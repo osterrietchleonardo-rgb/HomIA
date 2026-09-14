@@ -1,42 +1,88 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 200" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="36 0 204 260" fill="none">
   <defs>
     <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#FFFFFF"/>
-      <stop offset="72%" stop-color="#F7F9FB"/>
-      <stop offset="100%" stop-color="#E5EAF1"/>
+      <stop offset="62%" stop-color="#F8FAFC"/>
+      <stop offset="100%" stop-color="#E8EDF4"/>
     </linearGradient>
-    <linearGradient id="cable" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#1D63B8"/>
-      <stop offset="100%" stop-color="#00C4FF"/>
+    <linearGradient id="loop" gradientUnits="userSpaceOnUse" x1="139" y1="110" x2="96" y2="32">
+      <stop offset="0%" stop-color="#3E8BFF"/>
+      <stop offset="20%" stop-color="#7BB6FF"/>
+      <stop offset="48%" stop-color="#CFE6FF"/>
+      <stop offset="75%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#FFFFFF"/>
     </linearGradient>
-    <radialGradient id="orb" cx="0.42" cy="0.36" r="0.75">
-      <stop offset="0%" stop-color="#FFFDF4"/>
-      <stop offset="26%" stop-color="#FFDE6B"/>
-      <stop offset="58%" stop-color="#FF5A1F"/>
-      <stop offset="86%" stop-color="#E23E45"/>
-      <stop offset="100%" stop-color="#C93B5E"/>
+    <linearGradient id="arm" gradientUnits="userSpaceOnUse" x1="140" y1="44" x2="196" y2="34">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="38%" stop-color="#FFE9D2"/>
+      <stop offset="68%" stop-color="#FFB061"/>
+      <stop offset="100%" stop-color="#FF6A2A"/>
+    </linearGradient>
+    <linearGradient id="tip" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFA14D"/>
+      <stop offset="55%" stop-color="#FF5A1F"/>
+      <stop offset="100%" stop-color="#EF4E3A"/>
+    </linearGradient>
+    <linearGradient id="collar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9ADFFF"/>
+      <stop offset="100%" stop-color="#D9F3FF"/>
+    </linearGradient>
+    <linearGradient id="orb" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4E8EF7"/>
+      <stop offset="22%" stop-color="#A8D4FF"/>
+      <stop offset="42%" stop-color="#EDF5FF"/>
+      <stop offset="68%" stop-color="#FFC46B"/>
+      <stop offset="85%" stop-color="#FF7A3D"/>
+      <stop offset="100%" stop-color="#F04E38"/>
+    </linearGradient>
+    <radialGradient id="glowW" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#FF8A4D" stop-opacity="0.6"/>
+      <stop offset="55%" stop-color="#FF7A3D" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#FF7A3D" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0%" stop-color="rgba(255,90,31,0.5)"/>
-      <stop offset="45%" stop-color="rgba(255,122,69,0.2)"/>
-      <stop offset="72%" stop-color="rgba(0,196,255,0.14)"/>
-      <stop offset="100%" stop-color="rgba(0,196,255,0)"/>
+    <radialGradient id="glowC" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#00C4FF" stop-opacity="0.5"/>
+      <stop offset="60%" stop-color="#00C4FF" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#00C4FF" stop-opacity="0"/>
     </radialGradient>
+    <radialGradient id="shade" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#C4D2E4" stop-opacity="0.5"/>
+      <stop offset="70%" stop-color="#C4D2E4" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#C4D2E4" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="orbclip">
+      <circle cx="120" cy="152" r="13.5"/>
+    </clipPath>
   </defs>
-  <g stroke="#0A2540" stroke-width="6">
-    <ellipse cx="86" cy="182" rx="16" ry="12" fill="url(#body)"/>
-    <ellipse cx="134" cy="182" rx="16" ry="12" fill="url(#body)"/>
-    <ellipse cx="38" cy="120" rx="13" ry="23" transform="rotate(18 38 120)" fill="url(#body)"/>
-    <ellipse cx="182" cy="120" rx="13" ry="23" transform="rotate(-18 182 120)" fill="url(#body)"/>
+
+  <!-- Cabeza-cable: bucle casi circular -->
+  <g stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M 139 44 A 37 37 0 1 0 139 104" stroke="#102A45" stroke-width="17.5"/>
+    <path d="M 139 44 A 37 37 0 1 0 139 104" stroke="url(#loop)" stroke-width="10.5"/>
+    <path d="M 191 36 C 174 43 156 41 139 44" stroke="#102A45" stroke-width="17.5"/>
+    <path d="M 191 36 C 174 43 156 41 139 44" stroke="url(#arm)" stroke-width="10.5"/>
   </g>
-  <path d="M110 44 C153 44 174 82 174 124 C174 158 149 180 110 180 C71 180 46 158 46 124 C46 82 67 44 110 44 Z" fill="url(#body)" stroke="#0A2540" stroke-width="7"/>
-  <circle cx="110" cy="122" r="38" fill="url(#glow)"/>
-  <circle cx="110" cy="122" r="21" fill="url(#orb)" stroke="#1D63B8" stroke-opacity="0.35" stroke-width="2.5"/>
-  <circle cx="103.5" cy="115.5" r="5.5" fill="#FFFFFF" opacity="0.85"/>
-  <path d="M100 50 C94 32 104 16 122 15 C140 14 150 28 142 39 C136 47 122 46 121 36 C120 28 130 22 142 23 C152 24 158 27 163 30" stroke="url(#cable)" stroke-width="7" stroke-linecap="round"/>
-  <g transform="translate(163 30) rotate(-6)">
-    <rect x="0" y="-8" width="14" height="16" rx="4" fill="#FFFFFF" stroke="#0A2540" stroke-width="5"/>
-    <rect x="12" y="-12" width="13" height="24" rx="5" fill="#FF5A1F" stroke="#0A2540" stroke-width="5"/>
-    <rect x="24" y="-5" width="9" height="10" rx="3" fill="#FFFFFF" stroke="#0A2540" stroke-width="5"/>
+
+  <!-- Conector USB escalonado -->
+  <g transform="translate(191 36) rotate(-8)">
+    <rect x="-4" y="-12" width="20" height="24" rx="7" fill="#FFFFFF" stroke="#102A45" stroke-width="5.5"/>
+    <rect x="1" y="-6" width="9" height="12" rx="3.5" fill="url(#collar)"/>
+    <rect x="14" y="-15" width="26" height="30" rx="8" fill="url(#tip)" stroke="#102A45" stroke-width="5.5"/>
+    <rect x="21" y="-8" width="13" height="16" rx="4" fill="#FFE3C8" opacity="0.95"/>
   </g>
+
+  <!-- Cuerpo -->
+  <path d="M 120 98 C 148 98 168 108 176 126 C 183 141 185 159 183 177 C 182 191 178 203 172 212 C 176 219 178 228 175 237 C 171 247 157 251 147 247 C 140 244 137 238 137 230 C 137 224 131 219 120 219 C 109 219 103 224 103 230 C 103 238 100 244 93 247 C 83 251 69 247 65 237 C 62 228 64 219 68 212 C 62 203 58 191 57 177 C 55 159 57 141 64 126 C 72 108 92 98 120 98 Z" fill="url(#body)" stroke="#102A45" stroke-width="7" stroke-linejoin="round"/>
+  <ellipse cx="120" cy="230" rx="46" ry="15" fill="url(#shade)" opacity="0.55"/>
+
+  <!-- Brazos -->
+  <rect x="55" y="126" width="26" height="64" rx="13" transform="rotate(8 68 158)" fill="url(#body)" stroke="#102A45" stroke-width="6.5" stroke-linejoin="round"/>
+  <rect x="159" y="126" width="26" height="64" rx="13" transform="rotate(-8 172 158)" fill="url(#body)" stroke="#102A45" stroke-width="6.5" stroke-linejoin="round"/>
+
+  <!-- Orbe de pecho -->
+  <circle cx="107" cy="141" r="23" fill="url(#glowC)"/>
+  <circle cx="130" cy="162" r="28" fill="url(#glowW)"/>
+  <circle cx="120" cy="152" r="13.5" fill="url(#orb)"/>
+  <circle cx="132.5" cy="154" r="5" fill="#102A45" opacity="0.6" clip-path="url(#orbclip)"/>
+  <ellipse cx="114.5" cy="146.5" rx="4" ry="3.6" fill="#FFFFFF" opacity="0.9"/>
 </svg>

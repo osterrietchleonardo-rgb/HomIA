@@ -228,8 +228,8 @@ export function HeroSearch() {
         {/* Barra + Homy detrás */}
         <div className="relative z-10 w-[min(88vw,430px)] shrink-0 px-2">
           {/* Homy detrás de la barra */}
-          <div className="pointer-events-none absolute bottom-3 left-1/2 z-0 origin-bottom -translate-x-1/2 scale-[0.82] sm:scale-100">
-            <Homy size={136} state={homyState} />
+          <div className="pointer-events-none absolute bottom-3 left-1/2 z-0 origin-bottom -translate-x-1/2 scale-[0.7] sm:scale-[0.78]">
+            <Homy size={124} state={homyState} />
           </div>
 
           {/* Anillo de actividad IA */}

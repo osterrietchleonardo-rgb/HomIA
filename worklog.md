@@ -21,3 +21,19 @@ Work Log:
 Stage Summary:
 - Home 100% funcional y testeada. Entregados los 3 pedidos: (1) logo sin fondo + "HomIA" a escala, (2) barra central corta con consultas/respuestas en texto relieve sin recuadros, (3) Homy 2D fiel al logo detrás de la barra reaccionando al tipeo + plugin flotante de chat.
 - La IA de Homy responde con datos reales del motor (sin mock data). Próximas fases pendientes de confirmación del usuario: FASE 1 (modelado de datos), autenticación, etc.
+
+---
+Task ID: 2
+Agent: Super Z (main)
+Task: Redibujar la mascota Homy 2D con la forma real del personaje del logo (especificación anatómica detallada enviada por el usuario).
+
+Work Log:
+- Analizada la imagen real del logo (upload/Gemini_Generated_Image_v7cj20v7cj20v7cj (1).png) + especificación JSON del personaje (contornos #102A45, cuerpo blanco con sombras internas, gradiente cian→naranja→coral, cabeza-cable con bucle abierto casi circular y conector USB escalonado, orbe de pecho con halo).
+- `src/components/homy/homy-character.tsx`: reescrito por completo. Bucle-cable como arco SVG real (A 37 37, 250°) con extremo azul que se implantа detrás del hombro del cuerpo; brazo con gradiente blanco→naranja hacia el enchufe USB (collar blanco con detalle cian + punta naranja/coral con lengüeta clara); cuerpo blob rechoncho con piernas y muesca en U integradas; brazos cápsula colgantes rotacionados 8°; orbe cian→blanco→coral con dobles halos (cian sup-izq, naranja inf-der) y reflejo azul marino tipo media luna en el borde (clipPath). Mismo API (size/state/className): idle flotante, listening (núcleo acelerado + enchufe wiggle), thinking (burbujas + tilt), happy (rebote). Corregido bug latente: el wiggle del enchufe ahora va en <g> interno para no pisar el transform del grupo exterior.
+- Nueva proporción viewBox 204×260 (más alto que ancho, como el logo); ajustado posicionamiento de Homy detrás de la barra (hero-search: size 124, scale 0.7/0.78) y del botón del widget (44).
+- `src/app/icon.svg` + `public/logo.svg`: sincronizados con el nuevo personaje (SVG estático idéntico).
+- Verificación con Agent Browser: render standalone grande comparado contra el logo real (3 iteraciones de paths: implantación del bucle al cuerpo, brazos más cortos y pegados, reflejo del orbe sutil), desktop 1440 (header, Homy detrás de la barra con cable y enchufe asomando), interacción end-to-end ("Necesito un plomero urgente en Palermo" → escucha → respuesta IA real con Plomería/Urgencia alta/sugerencias), mobile 390 (header, barra, Homy, chips), plugin de chat con el nuevo avatar. Lint sin errores, consola sin errores.
+
+Stage Summary:
+- Homy 2D ahora es fiel a la forma real del personaje del logo: cuerpo blanco rechoncho con contorno azul marino, cabeza-cable con bucle casi circular y extremo azul naciendo del cuerpo, conector USB escalonado con gradiente cian→naranja, orbe de pecho luminoso. Animaciones de reacción al tipeo intactas.
+- Home 100% funcional (IA real, sin mock data). Pendiente confirmación del usuario para avanzar a FASE 1 (SQL Supabase).

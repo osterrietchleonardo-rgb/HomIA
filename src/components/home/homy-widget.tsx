@@ -121,7 +121,7 @@ export function HomyWidget() {
         {open ? (
           <X className="size-6 text-navy" aria-hidden />
         ) : (
-          <Homy size={50} state="idle" />
+          <Homy size={44} state="idle" />
         )}
         {!open && (
           <span
