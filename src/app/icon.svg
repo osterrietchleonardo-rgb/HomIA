@@ -1,88 +1,109 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="36 0 204 260" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 560" fill="none">
   <defs>
-    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#FFFFFF"/>
-      <stop offset="62%" stop-color="#F8FAFC"/>
-      <stop offset="100%" stop-color="#E8EDF4"/>
+    <linearGradient id="hcFill" gradientUnits="userSpaceOnUse" x1="100" y1="180" x2="330" y2="50">
+      <stop offset="0%" stop-color="#F8FAFD"/><stop offset="55%" stop-color="#FFFFFF"/>
+      <stop offset="82%" stop-color="#EDF8FE"/><stop offset="94%" stop-color="#A8E7FC"/>
+      <stop offset="100%" stop-color="#7FDBFA"/>
     </linearGradient>
-    <linearGradient id="loop" gradientUnits="userSpaceOnUse" x1="139" y1="110" x2="96" y2="32">
-      <stop offset="0%" stop-color="#3E8BFF"/>
-      <stop offset="20%" stop-color="#7BB6FF"/>
-      <stop offset="48%" stop-color="#CFE6FF"/>
-      <stop offset="75%" stop-color="#FFFFFF"/>
-      <stop offset="100%" stop-color="#FFFFFF"/>
+    <linearGradient id="hcAcc" gradientUnits="userSpaceOnUse" x1="150" y1="40" x2="200" y2="280">
+      <stop offset="0%" stop-color="#7FD4F5" stop-opacity="0"/><stop offset="18%" stop-color="#6FC4EE" stop-opacity="0.55"/>
+      <stop offset="45%" stop-color="#3E86D9" stop-opacity="0.9"/><stop offset="70%" stop-color="#1D4E9E"/>
+      <stop offset="88%" stop-color="#2E6FD8" stop-opacity="0.5"/><stop offset="100%" stop-color="#2E6FD8" stop-opacity="0"/>
     </linearGradient>
-    <linearGradient id="arm" gradientUnits="userSpaceOnUse" x1="140" y1="44" x2="196" y2="34">
-      <stop offset="0%" stop-color="#FFFFFF"/>
-      <stop offset="38%" stop-color="#FFE9D2"/>
-      <stop offset="68%" stop-color="#FFB061"/>
-      <stop offset="100%" stop-color="#FF6A2A"/>
+    <linearGradient id="hcShd" gradientUnits="userSpaceOnUse" x1="160" y1="25" x2="200" y2="270">
+      <stop offset="0%" stop-color="#C9D4E6" stop-opacity="0"/><stop offset="45%" stop-color="#C9D4E6" stop-opacity="0.4"/>
+      <stop offset="80%" stop-color="#C9D4E6" stop-opacity="0.35"/><stop offset="100%" stop-color="#C9D4E6" stop-opacity="0"/>
     </linearGradient>
-    <linearGradient id="tip" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#FFA14D"/>
-      <stop offset="55%" stop-color="#FF5A1F"/>
-      <stop offset="100%" stop-color="#EF4E3A"/>
+    <linearGradient id="hcFg" gradientUnits="userSpaceOnUse" x1="128" y1="54" x2="170" y2="36">
+      <stop offset="0%" stop-color="#FFFFFF"/><stop offset="45%" stop-color="#FFFFFF"/>
+      <stop offset="85%" stop-color="#0B0B0B"/><stop offset="100%" stop-color="#0B0B0B"/>
     </linearGradient>
-    <linearGradient id="collar" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#9ADFFF"/>
-      <stop offset="100%" stop-color="#D9F3FF"/>
+    <mask id="hcFade" maskUnits="userSpaceOnUse" x="0" y="0" width="440" height="560">
+      <rect width="440" height="560" fill="#FFFFFF"/>
+      <rect x="122" y="0" width="95" height="95" fill="url(#hcFg)"/>
+    </mask>
+    <linearGradient id="hcUsbb" gradientUnits="userSpaceOnUse" x1="308" y1="24" x2="424" y2="96">
+      <stop offset="0%" stop-color="#3AB5D6"/><stop offset="30%" stop-color="#F0962F"/>
+      <stop offset="64%" stop-color="#F0722A"/><stop offset="100%" stop-color="#EC4530"/>
     </linearGradient>
-    <linearGradient id="orb" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#4E8EF7"/>
-      <stop offset="22%" stop-color="#A8D4FF"/>
-      <stop offset="42%" stop-color="#EDF5FF"/>
-      <stop offset="68%" stop-color="#FFC46B"/>
-      <stop offset="85%" stop-color="#FF7A3D"/>
-      <stop offset="100%" stop-color="#F04E38"/>
+    <linearGradient id="hcUsbt" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F5922F"/><stop offset="100%" stop-color="#EC4530"/>
     </linearGradient>
-    <radialGradient id="glowW" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0%" stop-color="#FF8A4D" stop-opacity="0.6"/>
-      <stop offset="55%" stop-color="#FF7A3D" stop-opacity="0.28"/>
-      <stop offset="100%" stop-color="#FF7A3D" stop-opacity="0"/>
+    <linearGradient id="hcUsbf" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/><stop offset="100%" stop-color="#E9EEF6"/>
+    </linearGradient>
+    <linearGradient id="hbBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/><stop offset="58%" stop-color="#FBFCFE"/><stop offset="100%" stop-color="#EDF1F8"/>
+    </linearGradient>
+    <linearGradient id="hbShade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#C7D3E5" stop-opacity="0"/><stop offset="55%" stop-color="#C7D3E5" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#BCC9DE" stop-opacity="0.5"/>
+    </linearGradient>
+    <radialGradient id="hbSidel" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#CBD6E8" stop-opacity="0.5"/><stop offset="100%" stop-color="#CBD6E8" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="glowC" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0%" stop-color="#00C4FF" stop-opacity="0.5"/>
-      <stop offset="60%" stop-color="#00C4FF" stop-opacity="0.2"/>
-      <stop offset="100%" stop-color="#00C4FF" stop-opacity="0"/>
+    <radialGradient id="hbSider" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#CBD6E8" stop-opacity="0.5"/><stop offset="100%" stop-color="#CBD6E8" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="shade" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0%" stop-color="#C4D2E4" stop-opacity="0.5"/>
-      <stop offset="70%" stop-color="#C4D2E4" stop-opacity="0.16"/>
-      <stop offset="100%" stop-color="#C4D2E4" stop-opacity="0"/>
-    </radialGradient>
-    <clipPath id="orbclip">
-      <circle cx="120" cy="152" r="13.5"/>
+    <linearGradient id="hbRing" x1="0" y1="0" x2="1" y2="0.25">
+      <stop offset="0%" stop-color="#00C6FF"/><stop offset="48%" stop-color="#7FA0FF" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#FF6A2B"/>
+    </linearGradient>
+    <linearGradient id="hbCore" gradientUnits="userSpaceOnUse" x1="182" y1="350" x2="258" y2="354">
+      <stop offset="0%" stop-color="#2E6FE0"/><stop offset="34%" stop-color="#344FA8"/>
+      <stop offset="52%" stop-color="#7A4486"/><stop offset="70%" stop-color="#D05230"/>
+      <stop offset="100%" stop-color="#EF4123"/>
+    </linearGradient>
+    <linearGradient id="hcAccfade" gradientUnits="userSpaceOnUse" x1="120" y1="40" x2="300" y2="100">
+      <stop offset="0%" stop-color="#FFFFFF"/><stop offset="55%" stop-color="#0B0B0B"/><stop offset="100%" stop-color="#0B0B0B"/>
+    </linearGradient>
+    <mask id="hcShdfade" maskUnits="userSpaceOnUse" x="0" y="0" width="440" height="560">
+      <rect width="440" height="560" fill="#FFFFFF"/>
+      <rect x="90" y="10" width="240" height="130" fill="url(#hcAccfade)" opacity="0.55"/>
+    </mask>
+    <filter id="hbBlur" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="13"/></filter>
+    <filter id="hbBlur2" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="7"/></filter>
+    <clipPath id="hbClip">
+      <path d="M 147.5 262 C 173.9 286 266.1 286 292.5 262 C 318.8 250 351.8 280 366 314 C 380.3 352 406.7 368 410 396 C 410 425 396.8 448 370.5 452 C 348.6 453 336.5 441 334.3 424 C 333.2 418 332.1 414 331 411 C 338.7 448 343.1 479 340.9 505 C 343.1 532 328.9 549 303.6 550 C 282.7 551 271.6 540 270.5 524 C 269.4 498 249.6 479 220 479 C 190.4 479 168.4 498 169.5 524 C 168.4 540 155.2 551 134.5 550 C 109.3 549 94.5 532 96.7 505 C 94.5 479 98.9 448 106.6 411 C 105.5 414 104.4 418 103.3 424 C 101.1 441 89.1 453 66.9 452 C 41.2 448 27.3 425 27.3 396 C 30.6 368 56.9 352 71.3 314 C 85.8 280 118.9 250 147.5 262 Z"/>
     </clipPath>
   </defs>
 
-  <!-- Cabeza-cable: bucle casi circular -->
-  <g stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M 139 44 A 37 37 0 1 0 139 104" stroke="#102A45" stroke-width="17.5"/>
-    <path d="M 139 44 A 37 37 0 1 0 139 104" stroke="url(#loop)" stroke-width="10.5"/>
-    <path d="M 191 36 C 174 43 156 41 139 44" stroke="#102A45" stroke-width="17.5"/>
-    <path d="M 191 36 C 174 43 156 41 139 44" stroke="url(#arm)" stroke-width="10.5"/>
+  <g mask="url(#hcFade)">
+    <g stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <path d="M 165.6 40.6 A 106 106 0 1 0 259 70 C 244 57 240 44 248 35 C 258 24 276 26 286 36 C 294 44 297 52 300 58" stroke="#102A45" stroke-width="61"/>
+      <path d="M 165.6 40.6 A 106 106 0 1 0 259 70 C 244 57 240 44 248 35 C 258 24 276 26 286 36 C 294 44 297 52 300 58" stroke="url(#hcFill)" stroke-width="48"/>
+      <path d="M 153.7 32 A 117 117 0 1 0 283.2 83" stroke="url(#hcShd)" stroke-width="8" mask="url(#hcShdfade)"/>
+      <path d="M 155.3 56.6 A 93 93 0 1 0 266.1 101.4" stroke="url(#hcAcc)" stroke-width="16"/>
+    </g>
   </g>
 
-  <!-- Conector USB escalonado -->
-  <g transform="translate(191 36) rotate(-8)">
-    <rect x="-4" y="-12" width="20" height="24" rx="7" fill="#FFFFFF" stroke="#102A45" stroke-width="5.5"/>
-    <rect x="1" y="-6" width="9" height="12" rx="3.5" fill="url(#collar)"/>
-    <rect x="14" y="-15" width="26" height="30" rx="8" fill="url(#tip)" stroke="#102A45" stroke-width="5.5"/>
-    <rect x="21" y="-8" width="13" height="16" rx="4" fill="#FFE3C8" opacity="0.95"/>
+  <ellipse cx="350" cy="96" rx="32" ry="8" fill="#E8563A" opacity="0.28" filter="url(#hbBlur2)"/>
+
+  <g stroke-linejoin="round" transform="rotate(-6 312 60)">
+    <rect x="312" y="28" width="76" height="64" rx="17" fill="url(#hcUsbf)" stroke="url(#hcUsbb)" stroke-width="11"/>
+    <rect x="386" y="40" width="34" height="40" rx="11" fill="#FFFBF7" stroke="url(#hcUsbt)" stroke-width="10"/>
   </g>
 
-  <!-- Cuerpo -->
-  <path d="M 120 98 C 148 98 168 108 176 126 C 183 141 185 159 183 177 C 182 191 178 203 172 212 C 176 219 178 228 175 237 C 171 247 157 251 147 247 C 140 244 137 238 137 230 C 137 224 131 219 120 219 C 109 219 103 224 103 230 C 103 238 100 244 93 247 C 83 251 69 247 65 237 C 62 228 64 219 68 212 C 62 203 58 191 57 177 C 55 159 57 141 64 126 C 72 108 92 98 120 98 Z" fill="url(#body)" stroke="#102A45" stroke-width="7" stroke-linejoin="round"/>
-  <ellipse cx="120" cy="230" rx="46" ry="15" fill="url(#shade)" opacity="0.55"/>
+  <path d="M 147.5 262 C 173.9 286 266.1 286 292.5 262 C 318.8 250 351.8 280 366 314 C 380.3 352 406.7 368 410 396 C 410 425 396.8 448 370.5 452 C 348.6 453 336.5 441 334.3 424 C 333.2 418 332.1 414 331 411 C 338.7 448 343.1 479 340.9 505 C 343.1 532 328.9 549 303.6 550 C 282.7 551 271.6 540 270.5 524 C 269.4 498 249.6 479 220 479 C 190.4 479 168.4 498 169.5 524 C 168.4 540 155.2 551 134.5 550 C 109.3 549 94.5 532 96.7 505 C 94.5 479 98.9 448 106.6 411 C 105.5 414 104.4 418 103.3 424 C 101.1 441 89.1 453 66.9 452 C 41.2 448 27.3 425 27.3 396 C 30.6 368 56.9 352 71.3 314 C 85.8 280 118.9 250 147.5 262 Z" fill="url(#hbBody)" stroke="#102A45" stroke-width="14" stroke-linejoin="round"/>
 
-  <!-- Brazos -->
-  <rect x="55" y="126" width="26" height="64" rx="13" transform="rotate(8 68 158)" fill="url(#body)" stroke="#102A45" stroke-width="6.5" stroke-linejoin="round"/>
-  <rect x="159" y="126" width="26" height="64" rx="13" transform="rotate(-8 172 158)" fill="url(#body)" stroke="#102A45" stroke-width="6.5" stroke-linejoin="round"/>
+  <g clip-path="url(#hbClip)">
+    <rect x="30" y="330" width="380" height="226" fill="url(#hbShade)"/>
+    <ellipse cx="92" cy="445" rx="34" ry="88" fill="url(#hbSidel)"/>
+    <ellipse cx="348" cy="445" rx="34" ry="88" fill="url(#hbSider)"/>
+    <ellipse cx="220" cy="292" rx="54" ry="14" fill="#C9D4E6" opacity="0.38" filter="url(#hbBlur2)"/>
+    <ellipse cx="220" cy="530" rx="28" ry="13" fill="#C4D0E4" opacity="0.5" filter="url(#hbBlur2)"/>
+  </g>
 
-  <!-- Orbe de pecho -->
-  <circle cx="107" cy="141" r="23" fill="url(#glowC)"/>
-  <circle cx="130" cy="162" r="28" fill="url(#glowW)"/>
-  <circle cx="120" cy="152" r="13.5" fill="url(#orb)"/>
-  <circle cx="132.5" cy="154" r="5" fill="#102A45" opacity="0.6" clip-path="url(#orbclip)"/>
-  <ellipse cx="114.5" cy="146.5" rx="4" ry="3.6" fill="#FFFFFF" opacity="0.9"/>
+  <g stroke="#102A45" stroke-width="11" stroke-linecap="round" fill="none">
+    <path d="M 331 414 C 339.7 386 340.8 354 327.6 332"/>
+    <path d="M 106.6 414 C 100.3 386 99.2 354 112.4 332"/>
+    <path d="M 148.6 426 C 176 460 197 470 220 470 C 243 470 264 460 291.4 426"/>
+  </g>
+
+  <g>
+    <circle cx="220" cy="350" r="54" stroke="url(#hbRing)" stroke-width="18" fill="none" filter="url(#hbBlur)" opacity="0.85"/>
+    <circle cx="220" cy="350" r="40" fill="url(#hbCore)"/>
+    <path d="M 220 308 L 220 352" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>
+    <ellipse cx="203" cy="334" rx="7" ry="4.5" fill="#FFFFFF" opacity="0.35" transform="rotate(-32 203 334)"/>
+  </g>
 </svg>

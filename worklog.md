@@ -37,3 +37,22 @@ Work Log:
 Stage Summary:
 - Homy 2D ahora es fiel a la forma real del personaje del logo: cuerpo blanco rechoncho con contorno azul marino, cabeza-cable con bucle casi circular y extremo azul naciendo del cuerpo, conector USB escalonado con gradiente cian→naranja, orbe de pecho luminoso. Animaciones de reacción al tipeo intactas.
 - Home 100% funcional (IA real, sin mock data). Pendiente confirmación del usuario para avanzar a FASE 1 (SQL Supabase).
+
+---
+Task ID: 3
+Agent: Super Z (main)
+Task: Tercer redibujo de Homy con el logo REAL enviado por el usuario (imagen + spec geométrica detallada `descripcion_geometrica_personaje`).
+
+Work Log:
+- Recibido el logo real (`upload/Gemini_Generated_Image_dovp3edovp3edovp.jfif`, 2816×1536) + spec JSON con anatomía precisa: bucle-cable casi circular con espacio negativo, remate superior izquierdo desvanecido, curva de retorno en S hacia conector USB, cuerpo trapezoide redondeado con brazos integrados por líneas de separación, base bilobulada con muesca en U, emblema tipo botón de encendido con halo.
+- Análisis de color por cuantización sobre la imagen real: contorno #103060, sombras internas #D0D0E0/#B0C0D0, azules #305090→#30B0E0, naranjas #F08030→#F06030.
+- `homy-character.tsx` reescrito (viewBox 440×560): (1) cable como trayecto ÚNICO continuo (arco 305° + curva S) dibujado en capas — contorno navy 61u, relleno blanco 48u (cian solo al final, antes del USB) — elimina el "nudo" de la unión; (2) punta desvanecida mediante máscara con gradiente lineal corto en θ=-100°; (3) degradado azul profundo #1D4E9E sobre el borde INTERNO del bucle (arco R=93, 16u) + sombra gris-azulada del borde externo; (4) USB blanco con borde degradado cian→naranja→coral y punta escalonada, inclinado -6°, con wrap de grupos para no pisar el wiggle CSS; (5) cuerpo escalado 1.098× con hombros tangentemente continuos, brazos integrados, sonrisa profunda, muesca en U; (6) emblema power-button: núcleo azul→violeta→naranja-rojo con línea blanca y anillo de glow cian→naranja difuminado al 85%.
+- Iteración visual con Agent Browser: preview estático lado a lado contra el logo real (public/homy-preview.html, 6 versiones hasta fidelidad), comparando proporciones (tubo/diámetro 3.4:1, loop 74% del ancho del cuerpo, centro del bucle 36u a la izquierda del eje del cuerpo como el real).
+- Sincronizados `src/app/icon.svg` y `public/logo.svg` con el personaje nuevo (SVG estático).
+- Limpieza: eliminados homy-preview.html y logo-real.png de public/.
+- Corregido bug: className homy-plug movido a <g> interno para que la animación wiggle no pise el rotate(-6) estático.
+- Verificación E2E con Agent Browser: desktop 1440 (hero, flujos bidireccionales, Homy detrás de la barra), interacción completa ("Necesito un plomero urgente, se me inundó el baño" → escucha → thinking → respuesta IA real con Plomería/Urgencia alta/sugerencias), chat widget ("¿Cómo funciona el pago protegido?" → respuesta real + chips), mobile 390 (header, barra, Homy, chips), favicon 200. Lint sin errores, consola sin errores, dev.log limpio.
+
+Stage Summary:
+- Homy 2D ahora es la réplica vectorial fiel del logo real: bucle-cable blanco con degradado azul interno y punta disuelta, USB blanco de borde cian→naranja→coral, cuerpo rechoncho con sonrisa y emblema de encendido luminoso. Todos los estados (idle/listening/thinking/happy) preservados.
+- Home 100% funcional con IA real (sin mock data). Pendiente confirmación del usuario para FASE 1 (modelado de datos SQL).

@@ -12,37 +12,74 @@ interface HomyProps {
   className?: string;
 }
 
-/** Proporción del personaje: viewBox 204 × 260 */
-const VB_W = 204;
-const VB_H = 260;
+/** Proporción del personaje: viewBox 440 × 560 (≈1:1.27, más alto que ancho) */
+const VB_W = 440;
+const VB_H = 560;
 
 /**
- * Homy — la mascota 2D de HomIA, fiel al logo real:
- * · Cuerpo blanco rechoncho (estilo astronauta/fantasma) con contorno azul
- *   marino #102A45 grueso y esquinas totalmente redondeadas.
- * · Brazos cortos colgando a los costados, separados del torso por línea curva.
- * · Base con dos piernas redonditas separadas por una U invertida.
- * · Cabeza-cable: bucle casi circular (espacio negativo circular) cuyo extremo
- *   inferior azul asoma sobre el cuerpo; del costado superior derecho sale el
- *   brazo hacia el conector USB escalonado (collar blanco + punta naranja).
- * · Degradado de marca: cian/azul → blanco → naranja → coral a lo largo del cable.
- * · Emblema de pecho: orbe cian→blanco→coral con halo de luz (cian arriba-izq,
- *   naranja abajo-der) y reflejo azul marino en el borde derecho del núcleo.
- * 100% transparente (sin fondo) y escalable.
+ * Homy — la mascota 2D de HomIA, trazada sobre la geometría real del logo.
+ *
+ * Anatomía (spec `descripcion_geometrica_personaje`):
+ * · Cabeza-cable: tubo blanco que nace detrás del hombro derecho, sube y forma
+ *   un bucle casi circular (espacio negativo circular) cuyo extremo superior
+ *   izquierdo se desvanece en punta abierta; del costado superior derecho sale
+ *   una curva en "S" muy suave hacia el conector USB.
+ * · Degradado azul sobre el borde INTERNO del bucle (cian tenue arriba → azul
+ *   profundo abajo) y sombra gris-azulada sobre el borde externo (volumen).
+ * · Conector USB escalonado: cuerpo blanco con borde degradado cian → naranja
+ *   → coral y punta estrecha naranja/coral, levemente inclinado.
+ * · Cuerpo rechoncho blanco (trapezoide muy redondeado, hombros caídos),
+ *   contorno azul marino #102A45 de grosor constante, brazos integrados a la
+ *   silueta con líneas de separación internas, base bilobulada con muesca en U
+ *   invertida y sonrisa amplia.
+ * · Emblema de pecho: botón de encendido — núcleo degradado azul (izq) →
+ *   naranja-rojo (der) con línea blanca vertical y halo de luz (cian izq,
+ *   naranja der).
+ * 100% transparente (sin fondo), escalable y animable por estados.
  */
 export function Homy({ size = 120, state = "idle", className }: HomyProps) {
   const uid = useId().replace(/[:]/g, "");
-  const bodyGrad = `homy-body-${uid}`;
-  const loopGrad = `homy-loop-${uid}`;
-  const armGrad = `homy-arm-${uid}`;
-  const tipGrad = `homy-tip-${uid}`;
-  const collarGrad = `homy-collar-${uid}`;
-  const orbGrad = `homy-orb-${uid}`;
-  const glowWarm = `homy-glow-w-${uid}`;
-  const glowCool = `homy-glow-c-${uid}`;
-  const shadeGrad = `homy-shade-${uid}`;
-
   const outline = "#102A45";
+
+  // ── Geometría del bucle-cable ──
+  // Centro C=(184,145) · radio de línea central 106 · tubo 48 · contorno 13
+  // Trayecto ÚNICO continuo: bucle (punta θ=-100° → CCW) + curva S hacia el USB
+  const loopSPath =
+    "M 165.6 40.6 A 106 106 0 1 0 259 70 " +
+    "C 244 57 240 44 248 35 C 258 24 276 26 286 36 C 294 44 297 52 300 58";
+  const accentPath = "M 155.3 56.6 A 93 93 0 1 0 266.1 101.4";
+  const shadeArcPath = "M 153.7 32 A 117 117 0 1 0 283.2 83";
+
+  // ── Cuerpo ──
+  const bodyPath =
+    "M 147.5 262 C 173.9 286 266.1 286 292.5 262 C 318.8 250 351.8 280 366 314 " +
+    "C 380.3 352 406.7 368 410 396 C 410 425 396.8 448 370.5 452 C 348.6 453 336.5 441 334.3 424 " +
+    "C 333.2 418 332.1 414 331 411 C 338.7 448 343.1 479 340.9 505 C 343.1 532 328.9 549 303.6 550 " +
+    "C 282.7 551 271.6 540 270.5 524 C 269.4 498 249.6 479 220 479 C 190.4 479 168.4 498 169.5 524 " +
+    "C 168.4 540 155.2 551 134.5 550 C 109.3 549 94.5 532 96.7 505 C 94.5 479 98.9 448 106.6 411 " +
+    "C 105.5 414 104.4 418 103.3 424 C 101.1 441 89.1 453 66.9 452 C 41.2 448 27.3 425 27.3 396 " +
+    "C 30.6 368 56.9 352 71.3 314 C 85.8 280 118.9 250 147.5 262 Z";
+
+  // ── Ids únicos por instancia ──
+  const idCableFill = `hc-fill-${uid}`;
+  const idCableAccent = `hc-acc-${uid}`;
+  const idCableShade = `hc-shd-${uid}`;
+  const idFade = `hc-fade-${uid}`;
+  const idFadeGrad = `hc-fg-${uid}`;
+  const idUsbBorder = `hc-usbb-${uid}`;
+  const idUsbTip = `hc-usbt-${uid}`;
+  const idUsbFill = `hc-usbf-${uid}`;
+  const idBody = `hb-body-${uid}`;
+  const idBodyShade = `hb-shade-${uid}`;
+  const idSideL = `hb-sidel-${uid}`;
+  const idSideR = `hb-sider-${uid}`;
+  const idGlowRing = `hb-ring-${uid}`;
+  const idCore = `hb-core-${uid}`;
+  const idBlurGlow = `hb-blur-${uid}`;
+  const idBlurSoft = `hb-blur2-${uid}`;
+  const idClipBody = `hb-clip-${uid}`;
+  const idAccentFade = `hb-accfade-${uid}`;
+  const idShadeFade = `hb-shdfade-${uid}`;
 
   return (
     <div
@@ -80,250 +117,283 @@ export function Homy({ size = 120, state = "idle", className }: HomyProps) {
       )}
 
       <svg
-        viewBox={`36 0 ${VB_W} ${VB_H}`}
+        viewBox={`0 0 ${VB_W} ${VB_H}`}
         width="100%"
         height="100%"
         fill="none"
         aria-hidden
       >
         <defs>
-          {/* Cuerpo: blanco con sombreado interior suave (aspecto burbuja) */}
-          <linearGradient id={bodyGrad} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#FFFFFF" />
-            <stop offset="62%" stopColor="#F8FAFC" />
-            <stop offset="100%" stopColor="#E8EDF4" />
-          </linearGradient>
-          {/* Cable del bucle: azul al nacer → blanco en el bucle */}
+          {/* Relleno del cable: blanco puro, cian solo justo antes del USB */}
           <linearGradient
-            id={loopGrad}
+            id={idCableFill}
             gradientUnits="userSpaceOnUse"
-            x1="139"
-            y1="110"
-            x2="96"
-            y2="32"
+            x1="100"
+            y1="180"
+            x2="330"
+            y2="50"
           >
-            <stop offset="0%" stopColor="#3E8BFF" />
-            <stop offset="20%" stopColor="#7BB6FF" />
-            <stop offset="48%" stopColor="#CFE6FF" />
-            <stop offset="75%" stopColor="#FFFFFF" />
-            <stop offset="100%" stopColor="#FFFFFF" />
+            <stop offset="0%" stopColor="#F8FAFD" />
+            <stop offset="55%" stopColor="#FFFFFF" />
+            <stop offset="82%" stopColor="#EDF8FE" />
+            <stop offset="94%" stopColor="#A8E7FC" />
+            <stop offset="100%" stopColor="#7FDBFA" />
           </linearGradient>
-          {/* Brazo hacia el enchufe: blanco → naranja cerca del USB */}
+          {/* Acento del borde interno del bucle: cian tenue → azul profundo */}
           <linearGradient
-            id={armGrad}
+            id={idCableAccent}
             gradientUnits="userSpaceOnUse"
-            x1="140"
-            y1="44"
-            x2="196"
-            y2="34"
+            x1="150"
+            y1="40"
+            x2="200"
+            y2="280"
+          >
+            <stop offset="0%" stopColor="#7FD4F5" stopOpacity="0" />
+            <stop offset="18%" stopColor="#6FC4EE" stopOpacity="0.55" />
+            <stop offset="45%" stopColor="#3E86D9" stopOpacity="0.9" />
+            <stop offset="70%" stopColor="#1D4E9E" />
+            <stop offset="88%" stopColor="#2E6FD8" stopOpacity="0.5" />
+            <stop offset="100%" stopColor="#2E6FD8" stopOpacity="0" />
+          </linearGradient>
+          {/* Sombra sutil del borde externo del bucle (volumen de burbuja) */}
+          <linearGradient
+            id={idCableShade}
+            gradientUnits="userSpaceOnUse"
+            x1="160"
+            y1="25"
+            x2="200"
+            y2="270"
+          >
+            <stop offset="0%" stopColor="#C9D4E6" stopOpacity="0" />
+            <stop offset="45%" stopColor="#C9D4E6" stopOpacity="0.4" />
+            <stop offset="80%" stopColor="#C9D4E6" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#C9D4E6" stopOpacity="0" />
+          </linearGradient>
+          {/* Desvanecido corto de la punta superior izquierda del cable */}
+          <linearGradient
+            id={idFadeGrad}
+            gradientUnits="userSpaceOnUse"
+            x1="128"
+            y1="54"
+            x2="170"
+            y2="36"
           >
             <stop offset="0%" stopColor="#FFFFFF" />
-            <stop offset="38%" stopColor="#FFE9D2" />
-            <stop offset="68%" stopColor="#FFB061" />
-            <stop offset="100%" stopColor="#FF6A2A" />
+            <stop offset="45%" stopColor="#FFFFFF" />
+            <stop offset="85%" stopColor="#0B0B0B" />
+            <stop offset="100%" stopColor="#0B0B0B" />
           </linearGradient>
-          {/* Punta USB: naranja → coral */}
-          <linearGradient id={tipGrad} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#FFA14D" />
-            <stop offset="55%" stopColor="#FF5A1F" />
-            <stop offset="100%" stopColor="#EF4E3A" />
+          <mask id={idFade} maskUnits="userSpaceOnUse" x="0" y="0" width="440" height="560">
+            <rect width="440" height="560" fill="#FFFFFF" />
+            <rect x="122" y="0" width="95" height="95" fill={`url(#${idFadeGrad})`} />
+          </mask>
+
+          {/* Borde del conector USB: cian → naranja → coral */}
+          <linearGradient
+            id={idUsbBorder}
+            gradientUnits="userSpaceOnUse"
+            x1="308"
+            y1="24"
+            x2="424"
+            y2="96"
+          >
+            <stop offset="0%" stopColor="#3AB5D6" />
+            <stop offset="30%" stopColor="#F0962F" />
+            <stop offset="64%" stopColor="#F0722A" />
+            <stop offset="100%" stopColor="#EC4530" />
           </linearGradient>
-          {/* Detalle interno del collar: cian → celeste */}
-          <linearGradient id={collarGrad} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#9ADFFF" />
-            <stop offset="100%" stopColor="#D9F3FF" />
+          <linearGradient id={idUsbTip} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#F5922F" />
+            <stop offset="100%" stopColor="#EC4530" />
           </linearGradient>
-          {/* Orbe del pecho: cian → blanco → naranja → coral */}
-          <linearGradient id={orbGrad} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#4E8EF7" />
-            <stop offset="22%" stopColor="#A8D4FF" />
-            <stop offset="42%" stopColor="#EDF5FF" />
-            <stop offset="68%" stopColor="#FFC46B" />
-            <stop offset="85%" stopColor="#FF7A3D" />
-            <stop offset="100%" stopColor="#F04E38" />
+          <linearGradient id={idUsbFill} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#FFFFFF" />
+            <stop offset="100%" stopColor="#E9EEF6" />
           </linearGradient>
-          <radialGradient id={glowWarm} cx="0.5" cy="0.5" r="0.5">
-            <stop offset="0%" stopColor="#FF8A4D" stopOpacity="0.6" />
-            <stop offset="55%" stopColor="#FF7A3D" stopOpacity="0.28" />
-            <stop offset="100%" stopColor="#FF7A3D" stopOpacity="0" />
+
+          {/* Cuerpo: blanco puro arriba-izquierda (luz), gris-azulado abajo */}
+          <linearGradient id={idBody} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#FFFFFF" />
+            <stop offset="58%" stopColor="#FBFCFE" />
+            <stop offset="100%" stopColor="#EDF1F8" />
+          </linearGradient>
+          <linearGradient id={idBodyShade} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#C7D3E5" stopOpacity="0" />
+            <stop offset="55%" stopColor="#C7D3E5" stopOpacity="0.16" />
+            <stop offset="100%" stopColor="#BCC9DE" stopOpacity="0.5" />
+          </linearGradient>
+          <radialGradient id={idSideL} cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0%" stopColor="#CBD6E8" stopOpacity="0.5" />
+            <stop offset="100%" stopColor="#CBD6E8" stopOpacity="0" />
           </radialGradient>
-          <radialGradient id={glowCool} cx="0.5" cy="0.5" r="0.5">
-            <stop offset="0%" stopColor="#00C4FF" stopOpacity="0.5" />
-            <stop offset="60%" stopColor="#00C4FF" stopOpacity="0.2" />
-            <stop offset="100%" stopColor="#00C4FF" stopOpacity="0" />
+          <radialGradient id={idSideR} cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0%" stopColor="#CBD6E8" stopOpacity="0.5" />
+            <stop offset="100%" stopColor="#CBD6E8" stopOpacity="0" />
           </radialGradient>
-          {/* Sombra interior inferior del cuerpo */}
-          <radialGradient id={shadeGrad} cx="0.5" cy="0.5" r="0.5">
-            <stop offset="0%" stopColor="#C4D2E4" stopOpacity="0.5" />
-            <stop offset="70%" stopColor="#C4D2E4" stopOpacity="0.16" />
-            <stop offset="100%" stopColor="#C4D2E4" stopOpacity="0" />
-          </radialGradient>
-          {/* Recorte para el reflejo del orbe (media luna en el borde) */}
-          <clipPath id={`homy-orbclip-${uid}`}>
-            <circle cx="120" cy="152" r="13.5" />
+
+          {/* Halo del emblema: anillo cian → naranja */}
+          <linearGradient id={idGlowRing} x1="0" y1="0" x2="1" y2="0.25">
+            <stop offset="0%" stopColor="#00C6FF" />
+            <stop offset="48%" stopColor="#7FA0FF" stopOpacity="0.55" />
+            <stop offset="100%" stopColor="#FF6A2B" />
+          </linearGradient>
+          {/* Núcleo del emblema: azul (izq) → naranja-rojo (der) */}
+          <linearGradient
+            id={idCore}
+            gradientUnits="userSpaceOnUse"
+            x1="182"
+            y1="350"
+            x2="258"
+            y2="354"
+          >
+            <stop offset="0%" stopColor="#2E6FE0" />
+            <stop offset="34%" stopColor="#344FA8" />
+            <stop offset="52%" stopColor="#7A4486" />
+            <stop offset="70%" stopColor="#D05230" />
+            <stop offset="100%" stopColor="#EF4123" />
+          </linearGradient>
+
+          {/* Desvanecido del acento/sombra del cable en el tramo derecho */}
+          <linearGradient
+            id={idAccentFade}
+            gradientUnits="userSpaceOnUse"
+            x1="120"
+            y1="40"
+            x2="300"
+            y2="100"
+          >
+            <stop offset="0%" stopColor="#FFFFFF" />
+            <stop offset="55%" stopColor="#0B0B0B" />
+            <stop offset="100%" stopColor="#0B0B0B" />
+          </linearGradient>
+          <mask id={idShadeFade} maskUnits="userSpaceOnUse" x="0" y="0" width="440" height="560">
+            <rect width="440" height="560" fill="#FFFFFF" />
+            <rect x="90" y="10" width="240" height="130" fill={`url(#${idAccentFade})`} opacity="0.55" />
+          </mask>
+
+          <filter id={idBlurGlow} x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="13" />
+          </filter>
+          <filter id={idBlurSoft} x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="7" />
+          </filter>
+
+          <clipPath id={idClipBody}>
+            <path d={bodyPath} />
           </clipPath>
         </defs>
 
-        {/* ── Cabeza-cable: bucle casi circular (detrás del cuerpo) ── */}
-        <g strokeLinecap="round" strokeLinejoin="round" fill="none">
-          {/* Contorno del bucle */}
-          <path
-            d="M 139 44 A 37 37 0 1 0 139 104"
-            stroke={outline}
-            strokeWidth="17.5"
-          />
-          {/* Relleno del bucle (degradado azul → blanco) */}
-          <path
-            d="M 139 44 A 37 37 0 1 0 139 104"
-            stroke={`url(#${loopGrad})`}
-            strokeWidth="10.5"
-          />
-          {/* Brazo hacia el enchufe: contorno + degradado */}
-          <path
-            d="M 191 36 C 174 43 156 41 139 44"
-            stroke={outline}
-            strokeWidth="17.5"
-          />
-          <path
-            d="M 191 36 C 174 43 156 41 139 44"
-            stroke={`url(#${armGrad})`}
-            strokeWidth="10.5"
-          />
+        {/* ══════════ CABEZA-CABLE (detrás del cuerpo) ══════════ */}
+        <g mask={`url(#${idFade})`}>
+          <g strokeLinecap="round" strokeLinejoin="round" fill="none">
+            {/* Capa de contorno azul marino (bucle + S en un solo trayecto) */}
+            <path d={loopSPath} stroke={outline} strokeWidth="61" />
+            {/* Relleno del tubo (blanco → cian hacia el USB) */}
+            <path d={loopSPath} stroke={`url(#${idCableFill})`} strokeWidth="48" />
+            {/* Sombra suave del borde externo (volumen) */}
+            <path
+              d={shadeArcPath}
+              stroke={`url(#${idCableShade})`}
+              strokeWidth="8"
+              mask={`url(#${idShadeFade})`}
+            />
+            {/* Degradado azul del borde interno del bucle */}
+            <path d={accentPath} stroke={`url(#${idCableAccent})`} strokeWidth="16" />
+          </g>
         </g>
 
-        {/* ── Conector USB escalonado ── */}
-        <g transform="translate(191 36) rotate(-8)">
-          <g className="homy-plug">
-            {/* Collar blanco */}
+        {/* Resplandor coral bajo el conector (sangrado de color del logo) */}
+        <ellipse
+          cx="350"
+          cy="96"
+          rx="32"
+          ry="8"
+          fill="#E8563A"
+          opacity="0.28"
+          filter={`url(#${idBlurSoft})`}
+        />
+
+        {/* ══════════ CONECTOR USB ESCALONADO ══════════ */}
+        <g transform="rotate(-6 312 60)">
+          <g className="homy-plug" strokeLinejoin="round">
+            {/* Cuerpo del enchufe: blanco con borde degradado */}
             <rect
-              x="-4"
-              y="-12"
-              width="20"
-              height="24"
-              rx="7"
-              fill="#FFFFFF"
-              stroke={outline}
-              strokeWidth="5.5"
+              x="312"
+              y="28"
+              width="76"
+              height="64"
+              rx="17"
+              fill={`url(#${idUsbFill})`}
+              stroke={`url(#${idUsbBorder})`}
+              strokeWidth="11"
             />
-            {/* Detalle interno cian del collar */}
+            {/* Punta estrecha naranja/coral */}
             <rect
-              x="1"
-              y="-6"
-              width="9"
-              height="12"
-              rx="3.5"
-              fill={`url(#${collarGrad})`}
-            />
-            {/* Punta metálica naranja */}
-            <rect
-              x="14"
-              y="-15"
-              width="26"
-              height="30"
-              rx="8"
-              fill={`url(#${tipGrad})`}
-              stroke={outline}
-              strokeWidth="5.5"
-            />
-            {/* Lengüeta clara interna */}
-            <rect
-              x="21"
-              y="-8"
-              width="13"
-              height="16"
-              rx="4"
-              fill="#FFE3C8"
-              opacity="0.95"
+              x="386"
+              y="40"
+              width="34"
+              height="40"
+              rx="11"
+              fill="#FFFBF7"
+              stroke={`url(#${idUsbTip})`}
+              strokeWidth="10"
             />
           </g>
         </g>
 
-        {/* ── Cuerpo: blob rechoncho con piernas y muesca en U ── */}
+        {/* ══════════ CUERPO ══════════ */}
         <path
           className="homy-body"
-          d="M 120 98
-             C 148 98 168 108 176 126
-             C 183 141 185 159 183 177
-             C 182 191 178 203 172 212
-             C 176 219 178 228 175 237
-             C 171 247 157 251 147 247
-             C 140 244 137 238 137 230
-             C 137 224 131 219 120 219
-             C 109 219 103 224 103 230
-             C 103 238 100 244 93 247
-             C 83 251 69 247 65 237
-             C 62 228 64 219 68 212
-             C 62 203 58 191 57 177
-             C 55 159 57 141 64 126
-             C 72 108 92 98 120 98
-             Z"
-          fill={`url(#${bodyGrad})`}
+          d={bodyPath}
+          fill={`url(#${idBody})`}
           stroke={outline}
-          strokeWidth="7"
+          strokeWidth="14"
           strokeLinejoin="round"
         />
 
-        {/* Sombra interior suave (volumen regordete) */}
-        <ellipse
-          cx="120"
-          cy="230"
-          rx="46"
-          ry="15"
-          fill={`url(#${shadeGrad})`}
-          opacity="0.55"
-        />
-
-        {/* ── Brazos colgantes, por delante del torso ── */}
-        <g strokeLinejoin="round">
-          <rect
-            x="55"
-            y="126"
-            width="26"
-            height="64"
-            rx="13"
-            transform="rotate(8 68 158)"
-            fill={`url(#${bodyGrad})`}
-            stroke={outline}
-            strokeWidth="6.5"
-          />
-          <rect
-            x="159"
-            y="126"
-            width="26"
-            height="64"
-            rx="13"
-            transform="rotate(-8 172 158)"
-            fill={`url(#${bodyGrad})`}
-            stroke={outline}
-            strokeWidth="6.5"
-          />
+        {/* Sombreado interno (efecto burbuja 3D), recortado al cuerpo */}
+        <g clipPath={`url(#${idClipBody})`}>
+          <rect x="30" y="330" width="380" height="226" fill={`url(#${idBodyShade})`} />
+          {/* Volumen lateral izquierdo/derecho */}
+          <ellipse cx="92" cy="445" rx="34" ry="88" fill={`url(#${idSideL})`} />
+          <ellipse cx="348" cy="445" rx="34" ry="88" fill={`url(#${idSideR})`} />
+          {/* Sombra del cable sobre el pecho */}
+          <ellipse cx="220" cy="292" rx="54" ry="14" fill="#C9D4E6" opacity="0.38" filter={`url(#${idBlurSoft})`} />
+          {/* Sombra entre las piernas */}
+          <ellipse cx="220" cy="530" rx="28" ry="13" fill="#C4D0E4" opacity="0.5" filter={`url(#${idBlurSoft})`} />
         </g>
 
-        {/* ── Emblema de pecho: halo de luz + orbe ── */}
-        <g className="homy-core">
-          <circle cx="107" cy="141" r="23" fill={`url(#${glowCool})`} />
-          <circle cx="130" cy="162" r="28" fill={`url(#${glowWarm})`} />
+        {/* Líneas internas: separación de brazos + sonrisa */}
+        <g stroke={outline} strokeWidth="11" strokeLinecap="round" fill="none">
+          <path d="M 331 414 C 339.7 386 340.8 354 327.6 332" />
+          <path d="M 106.6 414 C 100.3 386 99.2 354 112.4 332" />
+          <path d="M 148.6 426 C 176 460 197 470 220 470 C 243 470 264 460 291.4 426" />
         </g>
+
+        {/* ══════════ EMBLEMA DE PECHO: BOTÓN DE ENCENDIDO ══════════ */}
         <g className="homy-core">
-          <circle cx="120" cy="152" r="13.5" fill={`url(#${orbGrad})`} />
-          {/* Reflejo azul marino sutil: media luna en el borde derecho */}
+          {/* Halo de luz (anillo difuminado cian → naranja) */}
           <circle
-            cx="132.5"
-            cy="154"
-            r="5"
-            fill={outline}
-            opacity="0.6"
-            clipPath={`url(#homy-orbclip-${uid})`}
+            cx="220"
+            cy="350"
+            r="54"
+            stroke={`url(#${idGlowRing})`}
+            strokeWidth="18"
+            fill="none"
+            filter={`url(#${idBlurGlow})`}
+            opacity="0.85"
           />
-          {/* Brillo blanco superior izquierdo */}
-          <ellipse
-            cx="114.5"
-            cy="146.5"
-            rx="4"
-            ry="3.6"
-            fill="#FFFFFF"
-            opacity="0.9"
+          {/* Núcleo */}
+          <circle cx="220" cy="350" r="40" fill={`url(#${idCore})`} />
+          {/* Línea del botón de encendido */}
+          <path
+            d="M 220 308 L 220 352"
+            stroke="#FFFFFF"
+            strokeWidth="8"
+            strokeLinecap="round"
           />
+          {/* Brillo superior izquierdo */}
+          <ellipse cx="203" cy="334" rx="7" ry="4.5" fill="#FFFFFF" opacity="0.35" transform="rotate(-32 203 334)" />
         </g>
       </svg>
     </div>
