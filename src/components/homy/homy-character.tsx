@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useEffect, useId, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export type HomyState = "idle" | "listening" | "thinking" | "happy";
@@ -12,18 +12,21 @@ interface HomyProps {
   className?: string;
 }
 
-/** Proporción del personaje: viewBox 440 × 560 (≈1:1.27, más alto que ancho) */
+/** Proporción del personaje: viewBox 440 × 580 (≈1:1.32, más alto que ancho) */
 const VB_W = 440;
-const VB_H = 560;
+const VB_H = 580;
+
+/** Momentos de vida aleatorios: 0 = reposo · 1 = se endereza · 2/3 = mira a un lado */
+type HomyMood = 0 | 1 | 2 | 3;
 
 /**
  * Homy — la mascota 2D de HomIA, trazada sobre la geometría real del logo.
  *
  * Anatomía (spec `descripcion_geometrica_personaje`):
- * · Cabeza-cable: tubo blanco que nace detrás del hombro derecho, sube y forma
- *   un bucle casi circular (espacio negativo circular) cuyo extremo superior
- *   izquierdo se desvanece en punta abierta; del costado superior derecho sale
- *   una curva en "S" muy suave hacia el conector USB.
+ * · Cabeza-cable flotante: tubo blanco centrado sobre el eje del cuerpo (x 219),
+ *   con un pequeño espacio de aire entre el bucle y los hombros; forma un bucle
+ *   casi circular cuyo extremo superior izquierdo se desvanece en punta abierta;
+ *   del costado superior derecho sale una curva en "S" muy suave hacia el USB.
  * · Degradado azul sobre el borde INTERNO del bucle (cian tenue arriba → azul
  *   profundo abajo) y sombra gris-azulada sobre el borde externo (volumen).
  * · Conector USB escalonado: cuerpo blanco con borde degradado cian → naranja
@@ -35,20 +38,55 @@ const VB_H = 560;
  * · Emblema de pecho: botón de encendido — núcleo degradado azul (izq) →
  *   naranja-rojo (der) con línea blanca vertical y halo de luz (cian izq,
  *   naranja der).
+ *
+ * Vida (capas independientes, ver globals.css):
+ * · .homy-figure respira (squash & stretch sutil desde la base)
+ * · .homy-tilt hace micro-movimientos ocasionales del torso
+ * · .homy-head flota con su propio ritmo (desfase = paralaje vivo)
+ * · .homy-core late como un corazón; el halo respira luz
+ * · data-mood dispara conductas aleatorias (se endereza / mira a los lados)
  * 100% transparente (sin fondo), escalable y animable por estados.
  */
 export function Homy({ size = 120, state = "idle", className }: HomyProps) {
   const uid = useId().replace(/[:]/g, "");
   const outline = "#102A45";
+  const [mood, setMood] = useState<HomyMood>(0);
 
-  // ── Geometría del bucle-cable ──
-  // Centro C=(184,145) · radio de línea central 106 · tubo 48 · contorno 13
+  // Micro-conductas aleatorias: solo en reposo, cada 4–8 s hace un gesto breve.
+  useEffect(() => {
+    if (state !== "idle") {
+      // Reset asíncrono (evita renders en cascada sincrónicos)
+      const reset = setTimeout(() => setMood(0), 0);
+      return () => clearTimeout(reset);
+    }
+    let t1: ReturnType<typeof setTimeout>;
+    let t2: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      t1 = setTimeout(() => {
+        setMood((1 + Math.floor(Math.random() * 3)) as HomyMood);
+        t2 = setTimeout(() => {
+          setMood(0);
+          schedule();
+        }, 1150);
+      }, 4200 + Math.random() * 3800);
+    };
+    schedule();
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [state]);
+
+  // ── Geometría del bucle-cabeza ──
+  // Centro C=(219,124) · radio de línea central 100 · tubo 48 · contorno 61.
+  // Centrado sobre el eje del cuerpo (x≈219) y elevado: el borde inferior del
+  // bucle (y≈254.5) queda ~18 unidades por encima de la línea de hombros (273).
   // Trayecto ÚNICO continuo: bucle (punta θ=-100° → CCW) + curva S hacia el USB
   const loopSPath =
-    "M 165.6 40.6 A 106 106 0 1 0 259 70 " +
-    "C 244 57 240 44 248 35 C 258 24 276 26 286 36 C 294 44 297 52 300 58";
-  const accentPath = "M 155.3 56.6 A 93 93 0 1 0 266.1 101.4";
-  const shadeArcPath = "M 153.7 32 A 117 117 0 1 0 283.2 83";
+    "M 201.6 25.5 A 100 100 0 1 0 289.7 53.3 " +
+    "C 277 41 274 30 282 22 C 292 13 308 15 318 24 C 326 31 328 42 328 51";
+  const accentPath = "M 203.9 38.3 A 87 87 0 1 0 280.5 62.5";
+  const shadeArcPath = "M 199.7 14.7 A 111 111 0 1 0 297.5 45.5";
 
   // ── Cuerpo ──
   const bodyPath =
@@ -91,6 +129,7 @@ export function Homy({ size = 120, state = "idle", className }: HomyProps) {
       )}
       style={{ width: size, height: size * (VB_H / VB_W) }}
       data-homy={state}
+      data-mood={state === "idle" && mood > 0 ? mood : undefined}
       role="img"
       aria-label={
         state === "thinking"
@@ -117,7 +156,7 @@ export function Homy({ size = 120, state = "idle", className }: HomyProps) {
       )}
 
       <svg
-        viewBox={`0 0 ${VB_W} ${VB_H}`}
+        viewBox={`0 -20 ${VB_W} ${VB_H}`}
         width="100%"
         height="100%"
         fill="none"
@@ -128,10 +167,10 @@ export function Homy({ size = 120, state = "idle", className }: HomyProps) {
           <linearGradient
             id={idCableFill}
             gradientUnits="userSpaceOnUse"
-            x1="100"
-            y1="180"
-            x2="330"
-            y2="50"
+            x1="135"
+            y1="160"
+            x2="360"
+            y2="30"
           >
             <stop offset="0%" stopColor="#F8FAFD" />
             <stop offset="55%" stopColor="#FFFFFF" />
@@ -143,10 +182,10 @@ export function Homy({ size = 120, state = "idle", className }: HomyProps) {
           <linearGradient
             id={idCableAccent}
             gradientUnits="userSpaceOnUse"
-            x1="150"
-            y1="40"
-            x2="200"
-            y2="280"
+            x1="185"
+            y1="20"
+            x2="235"
+            y2="258"
           >
             <stop offset="0%" stopColor="#7FD4F5" stopOpacity="0" />
             <stop offset="18%" stopColor="#6FC4EE" stopOpacity="0.55" />
@@ -159,10 +198,10 @@ export function Homy({ size = 120, state = "idle", className }: HomyProps) {
           <linearGradient
             id={idCableShade}
             gradientUnits="userSpaceOnUse"
-            x1="160"
-            y1="25"
-            x2="200"
-            y2="270"
+            x1="195"
+            y1="4"
+            x2="235"
+            y2="249"
           >
             <stop offset="0%" stopColor="#C9D4E6" stopOpacity="0" />
             <stop offset="45%" stopColor="#C9D4E6" stopOpacity="0.4" />
@@ -173,29 +212,29 @@ export function Homy({ size = 120, state = "idle", className }: HomyProps) {
           <linearGradient
             id={idFadeGrad}
             gradientUnits="userSpaceOnUse"
-            x1="128"
-            y1="54"
-            x2="170"
-            y2="36"
+            x1="164"
+            y1="39"
+            x2="206"
+            y2="21"
           >
             <stop offset="0%" stopColor="#FFFFFF" />
             <stop offset="45%" stopColor="#FFFFFF" />
             <stop offset="85%" stopColor="#0B0B0B" />
             <stop offset="100%" stopColor="#0B0B0B" />
           </linearGradient>
-          <mask id={idFade} maskUnits="userSpaceOnUse" x="0" y="0" width="440" height="560">
-            <rect width="440" height="560" fill="#FFFFFF" />
-            <rect x="122" y="0" width="95" height="95" fill={`url(#${idFadeGrad})`} />
+          <mask id={idFade} maskUnits="userSpaceOnUse" x="0" y="-20" width="440" height="580">
+            <rect x="0" y="-20" width="440" height="580" fill="#FFFFFF" />
+            <rect x="158" y="-20" width="95" height="115" fill={`url(#${idFadeGrad})`} />
           </mask>
 
           {/* Borde del conector USB: cian → naranja → coral */}
           <linearGradient
             id={idUsbBorder}
             gradientUnits="userSpaceOnUse"
-            x1="308"
-            y1="24"
-            x2="424"
-            y2="96"
+            x1="318"
+            y1="21"
+            x2="432"
+            y2="93"
           >
             <stop offset="0%" stopColor="#3AB5D6" />
             <stop offset="30%" stopColor="#F0962F" />
@@ -266,9 +305,9 @@ export function Homy({ size = 120, state = "idle", className }: HomyProps) {
             <stop offset="55%" stopColor="#0B0B0B" />
             <stop offset="100%" stopColor="#0B0B0B" />
           </linearGradient>
-          <mask id={idShadeFade} maskUnits="userSpaceOnUse" x="0" y="0" width="440" height="560">
-            <rect width="440" height="560" fill="#FFFFFF" />
-            <rect x="90" y="10" width="240" height="130" fill={`url(#${idAccentFade})`} opacity="0.55" />
+          <mask id={idShadeFade} maskUnits="userSpaceOnUse" x="0" y="-20" width="440" height="580">
+            <rect x="0" y="-20" width="440" height="580" fill="#FFFFFF" />
+            <rect x="125" y="-5" width="240" height="130" fill={`url(#${idAccentFade})`} opacity="0.55" />
           </mask>
 
           <filter id={idBlurGlow} x="-80%" y="-80%" width="260%" height="260%">
@@ -283,117 +322,126 @@ export function Homy({ size = 120, state = "idle", className }: HomyProps) {
           </clipPath>
         </defs>
 
-        {/* ══════════ CABEZA-CABLE (detrás del cuerpo) ══════════ */}
-        <g mask={`url(#${idFade})`}>
-          <g strokeLinecap="round" strokeLinejoin="round" fill="none">
-            {/* Capa de contorno azul marino (bucle + S en un solo trayecto) */}
-            <path d={loopSPath} stroke={outline} strokeWidth="61" />
-            {/* Relleno del tubo (blanco → cian hacia el USB) */}
-            <path d={loopSPath} stroke={`url(#${idCableFill})`} strokeWidth="48" />
-            {/* Sombra suave del borde externo (volumen) */}
+        {/* ══════════ CABEZA-CABLE FLOTANTE (grupo animable independiente) ══════════ */}
+        <g className="homy-head">
+          <g className="homy-head-inner">
+            <g mask={`url(#${idFade})`}>
+              <g strokeLinecap="round" strokeLinejoin="round" fill="none">
+                {/* Capa de contorno azul marino (bucle + S en un solo trayecto) */}
+                <path d={loopSPath} stroke={outline} strokeWidth="61" />
+                {/* Relleno del tubo (blanco → cian hacia el USB) */}
+                <path d={loopSPath} stroke={`url(#${idCableFill})`} strokeWidth="48" />
+                {/* Sombra suave del borde externo (volumen) */}
+                <path
+                  d={shadeArcPath}
+                  stroke={`url(#${idCableShade})`}
+                  strokeWidth="8"
+                  mask={`url(#${idShadeFade})`}
+                />
+                {/* Degradado azul del borde interno del bucle */}
+                <path d={accentPath} stroke={`url(#${idCableAccent})`} strokeWidth="16" />
+              </g>
+            </g>
+
+            {/* Resplandor coral bajo el conector (sangrado de color del logo) */}
+            <ellipse
+              cx="360"
+              cy="92"
+              rx="32"
+              ry="8"
+              fill="#E8563A"
+              opacity="0.28"
+              filter={`url(#${idBlurSoft})`}
+            />
+
+            {/* ══════════ CONECTOR USB ESCALONADO ══════════ */}
+            <g transform="rotate(-6 322 57)">
+              <g className="homy-plug" strokeLinejoin="round">
+                {/* Cuerpo del enchufe: blanco con borde degradado */}
+                <rect
+                  x="322"
+                  y="25"
+                  width="76"
+                  height="64"
+                  rx="17"
+                  fill={`url(#${idUsbFill})`}
+                  stroke={`url(#${idUsbBorder})`}
+                  strokeWidth="11"
+                />
+                {/* Punta estrecha naranja/coral */}
+                <rect
+                  x="396"
+                  y="37"
+                  width="34"
+                  height="40"
+                  rx="11"
+                  fill="#FFFBF7"
+                  stroke={`url(#${idUsbTip})`}
+                  strokeWidth="10"
+                />
+              </g>
+            </g>
+          </g>
+        </g>
+
+        {/* ══════════ CUERPO (grupo respirable + micro-gestos) ══════════ */}
+        <g className="homy-figure">
+          <g className="homy-tilt">
             <path
-              d={shadeArcPath}
-              stroke={`url(#${idCableShade})`}
-              strokeWidth="8"
-              mask={`url(#${idShadeFade})`}
+              className="homy-body"
+              d={bodyPath}
+              fill={`url(#${idBody})`}
+              stroke={outline}
+              strokeWidth="14"
+              strokeLinejoin="round"
             />
-            {/* Degradado azul del borde interno del bucle */}
-            <path d={accentPath} stroke={`url(#${idCableAccent})`} strokeWidth="16" />
+
+            {/* Sombreado interno (efecto burbuja 3D), recortado al cuerpo */}
+            <g clipPath={`url(#${idClipBody})`}>
+              <rect x="30" y="330" width="380" height="226" fill={`url(#${idBodyShade})`} />
+              {/* Volumen lateral izquierdo/derecho */}
+              <ellipse cx="92" cy="445" rx="34" ry="88" fill={`url(#${idSideL})`} />
+              <ellipse cx="348" cy="445" rx="34" ry="88" fill={`url(#${idSideR})`} />
+              {/* Sombra proyectada de la cabeza flotante sobre el pecho */}
+              <ellipse cx="219" cy="288" rx="52" ry="12" fill="#C9D4E6" opacity="0.32" filter={`url(#${idBlurSoft})`} />
+              {/* Sombra entre las piernas */}
+              <ellipse cx="220" cy="530" rx="28" ry="13" fill="#C4D0E4" opacity="0.5" filter={`url(#${idBlurSoft})`} />
+            </g>
+
+            {/* Líneas internas: separación de brazos + sonrisa */}
+            <g stroke={outline} strokeWidth="11" strokeLinecap="round" fill="none">
+              <path d="M 331 414 C 339.7 386 340.8 354 327.6 332" />
+              <path d="M 106.6 414 C 100.3 386 99.2 354 112.4 332" />
+              <path d="M 148.6 426 C 176 460 197 470 220 470 C 243 470 264 460 291.4 426" />
+            </g>
+
+            {/* ══════════ EMBLEMA DE PECHO: BOTÓN DE ENCENDIDO ══════════ */}
+            <g className="homy-core">
+              {/* Halo de luz (anillo difuminado cian → naranja) */}
+              <circle
+                className="homy-halo"
+                cx="220"
+                cy="350"
+                r="54"
+                stroke={`url(#${idGlowRing})`}
+                strokeWidth="18"
+                fill="none"
+                filter={`url(#${idBlurGlow})`}
+                opacity="0.85"
+              />
+              {/* Núcleo */}
+              <circle cx="220" cy="350" r="40" fill={`url(#${idCore})`} />
+              {/* Línea del botón de encendido */}
+              <path
+                d="M 220 308 L 220 352"
+                stroke="#FFFFFF"
+                strokeWidth="8"
+                strokeLinecap="round"
+              />
+              {/* Brillo superior izquierdo */}
+              <ellipse cx="203" cy="334" rx="7" ry="4.5" fill="#FFFFFF" opacity="0.35" transform="rotate(-32 203 334)" />
+            </g>
           </g>
-        </g>
-
-        {/* Resplandor coral bajo el conector (sangrado de color del logo) */}
-        <ellipse
-          cx="350"
-          cy="96"
-          rx="32"
-          ry="8"
-          fill="#E8563A"
-          opacity="0.28"
-          filter={`url(#${idBlurSoft})`}
-        />
-
-        {/* ══════════ CONECTOR USB ESCALONADO ══════════ */}
-        <g transform="rotate(-6 312 60)">
-          <g className="homy-plug" strokeLinejoin="round">
-            {/* Cuerpo del enchufe: blanco con borde degradado */}
-            <rect
-              x="312"
-              y="28"
-              width="76"
-              height="64"
-              rx="17"
-              fill={`url(#${idUsbFill})`}
-              stroke={`url(#${idUsbBorder})`}
-              strokeWidth="11"
-            />
-            {/* Punta estrecha naranja/coral */}
-            <rect
-              x="386"
-              y="40"
-              width="34"
-              height="40"
-              rx="11"
-              fill="#FFFBF7"
-              stroke={`url(#${idUsbTip})`}
-              strokeWidth="10"
-            />
-          </g>
-        </g>
-
-        {/* ══════════ CUERPO ══════════ */}
-        <path
-          className="homy-body"
-          d={bodyPath}
-          fill={`url(#${idBody})`}
-          stroke={outline}
-          strokeWidth="14"
-          strokeLinejoin="round"
-        />
-
-        {/* Sombreado interno (efecto burbuja 3D), recortado al cuerpo */}
-        <g clipPath={`url(#${idClipBody})`}>
-          <rect x="30" y="330" width="380" height="226" fill={`url(#${idBodyShade})`} />
-          {/* Volumen lateral izquierdo/derecho */}
-          <ellipse cx="92" cy="445" rx="34" ry="88" fill={`url(#${idSideL})`} />
-          <ellipse cx="348" cy="445" rx="34" ry="88" fill={`url(#${idSideR})`} />
-          {/* Sombra del cable sobre el pecho */}
-          <ellipse cx="220" cy="292" rx="54" ry="14" fill="#C9D4E6" opacity="0.38" filter={`url(#${idBlurSoft})`} />
-          {/* Sombra entre las piernas */}
-          <ellipse cx="220" cy="530" rx="28" ry="13" fill="#C4D0E4" opacity="0.5" filter={`url(#${idBlurSoft})`} />
-        </g>
-
-        {/* Líneas internas: separación de brazos + sonrisa */}
-        <g stroke={outline} strokeWidth="11" strokeLinecap="round" fill="none">
-          <path d="M 331 414 C 339.7 386 340.8 354 327.6 332" />
-          <path d="M 106.6 414 C 100.3 386 99.2 354 112.4 332" />
-          <path d="M 148.6 426 C 176 460 197 470 220 470 C 243 470 264 460 291.4 426" />
-        </g>
-
-        {/* ══════════ EMBLEMA DE PECHO: BOTÓN DE ENCENDIDO ══════════ */}
-        <g className="homy-core">
-          {/* Halo de luz (anillo difuminado cian → naranja) */}
-          <circle
-            cx="220"
-            cy="350"
-            r="54"
-            stroke={`url(#${idGlowRing})`}
-            strokeWidth="18"
-            fill="none"
-            filter={`url(#${idBlurGlow})`}
-            opacity="0.85"
-          />
-          {/* Núcleo */}
-          <circle cx="220" cy="350" r="40" fill={`url(#${idCore})`} />
-          {/* Línea del botón de encendido */}
-          <path
-            d="M 220 308 L 220 352"
-            stroke="#FFFFFF"
-            strokeWidth="8"
-            strokeLinecap="round"
-          />
-          {/* Brillo superior izquierdo */}
-          <ellipse cx="203" cy="334" rx="7" ry="4.5" fill="#FFFFFF" opacity="0.35" transform="rotate(-32 203 334)" />
         </g>
       </svg>
     </div>

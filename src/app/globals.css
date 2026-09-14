@@ -334,11 +334,184 @@
   }
 }
 
+/* ── Vida de Homy: capas con ritmos desfasados ── */
+@keyframes float-soft {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* Respiración: squash & stretch sutil desde la base del cuerpo */
+@keyframes homy-breath {
+  0%,
+  100% {
+    transform: scale(1, 1);
+  }
+  50% {
+    transform: scale(1.012, 1.022);
+  }
+}
+
+/* La cabeza flota con su propio ritmo (desfase = paralaje orgánico) */
+@keyframes homy-head-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  30% {
+    transform: translateY(-3px) rotate(0.9deg);
+  }
+  62% {
+    transform: translateY(1.6px) rotate(-0.9deg);
+  }
+  82% {
+    transform: translateY(-0.5px) rotate(0.2deg);
+  }
+}
+
+/* Micro-gesto ocasional del torso (descansa el 60% del ciclo) */
+@keyframes homy-idle-tilt {
+  0%,
+  58%,
+  100% {
+    transform: rotate(0deg) translateY(0);
+  }
+  66% {
+    transform: rotate(-1.5deg) translateY(-1px);
+  }
+  74% {
+    transform: rotate(1deg) translateY(0);
+  }
+  82% {
+    transform: rotate(-0.4deg);
+  }
+}
+
+/* Latido cardíaco del emblema: tum-tum… y pausa */
+@keyframes homy-heartbeat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  7% {
+    transform: scale(1.06);
+  }
+  14% {
+    transform: scale(1);
+  }
+  22% {
+    transform: scale(1.11);
+  }
+  36% {
+    transform: scale(1);
+  }
+}
+
+/* El halo del núcleo respira luz */
+@keyframes homy-halo {
+  0%,
+  100% {
+    opacity: 0.68;
+  }
+  22% {
+    opacity: 1;
+  }
+  48% {
+    opacity: 0.8;
+  }
+}
+
+/* El USB hace de antena: se sacude de vez en cuando */
+@keyframes homy-plug-idle {
+  0%,
+  52%,
+  100% {
+    transform: rotate(0deg);
+  }
+  60% {
+    transform: rotate(-7deg);
+  }
+  68% {
+    transform: rotate(5deg);
+  }
+  76% {
+    transform: rotate(-2.5deg);
+  }
+}
+
+/* Conductas aleatorias: se endereza / mira a un lado y al otro */
+@keyframes homy-perk {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  35% {
+    transform: translateY(-5px) scale(1.05);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes homy-look-l {
+  0% {
+    transform: rotate(0) translateX(0);
+  }
+  35% {
+    transform: rotate(-3.5deg) translateX(-2.5px);
+  }
+  70% {
+    transform: rotate(-2deg) translateX(-1.5px);
+  }
+  100% {
+    transform: rotate(0) translateX(0);
+  }
+}
+@keyframes homy-look-r {
+  0% {
+    transform: rotate(0) translateX(0);
+  }
+  35% {
+    transform: rotate(3.5deg) translateX(2.5px);
+  }
+  70% {
+    transform: rotate(2deg) translateX(1.5px);
+  }
+  100% {
+    transform: rotate(0) translateX(0);
+  }
+}
+
 /* ============================================================
-   Componentes Homy (SVG animable)
+   Componentes Homy (SVG animable — personaje “vivo”)
    ============================================================ */
+/* Cabeza flotante: bob propio, distinto ritmo que el cuerpo */
+.homy-head {
+  transform-box: fill-box;
+  transform-origin: 50% 60%;
+  animation: homy-head-bob 5.6s ease-in-out infinite;
+}
+.homy-head-inner {
+  transform-box: fill-box;
+  transform-origin: 50% 65%;
+  transition: transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+/* Cuerpo que respira desde la base + micro-gestos de torso */
+.homy-figure {
+  transform-box: fill-box;
+  transform-origin: 50% 96%;
+  animation: homy-breath 3.6s ease-in-out infinite;
+}
+.homy-tilt {
+  transform-box: fill-box;
+  transform-origin: 50% 92%;
+  animation: homy-idle-tilt 9.5s ease-in-out infinite;
+}
+/* Núcleo: latido + halo que respira luz */
 .homy-core {
-  animation: core-pulse 2.8s ease-in-out infinite;
+  animation: homy-heartbeat 3.6s ease-in-out infinite;
   transform-box: fill-box;
   transform-origin: center;
 }
@@ -347,9 +520,13 @@
   animation-duration: 1.05s;
   filter: drop-shadow(0 0 10px rgba(0, 196, 255, 0.8));
 }
+.homy-halo {
+  animation: homy-halo 3.6s ease-in-out infinite;
+}
 .homy-plug {
   transform-box: fill-box;
   transform-origin: 8% 50%;
+  animation: homy-plug-idle 7.8s ease-in-out infinite;
 }
 .homy-wrap[data-homy="listening"] .homy-plug,
 .homy-wrap[data-homy="thinking"] .homy-plug {
@@ -362,6 +539,34 @@
 }
 .homy-wrap[data-homy="thinking"] .homy-body {
   transform: rotate(-3deg);
+}
+
+/* Estados: la cabeza reacciona antes que el cuerpo */
+.homy-wrap[data-homy="listening"] {
+  animation: float-soft 5.4s ease-in-out infinite;
+}
+.homy-wrap[data-homy="listening"] .homy-head-inner {
+  transform: translateY(-2px) scale(1.045);
+}
+.homy-wrap[data-homy="thinking"] .homy-head-inner {
+  transform: rotate(-4deg) translateY(-1.5px);
+}
+.homy-wrap[data-homy="happy"] .homy-head-inner {
+  transform: rotate(3deg) translateY(-2px) scale(1.045);
+}
+
+/* Momentos de vida: gestos aleatorios + reacción al hover */
+.homy-wrap[data-mood="1"] .homy-head-inner {
+  animation: homy-perk 0.95s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.homy-wrap[data-mood="2"] .homy-head-inner {
+  animation: homy-look-l 1.05s ease-in-out;
+}
+.homy-wrap[data-mood="3"] .homy-head-inner {
+  animation: homy-look-r 1.05s ease-in-out;
+}
+.homy-wrap:hover .homy-head-inner {
+  animation: homy-perk 0.9s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* ============================================================
@@ -473,8 +678,14 @@
   .animate-flow-a,
   .animate-float,
   .animate-float-slow,
+  .homy-wrap,
   .homy-core,
+  .homy-halo,
   .homy-plug,
+  .homy-head,
+  .homy-head-inner,
+  .homy-figure,
+  .homy-tilt,
   .flow-line,
   .animate-ring-ping {
     animation: none !important;

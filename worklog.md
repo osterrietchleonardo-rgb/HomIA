@@ -56,3 +56,22 @@ Work Log:
 Stage Summary:
 - Homy 2D ahora es la réplica vectorial fiel del logo real: bucle-cable blanco con degradado azul interno y punta disuelta, USB blanco de borde cian→naranja→coral, cuerpo rechoncho con sonrisa y emblema de encendido luminoso. Todos los estados (idle/listening/thinking/happy) preservados.
 - Home 100% funcional con IA real (sin mock data). Pendiente confirmación del usuario para FASE 1 (modelado de datos SQL).
+
+---
+Task ID: 4
+Agent: Super Z (main)
+Task: Ajustes del plugin Homy según feedback del usuario: (1) cabeza centrada, (2) espacio entre cabeza y cuerpo, (3) efecto de "ser vivo".
+
+Work Log:
+- Diagnóstico: el bucle-cabeza tenía centro x=184 mientras el eje del cuerpo es x≈219 (corrida 35u a la izquierda — la Task 3 la había desplazado a propósito imitando el logo, pero el usuario prefiere centrada); además el bucle se hundía detrás del cuerpo sin separación visible.
+- `homy-character.tsx` re-geometrizado: bucle re-centrado en C=(219,124) r=100 (mismo eje del cuerpo), elevado para dejar ~18u de aire sobre la línea de hombros (273) — nunca colisiona ni en bob máximo ni en respiración máxima. Recalculados todos los elementos dependientes: curva S hacia USB (tangente continua en θ=-45°), conector USB movido a (322,25)-(430,77) rotado -6°, arcos de acento (r=87) y sombra (r=111), máscara de desvanecido reubicada (rect 158,0 + gradiente 164,39→206,21), gradientes userSpaceOnUse re-anclados, glow coral bajo USB, sombra de cabeza sobre el pecho suavizada (0.32).
+- viewBox ampliado a "0 -20 440 580" (proporción 1:1.32, dentro del spec ~1:1.3) para alojar el pico de la curva S y el bucle elevado sin recortes.
+- Efecto "ser vivo" con capas de ritmo desfasado (globals.css): .homy-figure respira (squash&stretch 3.6s desde la base), .homy-tilt micro-gesto de torso cada ~9.5s, .homy-head flota con bob propio 5.6s (paralaje contra el cuerpo), .homy-core late como corazón (doble pulso tum-tum + pausa), .homy-halo respira luz, .homy-plug hace de antena (sacudida ocasional 7.8s, wiggle rápido en listening/thinking).
+- Sistema de conductas aleatorias data-mood (JS): cada 4–8s en idle hace un gesto breve (1=endereza, 2=mira izq, 3=mira der) vía .homy-head-inner; hover del personaje también lo endereza. Reset async del mood para cumplir react-hooks/set-state-in-effect; atributo data-mood derivado en render (solo idle).
+- Estados mejorados: listening ahora flota suave (float-soft) y la cabeza se acreca/perka (scale 1.045); thinking inclina cabeza -4°; happy inclina +3°. La cabeza reacciona antes que el cuerpo.
+- prefers-reduced-motion ampliado a todas las capas nuevas (head/figure/tilt/halo/wrap).
+- Verificación E2E con Agent Browser: centrado y gap confirmados visualmente (zoom 2.6 sobre header, widget y hero), estados sondeados tras submit real: thinking(0.9s)→happy(1.9s)→idle ✓, respuesta IA real con Plomería/urgencia ✓, computed animations activos (homy-head-bob / homy-breath) ✓, eslint exit 0 ✓, consola sin errores ✓.
+
+Stage Summary:
+- Homy quedó con la cabeza centrada sobre el eje del cuerpo, un espacio de aire visible entre cabeza y cuerpo, y un sistema de vida en 6 capas (respiración, bob de cabeza, latido, halo, antena, micro-conductas aleatorias) + reacciones por estado y hover. Sin cambios de API del componente (size/state/className intactos).
+- Home sigue 100% funcional con IA real. Pendiente confirmación del usuario para FASE 1 (SQL Supabase).
