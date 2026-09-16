@@ -19,6 +19,8 @@ export type SessionUser = {
   avatarUrl?: string | null
   hasProfessional: boolean
   hasProvider: boolean
+  lat?: number | null
+  lng?: number | null
 }
 
 export async function hashPassword(pw: string) {
@@ -80,6 +82,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       avatarUrl: user.avatarUrl,
       hasProfessional: !!user.professional,
       hasProvider: !!user.provider,
+      lat: user.lat,
+      lng: user.lng,
     }
   } catch {
     return null

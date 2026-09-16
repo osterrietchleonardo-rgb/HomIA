@@ -8,7 +8,7 @@ export const runtime = 'nodejs'
 
 const BodySchema = z.object({
   message: z.string().min(1).max(800),
-  mode: z.enum(['cliente', 'profesional']).default('cliente'),
+  mode: z.enum(['cliente', 'profesional', 'auto']).default('auto'),
   sessionId: z.string().optional(),
   lat: z.number().optional().nullable(),
   lng: z.number().optional().nullable(),
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   try {
     // historial de la sesión (persistente)
     let history: { role: 'user' | 'homy'; content: string }[] = []
-    let session = null
+    let session: Awaited<ReturnType<typeof db.homySession.findUnique>> = null
     if (sessionId) {
       session = await db.homySession.findUnique({ where: { id: sessionId } })
       if (session) {
@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
       sessionId: activeSessionId,
       message: result.message,
       suggestions: result.suggestions,
+      intent: result.intent,
       question: result.question,
       results: result.results,
       steps: result.steps,

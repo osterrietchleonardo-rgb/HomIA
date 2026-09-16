@@ -3,6 +3,7 @@ import { ok } from '@/lib/api'
 import { db } from '@/lib/db'
 import { parseJson } from '@/lib/api'
 import { withinRadius, type WithGeo } from '@/lib/geo'
+import { matchTerms, canonicalCategoria } from '@/lib/search-match'
 
 // Búsqueda dual HomIA
 // mode=cliente    → profesionales (por profesión/habilidades) + trabajos abiertos de la categoría
@@ -26,12 +27,13 @@ export async function GET(req: NextRequest) {
     })
     let filtered = pros
     if (q || cat) {
+      const catSlug = canonicalCategoria(cat)
       filtered = pros.filter((p) => {
         const professions = parseJson<string[]>(p.professions, [])
         const skills = parseJson<string[]>(p.skills, [])
         const hay = [professions.join(' '), skills.join(' '), p.bio || '', p.user.displayName, p.companyName || '', p.city || ''].join(' ').toLowerCase()
-        const catOk = cat ? professions.includes(cat) : true
-        return catOk && (!q || hay.includes(q) || professions.some((pf) => pf.includes(q) || q.includes(pf)))
+        const catOk = catSlug ? professions.some((pf) => canonicalCategoria(pf) === catSlug || pf.toLowerCase().includes(catSlug)) : true
+        return catOk && (!q || matchTerms(q, hay) || professions.some((pf) => hay.includes(pf)))
       })
     }
     const proResults = withinRadius(
@@ -65,7 +67,7 @@ export async function GET(req: NextRequest) {
     })
     const jobResults = withinRadius(
       openJobs
-        .filter((j) => !q || `${j.title} ${j.description}`.toLowerCase().includes(q))
+        .filter((j) => !q || matchTerms(q, `${j.title} ${j.description} ${j.categorySlug}`.toLowerCase()))
         .map((j) => ({
           id: j.id,
           type: 'trabajo' as const,
@@ -100,13 +102,15 @@ export async function GET(req: NextRequest) {
 
   let matched = stock
   if (q) {
-    const terms = q.split(/\s+/).filter(Boolean)
     matched = stock.filter((s) => {
       const hay = [s.element.name, ...parseJson<string[]>(s.element.aliases, []), s.brand || '', s.provider.businessName].join(' ').toLowerCase()
-      return terms.some((t) => hay.includes(t)) || hay.includes(q)
+      return matchTerms(q, hay)
     })
   }
-  if (cat) matched = matched.filter((s) => s.element.category.slug === cat)
+  if (cat) {
+    const catSlug = canonicalCategoria(cat)
+    if (catSlug) matched = matched.filter((s) => s.element.category.slug === catSlug)
+  }
 
   const materialResults = withinRadius(
     matched.map((s) => ({
@@ -132,10 +136,11 @@ export async function GET(req: NextRequest) {
   )
 
   // ── Bolsa de trabajos abiertos ──
+  const catFilter = canonicalCategoria(cat)
   const openJobs = await db.jobPost.findMany({
     where: {
       status: 'abierto',
-      ...(cat ? { categorySlug: cat } : {}),
+      ...(catFilter ? { categorySlug: catFilter } : {}),
       ...(urgency ? { urgency } : {}),
     },
     include: { user: { select: { displayName: true, city: true } }, bids: { select: { id: true } } },
@@ -144,7 +149,7 @@ export async function GET(req: NextRequest) {
   })
   const jobResults = withinRadius(
     openJobs
-      .filter((j) => !q || `${j.title} ${j.description} ${j.categorySlug}`.toLowerCase().includes(q))
+      .filter((j) => !q || matchTerms(q, `${j.title} ${j.description} ${j.categorySlug}`.toLowerCase()))
       .map((j) => ({
         id: j.id,
         type: 'trabajo' as const,

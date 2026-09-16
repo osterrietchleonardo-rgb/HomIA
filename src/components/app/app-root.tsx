@@ -56,6 +56,15 @@ export default function AppRoot() {
     refresh()
   }, [refresh])
 
+  // URLs directas (/registrarse, /panel/...) → hash (#/registrarse) para que el
+  // router SPA las entienda: cubre links compartidos, refresh y URLs tipeadas.
+  useEffect(() => {
+    const p = window.location.pathname
+    if (p && p !== '/' && !window.location.hash) {
+      navigate(`${p}${window.location.search || ''}`, { replace: true })
+    }
+  }, [])
+
   // Pide ubicación en primera navegación a buscar/mapa (permiso explícito)
   useEffect(() => {
     if (!route.path.startsWith('/buscar')) return

@@ -175,3 +175,22 @@ Work Log:
 
 Stage Summary:
 - Home restaurada al diseño aprobado: header fijo limpio + sello IA + titular + barra con Homy detrás + chips de confianza. El bug era exclusivo del home de la SPA (las 27 pantallas del panel no se ven afectadas).
+
+---
+Task ID: 8
+Agent: Super Z (main)
+Task: (1) Buscador de la home sin razonamiento de intención ("qué hay para plomeros?" respondía como si buscaran un plomero). (2) Usuario no podía registrarse.
+
+Work Log:
+- Registro: la API /api/auth/register funciona OK para los 3 roles (verificado por curl, 201). La causa real era de ROUTING: al abrir URLs directas (/registrarse) el router SPA por hash mostraba la home. Fix en app-root.tsx: useEffect de montaje que convierte pathname+search → hash con navigate(replace) — cubre links compartidos, refresh y URLs tipeadas.
+- E2E registro verificado con Agent Browser: /registrarse directo → formulario → rol cliente → datos → "Crear mi cuenta" → alta real (Maria Gonzalez) → redirección a #/panel/cliente con dashboard y empty states OK.
+- Superagente home: hero-search.tsx ahora usa /api/homy/agent con mode:'auto' + lat/lng del store de ubicación. La respuesta renderiza: mensaje del agente, pregunta de aclaración con opciones clickeables, chips de resultados REALES (trabajos → /trabajo/{id}, profesionales → /profesional/{id}, materiales/comparables → /proveedor/{id}) y CTA según intención (contratar→"Ver profesionales en el mapa" /buscar?mode=cliente, trabajar→"Ver la bolsa de trabajos" /buscar?mode=profesional, materiales→"Comparar precios", ayuda→buscador).
+- Intención: AgentMode sumó 'auto' (default); systemPrompt con reglas de interpretación (problema de casa → contratar; oficio/trabajo → trabajar; insumos/precio → materiales); runHomyAgent retorna intent derivado de la ÚLTIMA herramienta usada (deriveIntentFromSteps) o heurística detectIntent (es-AR: patrones "qué hay para X", "busco trabajo", insumos con precio, etc.). Fallback sin LLM también razona intención por heurística.
+- Bug de sobre-filtrado encontrado con log de args: el LLM pasaba urgencia:"normal" default que descartaba trabajos de otras urgencias, y categoria:"plomero" que no matcheaba el slug "plomeria". Fixes: (a) prompt prohíbe pasar urgencia/radio si el usuario no lo mencionó; (b) toolBuscarTrabajos relaja filtros progresivamente (con urgencia → sin urgencia → sin categoría); (c) nuevo src/lib/search-match.ts compartido con matchTerms (normaliza acentos, tokens ≥3, stopwords, plurales plomeros→plomero, match por cualquier token) y canonicalCategoria (aliases plomero/gasista/albañil/etc → slugs); usado por homy-agent.ts Y /api/search (route.ts) — "que hay para plomeros?" ahora encuentra trabajos en ambas capas.
+- auth.ts: SessionUser + getSessionUser ahora incluyen lat/lng (agente usa ubicación del usuario logueado).
+- Datos demo reales creados vía API para probar: trabajo abierto "Instalar termotanque y revisar cañerias" ($80k-$120k, plomeria), proveedor "Corralon Mitre" con Cemento Portland 50kg a $9.800 (Loma Negra); usuarios de diagnóstico eliminados al final.
+- Verificación: bun run lint exit 0; tsc sin errores en homy-agent; tests curl de los 3 intents → intent correcto + datos reales citados ($80.000-$120.000 trabajo; Sergio Plomero ★5.0; cemento $9.800 Corralón Mitre); browser E2E: "que hay para plomeros?" → respuesta + chip trabajo + CTA "Ver la bolsa de trabajos" → #/buscar?mode=profesional&q=...; "necesito un plomero urgente" → pregunta de aclaración con opciones + chips de pros reales; consola limpia en carga fresca.
+
+Stage Summary:
+- El buscador de la home es ahora el superagente con razonamiento de intención para TODOS los casos (contratar/trabajar/materiales/ayuda), con preguntas de aclaración, resultados reales clickeables y CTA al flujo correcto.
+- Registro arreglado a nivel routing (URLs directas → hash) y verificado E2E de punta a punta.
