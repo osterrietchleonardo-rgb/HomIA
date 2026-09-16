@@ -62,7 +62,7 @@ export default function ProviderDashboard() {
       </div>
 
       {stock.length === 0 ? (
-        <section className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6 mb-6">
+        <section className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-6 mb-6">
           <EmptyState icon="📦" title="Todavía no publicaste elementos"
             hint="Publicá precios y stock del catálogo estándar para aparecer en las búsquedas de materiales de los profesionales."
             action={
@@ -80,7 +80,7 @@ export default function ProviderDashboard() {
           <p className="text-sm text-slate-500 mt-0.5 mb-3">Repone antes de que un profesional necesite el material.</p>
           <div className="space-y-2">
             {alerts.map((s) => (
-              <div key={s.id} className="rounded-2xl bg-white border border-slate-200 p-3.5 flex flex-wrap items-center justify-between gap-2">
+              <div key={s.id} className="rounded-2xl homy-glass border border-slate-200 p-3.5 flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-bold text-[#0A2540] truncate">{s.name}</p>
                   <p className="text-xs text-slate-500 mt-0.5">
@@ -110,7 +110,7 @@ export default function ProviderDashboard() {
         <section>
           <h2 className="font-extrabold text-[#0A2540] mb-3">Vinculaciones activas ({activeLinks.length})</h2>
           {links.length === 0 ? (
-            <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6">
+            <div className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-6">
               <EmptyState icon="🔗" title="Sin profesionales vinculados"
                 hint="Vinculá profesionales con una cuenta de retiro para que retiren materiales por tu negocio."
                 action={
@@ -122,7 +122,7 @@ export default function ProviderDashboard() {
           ) : (
             <div className="space-y-2">
               {links.slice(0, 4).map((l) => (
-                <button key={l.id} onClick={() => navigate('/panel/proveedor/vinculaciones')} className="w-full text-left rounded-2xl bg-white border border-slate-200 p-4 shadow-sm hover:shadow-md transition flex items-center justify-between gap-3">
+                <button key={l.id} onClick={() => navigate('/panel/proveedor/vinculaciones')} className="w-full text-left rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm hover:shadow-md transition flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <UAvatar name={l.professional.companyName || l.professional.displayName} url={l.professional.avatarUrl} size={40} />
                     <div className="min-w-0">
@@ -150,7 +150,7 @@ export default function ProviderDashboard() {
         {/* Acceso rápido al CRM */}
         <section>
           <h2 className="font-extrabold text-[#0A2540] mb-3">CRM</h2>
-          <button onClick={() => navigate('/panel/proveedor/crm')} className="w-full text-left rounded-2xl bg-white border border-slate-200 p-4 shadow-sm hover:shadow-md transition flex items-center gap-4">
+          <button onClick={() => navigate('/panel/proveedor/crm')} className="w-full text-left rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm hover:shadow-md transition flex items-center gap-4">
             <span className="size-11 rounded-2xl bg-[#1D63B8]/10 grid place-items-center shrink-0">
               <Users className="size-5 text-[#1D63B8]" />
             </span>
@@ -160,7 +160,7 @@ export default function ProviderDashboard() {
             </span>
             <ArrowRight className="size-4 text-slate-300 shrink-0" />
           </button>
-          <button onClick={() => navigate('/panel/proveedor/vinculaciones')} className="w-full text-left rounded-2xl bg-white border border-slate-200 p-4 shadow-sm hover:shadow-md transition flex items-center gap-4 mt-2">
+          <button onClick={() => navigate('/panel/proveedor/vinculaciones')} className="w-full text-left rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm hover:shadow-md transition flex items-center gap-4 mt-2">
             <span className="size-11 rounded-2xl bg-[#FF5A1F]/10 grid place-items-center shrink-0">
               <Link2 className="size-5 text-[#FF5A1F]" />
             </span>

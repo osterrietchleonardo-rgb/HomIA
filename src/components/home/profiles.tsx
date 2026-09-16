@@ -54,7 +54,7 @@ export function Profiles() {
   return (
     <section
       id="comunidad"
-      className="scroll-mt-24 bg-chalk py-24 sm:py-28"
+      className="scroll-mt-24 py-24 sm:py-28"
       aria-label="Perfiles de la comunidad HomIA"
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -74,8 +74,8 @@ export function Profiles() {
               transition={{ duration: 0.55, delay: i * 0.12 }}
               className={
                 p.highlight
-                  ? "relative flex flex-col rounded-[30px] border border-action/25 bg-gradient-to-b from-action/6 to-white p-8 shadow-[0_24px_60px_-24px_rgba(255,90,31,0.35)] transition-transform duration-300 hover:-translate-y-1.5"
-                  : "relative flex flex-col rounded-[30px] border border-line/90 bg-white p-8 shadow-[0_12px_40px_-20px_rgba(10,37,64,0.18)] transition-transform duration-300 hover:-translate-y-1.5"
+                  ? "homy-glass homy-glass-featured homy-lift relative flex flex-col rounded-[30px] p-8"
+                  : "homy-glass homy-lift relative flex flex-col rounded-[30px] p-8"
               }
             >
               {p.highlight && (

@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { useRoute, navigate, Link } from '@/lib/router'
 import { useSession, useLocation, syncLocationToServer } from '@/lib/store'
 import { Loading } from '@/components/app/ui-bits'
+import { BackdropFX } from '@/components/app/backdrop-fx'
 import { Toaster } from '@/components/ui/sonner'
 
 // Pantallas públicas
@@ -102,7 +103,9 @@ export default function AppRoot() {
 
   return (
     <>
-      {screen}
+      {/* Z-order sagrado: ambiente z-0 → app z-10 → modales/paneles z-50 */}
+      <BackdropFX />
+      <div className="homy-screen relative z-10">{screen}</div>
       <Toaster position="top-center" richColors />
     </>
   )
@@ -156,7 +159,7 @@ function RolePicker() {
       <p className="text-sm text-slate-500 mt-2">Podés tener varios perfiles con la misma cuenta.</p>
       <div className="grid gap-3 mt-6">
         {user?.roles.map((r) => (
-          <Link key={r} to={`/panel/${r}`} className="rounded-2xl border border-slate-200 bg-white p-4 font-bold text-[#0A2540] shadow-sm hover:border-[#1D63B8] transition capitalize">
+          <Link key={r} to={`/panel/${r}`} className="homy-glass homy-lift rounded-2xl p-4 font-bold text-[#0A2540] capitalize">
             {r} →
           </Link>
         ))}
@@ -168,7 +171,7 @@ function RolePicker() {
 function AuthGate({ path }: { path: string }) {
   return (
     <div className="min-h-[70vh] flex items-center justify-center px-4">
-      <div className="max-w-md w-full rounded-3xl border border-slate-200 bg-white shadow-xl p-8 text-center">
+      <div className="homy-glass max-w-md w-full rounded-3xl p-8 text-center">
         <div className="text-4xl mb-2">🔒</div>
         <h2 className="text-xl font-extrabold text-[#0A2540]">Creá tu cuenta para seguir</h2>
         <p className="text-sm text-slate-500 mt-2">
@@ -196,12 +199,14 @@ function AuthGate({ path }: { path: string }) {
 function NotFound() {
   return (
     <div className="min-h-[70vh] flex flex-col items-center justify-center px-4 text-center">
-      <div className="text-6xl mb-4">🧩</div>
-      <h1 className="text-2xl font-extrabold text-[#0A2540]">Esta página no existe</h1>
-      <p className="text-slate-500 mt-2">El enlace se rompió o la página se movió.</p>
-      <button onClick={() => navigate('/')} className="mt-6 rounded-xl bg-[#0A2540] text-white font-bold px-6 py-3 hover:bg-[#123455] transition">
-        Volver al inicio
-      </button>
+      <div className="homy-glass rounded-3xl px-10 py-8">
+        <div className="text-6xl mb-4">🧩</div>
+        <h1 className="text-2xl font-extrabold text-[#0A2540]">Esta página no existe</h1>
+        <p className="text-slate-500 mt-2">El enlace se rompió o la página se movió.</p>
+        <button onClick={() => navigate('/')} className="mt-6 rounded-xl bg-[#0A2540] text-white font-bold px-6 py-3 hover:bg-[#123455] transition">
+          Volver al inicio
+        </button>
+      </div>
     </div>
   )
 }

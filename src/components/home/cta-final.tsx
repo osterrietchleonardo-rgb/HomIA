@@ -12,11 +12,11 @@ export function CtaFinal() {
 
   return (
     <section
-      className="bg-chalk pb-24 pt-4 sm:pb-28"
+      className="pb-24 pt-4 sm:pb-28"
       aria-label="Llamado a la acción final"
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="relative overflow-hidden rounded-[36px] bg-navy px-6 py-16 sm:px-12 sm:py-20">
+        <div className="homy-glass-dark relative overflow-hidden rounded-[36px] px-6 py-16 sm:px-12 sm:py-20">
           {/* Decoración */}
           <div aria-hidden className="pointer-events-none absolute inset-0">
             <div className="absolute left-[-8%] top-[-40%] size-[420px] rounded-full bg-tech/35 blur-[110px]" />

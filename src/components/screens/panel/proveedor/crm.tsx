@@ -115,7 +115,7 @@ export default function ProviderCRM() {
     return (
       <div>
         <PageHeader title="CRM" subtitle="Tus tratos con clientes y profesionales" />
-        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6">
+        <div className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-6">
           <EmptyState icon="🤝" title="No tenemos un pipeline para vos todavía" hint="Recargá la pantalla: se crea automáticamente la primera vez." />
         </div>
       </div>
@@ -135,7 +135,7 @@ export default function ProviderCRM() {
       />
 
       {deals.length === 0 ? (
-        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6">
+        <div className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-6">
           <EmptyState icon="🤝" title="Tu pipeline está vacío"
             hint={`Anotá cada contacto y cotización para no perder ninguna venta. Las etapas ${stages.map((s) => s.name).join(' / ')} ya están listas.`}
             action={
@@ -152,7 +152,7 @@ export default function ProviderCRM() {
             const idx = stageIndex(stage.id)
             return (
               <section key={stage.id} className="min-w-[266px] w-[266px] sm:flex-1 shrink-0">
-                <header className="rounded-2xl bg-white border border-slate-200 shadow-sm p-3 mb-3">
+                <header className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-3 mb-3">
                   <div className="flex items-center gap-2">
                     <span className="size-2.5 rounded-full shrink-0" style={{ background: stage.color }} />
                     <h2 className="font-bold text-sm text-[#0A2540] truncate flex-1">{stage.name}</h2>
@@ -163,7 +163,7 @@ export default function ProviderCRM() {
 
                 <div className="space-y-2 min-h-[80px]">
                   {list.map((deal) => (
-                    <article key={deal.id} className="rounded-2xl bg-white border border-slate-200 p-3.5 shadow-sm">
+                    <article key={deal.id} className="rounded-2xl homy-glass border border-slate-200 p-3.5 shadow-sm">
                       <div className="flex items-start justify-between gap-2">
                         <p className="font-bold text-sm text-[#0A2540] leading-snug">{deal.title}</p>
                         <button onClick={() => setDeleteTarget(deal)} title="Eliminar trato" aria-label={`Eliminar ${deal.title}`}
@@ -233,7 +233,7 @@ export default function ProviderCRM() {
             <div>
               <label className="text-sm font-semibold text-[#0A2540]">Etapa</label>
               <select value={stageId || stages[0]?.id || ''} onChange={(e) => setStageId(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]">
+                className="mt-1 w-full rounded-xl border border-slate-300 homy-glass px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]">
                 {stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>

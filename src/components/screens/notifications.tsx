@@ -33,8 +33,8 @@ export default function NotificationsScreen() {
 
   if (!sessionLoading && !user) {
     return (
-      <div className="min-h-screen bg-chalk flex items-center justify-center px-4">
-        <div className="max-w-sm rounded-3xl bg-white border border-slate-200 shadow-xl p-8 text-center">
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="max-w-sm rounded-3xl homy-glass border border-slate-200 shadow-xl p-8 text-center">
           <Bell className="size-10 text-[#1D63B8] mx-auto" />
           <h2 className="text-xl font-extrabold text-[#0A2540] mt-3">Ingresá para ver tus notificaciones</h2>
           <button onClick={() => navigate('/ingresar?volver=/notificaciones')} className="mt-5 w-full rounded-xl bg-[#FF5A1F] text-white font-bold py-3">
@@ -46,7 +46,7 @@ export default function NotificationsScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-chalk">
+    <div className="min-h-screen">
       <div className="max-w-2xl mx-auto px-4 py-8">
         <button onClick={() => navigate('/')} className="text-sm text-slate-500 hover:text-[#1D63B8] flex items-center gap-1 mb-4">
           <ChevronLeft className="size-4" /> Inicio
@@ -62,7 +62,7 @@ export default function NotificationsScreen() {
               <button
                 key={n.id}
                 onClick={() => { if (n.link?.startsWith('#')) { window.location.hash = n.link } else if (n.link) { navigate(n.link.replace(/^#/, '')) } }}
-                className={`w-full text-left rounded-2xl border p-4 transition hover:shadow-md ${n.read ? 'bg-white border-slate-200' : 'bg-[#00C4FF]/5 border-[#00C4FF]/40'}`}
+                className={`w-full text-left rounded-2xl border p-4 transition hover:shadow-md ${n.read ? 'homy-glass border-slate-200' : 'bg-[#00C4FF]/5 border-[#00C4FF]/40'}`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-bold text-[#0A2540]">{n.title}</p>

@@ -25,7 +25,7 @@ export function AiBand() {
   return (
     <section
       id="motor-ia"
-      className="relative scroll-mt-24 overflow-hidden bg-navy py-24 sm:py-28"
+      className="homy-glass-dark relative scroll-mt-24 overflow-hidden py-24 sm:py-28"
       aria-label="Motor de inteligencia artificial de HomIA"
     >
       {/* Decoración de fondo */}

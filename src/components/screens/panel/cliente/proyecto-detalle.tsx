@@ -100,7 +100,7 @@ export default function ClientProjectDetail({ id }: { id: string }) {
       <PageHeader title={p.title} subtitle={`Proyecto con ${p.professional.companyName || p.professional.displayName}`} />
 
       {/* etapas */}
-      <div className="rounded-2xl bg-white border border-slate-200 p-5 mb-5">
+      <div className="rounded-2xl homy-glass border border-slate-200 p-5 mb-5">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex gap-2">
             {STAGES.map((s, i) => (
@@ -126,7 +126,7 @@ export default function ClientProjectDetail({ id }: { id: string }) {
       </div>
 
       {/* contacto del profesional */}
-      <div className="rounded-2xl bg-white border border-slate-200 p-4 mb-5 flex items-center justify-between gap-3 flex-wrap">
+      <div className="rounded-2xl homy-glass border border-slate-200 p-4 mb-5 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <UAvatar name={p.professional.displayName} url={p.professional.avatarUrl} size={46} />
           <div>
@@ -146,7 +146,7 @@ export default function ClientProjectDetail({ id }: { id: string }) {
           <h2 className="font-extrabold text-[#0A2540] mb-3">Materiales por aprobar ({pending.length})</h2>
           <div className="space-y-2">
             {pending.map((m) => (
-              <div key={m.id} className="rounded-2xl bg-white border border-amber-200 p-4">
+              <div key={m.id} className="rounded-2xl homy-glass border border-amber-200 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <p className="font-bold text-[#0A2540]">{m.name}</p>
@@ -169,7 +169,7 @@ export default function ClientProjectDetail({ id }: { id: string }) {
 
       {/* materiales decididos */}
       {decided.length > 0 && (
-        <div className="rounded-2xl bg-white border border-slate-200 p-5 mb-5">
+        <div className="rounded-2xl homy-glass border border-slate-200 p-5 mb-5">
           <h2 className="font-extrabold text-[#0A2540] mb-3">Historial de materiales</h2>
           <div className="divide-y divide-slate-100">
             {decided.map((m) => (
@@ -189,7 +189,7 @@ export default function ClientProjectDetail({ id }: { id: string }) {
       )}
 
       {/* facturas */}
-      <div className="rounded-2xl bg-white border border-slate-200 p-5 mb-5">
+      <div className="rounded-2xl homy-glass border border-slate-200 p-5 mb-5">
         <h2 className="font-extrabold text-[#0A2540] mb-3">Facturas ({data.invoices.length})</h2>
         {data.invoices.length === 0 ? (
           <p className="text-sm text-slate-500">El profesional factura con detalle explícito cuando haya materiales aprobados y mano de obra.</p>
@@ -239,7 +239,7 @@ export default function ClientProjectDetail({ id }: { id: string }) {
 
 function MiniStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="rounded-xl bg-slate-50 px-4 py-3">
+    <div className="rounded-xl homy-glass-soft px-4 py-3">
       <p className="text-xs text-slate-400 font-semibold uppercase">{label}</p>
       <p className={`text-lg font-extrabold ${accent ? 'text-[#FF5A1F]' : 'text-[#0A2540]'}`}>{value}</p>
     </div>

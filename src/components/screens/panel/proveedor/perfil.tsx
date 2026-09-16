@@ -126,7 +126,7 @@ export default function ProviderProfile() {
       <PageHeader title="Mi perfil" subtitle="Datos de tu negocio y verificación de identidad" />
 
       {/* encabezado con reputación */}
-      <div className="rounded-3xl bg-white border border-slate-200 shadow-sm p-6 mb-5">
+      <div className="rounded-3xl homy-glass border border-slate-200 shadow-sm p-6 mb-5">
         <div className="flex items-center gap-4">
           <UAvatar name={me?.displayName || ''} url={me?.avatarUrl} size={60} />
           <div className="min-w-0">
@@ -144,7 +144,7 @@ export default function ProviderProfile() {
       </div>
 
       {/* datos del negocio */}
-      <form onSubmit={save} className="rounded-3xl bg-white border border-slate-200 shadow-sm p-6 space-y-4 mb-5">
+      <form onSubmit={save} className="rounded-3xl homy-glass border border-slate-200 shadow-sm p-6 space-y-4 mb-5">
         <h2 className="font-extrabold text-[#0A2540] flex items-center gap-2"><Store className="size-5 text-[#1D63B8]" /> Datos del negocio</h2>
         <Field label="Nombre del negocio" value={businessName} onChange={setBusinessName} placeholder="Ej: Corralón Central" required />
         <Field label="CUIT" value={cuit} onChange={setCuit} placeholder="30-12345678-9" />
@@ -163,7 +163,7 @@ export default function ProviderProfile() {
       </form>
 
       {/* documentos */}
-      <div className="rounded-3xl bg-white border border-slate-200 shadow-sm p-6">
+      <div className="rounded-3xl homy-glass border border-slate-200 shadow-sm p-6">
         <h2 className="font-extrabold text-[#0A2540] flex items-center gap-2"><ShieldCheck className="size-5 text-[#1D63B8]" /> Documentos</h2>
         <p className="text-sm text-slate-500 mt-1 mb-4">
           Subí tu DNI (frente y reverso) para verificar tu negocio. Queda privado: solo lo ve el equipo de HomIA.

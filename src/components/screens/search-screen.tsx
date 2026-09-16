@@ -171,9 +171,9 @@ export default function SearchScreen() {
   const hasResults = pros.length + jobs.length + materials.length + comparables.length > 0
 
   return (
-    <div className="min-h-screen bg-chalk">
-      {/* Header de búsqueda */}
-      <div className="sticky top-0 z-40 bg-[#0A2540]/95 backdrop-blur-xl shadow-lg">
+    <div className="min-h-screen">
+      {/* Header de búsqueda — vidrio nocturno */}
+      <div className="homy-glass-dark sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
           <button onClick={() => navigate('/')} className="shrink-0 flex items-center gap-1.5">
             <Homy size={36} state={aiState} />
@@ -395,7 +395,7 @@ function ProCard({ pro, logged }: { pro: ProResult; logged: boolean }) {
   return (
     <button
       onClick={() => logged ? navigate(`/profesional/${pro.id}`) : gate()}
-      className="text-left rounded-2xl bg-white border border-slate-200 p-4 shadow-sm hover:shadow-lg hover:border-[#1D63B8]/50 transition group"
+      className="text-left rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm hover:shadow-lg hover:border-[#1D63B8]/50 transition group"
     >
       <div className="flex items-start gap-3">
         <UAvatar name={pro.displayName} size={46} />
@@ -422,7 +422,7 @@ function MaterialCard({ m, logged, highlight }: { m: MaterialResult; logged: boo
   return (
     <button
       onClick={() => logged ? navigate(`/proveedor/${m.providerId}`) : gate()}
-      className={`text-left rounded-2xl bg-white border p-4 shadow-sm hover:shadow-lg transition ${highlight ? 'border-emerald-300 hover:border-emerald-400' : 'border-slate-200 hover:border-[#00A3E0]/60'}`}
+      className={`text-left rounded-2xl homy-glass border p-4 shadow-sm hover:shadow-lg transition ${highlight ? 'border-emerald-300 hover:border-emerald-400' : 'border-slate-200 hover:border-[#00A3E0]/60'}`}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="font-bold text-[#0A2540] leading-snug">{m.elementName}</p>
@@ -443,7 +443,7 @@ function JobCard({ job, logged }: { job: JobResult; logged: boolean }) {
   return (
     <button
       onClick={() => logged ? navigate(`/trabajo/${job.id}`) : gate()}
-      className="text-left rounded-2xl bg-white border border-slate-200 p-4 shadow-sm hover:shadow-lg hover:border-[#FF5A1F]/50 transition"
+      className="text-left rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm hover:shadow-lg hover:border-[#FF5A1F]/50 transition"
     >
       <div className="flex items-start justify-between gap-2">
         <p className="font-bold text-[#0A2540] leading-snug">{job.title}</p>

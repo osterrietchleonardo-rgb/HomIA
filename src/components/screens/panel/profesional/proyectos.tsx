@@ -49,14 +49,14 @@ export default function ProProjects() {
       <div className="flex gap-2 mb-5">
         {FILTERS.map((f) => (
           <button key={f.key} onClick={() => setFilter(f.key)}
-            className={`rounded-full px-4 py-1.5 text-sm font-bold transition ${filter === f.key ? 'bg-[#0A2540] text-white' : 'bg-white border border-slate-200 text-slate-500 hover:border-[#1D63B8]/40'}`}>
+            className={`rounded-full px-4 py-1.5 text-sm font-bold transition ${filter === f.key ? 'bg-[#0A2540] text-white' : 'homy-glass border border-slate-200 text-slate-500 hover:border-[#1D63B8]/40'}`}>
             {f.label}
           </button>
         ))}
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-2xl bg-white border border-slate-200 p-6">
+        <div className="rounded-2xl homy-glass border border-slate-200 p-6">
           <EmptyState icon="📁" title={filter === 'todos' ? 'No tenés proyectos todavía' : 'Nada con este filtro'}
             hint="Cuando un cliente acepte tu presupuesto de la bolsa, el proyecto se crea solo y lo seguís desde acá."
             action={
@@ -70,7 +70,7 @@ export default function ProProjects() {
           {filtered.map((p) => (
             <button key={p.id}
               onClick={() => navigate(`/panel/profesional/proyectos/${p.id}`)}
-              className="w-full text-left rounded-2xl bg-white border border-slate-200 p-4 shadow-sm hover:shadow-md transition">
+              className="w-full text-left rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm hover:shadow-md transition">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <UAvatar name={p.client?.displayName || 'Cliente'} url={p.client?.avatarUrl} size={44} />

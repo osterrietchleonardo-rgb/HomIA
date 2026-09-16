@@ -77,7 +77,7 @@ export default function PublishJob() {
   return (
     <div className="max-w-2xl">
       <PageHeader title="Publicar trabajo" subtitle="Contá qué necesitás: los profesionales te mandan presupuestos" />
-      <form onSubmit={submit} className="rounded-3xl bg-white border border-slate-200 shadow-sm p-6 space-y-5">
+      <form onSubmit={submit} className="rounded-3xl homy-glass border border-slate-200 shadow-sm p-6 space-y-5">
         <div>
           <label className="text-sm font-semibold text-[#0A2540]">Título *</label>
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej.: Cambiar grifería de cocina y destapar desagüe"
@@ -103,7 +103,7 @@ export default function PublishJob() {
         <div className="grid sm:grid-cols-2 gap-4">
           <div>
             <label className="text-sm font-semibold text-[#0A2540]">Urgencia</label>
-            <select value={urgency} onChange={(e) => setUrgency(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 bg-white outline-none focus:border-[#1D63B8]">
+            <select value={urgency} onChange={(e) => setUrgency(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 homy-glass-input outline-none focus:border-[#1D63B8]">
               <option value="baja">Tranquilo</option>
               <option value="normal">Normal</option>
               <option value="alta">Urgente</option>

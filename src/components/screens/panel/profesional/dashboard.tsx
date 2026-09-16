@@ -79,13 +79,13 @@ export default function ProDashboard() {
         <section>
           <h2 className="font-extrabold text-[#0A2540] mb-3">Próximas acciones</h2>
           {actions.length === 0 ? (
-            <div className="rounded-2xl bg-white border border-slate-200 p-6">
+            <div className="rounded-2xl homy-glass border border-slate-200 p-6">
               <EmptyState icon="🧰" title="Todo al día, campeón" hint="Cuando envíes presupuestos o propongas materiales, vas a ver acá lo que necesita tu atención." />
             </div>
           ) : (
             <div className="space-y-2">
               {actions.map(({ key, project: p, kind }) => (
-                <button key={key} onClick={() => navigate(`/panel/profesional/proyectos/${p.id}`)} className="w-full text-left rounded-2xl bg-white border border-slate-200 p-4 hover:shadow-md transition flex items-center justify-between gap-3">
+                <button key={key} onClick={() => navigate(`/panel/profesional/proyectos/${p.id}`)} className="w-full text-left rounded-2xl homy-glass border border-slate-200 p-4 hover:shadow-md transition flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-bold text-[#0A2540] truncate">{p.title}</p>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -113,13 +113,13 @@ export default function ProDashboard() {
 
           <h2 className="font-extrabold text-[#0A2540] mb-3 mt-6">Trabajos para vos</h2>
           {inMyField.length === 0 ? (
-            <div className="rounded-2xl bg-white border border-slate-200 p-6 text-sm text-slate-500">
+            <div className="rounded-2xl homy-glass border border-slate-200 p-6 text-sm text-slate-500">
               No hay trabajos abiertos en tu rubro ahora mismo. Volvé a chequear la bolsa pronto o ampliá tu radio de búsqueda.
             </div>
           ) : (
             <div className="space-y-2">
               {inMyField.slice(0, 4).map((j) => (
-                <button key={j.id} onClick={() => navigate(`/trabajo/${j.id}`)} className="w-full text-left rounded-2xl bg-white border border-slate-200 p-4 hover:shadow-md transition">
+                <button key={j.id} onClick={() => navigate(`/trabajo/${j.id}`)} className="w-full text-left rounded-2xl homy-glass border border-slate-200 p-4 hover:shadow-md transition">
                   <p className="font-bold text-[#0A2540] truncate">{j.title}</p>
                   <p className="text-xs text-slate-400 mt-0.5">
                     {j.city || '—'} · {j.bidsCount} presupuesto{j.bidsCount === 1 ? '' : 's'}
@@ -140,7 +140,7 @@ export default function ProDashboard() {
 
 function QuickCard({ icon: Icon, title, desc, onClick }: { icon: React.ComponentType<{ className?: string }>; title: string; desc: string; onClick: () => void }) {
   return (
-    <button onClick={onClick} className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm hover:shadow-md hover:border-[#1D63B8]/40 transition text-left group">
+    <button onClick={onClick} className="rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm hover:shadow-md hover:border-[#1D63B8]/40 transition text-left group">
       <span className="inline-flex rounded-xl bg-[#1D63B8]/10 p-2.5 text-[#1D63B8] group-hover:bg-[#1D63B8] group-hover:text-white transition">
         <Icon className="size-5" />
       </span>

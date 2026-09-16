@@ -91,6 +91,7 @@ model ProfessionalProfile {
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   bids  JobBid[] @relation("BidProfessional")
   proProjects Project[] @relation("ProjectPro")
+  providerLinks ProviderLink[]
 }
 
 model ProviderProfile {
@@ -321,7 +322,8 @@ model ProviderLink {
   active         Boolean  @default(true)
   createdAt      DateTime @default(now())
 
-  provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  provider     ProviderProfile     @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  professional ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
 }
 
 // ─────────────────────────── OBRAS + RESEÑAS 360° ───────────────────────────

@@ -13,10 +13,8 @@ const TRUST_CHIPS = [
 export function Hero() {
   return (
     <section className="relative overflow-hidden pb-24 pt-36 sm:pt-44" aria-label="Presentación de HomIA">
-      {/* Fondos decorativos (no interfieren con la usabilidad) */}
+      {/* Fondos decorativos locales (la grilla global vive en BackdropFX) */}
       <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 bg-gradient-to-b from-chalk via-white to-confort" />
-        <div className="bg-grid-fade absolute inset-0" />
         <div className="absolute -top-24 right-[-10%] size-[480px] rounded-full bg-ai/10 blur-3xl" />
         <div className="absolute bottom-[-20%] left-[-8%] size-[420px] rounded-full bg-action/8 blur-3xl" />
         {/* Partículas flotantes sutiles */}

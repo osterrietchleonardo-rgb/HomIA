@@ -33,7 +33,7 @@ export default function ClientProjects() {
     <div className="max-w-4xl">
       <PageHeader title="Mis proyectos" subtitle="Seguimiento de obras con tu profesional" />
       {projects.length === 0 ? (
-        <div className="rounded-2xl bg-white border border-slate-200 p-6">
+        <div className="rounded-2xl homy-glass border border-slate-200 p-6">
           <EmptyState icon="📁" title="Sin proyectos todavía"
             hint="Cuando aceptes un presupuesto de un profesional, acá vas a seguir el avance: materiales, etapas, facturas y pago con Mercado Pago." />
         </div>
@@ -41,7 +41,7 @@ export default function ClientProjects() {
         <div className="space-y-3">
           {projects.map((p) => (
             <button key={p.id} onClick={() => navigate(`/panel/cliente/proyectos/${p.id}`)}
-              className="w-full text-left rounded-2xl bg-white border border-slate-200 p-5 hover:shadow-lg transition">
+              className="w-full text-left rounded-2xl homy-glass border border-slate-200 p-5 hover:shadow-lg transition">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-1">

@@ -36,7 +36,7 @@ const STATUS_OPTIONS = [
 function rowTone(status: string): string {
   if (status === 'agotado') return 'border-red-300 bg-red-50/40'
   if (status === 'por_agotar') return 'border-amber-300 bg-amber-50/40'
-  return 'border-slate-200 bg-white'
+  return 'border-slate-200 homy-glass'
 }
 
 export default function ProviderStock() {
@@ -205,19 +205,19 @@ export default function ProviderStock() {
       </div>
 
       {/* filtros */}
-      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-4 mb-4 flex flex-col sm:flex-row gap-3">
+      <div className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-4 mb-4 flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="size-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre…"
             className="w-full rounded-xl border border-slate-300 pl-10 pr-4 py-2.5 text-sm outline-none focus:border-[#1D63B8] focus:ring-2 focus:ring-[#1D63B8]/20" aria-label="Buscar elemento por nombre" />
         </div>
         <select value={cat} onChange={(e) => setCat(e.target.value)} aria-label="Filtrar por categoría"
-          className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-[#0A2540] outline-none focus:border-[#1D63B8]">
+          className="rounded-xl border border-slate-300 homy-glass px-3 py-2.5 text-sm font-semibold text-[#0A2540] outline-none focus:border-[#1D63B8]">
           <option value="">Todas las categorías</option>
           {catOptions.map(([slug, name]) => <option key={slug} value={slug}>{name}</option>)}
         </select>
         <select value={statusF} onChange={(e) => setStatusF(e.target.value)} aria-label="Filtrar por estado"
-          className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-[#0A2540] outline-none focus:border-[#1D63B8]">
+          className="rounded-xl border border-slate-300 homy-glass px-3 py-2.5 text-sm font-semibold text-[#0A2540] outline-none focus:border-[#1D63B8]">
           <option value="">Todos los estados</option>
           {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -225,7 +225,7 @@ export default function ProviderStock() {
 
       {/* listado */}
       {stock.length === 0 ? (
-        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6">
+        <div className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-6">
           <EmptyState icon="📦" title="Todavía no publicaste elementos"
             hint="Elegí elementos del catálogo estándar (tornillos, caños, cables…) y publicá tu precio y stock. Los profesionales te van a encontrar al buscar materiales."
             action={
@@ -235,7 +235,7 @@ export default function ProviderStock() {
             } />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6">
+        <div className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-6">
           <EmptyState icon="🔍" title="Sin resultados"
             hint="Ningún elemento coincide con los filtros. Probá con otro nombre, categoría o estado."
             action={
@@ -266,7 +266,7 @@ export default function ProviderStock() {
                     <input type="number" min={0} value={drafts[s.id]?.price ?? String(s.price)}
                       onChange={(e) => setDraft(s.id, 'price', e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter') savePrice(s) }}
-                      className="w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]"
+                      className="w-full min-w-0 rounded-xl border border-slate-300 homy-glass-input px-3 py-2.5 text-sm outline-none"
                       aria-label={`Precio de ${s.name}`} />
                     <button onClick={() => savePrice(s)} disabled={savingId === s.id} title="Guardar precio" aria-label={`Guardar precio de ${s.name}`}
                       className="rounded-xl bg-[#1D63B8] hover:bg-[#164e8c] disabled:opacity-50 text-white px-3.5 transition shrink-0">
@@ -280,17 +280,17 @@ export default function ProviderStock() {
                   <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Cantidad ({s.unit})</label>
                   <div className="flex gap-1.5 mt-1">
                     <button onClick={() => bump(s, -1)} disabled={savingId === s.id} title="Restar 1" aria-label={`Restar 1 a ${s.name}`}
-                      className="rounded-xl border border-slate-300 bg-white w-11 grid place-items-center hover:border-[#FF5A1F] hover:text-[#FF5A1F] disabled:opacity-50 transition shrink-0">
+                      className="rounded-xl border border-slate-300 homy-glass w-11 grid place-items-center hover:border-[#FF5A1F] hover:text-[#FF5A1F] disabled:opacity-50 transition shrink-0">
                       <Minus className="size-4" />
                     </button>
                     <input type="number" min={0} value={drafts[s.id]?.qty ?? String(s.quantity)}
                       onChange={(e) => setDraft(s.id, 'qty', e.target.value)}
                       onBlur={() => saveQty(s)}
                       onKeyDown={(e) => { if (e.key === 'Enter') saveQty(s) }}
-                      className="w-full min-w-0 rounded-xl border border-slate-300 bg-white px-2 py-2.5 text-sm text-center outline-none focus:border-[#1D63B8]"
+                      className="w-full min-w-0 rounded-xl border border-slate-300 homy-glass px-2 py-2.5 text-sm text-center outline-none focus:border-[#1D63B8]"
                       aria-label={`Cantidad de ${s.name}`} />
                     <button onClick={() => bump(s, +1)} disabled={savingId === s.id} title="Sumar 1" aria-label={`Sumar 1 a ${s.name}`}
-                      className="rounded-xl border border-slate-300 bg-white w-11 grid place-items-center hover:border-[#FF5A1F] hover:text-[#FF5A1F] disabled:opacity-50 transition shrink-0">
+                      className="rounded-xl border border-slate-300 homy-glass w-11 grid place-items-center hover:border-[#FF5A1F] hover:text-[#FF5A1F] disabled:opacity-50 transition shrink-0">
                       <Plus className="size-4" />
                     </button>
                   </div>
@@ -303,7 +303,7 @@ export default function ProviderStock() {
                     <p className="text-sm font-extrabold text-[#0A2540] mt-1">{s.minStock} {s.unit}</p>
                   </div>
                   <button onClick={() => setDeleteTarget(s)}
-                    className="rounded-xl border border-slate-200 bg-white text-slate-400 hover:text-red-500 hover:border-red-300 px-3 py-2 flex items-center gap-1.5 text-sm font-semibold transition">
+                    className="rounded-xl border border-slate-200 homy-glass text-slate-400 hover:text-red-500 hover:border-red-300 px-3 py-2 flex items-center gap-1.5 text-sm font-semibold transition">
                     <Trash2 className="size-4" /> Eliminar
                   </button>
                 </div>
@@ -326,7 +326,7 @@ export default function ProviderStock() {
             <div>
               <label className="text-sm font-semibold text-[#0A2540]">Categoría</label>
               <select value={dlgCat} onChange={(e) => { setDlgCat(e.target.value); setElementId('') }}
-                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]">
+                className="mt-1 w-full rounded-xl border border-slate-300 homy-glass-input px-3 py-2.5 text-sm outline-none">
                 <option value="">Elegí una categoría…</option>
                 {catalog.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
               </select>
@@ -334,7 +334,7 @@ export default function ProviderStock() {
             <div>
               <label className="text-sm font-semibold text-[#0A2540]">Elemento</label>
               <select value={elementId} onChange={(e) => setElementId(e.target.value)} disabled={!dlgCat}
-                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8] disabled:bg-slate-50 disabled:text-slate-400">
+                className="mt-1 w-full rounded-xl border border-slate-300 homy-glass-input px-3 py-2.5 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400">
                 <option value="">{dlgCat ? 'Elegí un elemento…' : 'Primero elegí una categoría'}</option>
                 {dlgElements.map((el) => <option key={el.id} value={el.id}>{el.name} ({el.unit})</option>)}
               </select>

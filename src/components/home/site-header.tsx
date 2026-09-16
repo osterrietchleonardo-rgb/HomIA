@@ -47,7 +47,7 @@ export function SiteHeader() {
       className={cn(
         "fixed inset-x-0 top-0 z-50 transition-all duration-500",
         scrolled
-          ? "bg-chalk/80 backdrop-blur-xl shadow-[0_8px_30px_-12px_rgba(10,37,64,0.15)] border-b border-line/70"
+          ? "homy-glass-strong border-x-0 border-t-0 shadow-[0_8px_30px_-12px_rgba(10,37,64,0.15)]"
           : "bg-transparent border-b border-transparent"
       )}
     >
@@ -124,7 +124,7 @@ export function SiteHeader() {
           </SheetTrigger>
           <SheetContent
             side="right"
-            className="w-[300px] bg-chalk/95 backdrop-blur-xl"
+            className="w-[300px] homy-glass-strong"
           >
             <SheetHeader>
               <SheetTitle className="flex items-center gap-2">

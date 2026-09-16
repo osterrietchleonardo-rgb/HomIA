@@ -57,14 +57,14 @@ export default function ProProfileScreen({ id }: { id: string }) {
     } finally { setBusy(false) }
   }
 
-  if (loading) return <div className="min-h-screen bg-chalk"><Loading /></div>
-  if (!data) return <div className="min-h-screen bg-chalk pt-20"><EmptyState icon="🔎" title="Profesional no encontrado" /></div>
+  if (loading) return <div className="min-h-screen"><Loading /></div>
+  if (!data) return <div className="min-h-screen pt-20"><EmptyState icon="🔎" title="Profesional no encontrado" /></div>
 
   const p = data.profile
   const parsedWorks = data.works.map((w) => ({ ...w, photoList: safePhotos(w.photos) }))
 
   return (
-    <div className="min-h-screen bg-chalk">
+    <div className="min-h-screen">
       <div className="bg-[#0A2540] pt-6 pb-12 px-4">
         <div className="max-w-4xl mx-auto">
           <button onClick={() => navigate('/buscar?mode=cliente')} className="text-slate-300 hover:text-white text-sm flex items-center gap-1 mb-4">
@@ -96,7 +96,7 @@ export default function ProProfileScreen({ id }: { id: string }) {
 
       <div className="max-w-4xl mx-auto px-4 -mt-6 pb-16 space-y-6">
         {/* bio + stats */}
-        <div className="rounded-3xl bg-white border border-slate-200 shadow-lg p-6">
+        <div className="rounded-3xl homy-glass border border-slate-200 shadow-lg p-6">
           <div className="grid grid-cols-3 gap-3 text-center">
             <Stat value={p.worksCount} label="Obras publicadas" />
             <Stat value={p.experienceYears} label="Años experiencia" />
@@ -119,11 +119,11 @@ export default function ProProfileScreen({ id }: { id: string }) {
         <div>
           <h2 className="text-lg font-extrabold text-[#0A2540] mb-3">Trabajos realizados ({parsedWorks.length})</h2>
           {parsedWorks.length === 0 ? (
-            <div className="rounded-2xl bg-white border border-slate-200 p-6 text-sm text-slate-500">Todavía no publicó obras.</div>
+            <div className="rounded-2xl homy-glass border border-slate-200 p-6 text-sm text-slate-500">Todavía no publicó obras.</div>
           ) : (
             <div className="grid sm:grid-cols-2 gap-4">
               {parsedWorks.map((w) => (
-                <div key={w.id} className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+                <div key={w.id} className="rounded-2xl homy-glass border border-slate-200 shadow-sm overflow-hidden">
                   {w.photoList.length > 0 && (
                      
                     <img src={w.photoList[0]} alt={w.title} className="h-44 w-full object-cover" />
@@ -143,11 +143,11 @@ export default function ProProfileScreen({ id }: { id: string }) {
         <div>
           <h2 className="text-lg font-extrabold text-[#0A2540] mb-3">Reseñas ({data.reviews.length})</h2>
           {data.reviews.length === 0 ? (
-            <div className="rounded-2xl bg-white border border-slate-200 p-6 text-sm text-slate-500">Sin reseñas todavía.</div>
+            <div className="rounded-2xl homy-glass border border-slate-200 p-6 text-sm text-slate-500">Sin reseñas todavía.</div>
           ) : (
             <div className="space-y-3">
               {data.reviews.map((r) => (
-                <div key={r.id} className="rounded-2xl bg-white border border-slate-200 p-4">
+                <div key={r.id} className="rounded-2xl homy-glass border border-slate-200 p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <UAvatar name={r.author.displayName} size={34} />
@@ -160,7 +160,7 @@ export default function ProProfileScreen({ id }: { id: string }) {
                   </div>
                   <p className="text-sm text-slate-600 mt-2">{r.comment}</p>
                   {r.reply && (
-                    <div className="mt-3 rounded-xl bg-slate-50 border-l-4 border-[#1D63B8] p-3">
+                    <div className="mt-3 rounded-xl homy-glass-soft border-l-4 border-[#1D63B8] p-3">
                       <p className="text-xs font-bold text-[#1D63B8]">Respuesta del profesional</p>
                       <p className="text-sm text-slate-600">{r.reply}</p>
                     </div>
@@ -177,7 +177,7 @@ export default function ProProfileScreen({ id }: { id: string }) {
 
 function Stat({ value, label }: { value: number; label: string }) {
   return (
-    <div className="rounded-2xl bg-slate-50 py-3">
+    <div className="rounded-2xl homy-glass-soft py-3">
       <p className="text-2xl font-extrabold text-[#0A2540]">{value}</p>
       <p className="text-xs text-slate-500 font-semibold uppercase">{label}</p>
     </div>

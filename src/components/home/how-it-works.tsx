@@ -35,7 +35,7 @@ export function HowItWorks() {
   return (
     <section
       id="como-funciona"
-      className="scroll-mt-24 bg-chalk py-24 sm:py-28"
+      className="scroll-mt-24 py-24 sm:py-28"
       aria-label="Cómo funciona HomIA"
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -58,7 +58,7 @@ export function HowItWorks() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-60px" }}
               transition={{ duration: 0.55, delay: i * 0.12 }}
-              className="group relative rounded-[28px] border border-line/80 bg-white p-7 shadow-[0_10px_36px_-18px_rgba(10,37,64,0.18)] transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_24px_50px_-20px_rgba(10,37,64,0.28)]"
+              className="homy-glass homy-lift group relative rounded-[28px] p-7"
             >
               <div className="flex items-center justify-between">
                 <span

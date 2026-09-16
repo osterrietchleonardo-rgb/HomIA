@@ -81,9 +81,9 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
   const otherRoles = user?.roles.filter((r) => r !== role) || []
 
   return (
-    <div className="min-h-screen bg-chalk flex flex-col">
-      {/* topbar */}
-      <header className="sticky top-0 z-40 bg-[#0A2540] text-white shadow-lg">
+    <div className="min-h-screen flex flex-col">
+      {/* topbar — vidrio nocturno: la grilla global se adivina detrás */}
+      <header className="homy-glass-dark sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
           <Link to="/" className="flex items-center gap-2 shrink-0">
             <Homy size={38} />
@@ -125,9 +125,9 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
       </header>
 
       <div className="flex-1 flex">
-        {/* sidebar desktop */}
-        <aside className="hidden lg:block w-60 shrink-0 border-r border-slate-200 bg-white">
-          <nav className="sticky top-16 p-3 space-y-1" aria-label="Navegación del panel">
+        {/* sidebar desktop — vidrio fuerte flotante */}
+        <aside className="hidden lg:block w-60 shrink-0">
+          <nav className="homy-glass-strong sticky top-20 m-3 rounded-3xl p-3 space-y-1" aria-label="Navegación del panel">
             {items.map((item) => {
               const active = currentPath === item.to
               const Icon = item.icon
@@ -135,8 +135,8 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
-                    active ? 'bg-[#1D63B8] text-white shadow-md' : 'text-slate-600 hover:bg-confort hover:text-[#0A2540]'
+                  className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${
+                    active ? 'bg-[#1D63B8] text-white shadow-[0_8px_20px_-8px_rgba(29,99,184,0.7)]' : 'text-slate-600 hover:bg-white/60 hover:text-[#0A2540]'
                   }`}
                 >
                   <Icon className="size-4.5" />
@@ -144,8 +144,8 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
                 </Link>
               )
             })}
-            <div className="my-2 h-px bg-slate-100" />
-            <Link to="/buscar" className="flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-confort">
+            <div className="my-2 h-px bg-[#0A2540]/6" />
+            <Link to="/buscar" className="flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-white/60">
               <Home className="size-4.5" /> Ir a la home
             </Link>
           </nav>
@@ -155,8 +155,8 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
         <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8">{children}</main>
       </div>
 
-      {/* bottom nav mobile */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(10,37,64,0.08)]" aria-label="Navegación inferior">
+      {/* bottom nav mobile — vidrio fuerte flotante */}
+      <nav className="homy-glass-strong lg:hidden fixed bottom-3 inset-x-3 z-40 rounded-3xl" aria-label="Navegación inferior" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="flex justify-around">
           {items.slice(0, 5).map((item) => {
             const active = currentPath === item.to

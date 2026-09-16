@@ -32,7 +32,7 @@ const FOOTER_COLUMNS = [
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-line/80 bg-confort/70 pb-[env(safe-area-inset-bottom)]">
+    <footer className="homy-glass-strong pb-[env(safe-area-inset-bottom)]">
       <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
         <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
           {/* Marca */}

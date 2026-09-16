@@ -52,7 +52,7 @@ export default function ProBids() {
       </div>
 
       {projects.length === 0 ? (
-        <div className="rounded-2xl bg-white border border-slate-200 p-6">
+        <div className="rounded-2xl homy-glass border border-slate-200 p-6">
           <EmptyState icon="📄" title="Todavía no enviaste ningún presupuesto"
             hint="Entrá a la bolsa de trabajos, elegí una publicación y mandá tu cotización. Cuando el cliente la acepte, el proyecto aparece acá."
             action={
@@ -66,7 +66,7 @@ export default function ProBids() {
           <section>
             <h2 className="font-extrabold text-[#0A2540] mb-3">En presupuestación (pendiente de respuesta)</h2>
             {quoting.length === 0 ? (
-              <div className="rounded-2xl bg-white border border-slate-200 p-5 text-sm text-slate-500">
+              <div className="rounded-2xl homy-glass border border-slate-200 p-5 text-sm text-slate-500">
                 No hay cotizaciones esperando respuesta. Buscá nuevos trabajos en la bolsa y mandá tu presupuesto.
               </div>
             ) : (
@@ -79,7 +79,7 @@ export default function ProBids() {
           <section>
             <h2 className="font-extrabold text-[#0A2540] mb-3">Proyectos activos</h2>
             {active.length === 0 ? (
-              <div className="rounded-2xl bg-white border border-slate-200 p-5 text-sm text-slate-500">
+              <div className="rounded-2xl homy-glass border border-slate-200 p-5 text-sm text-slate-500">
                 Cuando un cliente acepte uno de tus presupuestos, el proyecto activo aparece acá con su monto y etapa.
               </div>
             ) : (
@@ -98,7 +98,7 @@ function ProjectRow({ p, badgeLabel, note }: { p: Project; badgeLabel?: string; 
   return (
     <button
       onClick={() => navigate(`/panel/profesional/proyectos/${p.id}`)}
-      className="w-full text-left rounded-2xl bg-white border border-slate-200 p-4 shadow-sm hover:shadow-md transition flex items-center justify-between gap-3"
+      className="w-full text-left rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm hover:shadow-md transition flex items-center justify-between gap-3"
     >
       <div className="min-w-0">
         <p className="font-bold text-[#0A2540] truncate">{p.title}</p>

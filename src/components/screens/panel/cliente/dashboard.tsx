@@ -52,7 +52,7 @@ export default function ClientDashboard() {
         <section>
           <h2 className="font-extrabold text-[#0A2540] mb-3">Tus publicaciones</h2>
           {jobs.length === 0 ? (
-            <div className="rounded-2xl bg-white border border-slate-200 p-6">
+            <div className="rounded-2xl homy-glass border border-slate-200 p-6">
               <EmptyState icon="📢" title="Todavía no publicaste trabajos"
                 hint="Publicá qué necesitás y los profesionales de tu zona te mandan presupuestos."
                 action={
@@ -64,7 +64,7 @@ export default function ClientDashboard() {
           ) : (
             <div className="space-y-2">
               {jobs.slice(0, 5).map((j) => (
-                <button key={j.id} onClick={() => navigate(`/panel/cliente/trabajos`)} className="w-full text-left rounded-2xl bg-white border border-slate-200 p-4 hover:shadow-md transition flex items-center justify-between gap-3">
+                <button key={j.id} onClick={() => navigate(`/panel/cliente/trabajos`)} className="w-full text-left rounded-2xl homy-glass border border-slate-200 p-4 hover:shadow-md transition flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-bold text-[#0A2540] truncate">{j.title}</p>
                     <div className="flex items-center gap-2 mt-1"><StatusBadge status={j.status} /><UrgencyBadge urgency={j.urgency} /><span className="text-xs text-slate-400">{j.bids.length} presupuesto{j.bids.length === 1 ? '' : 's'}</span></div>
@@ -79,13 +79,13 @@ export default function ClientDashboard() {
         <section>
           <h2 className="font-extrabold text-[#0A2540] mb-3">Tus proyectos</h2>
           {projects.length === 0 ? (
-            <div className="rounded-2xl bg-white border border-slate-200 p-6 text-sm text-slate-500">
+            <div className="rounded-2xl homy-glass border border-slate-200 p-6 text-sm text-slate-500">
               Cuando aceptes un presupuesto se crea un proyecto acá: aprobás materiales, seguís etapas y pagás con Mercado Pago.
             </div>
           ) : (
             <div className="space-y-2">
               {projects.slice(0, 5).map((p) => (
-                <button key={p.id} onClick={() => navigate(`/panel/cliente/proyectos/${p.id}`)} className="w-full text-left rounded-2xl bg-white border border-slate-200 p-4 hover:shadow-md transition flex items-center justify-between gap-3">
+                <button key={p.id} onClick={() => navigate(`/panel/cliente/proyectos/${p.id}`)} className="w-full text-left rounded-2xl homy-glass border border-slate-200 p-4 hover:shadow-md transition flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-bold text-[#0A2540] truncate">{p.title}</p>
                     <div className="flex items-center gap-2 mt-1">

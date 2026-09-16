@@ -56,7 +56,7 @@ export default function ClientInvoices() {
       <PageHeader title="Facturas" subtitle="Todo lo que tenés que pagar y lo ya pagado" />
 
       {invoices.length === 0 ? (
-        <div className="rounded-2xl bg-white border border-slate-200 p-6">
+        <div className="rounded-2xl homy-glass border border-slate-200 p-6">
           <EmptyState icon="🧾" title="Sin facturas todavía"
             hint="Cuando tu profesional emita la factura del proyecto (materiales + mano de obra con detalle), la pagás acá con Mercado Pago." />
         </div>
@@ -67,7 +67,7 @@ export default function ClientInvoices() {
               <h2 className="font-extrabold text-[#0A2540] mb-3">Por pagar ({pendientes.length})</h2>
               <div className="space-y-2">
                 {pendientes.map((inv) => (
-                  <div key={inv.id} className="rounded-2xl bg-white border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3">
+                  <div key={inv.id} className="rounded-2xl homy-glass border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="font-bold text-[#0A2540]">{inv.number}</p>
                       <p className="text-xs text-slate-400">Emitida {formatDate(inv.issuedAt)} · mano de obra {formatARS(inv.laborCost)} + materiales {formatARS(inv.materialsCost)}</p>
@@ -88,7 +88,7 @@ export default function ClientInvoices() {
               <h2 className="font-extrabold text-[#0A2540] mb-3">Pagadas ({pagadas.length})</h2>
               <div className="space-y-2">
                 {pagadas.map((inv) => (
-                  <div key={inv.id} className="rounded-2xl bg-white border border-emerald-200 p-4 flex items-center justify-between gap-3">
+                  <div key={inv.id} className="rounded-2xl homy-glass border border-emerald-200 p-4 flex items-center justify-between gap-3">
                     <div>
                       <p className="font-bold text-[#0A2540]">{inv.number}</p>
                       <p className="text-xs text-slate-400">{formatDate(inv.issuedAt)}</p>

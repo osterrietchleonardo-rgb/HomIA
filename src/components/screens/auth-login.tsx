@@ -39,12 +39,12 @@ export default function LoginScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-chalk flex flex-col items-center justify-center px-4 py-10">
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-10">
       <button onClick={() => navigate('/')} className="mb-8 flex items-center gap-2 hover:opacity-80 transition">
         <Homy size={52} state="happy" />
         <HomIAWordmark className="text-3xl" />
       </button>
-      <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white shadow-xl p-7">
+      <div className="w-full max-w-md rounded-3xl border border-slate-200 homy-glass shadow-xl p-7">
         <h1 className="text-2xl font-extrabold text-[#0A2540]">Ingresar</h1>
         <p className="text-sm text-slate-500 mt-1">Tu hogar en buenas manos.</p>
         <form onSubmit={submit} className="grid gap-4 mt-6">

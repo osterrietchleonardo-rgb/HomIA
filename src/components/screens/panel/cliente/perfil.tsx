@@ -54,7 +54,7 @@ export default function ClientProfile() {
   return (
     <div className="max-w-xl">
       <PageHeader title="Mi perfil" subtitle="Datos de tu cuenta y ubicación" />
-      <div className="rounded-3xl bg-white border border-slate-200 shadow-sm p-6 space-y-4">
+      <div className="rounded-3xl homy-glass border border-slate-200 shadow-sm p-6 space-y-4">
         <div className="flex items-center gap-4">
           <UAvatar name={displayName || user?.displayName || ''} url={user?.avatarUrl} size={60} />
           <div>

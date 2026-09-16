@@ -86,7 +86,7 @@ export default function ProviderLinks() {
 
       {/* listado */}
       {links.length === 0 ? (
-        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6">
+        <div className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-6">
           <EmptyState icon="🔗" title="Todavía no vinculaste profesionales"
             hint="Vinculá por email a un profesional registrado en HomIA y creale su cuenta de retiro."
             action={
@@ -99,7 +99,7 @@ export default function ProviderLinks() {
       ) : (
         <div className="space-y-3 mb-6">
           {links.map((l) => (
-            <div key={l.id} className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm flex flex-wrap items-start justify-between gap-4">
+            <div key={l.id} className="rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm flex flex-wrap items-start justify-between gap-4">
               <div className="flex gap-3 min-w-0 flex-1">
                 <UAvatar name={l.professional.companyName || l.professional.displayName} url={l.professional.avatarUrl} size={48} />
                 <div className="min-w-0">
@@ -127,7 +127,7 @@ export default function ProviderLinks() {
       )}
 
       {/* formulario de vinculación */}
-      <form id="form-vincular" onSubmit={submit} className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5 scroll-mt-24">
+      <form id="form-vincular" onSubmit={submit} className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-5 scroll-mt-24">
         <h2 className="font-extrabold text-[#0A2540] flex items-center gap-2">
           <Link2 className="size-5 text-[#1D63B8]" /> Vincular un profesional
         </h2>

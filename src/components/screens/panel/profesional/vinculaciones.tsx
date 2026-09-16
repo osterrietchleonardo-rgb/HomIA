@@ -86,7 +86,7 @@ export default function ProLinks() {
 
       {/* formulario de vinculación */}
       {showForm && (
-        <div className="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm mb-5">
+        <div className="rounded-2xl homy-glass border border-slate-200 p-5 shadow-sm mb-5">
           <h2 className="font-extrabold text-[#0A2540] mb-1 flex items-center gap-2"><Store className="size-5 text-[#1D63B8]" /> Vincularme con un proveedor</h2>
           <p className="text-sm text-slate-500 mb-4">Ingresá el email del proveedor registrado en HomIA y el nombre que le querés dar a tu cuenta de retiro.</p>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -117,7 +117,7 @@ export default function ProLinks() {
       {loading ? (
         <Loading />
       ) : links.length === 0 ? (
-        <div className="rounded-2xl bg-white border border-slate-200 p-6">
+        <div className="rounded-2xl homy-glass border border-slate-200 p-6">
           <EmptyState icon="🔗" title="No tenés cuentas de retiro vinculadas"
             hint="Pedile al proveedor su email de registro en HomIA y creá la cuenta acá. Después vas a poder retirar materiales y cargarlos directo al proyecto."
             action={
@@ -127,7 +127,7 @@ export default function ProLinks() {
       ) : (
         <div className="space-y-3">
           {links.map((l) => (
-            <div key={l.id} className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+            <div key={l.id} className="rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <span className="inline-flex rounded-xl bg-[#1D63B8]/10 p-2.5 text-[#1D63B8] shrink-0">
                   <Store className="size-5" />

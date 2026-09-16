@@ -101,7 +101,7 @@ export default function ProCRM() {
     return (
       <div className="max-w-4xl">
         <PageHeader title="CRM" subtitle="Tu pipeline de clientes y oportunidades" />
-        <div className="rounded-2xl bg-white border border-slate-200 p-6">
+        <div className="rounded-2xl homy-glass border border-slate-200 p-6">
           <EmptyState icon="📊" title="No tenés pipelines todavía"
             hint="El pipeline se crea automáticamente la primera vez que entrás." />
         </div>
@@ -135,18 +135,18 @@ export default function ProCRM() {
           {pipeline.stages.map((stage, i) => {
             const list = stageDeals.get(stage.id) || []
             return (
-              <div key={stage.id} className="min-w-[240px] w-[240px] shrink-0 rounded-2xl bg-slate-50 border border-slate-200/70 p-3 flex flex-col">
+              <div key={stage.id} className="min-w-[240px] w-[240px] shrink-0 rounded-2xl homy-glass-soft p-3 flex flex-col">
                 <div className="flex items-center justify-between gap-2 mb-3 px-1">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="size-2.5 rounded-full shrink-0" style={{ background: stage.color || '#1D63B8' }} />
                     <p className="font-bold text-[#0A2540] text-sm truncate">{stage.name}</p>
                   </div>
-                  <span className="text-xs font-bold text-slate-400 bg-white rounded-full px-2 py-0.5 border border-slate-200">{list.length}</span>
+                  <span className="text-xs font-bold text-slate-400 homy-glass rounded-full px-2 py-0.5 border border-slate-200">{list.length}</span>
                 </div>
 
                 <div className="space-y-2 flex-1">
                   {list.map((d) => (
-                    <div key={d.id} className="rounded-xl bg-white border border-slate-200 p-3 shadow-sm group">
+                    <div key={d.id} className="rounded-xl homy-glass border border-slate-200 p-3 shadow-sm group">
                       <p className="font-bold text-[#0A2540] text-sm leading-snug break-words">{d.title}</p>
                       {d.value > 0 && <p className="text-sm font-extrabold text-[#FF5A1F] mt-1">{formatARS(d.value)}</p>}
                       {d.counterparty && (

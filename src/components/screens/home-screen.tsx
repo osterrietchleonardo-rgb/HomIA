@@ -12,7 +12,7 @@ import { HomyWidget } from '@/components/home/homy-widget'
 
 export default function HomeScreen() {
   return (
-    <div className="relative min-h-screen bg-chalk text-navy">
+    <div className="relative min-h-screen text-navy">
       <SiteHeader />
       <main>
         <Hero />

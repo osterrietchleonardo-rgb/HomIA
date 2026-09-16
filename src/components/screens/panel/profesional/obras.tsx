@@ -120,7 +120,7 @@ export default function ProWorks() {
       />
 
       {works.length === 0 ? (
-        <div className="rounded-2xl bg-white border border-slate-200 p-6">
+        <div className="rounded-2xl homy-glass border border-slate-200 p-6">
           <EmptyState icon="🏗️" title="Todavía no publicaste obras"
             hint="Publicar tus trabajos realizados con fotos te da credibilidad y más presupuestos aceptados."
             action={
@@ -132,7 +132,7 @@ export default function ProWorks() {
           {works.map((w) => {
             const photos = parsePhotos(w.photos)
             return (
-              <article key={w.id} className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+              <article key={w.id} className="rounded-2xl homy-glass border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                 {photos.length > 0 ? (
                   <div className={`grid gap-0.5 ${photos.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
                     {photos.slice(0, 4).map((url, i) => (

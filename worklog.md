@@ -194,3 +194,25 @@ Work Log:
 Stage Summary:
 - El buscador de la home es ahora el superagente con razonamiento de intención para TODOS los casos (contratar/trabajar/materiales/ayuda), con preguntas de aclaración, resultados reales clickeables y CTA al flujo correcto.
 - Registro arreglado a nivel routing (URLs directas → hash) y verificado E2E de punta a punta.
+
+---
+Task ID: 9
+Agent: Super Z (main)
+Task: ADN visual "Glass Core HomIA" en TODO el sistema (directiva del usuario: elegante, última generación, elementos transparentes manteniendo la grilla de la home, todo con sentido), inspirado en el contrato de 5 reglas del sistema VAKDOR del usuario (sin copiarlo).
+
+Work Log:
+- globals.css: nueva sección GLASS CORE con contrato documentado — 5 variantes de vidrio construidas SOLO con color-mix(in srgb, ...% transparent) (.homy-glass 72% cards, -strong 86% chrome, -soft 52% chips, -dark 78% navy, -featured borde acción) + .homy-glass-input con focus acento IA + .homy-lift (solo transform) + .homy-screen (fade opacity-only para no romper position:fixed) + keyframes aurora-a/b, sonar, fade-in (solo transform/opacity).
+- Nuevo src/components/app/backdrop-fx.tsx: capa de ambiente global fija z-0 con pointer-events-none + aria-hidden — grilla técnica continua (antes solo en hero), 3 auroras con drift transform-only, sonar IA, grano SVG y viñeta.
+- app-root.tsx: z-order sagrado BackdropFX z-0 → wrapper homy-screen relative z-10 → Toaster; AuthGate/RolePicker/NotFound en vidrio.
+- panel-layout: topbar bg-[#0A2540] sólido → homy-glass-dark, sidebar → homy-glass-strong flotante (m-3 rounded-3xl), bottom-nav mobile → glass-strong flotante con safe-area, fondo bg-chalk eliminado.
+- site-header scrolled → glass-strong; Sheet mobile → glass-strong; hero.tsx: degradado opaco y grilla local eliminados (los aporta el BackdropFX global, sin duplicados).
+- Secciones home: features/profiles/how-it-works → transparentes con tarjetas homy-glass homy-lift; ai-band y cta-final → homy-glass-dark; footer → glass-strong; fixed syntax rota ask-image: → [mask-image:...].
+- Reemplazo masivo 122× bg-white → homy-glass en 29 archivos de screens/ (cards de paneles, auth, search, perfiles, notificaciones); selects nativos → homy-glass-input; kanban CRM x2, cajas KYC, info-boxes y burbujas → glass-soft; raíces min-h-screen sin bg opaco.
+- shadcn glass: dialog, alert-dialog, sheet, dropdown-menu(x2), popover, select, command → glass-strong; card → homy-glass; tokens --card/--popover → color-mix translúcido.
+- prefers-reduced-motion: lista ampliada con todas las animaciones nuevas + fallback estático para auroras/sonar y transform:none para lift.
+- Bug real encontrado en E2E: /api/provider/links devolvía 500 (include `professional` inexistente en ProviderLink). Fix: relación professional agregada al schema (ProviderLink.professional ↔ ProfessionalProfile.providerLinks, db:push) Y ruta reescrita componiendo profesionales a mano (findMany por ids + Map) para no depender del cliente Prisma cacheado en el dev server. Verificado: POST crea vinculación, GET 200 con composición correcta (Julieta Vidrio ↔ Cuenta Cristal).
+- Usuarios de prueba (pro.glass/prov.glass) eliminados al terminar. Lint exit 0; tsc sin errores en archivos tocados; dev.log 200s; navegador sin errores JS.
+
+Stage Summary:
+- Todo el sistema comparte ahora un solo ambiente: grilla técnica continua + auroras + grano visible detrás de vidrio en home, buscar, auth, paneles de los 3 roles, diálogos y menús. Z-order sagrado y reduced-motion respetados; animaciones solo transform/opacity; decoración pointer-events-none + aria-hidden.
+- Verificación E2E multi-viewport (1280×800 y 390×844) en home, /buscar, /ingresar, /registrarse, panel cliente, CRM profesional, bolsa, dashboard proveedor y vinculaciones — todas en vidrio con datos reales.

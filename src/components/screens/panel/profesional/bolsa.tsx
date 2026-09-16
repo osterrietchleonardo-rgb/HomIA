@@ -74,7 +74,7 @@ export default function ProJobsBoard() {
       <PageHeader title="Bolsa de trabajos" subtitle="Publicaciones abiertas de clientes buscando profesionales como vos" />
 
       {/* Filtros */}
-      <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm mb-5">
+      <div className="rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm mb-5">
         <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto]">
           <input
             value={q} onChange={(e) => setQ(e.target.value)}
@@ -109,7 +109,7 @@ export default function ProJobsBoard() {
       {loading ? (
         <Loading />
       ) : jobsWithDistance.length === 0 ? (
-        <div className="rounded-2xl bg-white border border-slate-200 p-6">
+        <div className="rounded-2xl homy-glass border border-slate-200 p-6">
           <EmptyState icon="🧰" title="No encontramos trabajos con esos filtros"
             hint="Probá ampliar el radio, quitar la urgencia o buscar por otra categoría."
             action={
@@ -121,7 +121,7 @@ export default function ProJobsBoard() {
       ) : (
         <div className="space-y-3">
           {jobsWithDistance.map((j) => (
-            <div key={j.id} className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm hover:shadow-md transition">
+            <div key={j.id} className="rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm hover:shadow-md transition">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -155,7 +155,7 @@ export default function ProJobsBoard() {
       {/* Materiales en proveedores (colapsable) */}
       <div className="mt-8">
         <button onClick={() => setShowMaterials(!showMaterials)}
-          className="w-full flex items-center justify-between rounded-2xl bg-white border border-slate-200 px-5 py-4 shadow-sm hover:shadow-md transition"
+          className="w-full flex items-center justify-between rounded-2xl homy-glass border border-slate-200 px-5 py-4 shadow-sm hover:shadow-md transition"
           aria-expanded={showMaterials}>
           <span className="flex items-center gap-2 font-extrabold text-[#0A2540]">
             <Boxes className="size-5 text-[#1D63B8]" />
@@ -165,13 +165,13 @@ export default function ProJobsBoard() {
         </button>
         {showMaterials && (
           materials.length === 0 ? (
-            <div className="rounded-2xl bg-white border border-slate-200 p-6 mt-3 text-sm text-slate-500 text-center">
+            <div className="rounded-2xl homy-glass border border-slate-200 p-6 mt-3 text-sm text-slate-500 text-center">
               No hay stock cargado en proveedores para esta búsqueda.
             </div>
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
               {materials.slice(0, 6).map((m) => (
-                <div key={m.id} className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm">
+                <div key={m.id} className="rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-bold text-[#0A2540] text-sm leading-snug">{m.name}</p>
                     <StatusBadge status={m.status} />

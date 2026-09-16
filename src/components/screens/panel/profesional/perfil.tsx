@@ -173,7 +173,7 @@ export default function ProProfile() {
 
       <div className="space-y-5">
         {/* identidad */}
-        <section className="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+        <section className="rounded-2xl homy-glass border border-slate-200 p-5 shadow-sm">
           <h2 className="font-extrabold text-[#0A2540] mb-4">Datos de contacto</h2>
           <div className="flex items-center gap-4 mb-4">
             <UAvatar name={displayName || email} url={avatarUrl} size={56} />
@@ -190,14 +190,14 @@ export default function ProProfile() {
         </section>
 
         {/* perfil profesional */}
-        <section className="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+        <section className="rounded-2xl homy-glass border border-slate-200 p-5 shadow-sm">
           <h2 className="font-extrabold text-[#0A2540] mb-4">Tu perfil profesional</h2>
 
           {/* persona | empresa */}
           <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1 mb-4 max-w-sm">
             {(['persona', 'empresa'] as const).map((t) => (
               <button key={t} type="button" onClick={() => setPersonType(t)}
-                className={`rounded-lg py-2 text-sm font-bold capitalize transition ${personType === t ? 'bg-white text-[#0A2540] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                className={`rounded-lg py-2 text-sm font-bold capitalize transition ${personType === t ? 'homy-glass text-[#0A2540] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
                 {t === 'persona' ? 'Persona' : 'Empresa'}
               </button>
             ))}
@@ -209,7 +209,7 @@ export default function ProProfile() {
               const active = professions.includes(c.slug)
               return (
                 <button key={c.slug} type="button" onClick={() => toggleProfession(c.slug)} aria-pressed={active}
-                  className={`rounded-full px-3.5 py-1.5 text-sm font-bold border transition ${active ? 'bg-[#1D63B8] border-[#1D63B8] text-white' : 'bg-white border-slate-300 text-slate-500 hover:border-[#1D63B8]/50'}`}>
+                  className={`rounded-full px-3.5 py-1.5 text-sm font-bold border transition ${active ? 'bg-[#1D63B8] border-[#1D63B8] text-white' : 'homy-glass border-slate-300 text-slate-500 hover:border-[#1D63B8]/50'}`}>
                   {c.name}
                 </button>
               )
@@ -254,7 +254,7 @@ export default function ProProfile() {
         </section>
 
         {/* verificación de identidad */}
-        <section className="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+        <section className="rounded-2xl homy-glass border border-slate-200 p-5 shadow-sm">
           <h2 className="font-extrabold text-[#0A2540] mb-1 flex items-center gap-2"><ShieldCheck className="size-5 text-[#1D63B8]" /> Documentos — verificación de identidad</h2>
           <p className="text-sm text-slate-500 mb-4">Subí tu DNI (frente y reverso) para obtener el sello de verificado. Solo lo ve el equipo de HomIA.</p>
 

@@ -179,7 +179,7 @@ export default function ProProjectDetail({ id }: { id: string }) {
       <PageHeader title={p.title} subtitle={`Proyecto para ${p.client.displayName} · creado el ${formatDate(p.createdAt)}`} />
 
       {/* etapas */}
-      <div className="rounded-2xl bg-white border border-slate-200 p-5 mb-5 shadow-sm">
+      <div className="rounded-2xl homy-glass border border-slate-200 p-5 mb-5 shadow-sm">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex gap-2 flex-wrap">
             {STAGES.map((s, i) => (
@@ -214,7 +214,7 @@ export default function ProProjectDetail({ id }: { id: string }) {
       </div>
 
       {/* cliente + contacto */}
-      <div className="rounded-2xl bg-white border border-slate-200 p-4 mb-5 shadow-sm flex items-center justify-between gap-3 flex-wrap">
+      <div className="rounded-2xl homy-glass border border-slate-200 p-4 mb-5 shadow-sm flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <UAvatar name={p.client.displayName} url={p.client.avatarUrl} size={46} />
           <div>
@@ -238,7 +238,7 @@ export default function ProProjectDetail({ id }: { id: string }) {
 
       {/* formulario de materiales */}
       {p.status !== 'finalizado' && (
-        <div className="rounded-2xl bg-white border border-slate-200 p-5 mb-5 shadow-sm">
+        <div className="rounded-2xl homy-glass border border-slate-200 p-5 mb-5 shadow-sm">
           <h2 className="font-extrabold text-[#0A2540] mb-1 flex items-center gap-2"><Plus className="size-5 text-[#FF5A1F]" /> Proponer material al cliente</h2>
           <p className="text-sm text-slate-500 mb-4">Elegí del catálogo estándar; si un proveedor lo tiene en stock, te autocompletamos el mejor precio.</p>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -305,7 +305,7 @@ export default function ProProjectDetail({ id }: { id: string }) {
           <h2 className="font-extrabold text-[#0A2540] mb-3">Esperando aprobación del cliente ({proposed.length})</h2>
           <div className="space-y-2">
             {proposed.map((m) => (
-              <div key={m.id} className="rounded-2xl bg-white border border-amber-200 p-4 flex flex-wrap items-start justify-between gap-2">
+              <div key={m.id} className="rounded-2xl homy-glass border border-amber-200 p-4 flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="font-bold text-[#0A2540]">{m.name}</p>
                   <p className="text-sm text-slate-500">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}{m.providerName ? ` · ${m.providerName}` : ' · sin proveedor'}</p>
@@ -323,7 +323,7 @@ export default function ProProjectDetail({ id }: { id: string }) {
 
       {/* rechazados → sugerir alternativa */}
       {rejected.length > 0 && (
-        <div className="rounded-2xl bg-white border border-slate-200 p-5 mb-5 shadow-sm">
+        <div className="rounded-2xl homy-glass border border-slate-200 p-5 mb-5 shadow-sm">
           <h2 className="font-extrabold text-[#0A2540] mb-3">Rechazados por el cliente ({rejected.length})</h2>
           <div className="space-y-3">
             {rejected.map((m) => (
@@ -344,7 +344,7 @@ export default function ProProjectDetail({ id }: { id: string }) {
                   </div>
                 </div>
                 {altFor === m.id && (
-                  <div className="mt-3 rounded-xl bg-white border border-slate-200 p-4 grid gap-3 sm:grid-cols-3">
+                  <div className="mt-3 rounded-xl homy-glass border border-slate-200 p-4 grid gap-3 sm:grid-cols-3">
                     <label className="block sm:col-span-3">
                       <span className="text-xs font-semibold text-slate-500 uppercase">Alternativa</span>
                       <input value={altName} onChange={(e) => setAltName(e.target.value)} placeholder="Nombre del material alternativo"
@@ -378,7 +378,7 @@ export default function ProProjectDetail({ id }: { id: string }) {
 
       {/* aprobados / reemplazados */}
       {others.length > 0 && (
-        <div className="rounded-2xl bg-white border border-slate-200 p-5 mb-5 shadow-sm">
+        <div className="rounded-2xl homy-glass border border-slate-200 p-5 mb-5 shadow-sm">
           <h2 className="font-extrabold text-[#0A2540] mb-3">Historial de materiales</h2>
           <div className="divide-y divide-slate-100">
             {others.map((m) => (
@@ -398,7 +398,7 @@ export default function ProProjectDetail({ id }: { id: string }) {
       )}
 
       {/* cuentas de retiro vinculadas */}
-      <div className="rounded-2xl bg-white border border-slate-200 p-5 mb-5 shadow-sm">
+      <div className="rounded-2xl homy-glass border border-slate-200 p-5 mb-5 shadow-sm">
         <h2 className="font-extrabold text-[#0A2540] mb-1 flex items-center gap-2"><Truck className="size-5 text-[#1D63B8]" /> Cuentas de retiro vinculadas</h2>
         <p className="text-sm text-slate-500 mb-3">Con estas cuentas podés retirar materiales en los proveedores y se facturan a este proyecto.</p>
         {data.links.length === 0 ? (
@@ -422,7 +422,7 @@ export default function ProProjectDetail({ id }: { id: string }) {
       </div>
 
       {/* facturación */}
-      <div className="rounded-2xl bg-white border border-slate-200 p-5 mb-5 shadow-sm">
+      <div className="rounded-2xl homy-glass border border-slate-200 p-5 mb-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <h2 className="font-extrabold text-[#0A2540] flex items-center gap-2"><Receipt className="size-5 text-[#1D63B8]" /> Facturas ({data.invoices.length})</h2>
           {p.status !== 'finalizado' && (
@@ -457,7 +457,7 @@ export default function ProProjectDetail({ id }: { id: string }) {
 
 function MiniStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="rounded-xl bg-slate-50 px-4 py-3">
+    <div className="rounded-xl homy-glass-soft px-4 py-3">
       <p className="text-xs text-slate-400 font-semibold uppercase">{label}</p>
       <p className={`text-lg font-extrabold ${accent ? 'text-[#FF5A1F]' : 'text-[#0A2540]'}`}>{value}</p>
     </div>

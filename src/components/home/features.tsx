@@ -78,7 +78,7 @@ export function Features() {
   return (
     <section
       id="beneficios"
-      className="scroll-mt-24 bg-confort/60 py-24 sm:py-28"
+      className="scroll-mt-24 py-24 sm:py-28"
       aria-label="Beneficios de HomIA"
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -96,7 +96,7 @@ export function Features() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-40px" }}
               transition={{ duration: 0.5, delay: (i % 3) * 0.1 }}
-              className={`group relative rounded-[26px] border border-line/90 bg-white p-7 transition-all duration-300 hover:-translate-y-1.5 ${f.glow} ${f.border}`}
+              className={`homy-glass homy-lift group relative rounded-[26px] p-7 ${f.glow} ${f.border}`}
             >
               {f.tag && (
                 <span className="absolute right-5 top-5 rounded-full bg-navy/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-navy/50">

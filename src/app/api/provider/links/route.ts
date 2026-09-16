@@ -14,14 +14,19 @@ export async function GET() {
   const asProvider = prov
     ? await db.providerLink.findMany({
         where: { providerId: prov.id },
-        include: {
-          professional: {
-            include: { user: { select: { id: true, displayName: true, avatarUrl: true } } },
-          },
-        },
         orderBy: { createdAt: 'desc' },
       })
     : []
+
+  // Componemos el profesional a mano (include directo no disponible en el cliente viejo)
+  const proIds = [...new Set(asProvider.map((l) => l.professionalId))]
+  const pros = proIds.length
+    ? await db.professionalProfile.findMany({
+        where: { id: { in: proIds } },
+        include: { user: { select: { id: true, displayName: true, avatarUrl: true } } },
+      })
+    : []
+  const prosById = new Map(pros.map((p) => [p.id, p]))
 
   const asProfessional = pro
     ? await db.providerLink.findMany({
@@ -34,21 +39,26 @@ export async function GET() {
     : []
 
   return ok({
-    asProvider: asProvider.map((l) => ({
-      id: l.id,
-      accountLabel: l.accountLabel,
-      notes: l.notes,
-      active: l.active,
-      createdAt: l.createdAt,
-      professional: {
-        id: l.professional.id,
-        displayName: l.professional.user.displayName,
-        avatarUrl: l.professional.user.avatarUrl,
-        personType: l.professional.personType,
-        companyName: l.professional.companyName,
-        professions: safeParse(l.professional.professions),
-      },
-    })),
+    asProvider: asProvider.map((l) => {
+      const p = prosById.get(l.professionalId)
+      return {
+        id: l.id,
+        accountLabel: l.accountLabel,
+        notes: l.notes,
+        active: l.active,
+        createdAt: l.createdAt,
+        professional: p
+          ? {
+              id: p.id,
+              displayName: p.user.displayName,
+              avatarUrl: p.user.avatarUrl,
+              personType: p.personType,
+              companyName: p.companyName,
+              professions: safeParse(p.professions),
+            }
+          : { id: l.professionalId, displayName: 'Profesional', avatarUrl: null, personType: 'persona', companyName: null, professions: [] as string[] },
+      }
+    }),
     asProfessional: asProfessional.map((l) => ({
       id: l.id,
       accountLabel: l.accountLabel,

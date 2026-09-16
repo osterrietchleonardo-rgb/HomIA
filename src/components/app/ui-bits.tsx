@@ -104,7 +104,7 @@ export function PageHeader({ title, subtitle, right }: { title: string; subtitle
 
 export function StatCard({ label, value, hint, accent = '#1D63B8' }: { label: string; value: string | number; hint?: string; accent?: string }) {
   return (
-    <div className="rounded-2xl bg-white border border-slate-200/80 p-4 shadow-sm">
+    <div className="homy-glass homy-lift rounded-2xl p-4">
       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{label}</p>
       <p className="text-2xl font-extrabold mt-1" style={{ color: accent }}>{value}</p>
       {hint && <p className="text-xs text-slate-400 mt-1">{hint}</p>}

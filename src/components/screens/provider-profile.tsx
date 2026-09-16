@@ -35,15 +35,15 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
     })()
   }, [id])
 
-  if (loading) return <div className="min-h-screen bg-chalk"><Loading /></div>
-  if (!data) return <div className="min-h-screen bg-chalk pt-20"><EmptyState icon="🏪" title="Proveedor no encontrado" /></div>
+  if (loading) return <div className="min-h-screen"><Loading /></div>
+  if (!data) return <div className="min-h-screen pt-20"><EmptyState icon="🏪" title="Proveedor no encontrado" /></div>
 
   const p = data.profile
   const filtered = data.stock.filter((s) => !q || s.name.toLowerCase().includes(q.toLowerCase()))
   const categories = [...new Set(data.stock.map((s) => s.categorySlug))]
 
   return (
-    <div className="min-h-screen bg-chalk">
+    <div className="min-h-screen">
       <div className="bg-[#0A2540] pt-6 pb-12 px-4">
         <div className="max-w-4xl mx-auto">
           <button onClick={() => navigate('/buscar?mode=profesional')} className="text-slate-300 hover:text-white text-sm flex items-center gap-1 mb-4">
@@ -71,7 +71,7 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
 
       <div className="max-w-4xl mx-auto px-4 -mt-6 pb-16 space-y-6">
         {p.description && (
-          <div className="rounded-3xl bg-white border border-slate-200 shadow-lg p-6">
+          <div className="rounded-3xl homy-glass border border-slate-200 shadow-lg p-6">
             <p className="text-slate-600 leading-relaxed">{p.description}</p>
           </div>
         )}
@@ -98,9 +98,9 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
               </button>
             </div>
           ) : filtered.length === 0 ? (
-            <div className="rounded-2xl bg-white border border-slate-200 p-6 text-sm text-slate-500">Sin elementos que coincidan.</div>
+            <div className="rounded-2xl homy-glass border border-slate-200 p-6 text-sm text-slate-500">Sin elementos que coincidan.</div>
           ) : (
-            <div className="rounded-3xl bg-white border border-slate-200 shadow-sm divide-y divide-slate-100 overflow-hidden">
+            <div className="rounded-3xl homy-glass border border-slate-200 shadow-sm divide-y divide-slate-100 overflow-hidden">
               {filtered.map((s) => (
                 <div key={s.id} className="flex items-center justify-between gap-3 p-4 hover:bg-slate-50 transition">
                   <div className="min-w-0">
@@ -121,11 +121,11 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
         <div>
           <h2 className="text-lg font-extrabold text-[#0A2540] mb-3">Reseñas ({data.reviews.length})</h2>
           {data.reviews.length === 0 ? (
-            <div className="rounded-2xl bg-white border border-slate-200 p-6 text-sm text-slate-500">Sin reseñas todavía.</div>
+            <div className="rounded-2xl homy-glass border border-slate-200 p-6 text-sm text-slate-500">Sin reseñas todavía.</div>
           ) : (
             <div className="space-y-3">
               {data.reviews.map((r) => (
-                <div key={r.id} className="rounded-2xl bg-white border border-slate-200 p-4">
+                <div key={r.id} className="rounded-2xl homy-glass border border-slate-200 p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <UAvatar name={r.author.displayName} size={34} />

@@ -128,7 +128,7 @@ export default function JobDetailScreen({ id }: { id: string }) {
 
       <div className="max-w-3xl mx-auto px-4 -mt-6 pb-16">
         {/* descripción */}
-        <div className="rounded-3xl bg-white border border-slate-200 shadow-lg p-6">
+        <div className="rounded-3xl homy-glass border border-slate-200 shadow-lg p-6">
           <div className="flex items-start gap-4">
             <UAvatar name={job.client.displayName} url={job.client.avatarUrl} size={52} />
             <div className="min-w-0">
@@ -158,13 +158,13 @@ export default function JobDetailScreen({ id }: { id: string }) {
           <div className="mt-6">
             <h2 className="font-extrabold text-[#0A2540] text-lg mb-3">Presupuestos recibidos ({bids.length})</h2>
             {bids.length === 0 ? (
-              <div className="rounded-2xl bg-white border border-slate-200 p-6 text-sm text-slate-500">
+              <div className="rounded-2xl homy-glass border border-slate-200 p-6 text-sm text-slate-500">
                 Todavía no hay presupuestos. Te avisamos cuando un profesional oferte.
               </div>
             ) : (
               <div className="space-y-3">
                 {bids.map((b) => (
-                  <div key={b.id} className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5">
+                  <div key={b.id} className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-5">
                     <div className="flex items-start gap-3">
                       <UAvatar name={b.professional.displayName} url={b.professional.avatarUrl} size={46} />
                       <div className="flex-1 min-w-0">
@@ -182,7 +182,7 @@ export default function JobDetailScreen({ id }: { id: string }) {
                         <p className="text-xs text-slate-400">en {b.timelineDays} días</p>
                       </div>
                     </div>
-                    {b.message && <p className="text-sm text-slate-600 mt-3 bg-slate-50 rounded-xl p-3">{b.message}</p>}
+                    {b.message && <p className="text-sm text-slate-600 mt-3 homy-glass-soft rounded-xl p-3">{b.message}</p>}
                     <div className="flex flex-wrap items-center justify-between gap-2 mt-4">
                       <StatusBadge status={b.status} />
                       {b.status === 'pendiente' && job.status === 'abierto' && (
@@ -205,7 +205,7 @@ export default function JobDetailScreen({ id }: { id: string }) {
 
         {/* profesional: formulario de presupuesto */}
         {user && user.hasProfessional && !isOwner && (
-          <div className="mt-6 rounded-3xl bg-white border border-slate-200 shadow-lg p-6">
+          <div className="mt-6 rounded-3xl homy-glass border border-slate-200 shadow-lg p-6">
             <h2 className="font-extrabold text-[#0A2540] text-lg">{myBid ? 'Tu presupuesto' : 'Dejar presupuesto'}</h2>
             {myBid && <p className="text-xs text-slate-400 mb-2">Ya ofertaste: {formatARS(myBid.amount)} — podés editarlo.</p>}
             <div className="grid sm:grid-cols-3 gap-3 mt-3">

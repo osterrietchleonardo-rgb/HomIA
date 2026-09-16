@@ -75,14 +75,14 @@ export default function MyJobs() {
         }
       />
       {jobs.length === 0 ? (
-        <div className="rounded-2xl bg-white border border-slate-200 p-6">
+        <div className="rounded-2xl homy-glass border border-slate-200 p-6">
           <EmptyState icon="📢" title="Todavía no publicaste trabajos" hint="Publicá qué necesitás y empezá a recibir presupuestos."
             action={<button onClick={() => navigate('/panel/cliente/publicar')} className="rounded-xl bg-[#FF5A1F] text-white font-bold px-5 py-2.5">Publicar ahora</button>} />
         </div>
       ) : (
         <div className="space-y-4">
           {jobs.map((job) => (
-            <div key={job.id} className="rounded-3xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+            <div key={job.id} className="rounded-3xl homy-glass border border-slate-200 shadow-sm overflow-hidden">
               <div className="p-5 border-b border-slate-100">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
@@ -120,7 +120,7 @@ export default function MyJobs() {
                           <UStars rating={b.professional.rating} />
                           <span className="text-xs text-slate-500">{b.professional.rating > 0 ? `${b.professional.rating} (${b.professional.reviewsCount})` : 'Nuevo'} · {b.professional.worksCount} obras</span>
                         </div>
-                        {b.message && <p className="text-sm text-slate-600 mt-2 bg-slate-50 rounded-xl p-2.5">{b.message}</p>}
+                        {b.message && <p className="text-sm text-slate-600 mt-2 homy-glass-soft rounded-xl p-2.5">{b.message}</p>}
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-lg font-extrabold text-[#FF5A1F]">{formatARS(b.amount)}</p>

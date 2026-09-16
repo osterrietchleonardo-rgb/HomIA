@@ -155,7 +155,7 @@ export default function RegisterScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-chalk flex flex-col items-center px-4 py-10">
+    <div className="min-h-screen flex flex-col items-center px-4 py-10">
       <button onClick={() => navigate('/')} className="mb-6 flex items-center gap-2 hover:opacity-80 transition">
         <Homy size={48} state={busy ? 'thinking' : 'happy'} />
         <HomIAWordmark className="text-3xl" />
@@ -170,7 +170,7 @@ export default function RegisterScreen() {
         </div>
 
         {step === 1 && (
-          <div className="rounded-3xl border border-slate-200 bg-white shadow-xl p-7">
+          <div className="rounded-3xl border border-slate-200 homy-glass shadow-xl p-7">
             <h1 className="text-2xl font-extrabold text-[#0A2540] text-center">¿Cómo vas a usar HomIA?</h1>
             <p className="text-sm text-slate-500 text-center mt-1">Elegí tu perfil principal (después podés sumar otros).</p>
             <div className="grid gap-3 mt-6">
@@ -197,7 +197,7 @@ export default function RegisterScreen() {
         )}
 
         {step === 2 && role && (
-          <div className="rounded-3xl border border-slate-200 bg-white shadow-xl p-7">
+          <div className="rounded-3xl border border-slate-200 homy-glass shadow-xl p-7">
             <button onClick={() => setStep(1)} className="text-sm text-slate-500 hover:text-[#1D63B8] flex items-center gap-1 mb-4">
               <ChevronLeft className="size-4" /> Cambiar perfil
             </button>
@@ -212,7 +212,7 @@ export default function RegisterScreen() {
               <Field label="Ciudad / localidad" value={city} onChange={setCity} placeholder="Ej.: CABA" />
               <div>
                 <label className="text-sm font-semibold text-[#0A2540]">¿Cómo nos encontraste?</label>
-                <select value={howFoundUs} onChange={(e) => setHowFoundUs(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 bg-white outline-none focus:border-[#1D63B8]">
+                <select value={howFoundUs} onChange={(e) => setHowFoundUs(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 homy-glass-input outline-none focus:border-[#1D63B8]">
                   <option value="">Elegí una opción…</option>
                   {HOW_FOUND.map((h) => <option key={h.value} value={h.value}>{h.label}</option>)}
                 </select>
@@ -243,7 +243,7 @@ export default function RegisterScreen() {
         )}
 
         {step === 3 && role && (
-          <div className="rounded-3xl border border-slate-200 bg-white shadow-xl p-7">
+          <div className="rounded-3xl border border-slate-200 homy-glass shadow-xl p-7">
             <button onClick={() => setStep(2)} className="text-sm text-slate-500 hover:text-[#1D63B8] flex items-center gap-1 mb-4">
               <ChevronLeft className="size-4" /> Volver
             </button>
@@ -291,7 +291,7 @@ export default function RegisterScreen() {
                   <Field label={personType === 'empresa' ? 'CUIT empresa' : 'DNI o CUIL'} value={personType === 'empresa' ? companyCuit : dniCuil} onChange={personType === 'empresa' ? setCompanyCuit : setDniCuil} />
                 </div>
                 {personType === 'empresa' && (
-                  <div className="grid sm:grid-cols-2 gap-4 rounded-2xl bg-slate-50 p-4">
+                  <div className="grid sm:grid-cols-2 gap-4 rounded-2xl homy-glass-soft p-4">
                     <Field label="Razón social" value={companyName} onChange={setCompanyName} />
                     <Field label="Sitio web / Instagram" value={companyWebsite} onChange={setCompanyWebsite} />
                     <Field label="Cantidad de empleados" type="number" value={employeesCount} onChange={setEmployeesCount} />

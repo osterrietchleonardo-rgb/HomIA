@@ -108,7 +108,7 @@ export default function ProMaterials() {
       />
 
       {/* Filtros */}
-      <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm mb-5">
+      <div className="rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm mb-5">
         <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
           <input
             value={q} onChange={(e) => setQ(e.target.value)}
@@ -135,14 +135,14 @@ export default function ProMaterials() {
         {loading ? (
           <Loading text="Buscando materiales…" />
         ) : materials.length === 0 ? (
-          <div className="rounded-2xl bg-white border border-slate-200 p-6">
+          <div className="rounded-2xl homy-glass border border-slate-200 p-6">
             <EmptyState icon="📦" title="Sin resultados de stock"
               hint="Probá con otro término (buscamos también por alias: 'caño' encuentra 'tubo') o cambiá la categoría." />
           </div>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {materials.map((m) => (
-              <div key={m.id} className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm hover:shadow-md transition">
+              <div key={m.id} className="rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm hover:shadow-md transition">
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-bold text-[#0A2540] leading-snug">{m.name}</p>
                   <StatusBadge status={m.status} />
@@ -181,7 +181,7 @@ export default function ProMaterials() {
         {loadingCmp ? (
           <Loading text="Comparando precios entre proveedores…" />
         ) : bestPerElement.length === 0 ? (
-          <div className="rounded-2xl bg-white border border-slate-200 p-6">
+          <div className="rounded-2xl homy-glass border border-slate-200 p-6">
             <EmptyState icon="⚖️" title="Nada para comparar todavía"
               hint="Cuando haya stock cargado en dos o más proveedores, acá ves el mejor precio por elemento." />
           </div>
@@ -189,7 +189,7 @@ export default function ProMaterials() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {bestPerElement.map((c) => (
               <div key={c.stockId}
-                className={`rounded-2xl bg-white p-4 shadow-sm border-2 transition ${c.stockId === cheapestStockId ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-200'}`}>
+                className={`rounded-2xl homy-glass p-4 shadow-sm border-2 transition ${c.stockId === cheapestStockId ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-200'}`}>
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-bold text-[#0A2540] leading-snug">{c.elementName}</p>
                   {c.stockId === cheapestStockId && (
