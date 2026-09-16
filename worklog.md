@@ -75,3 +75,21 @@ Work Log:
 Stage Summary:
 - Homy quedó con la cabeza centrada sobre el eje del cuerpo, un espacio de aire visible entre cabeza y cuerpo, y un sistema de vida en 6 capas (respiración, bob de cabeza, latido, halo, antena, micro-conductas aleatorias) + reacciones por estado y hover. Sin cambios de API del componente (size/state/className intactos).
 - Home sigue 100% funcional con IA real. Pendiente confirmación del usuario para FASE 1 (SQL Supabase).
+
+---
+Task ID: 5
+Agent: Super Z (main)
+Task: FASE 1 — SQL completo de Supabase a partir de la nueva directiva del usuario (búsqueda dual, formularios por rol, bolsa de trabajos, proyectos con aprobación de materiales, facturas automáticas, CRM, stock estándar, reseñas 360°, geolocalización con radio).
+
+Work Log:
+- Sintetizada la directiva en modelo de dominio: búsqueda dual (cliente: profesionales/problema · profesional: materiales con precios por proveedor y bolsa "¿qué hay para plomeros?"), super agente Homy (loop+graph+herramientas+razonamiento, guardado como traza), gating de auth (navegar libre / registrarse para interactuar), formularios completos por rol con DNI frente/reverso, profesional persona|empresa, profesional que contrata profesional, obras publicadas vinculables, reseñas 360° con respuesta, CRM pipelines profesional/proveedor, vinculación proveedor↔profesional con cuenta de retiro, materiales por proyecto con aprobación del cliente y sugerencia de alternativas más baratas, comparables entre proveedores, factura automática detallada, catálogo estándar con aliases, stock con pipeline por_agotar/agotado y reposición, geolocalización PostGIS con radio elegible.
+- Creada suite supabase/migrations/ (11 archivos, ejecutables en orden en SQL Editor):
+  0001 extensiones (postgis, pg_trgm, pgcrypto) · 0002 identidad (profiles con roles[], profile_private, identity_documents, professional_profiles persona|empresa con constraint, provider_profiles, trigger on_auth_user_created) · 0003 catálogo estándar + provider_stock con status derivado + movimientos + reservas · 0004 bolsa (job_posts + job_bids privados entre partes) · 0005 proyectos + project_material_items (propuesto/aprobado/rechazado/reemplazado + alternative_of_id) + invoices (secuencia HOM-AAAA-000001) + provider_links + FKs retardadas de stock→projects · 0006 completed_works + reviews 360° (5 contextos, reply solo del reseñado vía trigger guard, únicas por obra/proyecto) · 0007 CRM (pipelines/stages/deals) + notifications · 0008 homy_sessions/messages con intent jsonb + search_events · 0009 motor: set_updated_at masivo, sync de roles + ensure_default_pipelines, derive_stock_status, rating agregado, accept_job_bid (crea proyecto + notifica), create_project_invoice (materiales aprobados + mano de obra), reserve/consume/release_stock, return_surplus (logística inversa), nearby_profiles/providers/job_posts (ST_DWithin), match_elements (trgm + aliases), element_comparables (por precio y cercanía) + grants · 0010 storage (5 buckets, carpetas /{profile_id}/, DNI y facturas privados) · 0011 seed (12 categorías + ~80 elementos con aliases).
+- Bugs detectados y corregidos en revisión: default de número de factura usaba pg_get_serial_sequence sobre UUID (→ secuencia invoice_number_seq), INSERT de stages con 3 columnas y 5 valores, operador %% inexistente en match_elements (→ %), search_path sin extensions en funciones PostGIS (→ public, extensions en las 16), fallback de display_name para altas sin email, typos en seed.
+- Métricas finales: 26 tablas, 26 RLS activos, 84 políticas, 20 funciones, 6 triggers, 45 índices (GIST geo, GIN trgm/arrays).
+- supabase/README.md con instrucciones de aplicación, matriz de acceso (navegar sin registro vs interactuar con registro), convenciones operativas y variables de entorno para Fase 2.
+
+Stage Summary:
+- FASE 1 completa como entregable SQL listo para Supabase (este sandbox no tiene Postgres/PostGIS para aplicarla localmente; validación sintáctica manual + revisión cruzada de referencias hechas).
+- Limitación honesta declarada: no se puede ejecutar aquí; se valida al pegarla en el proyecto Supabase del usuario. Las claves (SUPABASE_URL/ANON_KEY/SERVICE_ROLE) se conectan en Fase 2.
+- Pendiente confirmación del usuario → FASE 2: Auth + formularios completos por rol + tema + layout con gating.
