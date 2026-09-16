@@ -11,9 +11,11 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { useToast } from "@/hooks/use-toast";
 import { Homy, HomIAWordmark } from "@/components/homy/homy-character";
 import { cn } from "@/lib/utils";
+import { useSession } from "@/lib/store";
+import { navigate } from "@/lib/router";
+import { LayoutDashboard } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "Cómo funciona", href: "#como-funciona" },
@@ -25,7 +27,6 @@ const NAV_ITEMS = [
 export function SiteHeader() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
-  const { toast } = useToast();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -34,12 +35,12 @@ export function SiteHeader() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const comingSoon = (what: string) =>
-    toast({
-      title: `Muy pronto: ${what}`,
-      description:
-        "Estamos afinando los últimos detalles para que tu experiencia sea impecable. Dejanos acompañarte un poquito más.",
-    });
+  const { user, loading } = useSession();
+
+  const goPanel = () => {
+    const role = user?.roles?.[0] || "cliente";
+    navigate(`/panel/${role}`);
+  };
 
   return (
     <header
@@ -81,20 +82,32 @@ export function SiteHeader() {
 
         {/* Acciones */}
         <div className="hidden items-center gap-2 lg:flex">
-          <Button
-            variant="ghost"
-            className="rounded-full font-semibold text-navy hover:bg-confort"
-            onClick={() => comingSoon("el ingreso de usuarios")}
-          >
-            Ingresar
-          </Button>
-          <Button
-            className="rounded-full bg-action font-semibold text-white shadow-[0_10px_24px_-10px_rgba(255,90,31,0.7)] transition-all hover:bg-action-2 hover:shadow-[0_14px_30px_-10px_rgba(255,90,31,0.8)] active:scale-[0.98]"
-            onClick={() => comingSoon("la creación de cuentas")}
-          >
-            <Sparkles className="size-4" aria-hidden />
-            Crear cuenta
-          </Button>
+          {!loading && user ? (
+            <Button
+              className="rounded-full bg-navy font-semibold text-white shadow-[0_10px_24px_-10px_rgba(10,37,64,0.6)] transition-all hover:bg-[#123455] active:scale-[0.98]"
+              onClick={goPanel}
+            >
+              <LayoutDashboard className="size-4" aria-hidden />
+              Mi panel
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                className="rounded-full font-semibold text-navy hover:bg-confort"
+                onClick={() => navigate("/ingresar")}
+              >
+                Ingresar
+              </Button>
+              <Button
+                className="rounded-full bg-action font-semibold text-white shadow-[0_10px_24px_-10px_rgba(255,90,31,0.7)] transition-all hover:bg-action-2 hover:shadow-[0_14px_30px_-10px_rgba(255,90,31,0.8)] active:scale-[0.98]"
+                onClick={() => navigate("/registrarse")}
+              >
+                <Sparkles className="size-4" aria-hidden />
+                Crear cuenta
+              </Button>
+            </>
+          )}
         </div>
 
         {/* Menú mobile */}
@@ -134,25 +147,39 @@ export function SiteHeader() {
                 </Link>
               ))}
               <div className="my-3 h-px bg-line" />
-              <Button
-                variant="outline"
-                className="rounded-full font-semibold"
-                onClick={() => {
-                  setOpen(false);
-                  comingSoon("el ingreso de usuarios");
-                }}
-              >
-                Ingresar
-              </Button>
-              <Button
-                className="mt-2 rounded-full bg-action font-semibold text-white hover:bg-action-2"
-                onClick={() => {
-                  setOpen(false);
-                  comingSoon("la creación de cuentas");
-                }}
-              >
-                Crear cuenta
-              </Button>
+              {!loading && user ? (
+                <Button
+                  className="mt-2 rounded-full bg-navy font-semibold text-white hover:bg-[#123455]"
+                  onClick={() => {
+                    setOpen(false);
+                    goPanel();
+                  }}
+                >
+                  Mi panel
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    className="rounded-full font-semibold"
+                    onClick={() => {
+                      setOpen(false);
+                      navigate("/ingresar");
+                    }}
+                  >
+                    Ingresar
+                  </Button>
+                  <Button
+                    className="mt-2 rounded-full bg-action font-semibold text-white hover:bg-action-2"
+                    onClick={() => {
+                      setOpen(false);
+                      navigate("/registrarse");
+                    }}
+                  >
+                    Crear cuenta
+                  </Button>
+                </>
+              )}
             </nav>
           </SheetContent>
         </Sheet>

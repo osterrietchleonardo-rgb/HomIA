@@ -1,8 +1,6 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// HomIA — Ecosistema tripartito (Cliente / Profesional / Proveedor)
+// Espejo funcional de supabase/migrations/0001-0011 (para replicar en otro sistema ver migrations)
+// SQLite: sin enums (String), sin arrays (JSON string), sin PostGIS (Float lat/lng)
 
 generator client {
   provider = "prisma-client-js"
@@ -13,20 +11,454 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─────────────────────────── IDENTIDAD ───────────────────────────
+
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  roles         String   @default("[]") // JSON: ["cliente","profesional","proveedor"]
+  displayName   String
+  phone         String?
+  avatarUrl     String?
+  howFoundUs    String?  // google|redes|recomendacion|publicidad|otro
+  birthday      String?  // ISO date
+  address       String?
+  city          String?
+  lat           Float?
+  lng           Float?
+  locationShared Boolean @default(false)
+  searchRadiusKm Float   @default(10)
+  rating        Float    @default(0)
+  reviewsCount  Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  documents      IdentityDocument[]
+  professional   ProfessionalProfile?
+  provider       ProviderProfile?
+  jobPosts       JobPost[]
+  projectsAsClient Project[]          @relation("ProjectClient")
+  worksAuthored   CompletedWork[]
+  reviewsGiven    Review[]           @relation("ReviewAuthor")
+  reviewsReceived Review[]           @relation("ReviewTarget")
+  pipelines       CrmPipeline[]
+  notifications   Notification[]
+  homySessions    HomySession[]
+  favorites       Favorite[]
+  dealsCounterparty CrmDeal[]    @relation("DealCounterparty")
 }
 
-model Post {
+model IdentityDocument {
   id        String   @id @default(cuid())
+  userId    String
+  type      String   @default("dni") // dni|pasaporte|cuit
+  frontUrl  String?
+  backUrl   String?
+  status    String   @default("pendiente") // pendiente|en_revision|verificado|rechazado
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ProfessionalProfile {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  personType     String   @default("persona") // persona|empresa
+  professions    String   @default("[]") // JSON slugs: ["plomeria","gasistas"]
+  skills         String   @default("[]") // JSON strings
+  experienceYears Int     @default(0)
+  bio            String?
+  // Persona
+  dniCuil        String?
+  // Empresa
+  companyName    String?
+  companyCuit    String?
+  companyWebsite String?
+  employeesCount Int?
+  // Operativa
+  serviceRadiusKm Float  @default(15)
+  verified       Boolean  @default(false)
+  rating         Float    @default(0)
+  reviewsCount   Int      @default(0)
+  worksCount     Int      @default(0)
+  lat            Float?
+  lng            Float?
+  city           String?
+  subscription   String   @default("free") // free|pro
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bids  JobBid[] @relation("BidProfessional")
+  proProjects Project[] @relation("ProjectPro")
+}
+
+model ProviderProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  businessName String
+  cuit         String?
+  description  String?
+  address      String?
+  city         String?
+  lat          Float?
+  lng          Float?
+  verified     Boolean  @default(false)
+  rating       Float    @default(0)
+  reviewsCount Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stock  ProviderStock[]
+  links  ProviderLink[]
+  stockMaterials ProjectMaterial[]
+}
+
+// ─────────────────────────── CATÁLOGO + STOCK ───────────────────────────
+
+model Category {
+  id        String @id @default(cuid())
+  slug      String @unique
+  name      String
+  icon      String @default("wrench")
+  sortOrder Int    @default(0)
+  elements  CatalogElement[]
+}
+
+model CatalogElement {
+  id         String  @id @default(cuid())
+  categoryId String
+  name       String // nombre estándar normalizado
+  aliases    String  @default("[]") // JSON: nombres alternativos
+  unit       String  @default("unidad") // unidad|metro|kg|litro|caja|paquete
+  active     Boolean @default(true)
+
+  category Category        @relation(fields: [categoryId], references: [id])
+  stock    ProviderStock[]
+  materials ProjectMaterial[]
+}
+
+model ProviderStock {
+  id         String   @id @default(cuid())
+  providerId String
+  elementId  String
+  price      Float
+  quantity   Float    @default(0)
+  minStock   Float    @default(5)
+  status     String   @default("disponible") // disponible|por_agotar|agotado (derivado)
+  brand      String?
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+
+  provider    ProviderProfile  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  element     CatalogElement   @relation(fields: [elementId], references: [id])
+  movements   StockMovement[]
+  reservations StockReservation[]
+
+  @@unique([providerId, elementId])
+}
+
+model StockMovement {
+  id        String   @id @default(cuid())
+  stockId   String
+  type      String // entrada|salida|ajuste|reserva|liberacion|consumo
+  quantity  Float
+  note      String?
+  createdAt DateTime @default(now())
+  stock     ProviderStock @relation(fields: [stockId], references: [id], onDelete: Cascade)
+}
+
+model StockReservation {
+  id         String   @id @default(cuid())
+  stockId    String
+  projectId  String?
+  userId     String
+  quantity   Float
+  status     String   @default("activa") // activa|consumida|liberada
+  createdAt  DateTime @default(now())
+  stock      ProviderStock @relation(fields: [stockId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────── BOLSA DE TRABAJOS ───────────────────────────
+
+model JobPost {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String
+  categorySlug String
+  urgency     String   @default("normal") // baja|normal|alta|urgente
+  budgetMin   Float?
+  budgetMax   Float?
+  address     String?
+  city        String?
+  lat         Float?
+  lng         Float?
+  photos      String   @default("[]") // JSON urls
+  status      String   @default("abierto") // abierto|en_proceso|cerrado|cancelado
+  selectedBidId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bids    JobBid[]
+  projects Project[]
+}
+
+model JobBid {
+  id             String   @id @default(cuid())
+  jobId          String
+  professionalId String // → ProfessionalProfile.id
+  amount         Float
+  timelineDays   Int      @default(7)
+  message        String?
+  status         String   @default("pendiente") // pendiente|aceptado|rechazado|retirado
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  job          JobPost             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  professional ProfessionalProfile @relation("BidProfessional", fields: [professionalId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────── PROYECTOS + MATERIALES ───────────────────────────
+
+model Project {
+  id             String   @id @default(cuid())
+  jobId          String?
+  clientId       String
+  professionalId String
+  title          String
+  description    String?
+  status         String   @default("activo") // activo|finalizado|cancelado
+  stage          String   @default("presupuesto") // presupuesto|materiales|ejecucion|revision|finalizado
+  laborCost      Float    @default(0)
+  materialsCost  Float    @default(0)
+  lat            Float?
+  lng            Float?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  job       JobPost?          @relation(fields: [jobId], references: [id])
+  client    User              @relation("ProjectClient", fields: [clientId], references: [id])
+  pro       ProfessionalProfile @relation("ProjectPro", fields: [professionalId], references: [id])
+  materials ProjectMaterial[]
+  invoices  Invoice[]
+  works     CompletedWork[]
+}
+
+model ProjectMaterial {
+  id               String   @id @default(cuid())
+  projectId        String
+  elementId        String?
+  name             String // snapshot del nombre
+  providerId       String?
+  quantity         Float
+  unit             String   @default("unidad")
+  unitPrice        Float
+  status           String   @default("propuesto") // propuesto|aprobado|rechazado|reemplazado
+  alternativeOfId  String?
+  note             String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  element      CatalogElement?  @relation(fields: [elementId], references: [id])
+  provider     ProviderProfile? @relation(fields: [providerId], references: [id])
+  alternatives ProjectMaterial[] @relation("MaterialAlternative")
+  alternativeOf ProjectMaterial? @relation("MaterialAlternative", fields: [alternativeOfId], references: [id])
+}
+
+model Invoice {
+  id             String    @id @default(cuid())
+  projectId      String
+  number         String    @unique
+  clientId       String
+  professionalId String
+  laborCost      Float     @default(0)
+  materialsCost  Float     @default(0)
+  total          Float     @default(0)
+  status         String    @default("pendiente") // pendiente|pagada|vencida
+  mpPreferenceId String?
+  mpPaymentId    String?
+  paidAt         DateTime?
+  issuedAt       DateTime  @default(now())
+
+  project Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items   InvoiceItem[]
+  payments Payment[]
+}
+
+model InvoiceItem {
+  id        String @id @default(cuid())
+  invoiceId String
+  kind      String // material|mano_obra
+  description String
+  quantity  Float
+  unitPrice Float
+  subtotal  Float
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  mpPaymentId String
+  status      String
+  amount      Float
+  createdAt   DateTime @default(now())
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+// Cuenta de retiro de materiales: vincula proveedor ↔ profesional (o usuario)
+model ProviderLink {
+  id             String   @id @default(cuid())
+  providerId     String
+  professionalId String // → ProfessionalProfile.id (o userId si cliente)
+  accountLabel   String // nombre de la cuenta de retiro
+  notes          String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────── OBRAS + RESEÑAS 360° ───────────────────────────
+
+model CompletedWork {
+  id             String   @id @default(cuid())
+  authorId       String // quien publica (cliente o profesional)
+  authorRole     String   @default("cliente") // cliente|profesional
+  professionalId String?
+  projectId      String?
+  jobId          String?
+  title          String
+  description    String
+  photos         String   @default("[]")
+  categorySlug   String?
+  visible        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  author  User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id])
+}
+
+model Review {
+  id           String   @id @default(cuid())
+  authorId     String
+  targetUserId String
+  context      String   @default("proyecto") // proyecto|obra|perfil
+  projectId    String?
+  workId       String?
+  rating       Int
+  comment      String
+  reply        String?
+  replyAt      DateTime?
+  createdAt    DateTime @default(now())
+
+  author  User @relation("ReviewAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  target  User @relation("ReviewTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────── CRM ───────────────────────────
+
+model CrmPipeline {
+  id        String @id @default(cuid())
+  ownerId   String
+  ownerRole String // profesional|proveedor
+  name      String
+  createdAt DateTime @default(now())
+
+  owner  User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  stages CrmStage[]
+  deals  CrmDeal[]
+}
+
+model CrmStage {
+  id         String @id @default(cuid())
+  pipelineId String
+  name       String
+  sortOrder  Int    @default(0)
+  color      String @default("#1D63B8")
+
+  pipeline CrmPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  deals    CrmDeal[]
+}
+
+model CrmDeal {
+  id             String  @id @default(cuid())
+  pipelineId     String
+  stageId        String
+  title          String
+  value          Float   @default(0)
+  counterpartyId String? // User id del cliente/profesional
+  jobId          String?
+  projectId      String?
+  note           String?
+  position       Int     @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  pipeline CrmPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stage    CrmStage    @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  counterparty User?   @relation("DealCounterparty", fields: [counterpartyId], references: [id])
+}
+
+// ─────────────────────────── NOTIFICACIONES + IA ───────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
   title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
+  body      String?
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model HomySession {
+  id        String   @id @default(cuid())
+  userId    String?
+  title     String   @default("Nueva conversación")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  user     User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages HomyMessage[]
+}
+
+model HomyMessage {
+  id        String   @id @default(cuid())
+  sessionId String
+  role      String // user|homy|tool
+  content   String
+  intent    String? // JSON con categoría/urgencia/summary
+  createdAt DateTime @default(now())
+
+  session HomySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model SearchEvent {
+  id        String   @id @default(cuid())
+  userId    String?
+  mode      String   @default("cliente") // cliente|profesional
+  query     String
+  intent    String? // JSON
+  results   String? // JSON resumen
+  createdAt DateTime @default(now())
+}
+
+model Favorite {
+  id           String   @id @default(cuid())
+  userId       String
+  targetUserId String
+  createdAt    DateTime @default(now())
+
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, targetUserId])
 }
