@@ -1,7 +1,7 @@
 'use client'
 // Home HomIA — misma experiencia visual, ahora integrada al router de la app
 import { SiteHeader } from '@/components/home/site-header'
-import { HeroSearch } from '@/components/home/hero-search'
+import { Hero } from '@/components/home/hero'
 import { HowItWorks } from '@/components/home/how-it-works'
 import { AiBand } from '@/components/home/ai-band'
 import { Features } from '@/components/home/features'
@@ -15,7 +15,7 @@ export default function HomeScreen() {
     <div className="relative min-h-screen bg-chalk text-navy">
       <SiteHeader />
       <main>
-        <HeroSearch />
+        <Hero />
         <HowItWorks />
         <AiBand />
         <Features />

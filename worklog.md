@@ -161,3 +161,17 @@ Stage Summary:
 - HomIA completo: 27 pantallas + 21 APIs + superagente con loop/herramientas/razonamiento real + Mercado Pago (espera MP_ACCESS_TOKEN) + base SQLite funcional que espeja las 11 migraciones SQL para replicar en el sistema del usuario.
 - Las migraciones supabase/migrations/ quedan como documentación de referencia; CONTRACTS.md documenta los contratos API.
 - Mercado Pago: al pagar sin token muestra mensaje honesto de configuración; con MP_ACCESS_TOKEN el flujo completo funciona (preferencia → checkout → webhook → factura pagada → notificación).
+
+---
+Task ID: 7
+Agent: Super Z (main)
+Task: Fix visual reportado por el usuario — "que paso? quedo mal" (captura: header superpuesto con la barra de búsqueda en el home).
+
+Work Log:
+- Diagnóstico con captura del usuario: logo/Homy + placeholder "Contame qué necesitás tu hogar..." amontonados en el borde superior, sin titular ni sello IA.
+- Causa raíz: src/components/screens/home-screen.tsx (home de la SPA con catch-all [[...slug]]) renderizaba <HeroSearch /> directamente, salteando el wrapper <Hero /> que aporta pt-36/sm:pt-44 para despejar el header fijo (h-20), el sello "Potenciado por agentes IA", el h1 "Tu hogar, en buenas manos", el párrafo y los fondos decorativos.
+- Fix: reemplazado <HeroSearch /> por <Hero /> en home-screen.tsx (import actualizado). Un solo archivo tocado.
+- Verificación con Agent Browser: viewport 1280x800, 390x844 y 680x420 (ventana chica como la del usuario) → hero completo, barra centrada con Homy detrás, sin superposiciones. bun run lint → exit 0. Carga fresca: /api/auth/me 200, todos los assets 200, sin errores JS (window.__errlog vacío). Los ✗ vacíos de agent-browser errors eran entradas stale del CLI; los 500 en /api/auth/register y /api/provider/links eran requests viejos del E2E previo (sin sesión), no de la carga actual.
+
+Stage Summary:
+- Home restaurada al diseño aprobado: header fijo limpio + sello IA + titular + barra con Homy detrás + chips de confianza. El bug era exclusivo del home de la SPA (las 27 pantallas del panel no se ven afectadas).
