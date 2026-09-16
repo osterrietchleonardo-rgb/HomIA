@@ -21,6 +21,7 @@ export type SessionUser = {
   hasProvider: boolean
   lat?: number | null
   lng?: number | null
+  radiusKm?: number | null
 }
 
 export async function hashPassword(pw: string) {
@@ -84,6 +85,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       hasProvider: !!user.provider,
       lat: user.lat,
       lng: user.lng,
+      radiusKm: user.searchRadiusKm,
     }
   } catch {
     return null

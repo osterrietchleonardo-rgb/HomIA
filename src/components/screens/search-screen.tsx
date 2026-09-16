@@ -11,9 +11,9 @@ import { formatARS, URGENCY_LABEL } from '@/lib/format'
 import { formatDistance } from '@/lib/geo'
 import type { MapPin } from '@/components/app/map-view'
 import { toast } from 'sonner'
-import { Search, MapPin as MapPinIcon, Compass, Sparkles, Send, X, Lock } from 'lucide-react'
+import { Search, MapPin as MapPinIcon, Compass, Sparkles, X, Lock, Home, Hammer } from 'lucide-react'
 
-const MapView = dynamic(() => import('@/components/app/map-view'), { ssr: false, loading: () => <div className="h-[380px] rounded-2xl bg-slate-100 animate-pulse" /> })
+const MapView = dynamic(() => import('@/components/app/map-view'), { ssr: false, loading: () => <div className="h-[320px] sm:h-[420px] lg:h-[480px] rounded-3xl homy-glass animate-pulse" /> })
 
 type Mode = 'cliente' | 'profesional'
 
@@ -54,6 +54,7 @@ const CATEGORY_TABS = [
 ]
 
 export default function SearchScreen() {
+  // pantalla de búsqueda dual con superagente (re-render intencional)
   const route = useRoute()
   const { user, refresh } = useSession()
   const location = useLocation()
@@ -145,8 +146,6 @@ export default function SearchScreen() {
     }
   }
 
-  const allPins = 0 // (los pines reales vienen de /api/search/pins)
-  void allPins
   const [mapPins, setMapPins] = useState<MapPin[]>([])
   useEffect(() => {
     async function pins() {
@@ -172,20 +171,20 @@ export default function SearchScreen() {
 
   return (
     <div className="min-h-screen">
-      {/* Header de búsqueda — vidrio nocturno */}
+      {/* Header de búsqueda — vidrio nocturno compacto */}
       <div className="homy-glass-dark sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
-          <button onClick={() => navigate('/')} className="shrink-0 flex items-center gap-1.5">
-            <Homy size={36} state={aiState} />
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 pt-2.5 pb-2 flex items-center gap-2 sm:gap-3">
+          <button onClick={() => navigate('/')} className="shrink-0 flex items-center gap-1.5" aria-label="Volver a la home">
+            <Homy size={34} state={aiState} />
           </button>
-          <div className="flex-1 relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4.5 text-slate-400" />
+          <div className="flex-1 min-w-0 relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-slate-400 pointer-events-none" aria-hidden />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { askAgent(query) } }}
-              placeholder={mode === 'cliente' ? 'Contá qué necesitás: “plomero urgente, se me inundó el baño”…' : '“cemento 50kg” · “¿qué hay para plomeros?” · “tubo PVC 110”'}
-              className="w-full rounded-full bg-white/10 border border-white/20 text-white placeholder:text-slate-400 pl-11 pr-10 py-3 outline-none focus:border-[#00C4FF] focus:bg-white/15 transition"
+              placeholder={mode === 'cliente' ? '¿Qué necesitás para tu hogar?' : '“cemento 50kg” · “¿qué hay para plomeros?”'}
+              className="w-full rounded-full bg-white/10 border border-white/20 text-white placeholder:text-slate-400 pl-10 pr-9 py-2.5 sm:py-3 text-sm sm:text-base outline-none focus:border-[#00C4FF] focus:bg-white/15 transition"
             />
             {query && (
               <button onClick={() => setQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white" aria-label="Limpiar">
@@ -196,35 +195,40 @@ export default function SearchScreen() {
           <button
             onClick={() => askAgent(query || aiMessage || '')}
             disabled={aiBusy}
-            className="shrink-0 rounded-full bg-[#FF5A1F] hover:bg-[#e64d15] disabled:opacity-60 text-white font-bold px-4 sm:px-5 py-3 text-sm transition flex items-center gap-2"
+            className="shrink-0 rounded-full bg-[#FF5A1F] hover:bg-[#e64d15] disabled:opacity-60 text-white font-bold px-3.5 sm:px-5 py-2.5 sm:py-3 text-sm transition flex items-center gap-2"
           >
             <Sparkles className="size-4" />
             <span className="hidden sm:inline">{aiBusy ? 'Pensando…' : 'Preguntale a Homy'}</span>
           </button>
         </div>
-        {/* Modo + categorías */}
-        <div className="max-w-7xl mx-auto px-4 pb-3 flex flex-wrap items-center gap-2">
-          <div className="flex rounded-full bg-white/10 p-1 mr-1">
+        {/* Modo + categorías: en una línea en desktop, apilados en mobile */}
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 pb-2.5 flex flex-wrap items-center gap-2">
+          <div className="flex rounded-full bg-white/10 p-1 shrink-0">
             {(['cliente', 'profesional'] as Mode[]).map((m) => (
               <button
                 key={m}
                 onClick={() => setMode(m)}
-                className={`rounded-full px-4 py-1.5 text-sm font-bold transition ${mode === m ? 'bg-[#00C4FF] text-[#0A2540]' : 'text-slate-300 hover:text-white'}`}
+                className={`flex items-center gap-1.5 rounded-full px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-bold transition ${mode === m ? 'bg-[#00C4FF] text-[#0A2540]' : 'text-slate-300 hover:text-white'}`}
               >
-                {m === 'cliente' ? '🏠 Busco un pro' : '🛠️ Busco trabajo/materiales'}
+                {m === 'cliente' ? <Home className="size-3.5 sm:size-4" aria-hidden /> : <Hammer className="size-3.5 sm:size-4" aria-hidden />}
+                <span className="whitespace-nowrap">{m === 'cliente' ? 'Busco un pro' : 'Trabajo y materiales'}</span>
               </button>
             ))}
           </div>
-          <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-1">
-            {CATEGORY_TABS.map((c) => (
-              <button
-                key={c.slug}
-                onClick={() => setCat(c.slug)}
-                className={`shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-semibold transition ${cat === c.slug ? 'border-[#00C4FF] bg-[#00C4FF]/15 text-[#00C4FF]' : 'border-white/15 text-slate-300 hover:border-white/40'}`}
-              >
-                {c.name}
-              </button>
-            ))}
+          <div className="relative min-w-0 flex-1">
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-1">
+              {CATEGORY_TABS.map((c) => (
+                <button
+                  key={c.slug}
+                  onClick={() => setCat(c.slug)}
+                  className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition ${cat === c.slug ? 'border-[#00C4FF] bg-[#00C4FF]/15 text-[#00C4FF]' : 'border-white/15 text-slate-300 hover:border-white/40'}`}
+                >
+                  {c.name}
+                </button>
+              ))}
+            </div>
+            {/* fade decorativo: sugiere que hay más chips deslizables */}
+            <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#0A2540]/80 to-transparent" />
           </div>
         </div>
       </div>
@@ -232,7 +236,7 @@ export default function SearchScreen() {
       <div className="max-w-7xl mx-auto px-4 py-6">
         {/* Respuesta del superagente */}
         {(aiMessage || question) && (
-          <div className="mb-6 rounded-3xl border border-[#00C4FF]/30 bg-gradient-to-br from-white to-[#00C4FF]/5 p-5 shadow-lg">
+          <div className="mb-6 rounded-3xl homy-glass border border-[#00C4FF]/30 p-5 shadow-lg">
             <div className="flex items-start gap-3">
               <Homy size={56} state={aiBusy ? 'thinking' : 'happy'} />
               <div className="flex-1 min-w-0">
@@ -286,12 +290,13 @@ export default function SearchScreen() {
               </button>
             )}
           </div>
-          <div className="flex items-center gap-3">
-            <label className="text-xs font-semibold text-slate-500 uppercase">Radio: {location.radiusKm} km</label>
+          <div className="homy-glass-soft flex items-center gap-2.5 rounded-full px-3.5 py-1.5">
+            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Radio</label>
+            <span className="text-xs font-extrabold text-[#0A2540] tabular-nums min-w-[42px]">{location.radiusKm} km</span>
             <input
               type="range" min={1} max={100} value={location.radiusKm}
               onChange={(e) => location.setRadius(parseInt(e.target.value))}
-              className="w-40 accent-[#00C4FF]"
+              className="w-28 sm:w-40 accent-[#00C4FF]"
               aria-label="Diámetro de alcance"
             />
           </div>
@@ -395,7 +400,7 @@ function ProCard({ pro, logged }: { pro: ProResult; logged: boolean }) {
   return (
     <button
       onClick={() => logged ? navigate(`/profesional/${pro.id}`) : gate()}
-      className="text-left rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm hover:shadow-lg hover:border-[#1D63B8]/50 transition group"
+      className="text-left rounded-2xl homy-glass homy-lift border border-slate-200 p-4 shadow-sm hover:border-[#1D63B8]/50 transition group"
     >
       <div className="flex items-start gap-3">
         <UAvatar name={pro.displayName} size={46} />
@@ -422,7 +427,7 @@ function MaterialCard({ m, logged, highlight }: { m: MaterialResult; logged: boo
   return (
     <button
       onClick={() => logged ? navigate(`/proveedor/${m.providerId}`) : gate()}
-      className={`text-left rounded-2xl homy-glass border p-4 shadow-sm hover:shadow-lg transition ${highlight ? 'border-emerald-300 hover:border-emerald-400' : 'border-slate-200 hover:border-[#00A3E0]/60'}`}
+      className={`text-left rounded-2xl homy-glass homy-lift border p-4 shadow-sm transition ${highlight ? 'border-emerald-300 hover:border-emerald-400' : 'border-slate-200 hover:border-[#00A3E0]/60'}`}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="font-bold text-[#0A2540] leading-snug">{m.elementName}</p>
@@ -443,7 +448,7 @@ function JobCard({ job, logged }: { job: JobResult; logged: boolean }) {
   return (
     <button
       onClick={() => logged ? navigate(`/trabajo/${job.id}`) : gate()}
-      className="text-left rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm hover:shadow-lg hover:border-[#FF5A1F]/50 transition"
+      className="text-left rounded-2xl homy-glass homy-lift border border-slate-200 p-4 shadow-sm hover:border-[#FF5A1F]/50 transition"
     >
       <div className="flex items-start justify-between gap-2">
         <p className="font-bold text-[#0A2540] leading-snug">{job.title}</p>

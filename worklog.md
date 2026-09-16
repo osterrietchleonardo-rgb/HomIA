@@ -216,3 +216,20 @@ Work Log:
 Stage Summary:
 - Todo el sistema comparte ahora un solo ambiente: grilla técnica continua + auroras + grano visible detrás de vidrio en home, buscar, auth, paneles de los 3 roles, diálogos y menús. Z-order sagrado y reduced-motion respetados; animaciones solo transform/opacity; decoración pointer-events-none + aria-hidden.
 - Verificación E2E multi-viewport (1280×800 y 390×844) en home, /buscar, /ingresar, /registrarse, panel cliente, CRM profesional, bolsa, dashboard proveedor y vinculaciones — todas en vidrio con datos reales.
+
+---
+Task ID: 10
+Agent: Super Z (main)
+Task: (1) Vista horrible de /buscar en la captura del usuario. (2) Directiva: TODO el sistema responsive.
+
+Work Log:
+- Diagnóstico de la captura (/buscar): scrollbar horizontal NATIVO en chips (la clase no-scrollbar se usaba pero NO existía en globals.css), header apretado con tabs que se wrappeaban mal, mapa mostrando TODO el continente con radio de 10 km.
+- globals.css: utilidad .no-scrollbar agregada (scrollbar-width none + webkit display none).
+- map-view.tsx reescrito: BUG DE ZOOM raíz — getZoom() || 12 conservaba el zoom 4 inicial "continente" para siempre. Ahora: fitBounds al círculo de radio SOLO cuando cambia el foco (centro/radio, trackeados en focusRef), nunca al cambiar pines; vista sin centro a escala de ciudad (z10, no continente); zoomSnap 0.25; ResizeObserver → invalidateSize (responsive); pines centrados con translate(-50%,-50%); leyenda en homy-glass-soft; alturas responsive h-[320px] sm:h-[420px] lg:h-[480px]. FIX de race: init() ahora llama renderRef.current() si el primer render corrió antes de que Leaflet cargara (evita círculos corruptos/líneas fantasma vistas en móvil).
+- search-screen.tsx: header compacto en 2 filas ordenadas — fila 1 Homy+input+CTA (icono solo en mobile), fila 2 segmented control con iconos lucide (sin emojis) + chips con fade decorativo pointer-events-none; tarjeta del superagente → homy-glass; control de radio en píldora homy-glass-soft; tarjetas con homy-lift; alturas de mapa responsivas.
+- store.ts + auth.ts: HIDRATACIÓN DE UBICACIÓN DESDE LA SESIÓN ("todo tiene sentido"): /api/auth/me ahora devuelve radiusKm (user.searchRadiusKm); useSession.refresh hace setManual + setRadius si el usuario ya compartió ubicación antes — mapa centrado, distancias y radio funcionan al recargar sin re-pedir permiso.
+- job-detail.tsx: fila cliente/presupuesto apila en mobile (flex-col sm:flex-row, budget con borde separador); -mt-8 con más aire en el navy; bg-chalk opaco eliminado (grilla global visible).
+- provider-profile.tsx: contador "elementos publicados" a línea propia en mobile; sección catálogo COMPLETA (título+buscador+chips+lista) envuelta en una tarjeta homy-glass — antes el -mt-6 montaba texto navy sobre el navy expandido y era ilegible; buscador w-full en mobile (flex-1 anulaba w-full, bug de flex-basis).
+- Sweep responsive E2E (1280×800 / 390×844): home, /buscar ambos modos con query y geo, /ingresar, /registrarse, /trabajo/{id}, /profesional/{id}, /proveedor/{id}, /notificaciones, paneles cliente (dashboard/publicar/trabajos/proyectos/facturas/perfil), profesional (dashboard/bolsa/presupuestos/materiales/crm/perfil) y proveedor (dashboard/stock/crm/vinculaciones/perfil) con usuarios reales creados por API y eliminados al final. CRM kanbans con scroll horizontal intencional, todo lo demás fluído.
+- Limpieza: usuarios de prueba maptest/sweeppro/sweepprov2 borrados vía prisma. Lint exit 0, tsc limpio en archivos tocados, /api/auth/me y /api/search 200 en estado anónimo.
+- Nota: warning dev-only de React "unique key" en /buscar — verificado que TODOS los .map() del archivo (y Homy/backdrop/hero/ui-bits) tienen key; probablemente internals de next/dynamic; sin impacto funcional.

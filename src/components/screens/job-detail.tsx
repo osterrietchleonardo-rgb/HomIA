@@ -100,18 +100,18 @@ export default function JobDetailScreen({ id }: { id: string }) {
     } finally { setBusy(false) }
   }
 
-  if (loading) return <div className="min-h-screen bg-chalk"><Loading /></div>
+  if (loading) return <div className="min-h-screen"><Loading /></div>
   if (!job) {
     return (
-      <div className="min-h-screen bg-chalk pt-20">
+      <div className="min-h-screen pt-20">
         <EmptyState icon="🔎" title="Trabajo no encontrado" action={<BackHome />} />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-chalk">
-      <div className="bg-[#0A2540] pt-6 pb-10 px-4">
+    <div className="min-h-screen">
+      <div className="bg-[#0A2540] pt-6 pb-12 sm:pb-16 px-4">
         <div className="max-w-3xl mx-auto">
           <button onClick={() => navigate('/buscar?mode=profesional')} className="text-slate-300 hover:text-white text-sm flex items-center gap-1 mb-3">
             <ChevronLeft className="size-4" /> Volver a resultados
@@ -126,16 +126,16 @@ export default function JobDetailScreen({ id }: { id: string }) {
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-4 -mt-6 pb-16">
+      <div className="max-w-3xl mx-auto px-4 -mt-8 pb-16">
         {/* descripción */}
-        <div className="rounded-3xl homy-glass border border-slate-200 shadow-lg p-6">
-          <div className="flex items-start gap-4">
+        <div className="rounded-3xl homy-glass border border-slate-200 shadow-lg p-5 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
             <UAvatar name={job.client.displayName} url={job.client.avatarUrl} size={52} />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="font-bold text-[#0A2540]">{job.client.displayName}</p>
               <p className="text-xs text-slate-400">Cliente desde {formatDate(job.client.memberSince)}</p>
             </div>
-            <div className="ml-auto text-right shrink-0">
+            <div className="sm:ml-auto sm:text-right shrink-0 sm:pl-4 sm:border-l border-[#0A2540]/8">
               <p className="text-xs text-slate-400 uppercase font-semibold">Presupuesto del cliente</p>
               <p className="font-extrabold text-[#0A2540]">
                 {job.budgetMin ? `${formatARS(job.budgetMin)}${job.budgetMax ? ` – ${formatARS(job.budgetMax)}` : ''}` : 'A convenir'}

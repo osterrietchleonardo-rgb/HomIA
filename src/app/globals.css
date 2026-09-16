@@ -826,6 +826,15 @@
   }
 }
 
+/* Scroll oculto: carruseles y chips que se deslizan sin scrollbar nativa */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Scrollbar fino para el chat de Homy */
 .homy-scroll::-webkit-scrollbar {
   width: 6px;

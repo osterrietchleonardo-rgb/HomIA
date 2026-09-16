@@ -61,7 +61,7 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
                 <span className="text-sm text-slate-300">{p.rating > 0 ? `${p.rating} · ${p.reviewsCount} reseñas` : 'Nuevo en HomIA'}</span>
               </div>
             </div>
-            <div className="text-right">
+            <div className="w-full sm:w-auto text-left sm:text-right mt-1 sm:mt-0">
               <p className="text-xs text-slate-400 uppercase font-semibold">Elementos publicados</p>
               <p className="text-3xl font-extrabold text-[#00C4FF]">{data.stock.length}</p>
             </div>
@@ -76,20 +76,20 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
           </div>
         )}
 
-        {/* stock */}
-        <div>
+        {/* stock — la sección completa vive en una tarjeta: puede flotar sobre el navy */}
+        <div className="rounded-3xl homy-glass border border-slate-200 shadow-lg p-4 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <h2 className="text-lg font-extrabold text-[#0A2540]">Catálogo con stock ({filtered.length})</h2>
             <input
               value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar elemento…"
-              className="rounded-full border border-slate-300 px-4 py-2 text-sm outline-none focus:border-[#1D63B8]"
+              className="w-full sm:w-auto sm:max-w-64 rounded-full border border-slate-300 bg-white/70 px-4 py-2 text-sm outline-none focus:border-[#1D63B8]"
             />
           </div>
           <div className="flex flex-wrap gap-2 mb-3">
             {categories.map((c) => <span key={c} className="rounded-full bg-slate-100 text-slate-600 text-xs font-semibold px-3 py-1 capitalize">{c}</span>)}
           </div>
           {!user ? (
-            <div className="rounded-3xl bg-gradient-to-br from-amber-50 to-white border border-amber-200 p-8 text-center">
+            <div className="rounded-2xl bg-gradient-to-br from-amber-50 to-white border border-amber-200 p-8 text-center">
               <Lock className="size-8 text-amber-500 mx-auto" />
               <p className="font-extrabold text-[#0A2540] mt-2">Registrate para ver precios y stock</p>
               <p className="text-sm text-slate-500 mt-1">Los precios son visibles para profesionales con cuenta (gratis, 1 minuto).</p>
@@ -98,11 +98,11 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
               </button>
             </div>
           ) : filtered.length === 0 ? (
-            <div className="rounded-2xl homy-glass border border-slate-200 p-6 text-sm text-slate-500">Sin elementos que coincidan.</div>
+            <div className="rounded-2xl border border-slate-200 p-6 text-sm text-slate-500">Sin elementos que coincidan.</div>
           ) : (
-            <div className="rounded-3xl homy-glass border border-slate-200 shadow-sm divide-y divide-slate-100 overflow-hidden">
+            <div className="rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
               {filtered.map((s) => (
-                <div key={s.id} className="flex items-center justify-between gap-3 p-4 hover:bg-slate-50 transition">
+                <div key={s.id} className="flex items-center justify-between gap-3 p-4 hover:bg-white/60 transition">
                   <div className="min-w-0">
                     <p className="font-bold text-[#0A2540] truncate">{s.name}</p>
                     <p className="text-xs text-slate-400">{s.category}{s.brand ? ` · ${s.brand}` : ''} · stock: {s.quantity} {s.unit}</p>

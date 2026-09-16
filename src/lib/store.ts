@@ -10,6 +10,9 @@ export type SessionUserClient = {
   avatarUrl?: string | null
   hasProfessional: boolean
   hasProvider: boolean
+  lat?: number | null
+  lng?: number | null
+  radiusKm?: number | null
 }
 
 type SessionStore = {
@@ -27,6 +30,16 @@ export const useSession = create<SessionStore>((set) => ({
       const res = await fetch('/api/auth/me')
       const data = await res.json()
       set({ user: data.user ?? null, loading: false })
+      // “Todo tiene sentido”: si el usuario ya compartió su ubicación alguna vez,
+      // el mapa, los radios y las distancias vuelven a funcionar sin re-pedir permiso.
+      const u: SessionUserClient | null = data.user ?? null
+      if (u?.lat != null && u?.lng != null) {
+        const loc = useLocation.getState()
+        if (loc.lat == null || loc.lng == null) loc.setManual(u.lat, u.lng)
+        if (u.radiusKm != null && u.radiusKm > 0 && loc.radiusKm === 10) {
+          useLocation.getState().setRadius(u.radiusKm)
+        }
+      }
     } catch {
       set({ user: null, loading: false })
     }
