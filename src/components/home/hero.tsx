@@ -27,7 +27,7 @@ export function Hero() {
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col items-center text-center">
           {/* Sello de tecnología */}
-          <div className="animate-glow-ai inline-flex items-center gap-2.5 rounded-full border border-white/80 bg-white/70 px-4 py-2 backdrop-blur-md">
+          <div className="homy-glass-soft animate-glow-ai inline-flex items-center gap-2.5 rounded-full px-4 py-2">
             <span className="relative flex size-2.5">
               <span className="absolute inline-flex size-full animate-ping rounded-full bg-ai opacity-60" />
               <span className="relative inline-flex size-2.5 rounded-full bg-ai" />
@@ -38,11 +38,11 @@ export function Hero() {
           </div>
 
           {/* Titular */}
-          <h1 className="mt-7 max-w-4xl text-balance text-4xl font-extrabold leading-[1.06] tracking-tight text-navy sm:text-6xl lg:text-7xl">
+          <h1 className="mt-7 max-w-4xl text-balance text-[2.6rem] font-extrabold leading-[1.05] tracking-[-0.02em] text-navy sm:text-6xl lg:text-[4.6rem]">
             Tu hogar,
             <br />
             en{" "}
-            <span className="bg-gradient-to-r from-tech via-ai to-tech bg-clip-text text-transparent">
+            <span className="homy-gradient-text">
               buenas manos
             </span>
             .
@@ -56,16 +56,16 @@ export function Hero() {
           </p>
 
           {/* Barra de búsqueda con Homy */}
-          <div className="mt-16 w-full sm:mt-20">
+          <div className="mt-14 w-full sm:mt-16">
             <HeroSearch />
           </div>
 
           {/* Confianza */}
-          <ul className="mt-12 flex flex-wrap items-center justify-center gap-x-7 gap-y-3">
+          <ul className="mt-12 flex flex-wrap items-center justify-center gap-x-3 gap-y-3 sm:gap-x-4">
             {TRUST_CHIPS.map((chip) => (
               <li
                 key={chip.label}
-                className="flex items-center gap-2 text-[13px] font-semibold text-navy/55"
+                className="homy-glass-soft flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold text-navy/65 sm:text-[13px]"
               >
                 <chip.icon
                   className={

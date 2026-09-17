@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { navigate, Link, type RouteState } from '@/lib/router'
 import { useSession } from '@/lib/store'
-import { Homy } from '@/components/homy/homy-character'
+import { Homy, HomIAWordmark } from '@/components/homy/homy-character'
 import { toast } from 'sonner'
 import {
   LayoutDashboard, Briefcase, FolderKanban, FileText, User, Bell, LogOut,
@@ -85,8 +85,9 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
       {/* topbar — vidrio nocturno: la grilla global se adivina detrás */}
       <header className="homy-glass-dark sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
-          <Link to="/" className="flex items-center gap-2 shrink-0">
+          <Link to="/" className="flex items-center gap-2.5 shrink-0" aria-label="Ir a la home de HomIA">
             <Homy size={38} />
+            <HomIAWordmark className="hidden text-xl text-white md:block" />
           </Link>
           <div className="flex-1 hidden sm:block">
             <Link to="/buscar" className="flex items-center gap-2 rounded-full bg-white/10 border border-white/15 px-4 py-2 text-sm text-slate-300 hover:bg-white/15 transition max-w-md mx-auto">
@@ -125,9 +126,20 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
       </header>
 
       <div className="flex-1 flex">
-        {/* sidebar desktop — vidrio fuerte flotante */}
+        {/* sidebar desktop — vidrio fuerte flotante con tarjeta de usuario */}
         <aside className="hidden lg:block w-60 shrink-0">
           <nav className="homy-glass-strong sticky top-20 m-3 rounded-3xl p-3 space-y-1" aria-label="Navegación del panel">
+            {user && (
+              <div className="mb-2 flex items-center gap-3 rounded-2xl homy-glass-soft px-3 py-2.5">
+                <span className="grid size-9 shrink-0 place-items-center rounded-xl homy-chip-navy" aria-hidden>
+                  <User className="size-4.5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[13px] font-bold text-[#0A2540]">{user.displayName}</span>
+                  <span className="block text-[11px] font-semibold uppercase tracking-wide text-tech">{role}</span>
+                </span>
+              </div>
+            )}
             {items.map((item) => {
               const active = currentPath === item.to
               const Icon = item.icon
@@ -136,7 +148,9 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
                   key={item.to}
                   to={item.to}
                   className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${
-                    active ? 'bg-[#1D63B8] text-white shadow-[0_8px_20px_-8px_rgba(29,99,184,0.7)]' : 'text-slate-600 hover:bg-white/60 hover:text-[#0A2540]'
+                    active
+                      ? 'bg-gradient-to-r from-[#1D63B8] to-[#2b7fd0] text-white shadow-[0_10px_24px_-10px_rgba(29,99,184,0.75)]'
+                      : 'text-slate-600 hover:bg-white/60 hover:text-[#0A2540]'
                   }`}
                 >
                   <Icon className="size-4.5" />
@@ -162,9 +176,10 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
             const active = currentPath === item.to
             const Icon = item.icon
             return (
-              <Link key={item.to} to={item.to} className={`flex flex-col items-center gap-0.5 py-2 px-2 text-[10px] font-semibold min-w-[52px] ${active ? 'text-[#1D63B8]' : 'text-slate-400'}`}>
+              <Link key={item.to} to={item.to} className={`relative flex flex-col items-center gap-0.5 rounded-2xl py-2 px-2 text-[10px] font-semibold min-w-[52px] transition-colors ${active ? 'text-[#1D63B8]' : 'text-slate-400'}`}>
                 <Icon className="size-5" />
                 <span className="truncate max-w-[64px]">{item.label}</span>
+                {active && <span aria-hidden className="absolute -top-0.5 h-0.5 w-7 rounded-full bg-gradient-to-r from-[#1D63B8] to-[#00C4FF]" />}
               </Link>
             )
           })}

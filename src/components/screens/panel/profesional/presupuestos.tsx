@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { navigate } from '@/lib/router'
 import { PageHeader, StatusBadge, StatCard, Loading, EmptyState } from '@/components/app/ui-bits'
 import { formatARS, timeAgo } from '@/lib/format'
-import { ArrowRight, Search } from 'lucide-react'
+import { ArrowRight, Search, ClipboardPen, Wallet, Handshake, Banknote, FileText, FolderKanban } from 'lucide-react'
 
 type Project = {
   id: string; title: string; status: string; stage: string
@@ -38,35 +38,36 @@ export default function ProBids() {
         title="Mis presupuestos"
         subtitle="Cotizaciones que enviaste y cómo vienen tus proyectos"
         right={
-          <button onClick={() => navigate('/panel/profesional/bolsa')} className="rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] text-white font-bold px-5 py-2.5 flex items-center gap-2 transition">
+          <button onClick={() => navigate('/panel/profesional/bolsa')} className="homy-btn-primary px-5 py-2.5 text-sm">
             <Search className="size-4" /> Buscar más trabajos
           </button>
         }
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <StatCard label="En presupuestación" value={quoting.length} hint="esperando respuesta" accent="#1D63B8" />
-        <StatCard label="Valor cotizado" value={formatARS(quotedValue)} accent="#FFC700" />
-        <StatCard label="Ganados (activos)" value={active.length} accent="#16A34A" />
-        <StatCard label="Mano de obra ganada" value={formatARS(wonValue)} accent="#FF5A1F" />
+        <StatCard label="En presupuestación" value={quoting.length} hint="esperando respuesta" accent="#1D63B8" icon={<ClipboardPen />} tone="blue" />
+        <StatCard label="Valor cotizado" value={formatARS(quotedValue)} accent="#FFC700" icon={<Wallet />} tone="gold" />
+        <StatCard label="Ganados (activos)" value={active.length} accent="#16A34A" icon={<Handshake />} tone="mint" />
+        <StatCard label="Mano de obra ganada" value={formatARS(wonValue)} accent="#FF5A1F" icon={<Banknote />} tone="orange" />
       </div>
 
       {projects.length === 0 ? (
-        <div className="rounded-2xl homy-glass border border-slate-200 p-6">
-          <EmptyState icon="📄" title="Todavía no enviaste ningún presupuesto"
-            hint="Entrá a la bolsa de trabajos, elegí una publicación y mandá tu cotización. Cuando el cliente la acepte, el proyecto aparece acá."
-            action={
-              <button onClick={() => navigate('/panel/profesional/bolsa')} className="rounded-xl bg-[#FF5A1F] text-white font-bold px-5 py-2.5">
-                Ver la bolsa de trabajos
-              </button>
-            } />
-        </div>
+        <EmptyState icon={<FileText />} title="Todavía no enviaste ningún presupuesto"
+          hint="Entrá a la bolsa de trabajos, elegí una publicación y mandá tu cotización. Cuando el cliente la acepte, el proyecto aparece acá."
+          action={
+            <button onClick={() => navigate('/panel/profesional/bolsa')} className="homy-btn-primary px-5 py-2.5 text-sm">
+              Ver la bolsa de trabajos
+            </button>
+          } />
       ) : (
         <div className="space-y-6">
           <section>
-            <h2 className="font-extrabold text-[#0A2540] mb-3">En presupuestación (pendiente de respuesta)</h2>
+            <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-3">
+              <span className="homy-icon-chip homy-chip-gold size-7 [&_svg]:size-3.5" aria-hidden><ClipboardPen /></span>
+              En presupuestación (pendiente de respuesta)
+            </h2>
             {quoting.length === 0 ? (
-              <div className="rounded-2xl homy-glass border border-slate-200 p-5 text-sm text-slate-500">
+              <div className="homy-glass-soft rounded-2xl p-5 text-sm text-slate-500">
                 No hay cotizaciones esperando respuesta. Buscá nuevos trabajos en la bolsa y mandá tu presupuesto.
               </div>
             ) : (
@@ -77,9 +78,12 @@ export default function ProBids() {
           </section>
 
           <section>
-            <h2 className="font-extrabold text-[#0A2540] mb-3">Proyectos activos</h2>
+            <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-3">
+              <span className="homy-icon-chip homy-chip-mint size-7 [&_svg]:size-3.5" aria-hidden><FolderKanban /></span>
+              Proyectos activos
+            </h2>
             {active.length === 0 ? (
-              <div className="rounded-2xl homy-glass border border-slate-200 p-5 text-sm text-slate-500">
+              <div className="homy-glass-soft rounded-2xl p-5 text-sm text-slate-500">
                 Cuando un cliente acepte uno de tus presupuestos, el proyecto activo aparece acá con su monto y etapa.
               </div>
             ) : (
@@ -98,10 +102,10 @@ function ProjectRow({ p, badgeLabel, note }: { p: Project; badgeLabel?: string; 
   return (
     <button
       onClick={() => navigate(`/panel/profesional/proyectos/${p.id}`)}
-      className="w-full text-left rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm hover:shadow-md transition flex items-center justify-between gap-3"
+      className="w-full text-left rounded-2xl homy-glass homy-lift homy-card-glow p-4 flex items-center justify-between gap-3"
     >
       <div className="min-w-0">
-        <p className="font-bold text-[#0A2540] truncate">{p.title}</p>
+        <p className="font-bold text-[#0A2540] line-clamp-1">{p.title}</p>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
           <StatusBadge status={p.stage === 'finalizado' ? 'finalizado' : 'activo'} label={badgeLabel || p.stage} />
           {note && <span className="text-xs font-semibold text-amber-600">{note}</span>}
@@ -110,8 +114,10 @@ function ProjectRow({ p, badgeLabel, note }: { p: Project; badgeLabel?: string; 
         </div>
       </div>
       <div className="text-right shrink-0 flex items-center gap-2">
-        <p className="text-lg font-extrabold text-[#FF5A1F]">{formatARS(p.laborCost)}</p>
-        <ArrowRight className="size-4 text-slate-300" />
+        <p className="text-lg font-extrabold text-[#FF5A1F] tabular-nums">{formatARS(p.laborCost)}</p>
+        <span className="homy-glass-soft grid size-8 place-items-center rounded-full text-slate-400" aria-hidden>
+          <ArrowRight className="size-4" />
+        </span>
       </div>
     </button>
   )

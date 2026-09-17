@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { navigate } from '@/lib/router'
 import { PageHeader, StatusBadge, UAvatar, Loading, EmptyState } from '@/components/app/ui-bits'
 import { formatARS, formatDate } from '@/lib/format'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, FolderOpen } from 'lucide-react'
 
 type Project = {
   id: string; title: string; status: string; stage: string
@@ -46,53 +46,54 @@ export default function ProProjects() {
     <div className="max-w-4xl">
       <PageHeader title="Mis proyectos" subtitle="Trabajos acordados con clientes: etapas, materiales y facturación" />
 
-      <div className="flex gap-2 mb-5">
+      <div className="inline-flex homy-glass-soft rounded-full p-1 gap-1 mb-5 max-w-full overflow-x-auto no-scrollbar">
         {FILTERS.map((f) => (
           <button key={f.key} onClick={() => setFilter(f.key)}
-            className={`rounded-full px-4 py-1.5 text-sm font-bold transition ${filter === f.key ? 'bg-[#0A2540] text-white' : 'homy-glass border border-slate-200 text-slate-500 hover:border-[#1D63B8]/40'}`}>
+            className={`rounded-full px-4 py-1.5 text-sm font-bold transition whitespace-nowrap ${filter === f.key ? 'bg-[#0A2540] text-white shadow-lg shadow-[#0A2540]/25' : 'text-slate-500 hover:text-[#0A2540]'}`}>
             {f.label}
           </button>
         ))}
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-2xl homy-glass border border-slate-200 p-6">
-          <EmptyState icon="📁" title={filter === 'todos' ? 'No tenés proyectos todavía' : 'Nada con este filtro'}
-            hint="Cuando un cliente acepte tu presupuesto de la bolsa, el proyecto se crea solo y lo seguís desde acá."
-            action={
-              <button onClick={() => navigate('/panel/profesional/bolsa')} className="rounded-xl bg-[#FF5A1F] text-white font-bold px-5 py-2.5">
-                Ir a la bolsa de trabajos
-              </button>
-            } />
-        </div>
+        <EmptyState icon={<FolderOpen />} title={filter === 'todos' ? 'No tenés proyectos todavía' : 'Nada con este filtro'}
+          hint="Cuando un cliente acepte tu presupuesto de la bolsa, el proyecto se crea solo y lo seguís desde acá."
+          action={
+            <button onClick={() => navigate('/panel/profesional/bolsa')} className="homy-btn-primary px-5 py-2.5 text-sm">
+              Ir a la bolsa de trabajos
+            </button>
+          } />
       ) : (
         <div className="space-y-3">
           {filtered.map((p) => (
             <button key={p.id}
               onClick={() => navigate(`/panel/profesional/proyectos/${p.id}`)}
-              className="w-full text-left rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm hover:shadow-md transition">
+              className="w-full text-left rounded-2xl homy-glass homy-lift homy-card-glow p-4 sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <UAvatar name={p.client?.displayName || 'Cliente'} url={p.client?.avatarUrl} size={44} />
                   <div className="min-w-0">
-                    <h3 className="font-extrabold text-[#0A2540] truncate">{p.title}</h3>
-                    <p className="text-xs text-slate-400 truncate">
+                    <h3 className="font-extrabold text-[#0A2540] line-clamp-1 tracking-tight">{p.title}</h3>
+                    <p className="text-xs text-slate-400 line-clamp-1">
                       Cliente: {p.client?.displayName || '—'} · {formatDate(p.createdAt)}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="text-right">
-                    <p className="text-lg font-extrabold text-[#0A2540]">{formatARS(p.laborCost + p.materialsCost)}</p>
-                    <p className="text-[11px] text-slate-400">mano de obra {formatARS(p.laborCost)} + materiales {formatARS(p.materialsCost)}</p>
+                    <p className="text-lg font-extrabold text-[#0A2540] tabular-nums">{formatARS(p.laborCost + p.materialsCost)}</p>
+                    <p className="text-[11px] text-slate-400 tabular-nums">mano de obra {formatARS(p.laborCost)} + materiales {formatARS(p.materialsCost)}</p>
                   </div>
-                  <ArrowRight className="size-4 text-slate-300" />
+                  <span className="homy-glass-soft grid size-8 place-items-center rounded-full text-slate-400" aria-hidden>
+                    <ArrowRight className="size-4" />
+                  </span>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 mt-3">
                 <StatusBadge status={p.stage === 'finalizado' ? 'finalizado' : p.status} label={p.stage} />
                 {p.materialsPending > 0 && (
-                  <span className="text-xs font-bold text-amber-600 bg-amber-50 rounded-full px-2.5 py-1">
+                  <span className="homy-pill">
+                    <span className="homy-pill-dot bg-amber-500" aria-hidden />
                     {p.materialsPending} material(es) esperando aprobación del cliente
                   </span>
                 )}

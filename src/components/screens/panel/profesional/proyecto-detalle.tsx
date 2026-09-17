@@ -5,7 +5,10 @@ import { navigate, Link } from '@/lib/router'
 import { PageHeader, StatusBadge, Loading, EmptyState, UAvatar } from '@/components/app/ui-bits'
 import { formatARS, formatDate } from '@/lib/format'
 import { toast } from 'sonner'
-import { ArrowRight, Receipt, Truck, Plus, RefreshCcw, Phone, Mail } from 'lucide-react'
+import {
+  ArrowRight, Receipt, Truck, Plus, RefreshCcw, Phone, Mail,
+  FolderOpen, Package, ClipboardPen, CircleX, History, Check,
+} from 'lucide-react'
 
 const STAGES = ['presupuesto', 'materiales', 'ejecucion', 'revision', 'finalizado']
 const STAGE_LABEL: Record<string, string> = {
@@ -103,7 +106,7 @@ export default function ProProjectDetail({ id }: { id: string }) {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stage }),
       })
       if (!res.ok) { toast.error((await res.json()).error); return }
-      toast.success(stage === 'finalizado' ? '¡Obra finalizada! 🎉' : 'Etapa actualizada')
+      toast.success(stage === 'finalizado' ? '¡Obra finalizada!' : 'Etapa actualizada')
       load()
     } finally { setBusy(false) }
   }
@@ -163,7 +166,7 @@ export default function ProProjectDetail({ id }: { id: string }) {
   }
 
   if (loading) return <Loading />
-  if (!data) return <EmptyState icon="📁" title="Proyecto no encontrado" hint="Puede que el proyecto no exista o que no tengas acceso." action={<button onClick={() => navigate('/panel/profesional/proyectos')} className="rounded-xl bg-[#FF5A1F] text-white font-bold px-5 py-2.5">Volver a mis proyectos</button>} />
+  if (!data) return <EmptyState icon={<FolderOpen />} title="Proyecto no encontrado" hint="Puede que el proyecto no exista o que no tengas acceso." action={<button onClick={() => navigate('/panel/profesional/proyectos')} className="homy-btn-primary px-5 py-2.5 text-sm">Volver a mis proyectos</button>} />
 
   const p = data.project
   const stageIdx = STAGES.indexOf(p.stage)
@@ -179,27 +182,28 @@ export default function ProProjectDetail({ id }: { id: string }) {
       <PageHeader title={p.title} subtitle={`Proyecto para ${p.client.displayName} · creado el ${formatDate(p.createdAt)}`} />
 
       {/* etapas */}
-      <div className="rounded-2xl homy-glass border border-slate-200 p-5 mb-5 shadow-sm">
+      <div className="homy-glass rounded-2xl p-5 mb-5">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex gap-2 flex-wrap">
             {STAGES.map((s, i) => (
               <div key={s} className="flex items-center gap-2">
-                <span className={`rounded-full px-3 py-1 text-xs font-bold ${p.stage === s ? 'bg-[#1D63B8] text-white' : stageIdx > i ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
+                <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold transition ${p.stage === s ? 'bg-[#1D63B8] text-white shadow-lg shadow-[#1D63B8]/25' : stageIdx > i ? 'bg-emerald-100 text-emerald-700' : 'homy-glass-soft text-slate-400'}`}>
+                  {stageIdx > i && <Check className="size-3" aria-hidden />}
                   {STAGE_LABEL[s]}
                 </span>
-                {i < STAGES.length - 1 && <ArrowRight className="size-3 text-slate-300" />}
+                {i < STAGES.length - 1 && <ArrowRight className="size-3 text-slate-300" aria-hidden />}
               </div>
             ))}
           </div>
           {p.status !== 'finalizado' && (
             <div className="flex gap-2">
               {nextStage && nextStage !== 'finalizado' && (
-                <button disabled={busy} onClick={() => setStage(nextStage)} className="rounded-xl bg-[#1D63B8] hover:bg-[#175096] text-white text-sm font-bold px-4 py-2 transition disabled:opacity-50">
+                <button disabled={busy} onClick={() => setStage(nextStage)} className="homy-btn-primary px-4 py-2 text-sm disabled:opacity-50">
                   Avanzar a {STAGE_LABEL[nextStage]}
                 </button>
               )}
               {(p.stage === 'revision' || p.stage === 'ejecucion') && (
-                <button disabled={busy} onClick={() => setStage('finalizado')} className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-4 py-2 transition disabled:opacity-50">
+                <button disabled={busy} onClick={() => setStage('finalizado')} className="homy-btn-dark px-4 py-2 text-sm disabled:opacity-50">
                   Finalizar obra
                 </button>
               )}
@@ -214,7 +218,7 @@ export default function ProProjectDetail({ id }: { id: string }) {
       </div>
 
       {/* cliente + contacto */}
-      <div className="rounded-2xl homy-glass border border-slate-200 p-4 mb-5 shadow-sm flex items-center justify-between gap-3 flex-wrap">
+      <div className="homy-glass rounded-2xl p-4 mb-5 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <UAvatar name={p.client.displayName} url={p.client.avatarUrl} size={46} />
           <div>
@@ -224,13 +228,13 @@ export default function ProProjectDetail({ id }: { id: string }) {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {p.client.phone && (
-            <a href={`tel:${p.client.phone}`} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-[#0A2540] hover:border-[#1D63B8] transition flex items-center gap-1.5">
-              <Phone className="size-4" /> {p.client.phone}
+            <a href={`tel:${p.client.phone}`} className="homy-glass-soft rounded-full px-4 py-2 text-sm font-bold text-[#0A2540] transition hover:text-[#1D63B8] flex items-center gap-1.5">
+              <Phone className="size-4" aria-hidden /> {p.client.phone}
             </a>
           )}
           {p.client.email && (
-            <a href={`mailto:${p.client.email}`} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-[#0A2540] hover:border-[#1D63B8] transition flex items-center gap-1.5">
-              <Mail className="size-4" /> Email
+            <a href={`mailto:${p.client.email}`} className="homy-glass-soft rounded-full px-4 py-2 text-sm font-bold text-[#0A2540] transition hover:text-[#1D63B8] flex items-center gap-1.5">
+              <Mail className="size-4" aria-hidden /> Email
             </a>
           )}
         </div>
@@ -238,14 +242,17 @@ export default function ProProjectDetail({ id }: { id: string }) {
 
       {/* formulario de materiales */}
       {p.status !== 'finalizado' && (
-        <div className="rounded-2xl homy-glass border border-slate-200 p-5 mb-5 shadow-sm">
-          <h2 className="font-extrabold text-[#0A2540] mb-1 flex items-center gap-2"><Plus className="size-5 text-[#FF5A1F]" /> Proponer material al cliente</h2>
+        <div className="homy-glass rounded-2xl p-5 mb-5">
+          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-1">
+            <span className="homy-icon-chip homy-chip-orange size-8 [&_svg]:size-4" aria-hidden><Plus /></span>
+            Proponer material al cliente
+          </h2>
           <p className="text-sm text-slate-500 mb-4">Elegí del catálogo estándar; si un proveedor lo tiene en stock, te autocompletamos el mejor precio.</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Material (catálogo estándar)</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Material (catálogo estándar)</span>
               <select value={elementId} onChange={(e) => setElementId(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8] cursor-pointer">
+                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm cursor-pointer">
                 <option value="">Elegí un material…</option>
                 {catalog.map((c) => (
                   <optgroup key={c.slug} label={c.name}>
@@ -255,15 +262,15 @@ export default function ProProjectDetail({ id }: { id: string }) {
               </select>
             </label>
             <label className="block">
-              <span className="text-xs font-semibold text-slate-500 uppercase">
-                Proveedor {loadingStock && <RefreshCcw className="inline size-3 animate-spin text-[#00C4FF]" />}
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                Proveedor {loadingStock && <RefreshCcw className="inline size-3 animate-spin text-[#00C4FF]" aria-hidden />}
               </span>
               <select value={providerId} onChange={(e) => {
                 setProviderId(e.target.value)
                 const stock = stockOptions.find((s) => s.providerId === e.target.value)
                 if (stock) setUnitPrice(String(stock.price))
               }} disabled={!elementId || stockOptions.length === 0}
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8] cursor-pointer disabled:bg-slate-50 disabled:text-slate-400">
+                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm cursor-pointer disabled:text-slate-400">
                 <option value="">Sin proveedor (compro por mi cuenta)</option>
                 {stockOptions.map((s) => (
                   <option key={s.stockId} value={s.providerId}>
@@ -273,26 +280,26 @@ export default function ProProjectDetail({ id }: { id: string }) {
               </select>
             </label>
             <label className="block">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Cantidad {selectedElement ? `(${selectedElement.unit})` : ''}</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Cantidad {selectedElement ? `(${selectedElement.unit})` : ''}</span>
               <input type="number" min="0" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]" />
+                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm tabular-nums" />
             </label>
             <label className="block">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Precio unitario (ARS)</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Precio unitario (ARS)</span>
               <input type="number" min="0" step="any" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]" />
+                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm tabular-nums" />
             </label>
             <label className="block sm:col-span-2">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Nota para el cliente (opcional)</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Nota para el cliente (opcional)</span>
               <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej: marca recomendada, alternativa más duradera…"
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]" />
+                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm" />
             </label>
           </div>
           <div className="flex items-center justify-between mt-4 flex-wrap gap-2">
-            <p className="text-sm font-bold text-[#0A2540]">
+            <p className="text-sm font-bold text-[#0A2540] tabular-nums">
               Subtotal: {formatARS((parseFloat(quantity) || 0) * (parseFloat(unitPrice) || 0))}
             </p>
-            <button disabled={busy} onClick={proposeMaterial} className="rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] text-white font-bold px-5 py-2.5 transition disabled:opacity-50">
+            <button disabled={busy} onClick={proposeMaterial} className="homy-btn-primary px-5 py-2.5 text-sm disabled:opacity-50">
               Proponer al cliente
             </button>
           </div>
@@ -301,18 +308,21 @@ export default function ProProjectDetail({ id }: { id: string }) {
 
       {/* propuestos (esperando cliente) */}
       {proposed.length > 0 && (
-        <div className="rounded-3xl border-2 border-amber-300 bg-amber-50/50 p-5 mb-5">
-          <h2 className="font-extrabold text-[#0A2540] mb-3">Esperando aprobación del cliente ({proposed.length})</h2>
+        <div className="rounded-3xl border-2 border-amber-200/80 bg-amber-50/60 p-5 mb-5">
+          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-3">
+            <span className="homy-icon-chip homy-chip-gold size-8 [&_svg]:size-4" aria-hidden><ClipboardPen /></span>
+            Esperando aprobación del cliente ({proposed.length})
+          </h2>
           <div className="space-y-2">
             {proposed.map((m) => (
-              <div key={m.id} className="rounded-2xl homy-glass border border-amber-200 p-4 flex flex-wrap items-start justify-between gap-2">
+              <div key={m.id} className="rounded-2xl homy-glass p-4 flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="font-bold text-[#0A2540]">{m.name}</p>
-                  <p className="text-sm text-slate-500">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}{m.providerName ? ` · ${m.providerName}` : ' · sin proveedor'}</p>
+                  <p className="text-sm text-slate-500 tabular-nums">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}{m.providerName ? ` · ${m.providerName}` : ' · sin proveedor'}</p>
                   {m.note && <p className="text-xs text-slate-400 mt-1">{m.note}</p>}
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-extrabold text-[#0A2540]">{formatARS(m.subtotal)}</p>
+                  <p className="text-lg font-extrabold text-[#0A2540] tabular-nums">{formatARS(m.subtotal)}</p>
                   <StatusBadge status={m.status} />
                 </div>
               </div>
@@ -323,48 +333,51 @@ export default function ProProjectDetail({ id }: { id: string }) {
 
       {/* rechazados → sugerir alternativa */}
       {rejected.length > 0 && (
-        <div className="rounded-2xl homy-glass border border-slate-200 p-5 mb-5 shadow-sm">
-          <h2 className="font-extrabold text-[#0A2540] mb-3">Rechazados por el cliente ({rejected.length})</h2>
+        <div className="homy-glass rounded-2xl p-5 mb-5">
+          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-3">
+            <span className="homy-icon-chip homy-chip-orange size-8 [&_svg]:size-4" aria-hidden><CircleX /></span>
+            Rechazados por el cliente ({rejected.length})
+          </h2>
           <div className="space-y-3">
             {rejected.map((m) => (
-              <div key={m.id} className="rounded-2xl border border-red-100 bg-red-50/40 p-4">
+              <div key={m.id} className="rounded-2xl border border-red-100 bg-red-50/50 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <p className="font-bold text-[#0A2540]">{m.name}</p>
-                    <p className="text-sm text-slate-500">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}</p>
+                    <p className="text-sm text-slate-500 tabular-nums">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <StatusBadge status={m.status} />
                     {altFor !== m.id && (
                       <button onClick={() => { setAltFor(m.id); setAltName(m.name); setAltQty(String(m.quantity)); setAltPrice('') }}
-                        className="rounded-xl border border-[#1D63B8] text-[#1D63B8] hover:bg-[#1D63B8] hover:text-white text-sm font-bold px-4 py-2 transition">
+                        className="rounded-full border-2 border-[#1D63B8] text-[#1D63B8] hover:bg-[#1D63B8] hover:text-white text-sm font-bold px-4 py-2 transition">
                         Sugerir alternativa más barata
                       </button>
                     )}
                   </div>
                 </div>
                 {altFor === m.id && (
-                  <div className="mt-3 rounded-xl homy-glass border border-slate-200 p-4 grid gap-3 sm:grid-cols-3">
+                  <div className="mt-3 rounded-2xl homy-glass p-4 grid gap-3 sm:grid-cols-3">
                     <label className="block sm:col-span-3">
-                      <span className="text-xs font-semibold text-slate-500 uppercase">Alternativa</span>
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Alternativa</span>
                       <input value={altName} onChange={(e) => setAltName(e.target.value)} placeholder="Nombre del material alternativo"
-                        className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]" />
+                        className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm" />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-semibold text-slate-500 uppercase">Cantidad ({m.unit})</span>
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Cantidad ({m.unit})</span>
                       <input type="number" min="0" step="any" value={altQty} onChange={(e) => setAltQty(e.target.value)}
-                        className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]" />
+                        className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm tabular-nums" />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-semibold text-slate-500 uppercase">Precio unitario</span>
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Precio unitario</span>
                       <input type="number" min="0" step="any" value={altPrice} onChange={(e) => setAltPrice(e.target.value)} placeholder={`antes ${m.unitPrice}`}
-                        className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]" />
+                        className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm tabular-nums" />
                     </label>
                     <div className="flex items-end gap-2">
-                      <button disabled={busy} onClick={() => suggestAlternative(m)} className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-4 py-2.5 transition disabled:opacity-50">
+                      <button disabled={busy} onClick={() => suggestAlternative(m)} className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-4 py-2.5 transition disabled:opacity-50">
                         Enviar alternativa
                       </button>
-                      <button onClick={() => setAltFor(null)} className="rounded-xl border border-slate-300 text-slate-500 text-sm font-bold px-4 py-2.5 hover:border-red-300 transition">
+                      <button onClick={() => setAltFor(null)} className="homy-glass-soft rounded-full text-slate-500 text-sm font-bold px-4 py-2.5 hover:text-red-500 transition">
                         Cancelar
                       </button>
                     </div>
@@ -378,18 +391,21 @@ export default function ProProjectDetail({ id }: { id: string }) {
 
       {/* aprobados / reemplazados */}
       {others.length > 0 && (
-        <div className="rounded-2xl homy-glass border border-slate-200 p-5 mb-5 shadow-sm">
-          <h2 className="font-extrabold text-[#0A2540] mb-3">Historial de materiales</h2>
-          <div className="divide-y divide-slate-100">
+        <div className="homy-glass rounded-2xl p-5 mb-5">
+          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-3">
+            <span className="homy-icon-chip homy-chip-blue size-8 [&_svg]:size-4" aria-hidden><History /></span>
+            Historial de materiales
+          </h2>
+          <div className="divide-y divide-[#0A2540]/6">
             {others.map((m) => (
               <div key={m.id} className="py-2.5 flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[#0A2540] truncate">{m.name}</p>
-                  <p className="text-xs text-slate-400">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}{m.providerName ? ` · ${m.providerName}` : ''}</p>
+                  <p className="text-sm font-semibold text-[#0A2540] line-clamp-1">{m.name}</p>
+                  <p className="text-xs text-slate-400 tabular-nums">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}{m.providerName ? ` · ${m.providerName}` : ''}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <StatusBadge status={m.status} />
-                  <p className="text-sm font-bold">{formatARS(m.subtotal)}</p>
+                  <p className="text-sm font-bold tabular-nums">{formatARS(m.subtotal)}</p>
                 </div>
               </div>
             ))}
@@ -398,8 +414,11 @@ export default function ProProjectDetail({ id }: { id: string }) {
       )}
 
       {/* cuentas de retiro vinculadas */}
-      <div className="rounded-2xl homy-glass border border-slate-200 p-5 mb-5 shadow-sm">
-        <h2 className="font-extrabold text-[#0A2540] mb-1 flex items-center gap-2"><Truck className="size-5 text-[#1D63B8]" /> Cuentas de retiro vinculadas</h2>
+      <div className="homy-glass rounded-2xl p-5 mb-5">
+        <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-1">
+          <span className="homy-icon-chip homy-chip-blue size-8 [&_svg]:size-4" aria-hidden><Truck /></span>
+          Cuentas de retiro vinculadas
+        </h2>
         <p className="text-sm text-slate-500 mb-3">Con estas cuentas podés retirar materiales en los proveedores y se facturan a este proyecto.</p>
         {data.links.length === 0 ? (
           <p className="text-sm text-slate-500">
@@ -409,7 +428,7 @@ export default function ProProjectDetail({ id }: { id: string }) {
         ) : (
           <div className="space-y-2">
             {data.links.map((l) => (
-              <div key={l.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3.5">
+              <div key={l.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl homy-glass-soft p-3.5">
                 <div>
                   <p className="font-bold text-[#0A2540]">{l.accountLabel}</p>
                   <p className="text-xs text-slate-400">Proveedor: {l.provider.businessName}{l.provider.city ? ` · ${l.provider.city}` : ''}</p>
@@ -422,28 +441,34 @@ export default function ProProjectDetail({ id }: { id: string }) {
       </div>
 
       {/* facturación */}
-      <div className="rounded-2xl homy-glass border border-slate-200 p-5 mb-5 shadow-sm">
+      <div className="homy-glass rounded-2xl p-5 mb-5">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <h2 className="font-extrabold text-[#0A2540] flex items-center gap-2"><Receipt className="size-5 text-[#1D63B8]" /> Facturas ({data.invoices.length})</h2>
+          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight">
+            <span className="homy-icon-chip homy-chip-navy size-8 [&_svg]:size-4" aria-hidden><Receipt /></span>
+            Facturas ({data.invoices.length})
+          </h2>
           {p.status !== 'finalizado' && (
-            <button disabled={busy} onClick={issueInvoice} className="rounded-xl bg-[#0A2540] hover:bg-[#0d3357] text-white text-sm font-bold px-4 py-2.5 transition disabled:opacity-50">
+            <button disabled={busy} onClick={issueInvoice} className="homy-btn-dark px-4 py-2.5 text-sm disabled:opacity-50">
               Emitir factura
             </button>
           )}
         </div>
         <p className="text-xs text-slate-400 mb-3">La factura incluye los materiales aprobados + mano de obra. El cliente la paga con Mercado Pago desde su panel.</p>
         {data.invoices.length === 0 ? (
-          <p className="text-sm text-slate-500">Todavía no emitiste facturas para este proyecto.</p>
+          <div className="homy-glass-soft rounded-xl p-4 flex items-center gap-2 text-sm text-slate-500">
+            <Package className="size-4 shrink-0 text-slate-400" aria-hidden />
+            Todavía no emitiste facturas para este proyecto.
+          </div>
         ) : (
           <div className="space-y-2">
             {data.invoices.map((inv) => (
-              <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3.5">
+              <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl homy-glass-soft p-3.5">
                 <div>
                   <p className="font-bold text-[#0A2540]">{inv.number}</p>
                   <p className="text-xs text-slate-400">{formatDate(inv.issuedAt)}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <p className="font-extrabold">{formatARS(inv.total)}</p>
+                  <p className="font-extrabold tabular-nums">{formatARS(inv.total)}</p>
                   <StatusBadge status={inv.status} />
                 </div>
               </div>
@@ -458,8 +483,8 @@ export default function ProProjectDetail({ id }: { id: string }) {
 function MiniStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <div className="rounded-xl homy-glass-soft px-4 py-3">
-      <p className="text-xs text-slate-400 font-semibold uppercase">{label}</p>
-      <p className={`text-lg font-extrabold ${accent ? 'text-[#FF5A1F]' : 'text-[#0A2540]'}`}>{value}</p>
+      <p className="text-xs text-slate-400 font-bold uppercase tracking-wide">{label}</p>
+      <p className={`text-lg font-extrabold tabular-nums ${accent ? 'text-[#FF5A1F]' : 'text-[#0A2540]'}`}>{value}</p>
     </div>
   )
 }

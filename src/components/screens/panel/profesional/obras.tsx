@@ -5,7 +5,7 @@ import { PageHeader, Loading, EmptyState } from '@/components/app/ui-bits'
 import { formatDate } from '@/lib/format'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Plus, ImageIcon, X } from 'lucide-react'
+import { Plus, ImageIcon, X, HardHat } from 'lucide-react'
 
 const CATEGORIES = [
   { slug: 'plomeria', name: 'Plomería' },
@@ -113,26 +113,24 @@ export default function ProWorks() {
         title="Mis obras"
         subtitle="Tu vitrina: mostrá trabajos realizados con fotos reales"
         right={
-          <button onClick={() => setOpen(true)} className="rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] text-white font-bold px-5 py-2.5 flex items-center gap-2 transition shadow-lg shadow-[#FF5A1F]/20">
+          <button onClick={() => setOpen(true)} className="homy-btn-primary px-5 py-2.5 text-sm">
             <Plus className="size-4" /> Publicar obra
           </button>
         }
       />
 
       {works.length === 0 ? (
-        <div className="rounded-2xl homy-glass border border-slate-200 p-6">
-          <EmptyState icon="🏗️" title="Todavía no publicaste obras"
-            hint="Publicar tus trabajos realizados con fotos te da credibilidad y más presupuestos aceptados."
-            action={
-              <button onClick={() => setOpen(true)} className="rounded-xl bg-[#FF5A1F] text-white font-bold px-5 py-2.5">Publicar la primera</button>
-            } />
-        </div>
+        <EmptyState icon={<HardHat />} title="Todavía no publicaste obras"
+          hint="Publicar tus trabajos realizados con fotos te da credibilidad y más presupuestos aceptados."
+          action={
+            <button onClick={() => setOpen(true)} className="homy-btn-primary px-5 py-2.5 text-sm">Publicar la primera</button>
+          } />
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {works.map((w) => {
             const photos = parsePhotos(w.photos)
             return (
-              <article key={w.id} className="rounded-2xl homy-glass border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+              <article key={w.id} className="rounded-2xl homy-glass homy-lift homy-card-glow overflow-hidden flex flex-col">
                 {photos.length > 0 ? (
                   <div className={`grid gap-0.5 ${photos.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
                     {photos.slice(0, 4).map((url, i) => (
@@ -141,16 +139,18 @@ export default function ProWorks() {
                     ))}
                   </div>
                 ) : (
-                  <div className="h-28 bg-slate-50 flex items-center justify-center text-slate-300">
-                    <ImageIcon className="size-8" />
+                  <div className="h-28 homy-glass-soft flex items-center justify-center text-slate-300">
+                    <ImageIcon className="size-8" aria-hidden />
                   </div>
                 )}
                 <div className="p-4 flex-1">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    {w.categorySlug && <span className="text-[10px] font-extrabold uppercase tracking-wide text-[#1D63B8]">{w.categorySlug}</span>}
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    {w.categorySlug && (
+                      <span className="homy-pill"><span className="homy-pill-dot bg-[#1D63B8]" aria-hidden />{w.categorySlug}</span>
+                    )}
                     <span className="text-[11px] text-slate-400 shrink-0">{formatDate(w.createdAt)}</span>
                   </div>
-                  <h3 className="font-extrabold text-[#0A2540] leading-snug">{w.title}</h3>
+                  <h3 className="font-extrabold text-[#0A2540] leading-snug tracking-tight">{w.title}</h3>
                   <p className="text-sm text-slate-500 mt-1 line-clamp-3">{w.description}</p>
                 </div>
               </article>
@@ -168,29 +168,29 @@ export default function ProWorks() {
           </DialogHeader>
           <div className="space-y-3">
             <label className="block">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Título</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Título</span>
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej: Instalación eléctrica completa — casa 3 ambientes"
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]" />
+                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm" />
             </label>
             <label className="block">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Descripción</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Descripción</span>
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3}
                 placeholder="Contá qué hiciste, materiales usados, plazo…"
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8] resize-none" />
+                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm resize-none" />
             </label>
             <label className="block">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Categoría</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Categoría</span>
               <select value={categorySlug} onChange={(e) => setCategorySlug(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8] cursor-pointer">
+                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm cursor-pointer">
                 <option value="">Elegí una categoría…</option>
                 {CATEGORIES.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
               </select>
             </label>
             <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase">Fotos ({files.length}/4)</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Fotos ({files.length}/4)</span>
               <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" multiple
                 onChange={(e) => pickPhotos(e.target.files)}
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-[#1D63B8] file:text-white file:px-3 file:py-1.5 file:text-xs file:font-bold text-slate-500" />
+                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm text-slate-500 file:mr-3 file:rounded-full file:border-0 file:bg-[#1D63B8] file:text-white file:px-3 file:py-1.5 file:text-xs file:font-bold" />
               {previews.length > 0 && (
                 <div className="flex gap-2 mt-2 flex-wrap">
                   {previews.map((url, i) => (
@@ -204,7 +204,7 @@ export default function ProWorks() {
                         }}
                         className="absolute -top-1.5 -right-1.5 rounded-full bg-[#0A2540] text-white p-0.5 hover:bg-red-500 transition"
                         aria-label={`Quitar foto ${i + 1}`}>
-                        <X className="size-3" />
+                        <X className="size-3" aria-hidden />
                       </button>
                     </div>
                   ))}
@@ -212,9 +212,9 @@ export default function ProWorks() {
               )}
             </div>
             <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => { setOpen(false); clearForm() }} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-500 hover:border-red-300 transition">Cancelar</button>
-              <button disabled={busy} onClick={publish} className="rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] text-white text-sm font-bold px-5 py-2.5 transition disabled:opacity-50 flex items-center gap-2">
-                {busy && <span className="size-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />}
+              <button onClick={() => { setOpen(false); clearForm() }} className="homy-glass-soft rounded-full px-4 py-2.5 text-sm font-bold text-slate-500 hover:text-red-500 transition">Cancelar</button>
+              <button disabled={busy} onClick={publish} className="homy-btn-primary px-5 py-2.5 text-sm disabled:opacity-50 flex items-center gap-2">
+                {busy && <span className="size-4 rounded-full border-2 border-white/40 border-t-white animate-spin" aria-hidden />}
                 Publicar obra
               </button>
             </div>

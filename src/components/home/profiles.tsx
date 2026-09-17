@@ -2,8 +2,7 @@
 
 import { motion } from "framer-motion";
 import { UserRound, HardHat, Package, ArrowRight, Check } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { navigate } from "@/lib/router";
 import { SectionHeading } from "@/components/home/section-heading";
 
 const PROFILES = [
@@ -18,6 +17,7 @@ const PROFILES = [
       "Sobrantes devueltos y reembolsados automáticamente",
     ],
     cta: "Buscar un servicio",
+    href: "/buscar?mode=cliente",
     highlight: false,
   },
   {
@@ -31,6 +31,7 @@ const PROFILES = [
       "Cobro asegurado vía escrow, sin perseguir pagos",
     ],
     cta: "Quiero recibir licitaciones",
+    href: "/registrarse?rol=profesional",
     highlight: true,
   },
   {
@@ -44,13 +45,12 @@ const PROFILES = [
       "Un canal nuevo de ventas, sin costo de entrada",
     ],
     cta: "Quiero vender en HomIA",
+    href: "/registrarse?rol=proveedor",
     highlight: false,
   },
 ];
 
 export function Profiles() {
-  const { toast } = useToast();
-
   return (
     <section
       id="comunidad"
@@ -87,12 +87,12 @@ export function Profiles() {
                 <span
                   className={
                     p.highlight
-                      ? "grid size-12 place-items-center rounded-2xl bg-action/12"
-                      : "grid size-12 place-items-center rounded-2xl bg-tech/10"
+                      ? "homy-icon-chip size-12 !rounded-2xl homy-chip-orange"
+                      : "homy-icon-chip size-12 !rounded-2xl homy-chip-blue"
                   }
                 >
                   <p.icon
-                    className={p.highlight ? "size-6 text-action" : "size-6 text-tech"}
+                    className={p.highlight ? "size-6" : "size-6"}
                     aria-hidden
                   />
                 </span>
@@ -128,24 +128,17 @@ export function Profiles() {
                   </li>
                 ))}
               </ul>
-              <Button
-                variant={p.highlight ? "default" : "outline"}
+              <button
+                onClick={() => navigate(p.href)}
                 className={
                   p.highlight
-                    ? "mt-7 w-full rounded-full bg-action font-semibold text-white hover:bg-action-2"
-                    : "mt-7 w-full rounded-full border-line font-semibold text-navy hover:bg-confort"
-                }
-                onClick={() =>
-                  toast({
-                    title: "Muy pronto: registro de la comunidad",
-                    description:
-                      "Estamos preparando el ingreso para que sea simple y seguro. ¡Te va a encantar lo que se viene!",
-                  })
+                    ? "homy-btn-primary mt-7 w-full py-3 text-[14.5px]"
+                    : "mt-7 inline-flex w-full items-center justify-center gap-2 rounded-full border border-line bg-white/60 py-3 text-[14.5px] font-semibold text-navy transition-all duration-300 hover:-translate-y-0.5 hover:border-tech/40 hover:bg-white hover:shadow-[0_12px_28px_-14px_rgba(29,99,184,0.4)]"
                 }
               >
                 {p.cta}
                 <ArrowRight className="size-4" aria-hidden />
-              </Button>
+              </button>
             </motion.article>
           ))}
         </div>

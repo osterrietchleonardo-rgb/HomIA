@@ -9,7 +9,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Plus, ChevronLeft, ChevronRight, Trash2, UserRound } from 'lucide-react'
+import { Plus, ChevronLeft, ChevronRight, Trash2, UserRound, Handshake } from 'lucide-react'
 
 type Stage = { id: string; name: string; color: string; sortOrder: number }
 
@@ -103,7 +103,7 @@ export default function ProviderCRM() {
         }),
       })
       if (!res.ok) { toast.error((await res.json()).error); return }
-      toast.success('Trato creado ✓')
+      toast.success('Trato creado')
       setOpen(false)
       resetForm()
       load()
@@ -115,8 +115,8 @@ export default function ProviderCRM() {
     return (
       <div>
         <PageHeader title="CRM" subtitle="Tus tratos con clientes y profesionales" />
-        <div className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-6">
-          <EmptyState icon="🤝" title="No tenemos un pipeline para vos todavía" hint="Recargá la pantalla: se crea automáticamente la primera vez." />
+        <div className="homy-glass rounded-3xl p-6">
+          <EmptyState icon={<Handshake />} title="No tenemos un pipeline para vos todavía" hint="Recargá la pantalla: se crea automáticamente la primera vez." />
         </div>
       </div>
     )
@@ -128,42 +128,42 @@ export default function ProviderCRM() {
         title="CRM"
         subtitle={`${pipeline.name} — seguí cada trato de contacto a compra`}
         right={
-          <button onClick={() => setOpen(true)} className="rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] text-white font-bold px-5 py-2.5 flex items-center gap-2 transition shadow-lg shadow-[#FF5A1F]/20">
+          <button onClick={() => setOpen(true)} className="homy-btn-primary homy-focus px-5 py-2.5 text-sm">
             <Plus className="size-4" /> Nuevo trato
           </button>
         }
       />
 
       {deals.length === 0 ? (
-        <div className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-6">
-          <EmptyState icon="🤝" title="Tu pipeline está vacío"
+        <div className="homy-glass rounded-3xl p-6">
+          <EmptyState icon={<Handshake />} title="Tu pipeline está vacío"
             hint={`Anotá cada contacto y cotización para no perder ninguna venta. Las etapas ${stages.map((s) => s.name).join(' / ')} ya están listas.`}
             action={
-              <button onClick={() => setOpen(true)} className="rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] text-white font-bold px-5 py-2.5 mx-auto flex items-center gap-2 transition">
+              <button onClick={() => setOpen(true)} className="homy-btn-primary homy-focus px-5 py-2.5 text-sm mx-auto">
                 <Plus className="size-4" /> Crear el primer trato
               </button>
             } />
         </div>
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-3 px-0.5">
+        <div className="flex gap-4 overflow-x-auto no-scrollbar pb-3 px-0.5">
           {stages.map((stage) => {
             const list = deals.filter((d) => d.stageId === stage.id)
             const total = list.reduce((a, d) => a + (d.value || 0), 0)
             const idx = stageIndex(stage.id)
             return (
               <section key={stage.id} className="min-w-[266px] w-[266px] sm:flex-1 shrink-0">
-                <header className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-3 mb-3">
+                <header className="homy-glass rounded-2xl p-3 mb-3">
                   <div className="flex items-center gap-2">
-                    <span className="size-2.5 rounded-full shrink-0" style={{ background: stage.color }} />
+                    <span aria-hidden className="size-2.5 rounded-full shrink-0" style={{ background: stage.color }} />
                     <h2 className="font-bold text-sm text-[#0A2540] truncate flex-1">{stage.name}</h2>
-                    <span className="rounded-full bg-slate-100 text-slate-500 text-xs font-bold px-2 py-0.5">{list.length}</span>
+                    <span className="homy-pill">{list.length}</span>
                   </div>
-                  {total > 0 && <p className="text-xs font-semibold text-[#1D63B8] mt-1">{formatARS(total)}</p>}
+                  {total > 0 && <p className="text-xs font-semibold text-[#1D63B8] mt-1.5 tabular-nums">{formatARS(total)}</p>}
                 </header>
 
                 <div className="space-y-2 min-h-[80px]">
                   {list.map((deal) => (
-                    <article key={deal.id} className="rounded-2xl homy-glass border border-slate-200 p-3.5 shadow-sm">
+                    <article key={deal.id} className="homy-glass homy-lift homy-card-glow rounded-2xl p-3.5">
                       <div className="flex items-start justify-between gap-2">
                         <p className="font-bold text-sm text-[#0A2540] leading-snug">{deal.title}</p>
                         <button onClick={() => setDeleteTarget(deal)} title="Eliminar trato" aria-label={`Eliminar ${deal.title}`}
@@ -171,7 +171,7 @@ export default function ProviderCRM() {
                           <Trash2 className="size-4" />
                         </button>
                       </div>
-                      <p className={`text-sm font-extrabold mt-1 ${deal.value > 0 ? 'text-[#1D63B8]' : 'text-slate-300'}`}>
+                      <p className={`text-sm font-extrabold mt-1 text-right tabular-nums ${deal.value > 0 ? 'text-[#1D63B8]' : 'text-slate-300'}`}>
                         {deal.value > 0 ? formatARS(deal.value) : '—'}
                       </p>
                       {(deal.counterparty?.displayName || deal.note) && (
@@ -189,24 +189,24 @@ export default function ProviderCRM() {
                           )}
                         </p>
                       )}
-                      <div className="flex justify-between mt-3 pt-2 border-t border-slate-100">
+                      <div className="flex justify-between mt-3 pt-2 border-t border-[#0A2540]/8">
                         <button onClick={() => move(deal, -1)} disabled={idx === 0 || movingId === deal.id}
                           title={idx > 0 ? `Mover a “${stages[idx - 1].name}”` : 'Primera etapa'}
                           aria-label={`Mover ${deal.title} a la etapa anterior`}
-                          className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-slate-500 hover:border-[#1D63B8] hover:text-[#1D63B8] disabled:opacity-30 disabled:hover:border-slate-200 disabled:hover:text-slate-500 transition">
+                          className="rounded-lg border border-[#0A2540]/10 px-2.5 py-1.5 text-slate-500 hover:border-[#1D63B8] hover:text-[#1D63B8] disabled:opacity-30 disabled:hover:border-[#0A2540]/10 disabled:hover:text-slate-500 transition">
                           <ChevronLeft className="size-4" />
                         </button>
                         <button onClick={() => move(deal, +1)} disabled={idx === stages.length - 1 || movingId === deal.id}
                           title={idx < stages.length - 1 ? `Mover a “${stages[idx + 1].name}”` : 'Última etapa'}
                           aria-label={`Mover ${deal.title} a la etapa siguiente`}
-                          className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-slate-500 hover:border-[#16A34A] hover:text-[#16A34A] disabled:opacity-30 disabled:hover:border-slate-200 disabled:hover:text-slate-500 transition">
+                          className="rounded-lg border border-[#0A2540]/10 px-2.5 py-1.5 text-slate-500 hover:border-emerald-600 hover:text-emerald-600 disabled:opacity-30 disabled:hover:border-[#0A2540]/10 disabled:hover:text-slate-500 transition">
                           <ChevronRight className="size-4" />
                         </button>
                       </div>
                     </article>
                   ))}
                   {list.length === 0 && (
-                    <p className="rounded-2xl border border-dashed border-slate-200 text-xs text-slate-300 text-center py-6">
+                    <p className="rounded-2xl border border-dashed border-[#0A2540]/12 text-xs text-slate-400 text-center py-6">
                       Sin tratos acá
                     </p>
                   )}
@@ -221,19 +221,22 @@ export default function ProviderCRM() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Nuevo trato</DialogTitle>
+            <DialogTitle className="flex items-center gap-2.5">
+              <span aria-hidden className="homy-icon-chip homy-chip-blue size-8"><Handshake className="size-4" /></span>
+              Nuevo trato
+            </DialogTitle>
             <DialogDescription>Anotá el contacto o la cotización para hacerle seguimiento en el pipeline.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3.5">
             <div>
               <label className="text-sm font-semibold text-[#0A2540]">Título</label>
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej: Corralón López — pedido de caños"
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]" />
+                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm" />
             </div>
             <div>
               <label className="text-sm font-semibold text-[#0A2540]">Etapa</label>
               <select value={stageId || stages[0]?.id || ''} onChange={(e) => setStageId(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-300 homy-glass px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]">
+                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm">
                 {stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
@@ -241,16 +244,15 @@ export default function ProviderCRM() {
               <div>
                 <label className="text-sm font-semibold text-[#0A2540]">Valor (ARS) <span className="text-slate-400 font-normal">(opcional)</span></label>
                 <input type="number" min={0} value={value} onChange={(e) => setValue(e.target.value)} placeholder="0"
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]" />
+                  className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm text-right tabular-nums" />
               </div>
               <div>
                 <label className="text-sm font-semibold text-[#0A2540]">Contraparte <span className="text-slate-400 font-normal">(opcional)</span></label>
                 <input value={counterparty} onChange={(e) => setCounterparty(e.target.value)} placeholder="Cliente o profesional"
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]" />
+                  className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm" />
               </div>
             </div>
-            <button onClick={createDeal} disabled={busy}
-              className="w-full rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] disabled:opacity-60 text-white font-bold py-3 transition">
+            <button onClick={createDeal} disabled={busy} className="homy-btn-primary w-full py-3 disabled:opacity-60">
               {busy ? 'Creando…' : 'Crear trato'}
             </button>
           </div>

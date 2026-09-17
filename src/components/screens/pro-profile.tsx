@@ -3,10 +3,10 @@
 import { useEffect, useState } from 'react'
 import { navigate, useRoute } from '@/lib/router'
 import { useSession } from '@/lib/store'
-import { Loading, EmptyState, UAvatar, UStars, StatusBadge } from '@/components/app/ui-bits'
+import { Loading, EmptyState, UAvatar, UStars, StatCard } from '@/components/app/ui-bits'
 import { formatDate } from '@/lib/format'
 import { toast } from 'sonner'
-import { ChevronLeft, BadgeCheck, MapPin } from 'lucide-react'
+import { ChevronLeft, BadgeCheck, MapPin, HardHat, Briefcase, Star, ArrowUpRight, ImageOff, Search } from 'lucide-react'
 
 type Profile = {
   id: string; userId: string; displayName: string; avatarUrl: string | null; city: string | null
@@ -58,25 +58,27 @@ export default function ProProfileScreen({ id }: { id: string }) {
   }
 
   if (loading) return <div className="min-h-screen"><Loading /></div>
-  if (!data) return <div className="min-h-screen pt-20"><EmptyState icon="🔎" title="Profesional no encontrado" /></div>
+  if (!data) return <div className="min-h-screen pt-20 px-4"><EmptyState icon={<Search />} title="Profesional no encontrado" /></div>
 
   const p = data.profile
   const parsedWorks = data.works.map((w) => ({ ...w, photoList: safePhotos(w.photos) }))
 
   return (
     <div className="min-h-screen">
-      <div className="bg-[#0A2540] pt-6 pb-12 px-4">
-        <div className="max-w-4xl mx-auto">
-          <button onClick={() => navigate('/buscar?mode=cliente')} className="text-slate-300 hover:text-white text-sm flex items-center gap-1 mb-4">
+      {/* banda navy con profundidad */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-[#0A2540] via-[#0D3050] to-[#14406B]">
+        <span aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(58% 90% at 88% -10%, rgba(0,196,255,0.18) 0%, transparent 62%), radial-gradient(45% 70% at -5% 110%, rgba(255,90,31,0.14) 0%, transparent 55%)' }} />
+        <div className="relative max-w-4xl mx-auto pt-6 pb-12 px-4">
+          <button onClick={() => navigate('/buscar?mode=cliente')} className="homy-focus text-slate-300 hover:text-white text-sm flex items-center gap-1.5 mb-4 transition-colors">
             <ChevronLeft className="size-4" /> Volver
           </button>
           <div className="flex flex-wrap items-start gap-4">
             <UAvatar name={p.displayName} url={p.avatarUrl} size={76} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-2xl font-extrabold text-white">{p.companyName || p.displayName}</h1>
-                {p.verified && <BadgeCheck className="size-5 text-[#00C4FF]" />}
-                {p.personType === 'empresa' && <span className="rounded-full bg-white/10 text-white text-xs font-bold px-2.5 py-1">Empresa</span>}
+                <h1 className="text-2xl font-extrabold text-white tracking-tight">{p.companyName || p.displayName}</h1>
+                {p.verified && <BadgeCheck aria-label="Verificado" className="size-5 text-[#66DFFF]" />}
+                {p.personType === 'empresa' && <span className="homy-pill">Empresa</span>}
               </div>
               <p className="text-slate-300 capitalize text-sm mt-0.5">{p.professions.join(' · ') || 'Profesional'}</p>
               <div className="flex items-center gap-2 mt-2">
@@ -84,33 +86,35 @@ export default function ProProfileScreen({ id }: { id: string }) {
                 <span className="text-sm text-slate-300">{p.rating > 0 ? `${p.rating} · ${p.reviewsCount} reseñas` : 'Nuevo en HomIA'}</span>
               </div>
               <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
-                <MapPin className="size-3" /> {p.city || '—'} · radio {p.serviceRadiusKm} km · miembro desde {formatDate(p.memberSince)}
+                <MapPin aria-hidden className="size-3" /> {p.city || '—'} · radio {p.serviceRadiusKm} km · miembro desde {formatDate(p.memberSince)}
               </p>
             </div>
-            <button onClick={hire} disabled={busy} className="rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] disabled:opacity-60 px-5 py-3 font-bold text-white shadow-lg transition">
+            <button onClick={hire} disabled={busy} className="homy-btn-primary homy-focus px-6 py-3 text-sm disabled:opacity-60">
               {busy ? 'Creando…' : 'Contratar'}
             </button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 -mt-6 pb-16 space-y-6">
-        {/* bio + stats */}
-        <div className="rounded-3xl homy-glass border border-slate-200 shadow-lg p-6">
-          <div className="grid grid-cols-3 gap-3 text-center">
-            <Stat value={p.worksCount} label="Obras publicadas" />
-            <Stat value={p.experienceYears} label="Años experiencia" />
-            <Stat value={p.reviewsCount} label="Reseñas" />
-          </div>
-          {p.bio && <p className="mt-4 text-slate-600 leading-relaxed whitespace-pre-wrap">{p.bio}</p>}
+      <div className="max-w-4xl mx-auto px-4 -mt-8 pb-16 space-y-6">
+        {/* stats */}
+        <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
+          <StatCard label="Obras publicadas" value={p.worksCount} accent="#1D63B8" icon={<HardHat />} tone="blue" />
+          <StatCard label="Años experiencia" value={p.experienceYears} accent="#B98A00" icon={<Briefcase />} tone="gold" />
+          <StatCard label="Reseñas" value={p.reviewsCount} accent="#1D63B8" icon={<Star />} tone="ai" />
+        </div>
+
+        {/* bio + habilidades */}
+        <div className="homy-glass rounded-3xl p-6">
+          {p.bio && <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">{p.bio}</p>}
           {p.skills.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-4">
-              {p.skills.map((s) => <span key={s} className="rounded-full bg-[#1D63B8]/8 text-[#1D63B8] text-xs font-semibold px-3 py-1">{s}</span>)}
+            <div className={`flex flex-wrap gap-2 ${p.bio ? 'mt-4' : ''}`}>
+              {p.skills.map((s) => <span key={s} className="homy-glass-soft text-[#1D63B8] text-xs font-semibold px-3 py-1.5 rounded-full">{s}</span>)}
             </div>
           )}
           {p.companyWebsite && (
-            <a href={p.companyWebsite.startsWith('http') ? p.companyWebsite : `https://${p.companyWebsite}`} target="_blank" rel="noreferrer" className="inline-block mt-3 text-sm font-bold text-[#1D63B8] hover:underline">
-              {p.companyWebsite} ↗
+            <a href={p.companyWebsite.startsWith('http') ? p.companyWebsite : `https://${p.companyWebsite}`} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-1 text-sm font-bold text-[#1D63B8] hover:underline ${p.bio || p.skills.length > 0 ? 'mt-3' : ''}`}>
+              {p.companyWebsite} <ArrowUpRight aria-hidden className="size-3.5" />
             </a>
           )}
         </div>
@@ -119,13 +123,12 @@ export default function ProProfileScreen({ id }: { id: string }) {
         <div>
           <h2 className="text-lg font-extrabold text-[#0A2540] mb-3">Trabajos realizados ({parsedWorks.length})</h2>
           {parsedWorks.length === 0 ? (
-            <div className="rounded-2xl homy-glass border border-slate-200 p-6 text-sm text-slate-500">Todavía no publicó obras.</div>
+            <EmptyState icon={<ImageOff />} title="Todavía no publicó obras." />
           ) : (
             <div className="grid sm:grid-cols-2 gap-4">
               {parsedWorks.map((w) => (
-                <div key={w.id} className="rounded-2xl homy-glass border border-slate-200 shadow-sm overflow-hidden">
+                <div key={w.id} className="homy-glass homy-lift homy-card-glow rounded-2xl overflow-hidden">
                   {w.photoList.length > 0 && (
-                     
                     <img src={w.photoList[0]} alt={w.title} className="h-44 w-full object-cover" />
                   )}
                   <div className="p-4">
@@ -143,11 +146,11 @@ export default function ProProfileScreen({ id }: { id: string }) {
         <div>
           <h2 className="text-lg font-extrabold text-[#0A2540] mb-3">Reseñas ({data.reviews.length})</h2>
           {data.reviews.length === 0 ? (
-            <div className="rounded-2xl homy-glass border border-slate-200 p-6 text-sm text-slate-500">Sin reseñas todavía.</div>
+            <EmptyState icon={<Star />} title="Sin reseñas todavía." />
           ) : (
             <div className="space-y-3">
               {data.reviews.map((r) => (
-                <div key={r.id} className="rounded-2xl homy-glass border border-slate-200 p-4">
+                <div key={r.id} className="homy-glass rounded-2xl p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <UAvatar name={r.author.displayName} size={34} />
@@ -160,7 +163,7 @@ export default function ProProfileScreen({ id }: { id: string }) {
                   </div>
                   <p className="text-sm text-slate-600 mt-2">{r.comment}</p>
                   {r.reply && (
-                    <div className="mt-3 rounded-xl homy-glass-soft border-l-4 border-[#1D63B8] p-3">
+                    <div className="mt-3 rounded-xl bg-[#1D63B8]/5 border-l-4 border-[#1D63B8] p-3">
                       <p className="text-xs font-bold text-[#1D63B8]">Respuesta del profesional</p>
                       <p className="text-sm text-slate-600">{r.reply}</p>
                     </div>
@@ -171,15 +174,6 @@ export default function ProProfileScreen({ id }: { id: string }) {
           )}
         </div>
       </div>
-    </div>
-  )
-}
-
-function Stat({ value, label }: { value: number; label: string }) {
-  return (
-    <div className="rounded-2xl homy-glass-soft py-3">
-      <p className="text-2xl font-extrabold text-[#0A2540]">{value}</p>
-      <p className="text-xs text-slate-500 font-semibold uppercase">{label}</p>
     </div>
   )
 }

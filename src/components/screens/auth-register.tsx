@@ -4,9 +4,12 @@
 import { useMemo, useState } from 'react'
 import { navigate, useRoute } from '@/lib/router'
 import { useSession, useLocation, syncLocationToServer } from '@/lib/store'
-import { Homy, HomIAWordmark } from '@/components/homy/homy-character'
+import { AuthShell } from '@/components/app/auth-shell'
 import { toast } from 'sonner'
-import { Check, ChevronLeft, MapPin, Upload } from 'lucide-react'
+import {
+  BadgeCheck, Building2, Check, ChevronLeft, CircleCheck, HardHat,
+  House, MapPin, Store, Upload, UserRound,
+} from 'lucide-react'
 
 type Role = 'cliente' | 'profesional' | 'proveedor'
 
@@ -26,6 +29,50 @@ const CATEGORY_OPTIONS = [
   { slug: 'jardineria', name: 'Jardinería' }, { slug: 'climatizacion', name: 'Climatización' },
   { slug: 'techos', name: 'Techos' }, { slug: 'cerramientos', name: 'Cerramientos' },
 ]
+
+const ROLE_OPTIONS: { r: Role; icon: typeof House; title: string; desc: string; tone: string }[] = [
+  { r: 'cliente', icon: House, title: 'Soy cliente', desc: 'Busco profesionales y publico trabajos para mi casa', tone: 'homy-chip-blue' },
+  { r: 'profesional', icon: HardHat, title: 'Soy profesional', desc: 'Oferto trabajos, busco materiales y gestiono mis clientes', tone: 'homy-chip-orange' },
+  { r: 'proveedor', icon: Store, title: 'Soy proveedor', desc: 'Vendo materiales y gestiono mi stock y clientes', tone: 'homy-chip-ai' },
+]
+
+const STEP_LABELS = ['Perfil', 'Tus datos', 'Verificación']
+
+function StepDots({ step }: { step: 1 | 2 | 3 }) {
+  return (
+    <ol className="mb-7 flex items-center justify-center gap-0" aria-label="Progreso del registro">
+      {STEP_LABELS.map((label, i) => {
+        const n = (i + 1) as 1 | 2 | 3
+        const done = step > n
+        const active = step === n
+        return (
+          <li key={label} className="flex items-center">
+            <div className="flex flex-col items-center gap-1.5">
+              <span
+                className={`grid size-8 place-items-center rounded-full border text-[13px] font-bold transition-all duration-300 ${
+                  done
+                    ? 'border-transparent bg-gradient-to-br from-[#1D63B8] to-[#00C4FF] text-white'
+                    : active
+                      ? 'border-[#1D63B8] bg-white text-[#1D63B8] shadow-[0_0_0_4px_rgba(29,99,184,0.12)]'
+                      : 'border-slate-200 bg-white/70 text-slate-400'
+                }`}
+                aria-current={active ? 'step' : undefined}
+              >
+                {done ? <Check className="size-4" aria-hidden /> : n}
+              </span>
+              <span className={`text-[11px] font-bold uppercase tracking-wide ${active ? 'text-[#1D63B8]' : 'text-slate-400'}`}>
+                {label}
+              </span>
+            </div>
+            {n < 3 && (
+              <span aria-hidden className={`mx-2.5 mb-5 h-0.5 w-10 rounded-full sm:w-14 ${step > n ? 'bg-gradient-to-r from-[#1D63B8] to-[#00C4FF]' : 'bg-slate-200'}`} />
+            )}
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
 
 export default function RegisterScreen() {
   const route = useRoute()
@@ -147,7 +194,7 @@ export default function RegisterScreen() {
       }
       if (location.shared) syncLocationToServer(location.lat!, location.lng!, location.radiusKm)
       await refresh()
-      toast.success('¡Bienvenido a HomIA! 🎉')
+      toast.success('¡Bienvenido a HomIA!')
       navigate(`/panel/${rolesPayload.includes('proveedor') ? 'proveedor' : rolesPayload.includes('profesional') ? 'profesional' : 'cliente'}`, { replace: true })
     } finally {
       setBusy(false)
@@ -155,195 +202,210 @@ export default function RegisterScreen() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center px-4 py-10">
-      <button onClick={() => navigate('/')} className="mb-6 flex items-center gap-2 hover:opacity-80 transition">
-        <Homy size={48} state={busy ? 'thinking' : 'happy'} />
-        <HomIAWordmark className="text-3xl" />
-      </button>
+    <AuthShell
+      homyState={busy ? 'thinking' : 'happy'}
+      headline={
+        <>
+          Una cuenta, <span className="homy-gradient-text">todo tu ecosistema</span> del hogar.
+        </>
+      }
+      sub="Clientes, profesionales y proveedores en una sola red: trabajos, materiales, pagos y reputación 360°."
+    >
+      <StepDots step={step} />
 
-      <div className="w-full max-w-xl">
-        {/* progreso */}
-        <div className="flex items-center gap-2 mb-6 justify-center">
-          {[1, 2, 3].map((n) => (
-            <div key={n} className={`h-2 rounded-full transition-all ${step >= n ? 'w-10 bg-[#1D63B8]' : 'w-6 bg-slate-200'}`} />
-          ))}
+      {step === 1 && (
+        <div className="homy-glass-strong rounded-[28px] p-7 sm:p-8">
+          <h1 className="text-center text-[1.7rem] font-extrabold tracking-tight text-[#0A2540]">¿Cómo vas a usar HomIA?</h1>
+          <p className="mt-1 text-center text-sm text-slate-500">Elegí tu perfil principal (después podés sumar otros).</p>
+          <div className="mt-7 grid gap-3.5">
+            {ROLE_OPTIONS.map((opt) => (
+              <button
+                key={opt.r}
+                onClick={() => { setRole(opt.r); setStep(2) }}
+                aria-label={`Elegir perfil: ${opt.title}`}
+                className={`group relative flex items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all duration-300 hover:-translate-y-0.5 ${
+                  role === opt.r
+                    ? 'border-[#1D63B8] bg-[#1D63B8]/5 shadow-[0_14px_34px_-16px_rgba(29,99,184,0.45)]'
+                    : 'border-slate-200/90 hover:border-[#1D63B8]/50 hover:shadow-[0_12px_30px_-18px_rgba(10,37,64,0.35)]'
+                }`}
+              >
+                <span className={`homy-icon-chip size-12 shrink-0 ${opt.tone} transition-transform duration-300 group-hover:scale-105`}>
+                  <opt.icon className="size-6" aria-hidden />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-bold text-[#0A2540]">{opt.title}</span>
+                  <span className="mt-0.5 block text-[13.5px] leading-snug text-slate-500">{opt.desc}</span>
+                </span>
+                <ChevronLeft className="ml-auto size-5 shrink-0 rotate-180 text-slate-300 transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-[#1D63B8]" aria-hidden />
+              </button>
+            ))}
+          </div>
+          <p className="mt-6 text-center text-xs leading-relaxed text-slate-400">
+            Podés combinar perfiles con la misma cuenta (ej.: profesional que además contrata otros profesionales).
+          </p>
         </div>
+      )}
 
-        {step === 1 && (
-          <div className="rounded-3xl border border-slate-200 homy-glass shadow-xl p-7">
-            <h1 className="text-2xl font-extrabold text-[#0A2540] text-center">¿Cómo vas a usar HomIA?</h1>
-            <p className="text-sm text-slate-500 text-center mt-1">Elegí tu perfil principal (después podés sumar otros).</p>
-            <div className="grid gap-3 mt-6">
-              {([
-                { r: 'cliente' as const, icon: '🏠', title: 'Soy cliente', desc: 'Busco profesionales y publico trabajos para mi casa' },
-                { r: 'profesional' as const, icon: '🛠️', title: 'Soy profesional', desc: 'Oferto trabajos, busco materiales y gestiono mis clientes' },
-                { r: 'proveedor' as const, icon: '🏪', title: 'Soy proveedor', desc: 'Vendo materiales y gestiono mi stock y clientes' },
-              ]).map((opt) => (
-                <button
-                  key={opt.r}
-                  onClick={() => { setRole(opt.r); setStep(2) }}
-                  className={`text-left rounded-2xl border-2 p-4 transition hover:shadow-md ${role === opt.r ? 'border-[#1D63B8] bg-[#1D63B8]/5' : 'border-slate-200 hover:border-[#1D63B8]/50'}`}
-                >
-                  <span className="text-2xl">{opt.icon}</span>
-                  <p className="font-bold text-[#0A2540] mt-1">{opt.title}</p>
-                  <p className="text-sm text-slate-500">{opt.desc}</p>
-                </button>
-              ))}
+      {step === 2 && role && (
+        <div className="homy-glass-strong rounded-[28px] p-7 sm:p-8">
+          <button onClick={() => setStep(1)} className="mb-4 flex items-center gap-1 text-sm font-semibold text-slate-500 transition-colors hover:text-[#1D63B8]">
+            <ChevronLeft className="size-4" /> Cambiar perfil
+          </button>
+          <h1 className="text-[1.7rem] font-extrabold tracking-tight text-[#0A2540]">Tus datos</h1>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <Field label="Nombre y apellido (o negocio)" required value={displayName} onChange={setDisplayName} placeholder="Juan Pérez" />
+            <Field label="Email" required type="email" value={email} onChange={setEmail} placeholder="tu@email.com" />
+            <Field label="Contraseña" required type="password" value={password} onChange={setPassword} placeholder="Mínimo 6 caracteres" />
+            <Field label="Celular" value={phone} onChange={setPhone} placeholder="+54 9 11 …" />
+            <Field label="Fecha de nacimiento" type="date" value={birthday} onChange={setBirthday} />
+            <Field label="Dirección" value={address} onChange={setAddress} placeholder="Calle y número" />
+            <Field label="Ciudad / localidad" value={city} onChange={setCity} placeholder="Ej.: CABA" />
+            <div>
+              <label className="text-sm font-semibold text-[#0A2540]">¿Cómo nos encontraste?</label>
+              <select value={howFoundUs} onChange={(e) => setHowFoundUs(e.target.value)} className="homy-glass-input mt-1.5 w-full rounded-xl px-4 py-3 text-[15px] outline-none">
+                <option value="">Elegí una opción…</option>
+                {HOW_FOUND.map((h) => <option key={h.value} value={h.value}>{h.label}</option>)}
+              </select>
             </div>
-            <p className="text-xs text-slate-400 text-center mt-5">
-              Podés combinar perfiles con la misma cuenta (ej.: profesional que además contrata otros profesionales).
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-[#00C4FF]/30 bg-[#00C4FF]/5 p-4">
+            <p className="flex items-center gap-2 text-sm font-bold text-[#0A2540]"><MapPin className="size-4 text-[#0092C4]" /> Ubicación</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">Con tu ubicación vemos pines cercanos en el mapa y filtramos por distancia. Podés activarla después también.</p>
+            {!location.shared ? (
+              <button type="button" onClick={() => location.request()} className="mt-2.5 text-sm font-bold text-[#1D63B8] hover:underline">
+                {location.requesting ? 'Pidiendo permiso…' : 'Compartir mi ubicación'}
+              </button>
+            ) : (
+              <p className="mt-1.5 flex items-center gap-1.5 text-sm font-semibold text-emerald-600">
+                <CircleCheck className="size-4" aria-hidden /> Ubicación lista
+              </p>
+            )}
+            {location.error && <p className="mt-1 text-xs text-red-500">{location.error}</p>}
+          </div>
+
+          <button
+            onClick={() => setStep(3)}
+            disabled={!displayName || !email || !password}
+            className="homy-btn-dark mt-6 w-full py-3.5 text-[15px]"
+          >
+            Continuar
+          </button>
+        </div>
+      )}
+
+      {step === 3 && role && (
+        <div className="homy-glass-strong rounded-[28px] p-7 sm:p-8">
+          <button onClick={() => setStep(2)} className="mb-4 flex items-center gap-1 text-sm font-semibold text-slate-500 transition-colors hover:text-[#1D63B8]">
+            <ChevronLeft className="size-4" /> Volver
+          </button>
+          <h1 className="text-[1.7rem] font-extrabold tracking-tight text-[#0A2540]">
+            {role === 'cliente' && 'Últimos detalles'}
+            {role === 'profesional' && 'Tu perfil profesional'}
+            {role === 'proveedor' && 'Tu negocio'}
+          </h1>
+
+          {/* DNI (todos los roles) */}
+          <div className="mt-5">
+            <p className="flex items-center gap-2 text-sm font-semibold text-[#0A2540]">
+              <BadgeCheck className="size-4 text-[#1D63B8]" aria-hidden /> Documento de identidad (DNI)
             </p>
+            <p className="mt-0.5 text-xs text-slate-500">Frente y reverso — queda privado, solo lo ve HomIA para verificar tu cuenta.</p>
+            <div className="mt-2.5 grid grid-cols-2 gap-3">
+              <UploadBox id="dni-front" label="Frente" uploaded={dniFront} />
+              <UploadBox id="dni-back" label="Reverso" uploaded={dniBack} />
+            </div>
           </div>
-        )}
 
-        {step === 2 && role && (
-          <div className="rounded-3xl border border-slate-200 homy-glass shadow-xl p-7">
-            <button onClick={() => setStep(1)} className="text-sm text-slate-500 hover:text-[#1D63B8] flex items-center gap-1 mb-4">
-              <ChevronLeft className="size-4" /> Cambiar perfil
-            </button>
-            <h1 className="text-2xl font-extrabold text-[#0A2540]">Tus datos</h1>
-            <div className="grid sm:grid-cols-2 gap-4 mt-5">
-              <Field label="Nombre y apellido (o negocio)" required value={displayName} onChange={setDisplayName} placeholder="Juan Pérez" />
-              <Field label="Email" required type="email" value={email} onChange={setEmail} placeholder="tu@email.com" />
-              <Field label="Contraseña" required type="password" value={password} onChange={setPassword} placeholder="Mínimo 6 caracteres" />
-              <Field label="Celular" value={phone} onChange={setPhone} placeholder="+54 9 11 …" />
-              <Field label="Fecha de nacimiento" type="date" value={birthday} onChange={setBirthday} />
-              <Field label="Dirección" value={address} onChange={setAddress} placeholder="Calle y número" />
-              <Field label="Ciudad / localidad" value={city} onChange={setCity} placeholder="Ej.: CABA" />
+          {role === 'profesional' && (
+            <div className="mt-5 grid gap-4">
+              <div className="grid grid-cols-2 gap-3">
+                {([
+                  { t: 'persona' as const, icon: UserRound, label: 'Persona única' },
+                  { t: 'empresa' as const, icon: Building2, label: 'Empresa' },
+                ]).map((o) => (
+                  <button key={o.t} type="button" onClick={() => setPersonType(o.t)}
+                    className={`flex items-center justify-center gap-2 rounded-xl border-2 py-3 font-bold transition ${personType === o.t ? 'border-[#1D63B8] bg-[#1D63B8]/5 text-[#0A2540]' : 'border-slate-200 text-slate-500 hover:border-[#1D63B8]/40'}`}>
+                    <o.icon className="size-4.5" aria-hidden /> {o.label}
+                  </button>
+                ))}
+              </div>
               <div>
-                <label className="text-sm font-semibold text-[#0A2540]">¿Cómo nos encontraste?</label>
-                <select value={howFoundUs} onChange={(e) => setHowFoundUs(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 homy-glass-input outline-none focus:border-[#1D63B8]">
-                  <option value="">Elegí una opción…</option>
-                  {HOW_FOUND.map((h) => <option key={h.value} value={h.value}>{h.label}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-2xl bg-[#00C4FF]/5 border border-[#00C4FF]/30 p-4">
-              <p className="text-sm font-bold text-[#0A2540] flex items-center gap-2"><MapPin className="size-4 text-[#00C4FF]" /> Ubicación</p>
-              <p className="text-xs text-slate-500 mt-1">Con tu ubicación vemos pines cercanos en el mapa y filtramos por distancia. Podés activarla después también.</p>
-              {!location.shared ? (
-                <button type="button" onClick={() => location.request()} className="mt-2 text-sm font-bold text-[#1D63B8] hover:underline">
-                  {location.requesting ? 'Pidiendo permiso…' : 'Compartir mi ubicación'}
-                </button>
-              ) : (
-                <p className="text-sm text-emerald-600 font-semibold mt-1">✓ Ubicación lista</p>
-              )}
-              {location.error && <p className="text-xs text-red-500 mt-1">{location.error}</p>}
-            </div>
-
-            <button
-              onClick={() => setStep(3)}
-              disabled={!displayName || !email || !password}
-              className="mt-6 w-full rounded-xl bg-[#0A2540] text-white font-bold py-3.5 disabled:opacity-40 hover:bg-[#123455] transition"
-            >
-              Continuar
-            </button>
-          </div>
-        )}
-
-        {step === 3 && role && (
-          <div className="rounded-3xl border border-slate-200 homy-glass shadow-xl p-7">
-            <button onClick={() => setStep(2)} className="text-sm text-slate-500 hover:text-[#1D63B8] flex items-center gap-1 mb-4">
-              <ChevronLeft className="size-4" /> Volver
-            </button>
-            <h1 className="text-2xl font-extrabold text-[#0A2540]">
-              {role === 'cliente' && 'Últimos detalles'}
-              {role === 'profesional' && 'Tu perfil profesional'}
-              {role === 'proveedor' && 'Tu negocio'}
-            </h1>
-
-            {/* DNI (todos los roles) */}
-            <div className="mt-5">
-              <p className="text-sm font-semibold text-[#0A2540]">Documento de identidad (DNI)</p>
-              <p className="text-xs text-slate-500">Frente y reverso — queda privado, solo lo ve HomIA para verificar tu cuenta.</p>
-              <div className="grid grid-cols-2 gap-3 mt-2">
-                <UploadBox id="dni-front" label="Frente" uploaded={dniFront} />
-                <UploadBox id="dni-back" label="Reverso" uploaded={dniBack} />
-              </div>
-            </div>
-
-            {role === 'profesional' && (
-              <div className="grid gap-4 mt-5">
-                <div className="grid grid-cols-2 gap-3">
-                  {(['persona', 'empresa'] as const).map((t) => (
-                    <button key={t} type="button" onClick={() => setPersonType(t)}
-                      className={`rounded-xl border-2 py-3 font-bold capitalize transition ${personType === t ? 'border-[#1D63B8] bg-[#1D63B8]/5 text-[#0A2540]' : 'border-slate-200 text-slate-500'}`}>
-                      {t === 'persona' ? '👤 Persona única' : '🏢 Empresa'}
+                <label className="text-sm font-semibold text-[#0A2540]">Profesiones / rubros *</label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {CATEGORY_OPTIONS.map((c) => (
+                    <button key={c.slug} type="button"
+                      onClick={() => setProfessions((p) => p.includes(c.slug) ? p.filter((x) => x !== c.slug) : [...p, c.slug])}
+                      className={`rounded-full border px-3 py-1.5 text-[13px] font-semibold transition-all active:scale-[0.97] ${professions.includes(c.slug) ? 'border-transparent bg-gradient-to-r from-[#1D63B8] to-[#2b8fe0] text-white shadow-[0_6px_16px_-8px_rgba(29,99,184,0.6)]' : 'border-slate-300 text-slate-600 hover:border-[#1D63B8]/60'}`}>
+                      {professions.includes(c.slug) && <Check className="mr-1 inline size-3" aria-hidden />}{c.name}
                     </button>
                   ))}
                 </div>
-                <div>
-                  <label className="text-sm font-semibold text-[#0A2540]">Profesiones / rubros *</label>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {CATEGORY_OPTIONS.map((c) => (
-                      <button key={c.slug} type="button"
-                        onClick={() => setProfessions((p) => p.includes(c.slug) ? p.filter((x) => x !== c.slug) : [...p, c.slug])}
-                        className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${professions.includes(c.slug) ? 'border-[#1D63B8] bg-[#1D63B8] text-white' : 'border-slate-300 text-slate-600 hover:border-[#1D63B8]/60'}`}>
-                        {professions.includes(c.slug) && <Check className="inline size-3 mr-1" />}{c.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <Field label="Habilidades (separadas por coma)" value={skills} onChange={setSkills} placeholder="instalación de termos, destapaciones, plomería general" />
-                <div className="grid grid-cols-2 gap-4">
-                  <Field label="Años de experiencia" type="number" value={experienceYears} onChange={setExperienceYears} />
-                  <Field label={personType === 'empresa' ? 'CUIT empresa' : 'DNI o CUIL'} value={personType === 'empresa' ? companyCuit : dniCuil} onChange={personType === 'empresa' ? setCompanyCuit : setDniCuil} />
-                </div>
-                {personType === 'empresa' && (
-                  <div className="grid sm:grid-cols-2 gap-4 rounded-2xl homy-glass-soft p-4">
-                    <Field label="Razón social" value={companyName} onChange={setCompanyName} />
-                    <Field label="Sitio web / Instagram" value={companyWebsite} onChange={setCompanyWebsite} />
-                    <Field label="Cantidad de empleados" type="number" value={employeesCount} onChange={setEmployeesCount} />
-                  </div>
-                )}
-                <div>
-                  <label className="text-sm font-semibold text-[#0A2540]">Sobre vos / tu trabajo</label>
-                  <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} placeholder="Contá tu experiencia, trabajos realizados, certificaciones…"
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-[#1D63B8] resize-none" />
-                </div>
-                <Field label={`Radio de servicio: ${serviceRadiusKm} km`} type="range" min="1" max="100" value={serviceRadiusKm} onChange={setServiceRadiusKm} />
-                <label className="flex items-start gap-2 text-sm text-slate-600 bg-[#1D63B8]/5 border border-[#1D63B8]/20 rounded-xl p-3">
-                  <input type="checkbox" checked={alsoPro} onChange={(e) => setAlsoPro(e.target.checked)} className="mt-0.5 accent-[#1D63B8]" />
-                  <span>También quiero <b>contratar otros profesionales</b> (subcontratar, equipos, cuentas de retiro compartidas).</span>
-                </label>
               </div>
-            )}
-
-            {role === 'proveedor' && (
-              <div className="grid gap-4 mt-5">
-                <Field label="Nombre del local o negocio *" value={businessName} onChange={setBusinessName} placeholder="Ferretería El Tornillo" />
-                <Field label="CUIT" value={cuit} onChange={setCuit} placeholder="30-12345678-9" />
-                <div>
-                  <label className="text-sm font-semibold text-[#0A2540]">Sobre el negocio</label>
-                  <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Qué vendés, horarios, si hacés entregas…"
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-[#1D63B8] resize-none" />
+              <Field label="Habilidades (separadas por coma)" value={skills} onChange={setSkills} placeholder="instalación de termos, destapaciones, plomería general" />
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Años de experiencia" type="number" value={experienceYears} onChange={setExperienceYears} />
+                <Field label={personType === 'empresa' ? 'CUIT empresa' : 'DNI o CUIL'} value={personType === 'empresa' ? companyCuit : dniCuil} onChange={personType === 'empresa' ? setCompanyCuit : setDniCuil} />
+              </div>
+              {personType === 'empresa' && (
+                <div className="grid gap-4 rounded-2xl homy-glass-soft p-4 sm:grid-cols-2">
+                  <Field label="Razón social" value={companyName} onChange={setCompanyName} />
+                  <Field label="Sitio web / Instagram" value={companyWebsite} onChange={setCompanyWebsite} />
+                  <Field label="Cantidad de empleados" type="number" value={employeesCount} onChange={setEmployeesCount} />
                 </div>
+              )}
+              <div>
+                <label className="text-sm font-semibold text-[#0A2540]">Sobre vos / tu trabajo</label>
+                <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} placeholder="Contá tu experiencia, trabajos realizados, certificaciones…"
+                  className="homy-glass-input mt-1.5 w-full resize-none rounded-xl px-4 py-3 text-[15px] outline-none" />
               </div>
-            )}
-
-            {role === 'cliente' && (
-              <div className="mt-5 rounded-2xl bg-[#FF5A1F]/5 border border-[#FF5A1F]/20 p-4 text-sm text-slate-600">
-                ¡Listo! Con tu cuenta vas a poder buscar profesionales en el mapa, publicar trabajos, recibir presupuestos, aprobar materiales y pagar con Mercado Pago.
+              <div>
+                <label className="text-sm font-semibold text-[#0A2540]">Radio de servicio: {serviceRadiusKm} km</label>
+                <input
+                  type="range" min="1" max="100" value={serviceRadiusKm}
+                  onChange={(e) => setServiceRadiusKm(e.target.value)}
+                  className="homy-range mt-2.5 w-full"
+                  style={{ ['--range-progress' as string]: `${(parseInt(serviceRadiusKm) / 100) * 100}%` }}
+                  aria-label="Radio de servicio en kilómetros"
+                />
               </div>
-            )}
+              <label className="flex items-start gap-2.5 rounded-xl border border-[#1D63B8]/20 bg-[#1D63B8]/5 p-3.5 text-sm text-slate-600">
+                <input type="checkbox" checked={alsoPro} onChange={(e) => setAlsoPro(e.target.checked)} className="mt-0.5 accent-[#1D63B8]" />
+                <span>También quiero <b>contratar otros profesionales</b> (subcontratar, equipos, cuentas de retiro compartidas).</span>
+              </label>
+            </div>
+          )}
 
-            <button
-              onClick={submit} disabled={busy}
-              className="mt-6 w-full rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] disabled:opacity-60 text-white font-bold py-3.5 transition shadow-lg shadow-[#FF5A1F]/25"
-            >
-              {busy ? 'Creando tu cuenta…' : 'Crear mi cuenta'}
-            </button>
-            <p className="text-xs text-slate-400 text-center mt-3">Al crear la cuenta aceptás nuestros términos. Tus documentos quedan privados.</p>
-          </div>
-        )}
+          {role === 'proveedor' && (
+            <div className="mt-5 grid gap-4">
+              <Field label="Nombre del local o negocio *" value={businessName} onChange={setBusinessName} placeholder="Ferretería El Tornillo" />
+              <Field label="CUIT" value={cuit} onChange={setCuit} placeholder="30-12345678-9" />
+              <div>
+                <label className="text-sm font-semibold text-[#0A2540]">Sobre el negocio</label>
+                <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Qué vendés, horarios, si hacés entregas…"
+                  className="homy-glass-input mt-1.5 w-full resize-none rounded-xl px-4 py-3 text-[15px] outline-none" />
+              </div>
+            </div>
+          )}
 
-        <p className="text-sm text-slate-500 text-center mt-5">
-          ¿Ya tenés cuenta?{' '}
-          <button onClick={() => navigate('/ingresar')} className="font-bold text-[#1D63B8] hover:underline">Ingresá</button>
-        </p>
-      </div>
-    </div>
+          {role === 'cliente' && (
+            <div className="mt-5 rounded-2xl border border-[#FF5A1F]/20 bg-[#FF5A1F]/5 p-4 text-sm leading-relaxed text-slate-600">
+              ¡Listo! Con tu cuenta vas a poder buscar profesionales en el mapa, publicar trabajos, recibir presupuestos, aprobar materiales y pagar con Mercado Pago.
+            </div>
+          )}
+
+          <button onClick={submit} disabled={busy} className="homy-btn-primary mt-6 w-full py-3.5 text-[15px]">
+            {busy ? 'Creando tu cuenta…' : 'Crear mi cuenta'}
+          </button>
+          <p className="mt-3 text-center text-xs text-slate-400">Al crear la cuenta aceptás nuestros términos. Tus documentos quedan privados.</p>
+        </div>
+      )}
+
+      <p className="mt-6 text-center text-sm text-slate-500">
+        ¿Ya tenés cuenta?{' '}
+        <button onClick={() => navigate('/ingresar')} className="font-bold text-[#1D63B8] hover:underline">Ingresá</button>
+      </p>
+    </AuthShell>
   )
 }
 
@@ -367,7 +429,7 @@ function Field({
       <input
         type={type} value={value} onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder} min={min} max={max} required={required}
-        className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-[#1D63B8] focus:ring-2 focus:ring-[#1D63B8]/20 transition"
+        className="homy-glass-input mt-1.5 w-full rounded-xl px-4 py-3 text-[15px] outline-none"
       />
     </div>
   )
@@ -378,12 +440,14 @@ function UploadBox({ id, label, uploaded }: { id: string; label: string; uploade
   return (
     <label
       htmlFor={id}
-      className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 hover:border-[#1D63B8] py-5 px-3 cursor-pointer transition bg-slate-50/50"
+      className="group flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white/50 px-3 py-5 transition-all duration-300 hover:border-[#1D63B8] hover:bg-[#1D63B8]/5"
     >
-      <Upload className="size-5 text-slate-400" />
-      <span className="text-sm font-bold text-[#0A2540] mt-1">DNI {label}</span>
-      <span className="text-xs text-slate-400 mt-0.5">
-        {uploaded ? '✓ Subido' : name ? `✓ ${name}` : 'JPG, PNG o PDF'}
+      <span className="grid size-9 place-items-center rounded-xl homy-chip-blue transition-transform duration-300 group-hover:scale-105">
+        <Upload className="size-4.5" aria-hidden />
+      </span>
+      <span className="mt-1.5 text-sm font-bold text-[#0A2540]">DNI {label}</span>
+      <span className="mt-0.5 text-xs text-slate-400">
+        {uploaded ? 'Subido' : name ? name : 'JPG, PNG o PDF'}
       </span>
       <input
         id={id} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden"

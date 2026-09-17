@@ -45,7 +45,7 @@ export default function ClientProfile() {
       })
       if (!res.ok) { toast.error((await res.json()).error); return }
       await refresh()
-      toast.success('Perfil actualizado ✓')
+      toast.success('Perfil actualizado')
     } finally { setBusy(false) }
   }
 
@@ -54,12 +54,12 @@ export default function ClientProfile() {
   return (
     <div className="max-w-xl">
       <PageHeader title="Mi perfil" subtitle="Datos de tu cuenta y ubicación" />
-      <div className="rounded-3xl homy-glass border border-slate-200 shadow-sm p-6 space-y-4">
+      <div className="rounded-3xl homy-glass shadow-sm p-6 space-y-5">
         <div className="flex items-center gap-4">
           <UAvatar name={displayName || user?.displayName || ''} url={user?.avatarUrl} size={60} />
-          <div>
-            <p className="font-extrabold text-[#0A2540]">{user?.email}</p>
-            <p className="text-xs text-slate-400 capitalize">Perfiles: {user?.roles.join(', ')}</p>
+          <div className="min-w-0">
+            <p className="font-extrabold text-[#0A2540] truncate">{user?.email}</p>
+            <p className="text-xs text-slate-400 capitalize mt-0.5">Perfiles: {user?.roles.join(', ')}</p>
           </div>
         </div>
         <Field label="Nombre y apellido" value={displayName} onChange={setDisplayName} />
@@ -68,21 +68,29 @@ export default function ClientProfile() {
         <Field label="Ciudad" value={city} onChange={setCity} />
         <Field label="Cumpleaños" value={birthday} onChange={setBirthday} type="date" />
 
-        <div className="rounded-2xl bg-[#00C4FF]/5 border border-[#00C4FF]/30 p-4">
-          <p className="text-sm font-bold text-[#0A2540] flex items-center gap-2"><MapPin className="size-4 text-[#00C4FF]" /> Ubicación</p>
+        <div className="rounded-2xl homy-glass-soft p-4">
+          <p className="text-sm font-bold text-[#0A2540] flex items-center gap-2.5">
+            <span className="homy-icon-chip homy-chip-ai size-9 shrink-0 [&_svg]:size-4" aria-hidden><MapPin /></span>
+            Ubicación
+          </p>
           {location.shared ? (
             <>
-              <p className="text-xs text-slate-500 mt-1">Compartida · radio de búsqueda {location.radiusKm} km</p>
-              <input type="range" min={1} max={100} value={location.radiusKm} onChange={(e) => { location.setRadius(parseInt(e.target.value)); if (location.lat && location.lng) syncLocationToServer(location.lat, location.lng, parseInt(e.target.value)) }} className="w-full accent-[#00C4FF] mt-1" aria-label="Radio de búsqueda" />
+              <p className="text-xs text-slate-500 mt-2.5">Compartida · radio de búsqueda <span className="font-bold text-[#0A2540] tabular-nums">{location.radiusKm} km</span></p>
+              <input
+                type="range" min={1} max={100} value={location.radiusKm}
+                onChange={(e) => { location.setRadius(parseInt(e.target.value)); if (location.lat && location.lng) syncLocationToServer(location.lat, location.lng, parseInt(e.target.value)) }}
+                className="homy-range w-full mt-2.5"
+                style={{ '--range-progress': `${((location.radiusKm - 1) / 99) * 100}%` } as React.CSSProperties}
+                aria-label="Radio de búsqueda" />
             </>
           ) : (
-            <button onClick={async () => { const ok = await location.request(); if (ok && location.lat && location.lng) syncLocationToServer(location.lat, location.lng, location.radiusKm) }} className="mt-1 text-sm font-bold text-[#1D63B8] hover:underline">
+            <button onClick={async () => { const ok = await location.request(); if (ok && location.lat && location.lng) syncLocationToServer(location.lat, location.lng, location.radiusKm) }} className="mt-2 text-sm font-bold text-[#1D63B8] hover:underline">
               Compartir mi ubicación
             </button>
           )}
         </div>
 
-        <button onClick={save} disabled={busy} className="w-full rounded-xl bg-[#0A2540] hover:bg-[#123455] disabled:opacity-60 text-white font-bold py-3.5 transition">
+        <button onClick={save} disabled={busy} className="homy-btn-primary w-full py-3.5 text-[0.95rem]">
           {busy ? 'Guardando…' : 'Guardar cambios'}
         </button>
       </div>
@@ -93,9 +101,9 @@ export default function ClientProfile() {
 function Field({ label, value, onChange, type = 'text', placeholder }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string }) {
   return (
     <div>
-      <label className="text-sm font-semibold text-[#0A2540]">{label}</label>
+      <label className="text-sm font-bold text-[#0A2540]">{label}</label>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-[#1D63B8] focus:ring-2 focus:ring-[#1D63B8]/20" />
+        className="homy-glass-input mt-1.5 w-full rounded-xl px-4 py-3 outline-none" />
     </div>
   )
 }

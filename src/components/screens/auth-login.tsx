@@ -1,11 +1,11 @@
 'use client'
-// Login HomIA
+// Login HomIA — shell premium split-screen
 import { useState } from 'react'
 import { navigate, useRoute } from '@/lib/router'
 import { useSession } from '@/lib/store'
-import { Homy, HomIAWordmark } from '@/components/homy/homy-character'
+import { AuthShell } from '@/components/app/auth-shell'
 import { toast } from 'sonner'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, LogIn } from 'lucide-react'
 
 export default function LoginScreen() {
   const route = useRoute()
@@ -39,51 +39,64 @@ export default function LoginScreen() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-10">
-      <button onClick={() => navigate('/')} className="mb-8 flex items-center gap-2 hover:opacity-80 transition">
-        <Homy size={52} state="happy" />
-        <HomIAWordmark className="text-3xl" />
-      </button>
-      <div className="w-full max-w-md rounded-3xl border border-slate-200 homy-glass shadow-xl p-7">
-        <h1 className="text-2xl font-extrabold text-[#0A2540]">Ingresar</h1>
-        <p className="text-sm text-slate-500 mt-1">Tu hogar en buenas manos.</p>
-        <form onSubmit={submit} className="grid gap-4 mt-6">
+    <AuthShell
+      homyState={busy ? 'thinking' : 'happy'}
+      headline={
+        <>
+          Que tu hogar vuelva a <span className="homy-gradient-text">funcionar</span>, hoy.
+        </>
+      }
+      sub="Ingresá para seguir tus trabajos, aprobar presupuestos y pagar con la tranquilidad del escrow."
+    >
+      <div className="homy-glass-strong rounded-[28px] p-7 sm:p-8">
+        <h1 className="text-[1.7rem] font-extrabold tracking-tight text-[#0A2540]">Ingresar</h1>
+        <p className="mt-1 text-sm text-slate-500">Tu hogar en buenas manos.</p>
+
+        <form onSubmit={submit} className="mt-7 grid gap-4">
           <div>
             <label className="text-sm font-semibold text-[#0A2540]" htmlFor="email">Email</label>
             <input
               id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
               placeholder="tu@email.com" autoComplete="email"
-              className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-[#1D63B8] focus:ring-2 focus:ring-[#1D63B8]/20 transition"
+              className="homy-glass-input mt-1.5 w-full rounded-xl px-4 py-3 text-[15px] outline-none"
             />
           </div>
           <div>
             <label className="text-sm font-semibold text-[#0A2540]" htmlFor="password">Contraseña</label>
-            <div className="relative mt-1">
+            <div className="relative mt-1.5">
               <input
                 id="password" type={show ? 'text' : 'password'} required value={password} onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••" autoComplete="current-password"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 pr-11 outline-none focus:border-[#1D63B8] focus:ring-2 focus:ring-[#1D63B8]/20 transition"
+                className="homy-glass-input w-full rounded-xl px-4 py-3 pr-11 text-[15px] outline-none"
               />
-              <button type="button" onClick={() => setShow(!show)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" aria-label={show ? 'Ocultar contraseña' : 'Mostrar contraseña'}>
+              <button type="button" onClick={() => setShow(!show)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600" aria-label={show ? 'Ocultar contraseña' : 'Mostrar contraseña'}>
                 {show ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
               </button>
             </div>
           </div>
-          <button
-            type="submit" disabled={busy}
-            className="mt-1 w-full rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] disabled:opacity-60 text-white font-bold py-3.5 transition shadow-lg shadow-[#FF5A1F]/25"
-          >
-            {busy ? 'Ingresando…' : 'Ingresar'}
+          <button type="submit" disabled={busy} className="homy-btn-primary mt-1.5 w-full py-3.5 text-[15px]">
+            {busy ? (
+              'Ingresando…'
+            ) : (
+              <>
+                <LogIn className="size-4.5" aria-hidden />
+                Ingresar
+              </>
+            )}
           </button>
         </form>
-        <p className="text-sm text-slate-500 text-center mt-5">
+
+        <p className="mt-6 text-center text-sm text-slate-500">
           ¿No tenés cuenta?{' '}
           <button onClick={() => navigate(`/registrarse${volver ? `?volver=${encodeURIComponent(volver)}` : ''}`)} className="font-bold text-[#1D63B8] hover:underline">
             Creá tu cuenta gratis
           </button>
         </p>
       </div>
-      <p className="text-xs text-slate-400 mt-6">Buscá y mirá sin cuenta. Registrándote podés abrir tarjetas, presupuestar y contratar.</p>
-    </div>
+
+      <p className="mx-auto mt-6 max-w-sm text-center text-xs leading-relaxed text-slate-400">
+        Buscá y mirá sin cuenta. Registrándote podés abrir tarjetas, presupuestar y contratar.
+      </p>
+    </AuthShell>
   )
 }

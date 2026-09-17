@@ -11,7 +11,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
-  Plus, Search, Minus, Check, Trash2, Info, Package,
+  Plus, Search, Minus, Check, Trash2, Info, Package, PackageOpen,
 } from 'lucide-react'
 
 type StockItem = {
@@ -34,9 +34,9 @@ const STATUS_OPTIONS = [
 ]
 
 function rowTone(status: string): string {
-  if (status === 'agotado') return 'border-red-300 bg-red-50/40'
-  if (status === 'por_agotar') return 'border-amber-300 bg-amber-50/40'
-  return 'border-slate-200 homy-glass'
+  if (status === 'agotado') return 'border border-red-300/70 bg-gradient-to-br from-red-50/90 via-red-50/40 to-transparent'
+  if (status === 'por_agotar') return 'border border-amber-300/70 bg-gradient-to-br from-amber-50/90 via-amber-50/40 to-transparent'
+  return 'homy-glass'
 }
 
 export default function ProviderStock() {
@@ -125,7 +125,7 @@ export default function ProviderStock() {
     const n = Number(raw)
     if (raw === '' || Number.isNaN(n) || n < 0) { toast.error('Ingresá un precio válido'); return }
     if (n === item.price) { clearDraft(item.id, 'price'); return }
-    patch(item.id, { price: n }, 'Precio actualizado ✓')
+    patch(item.id, { price: n }, 'Precio actualizado')
     clearDraft(item.id, 'price')
   }
 
@@ -163,7 +163,7 @@ export default function ProviderStock() {
         body: JSON.stringify({ elementId, price: n, quantity: qn, minStock: Number.isNaN(ms) ? 5 : ms, brand: brand.trim() || undefined }),
       })
       if (!res.ok) { toast.error((await res.json()).error); return }
-      toast.success('Elemento publicado ✓')
+      toast.success('Elemento publicado')
       setOpen(false)
       resetForm()
       load()
@@ -190,34 +190,36 @@ export default function ProviderStock() {
         title="Stock"
         subtitle="Precios y cantidades de los elementos estándar del catálogo"
         right={
-          <button onClick={() => setOpen(true)} className="rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] text-white font-bold px-5 py-2.5 flex items-center gap-2 transition shadow-lg shadow-[#FF5A1F]/20">
+          <button onClick={() => setOpen(true)} className="homy-btn-primary homy-focus px-5 py-2.5 text-sm">
             <Plus className="size-4" /> Publicar elemento
           </button>
         }
       />
 
       {/* cómo funciona el estado */}
-      <div className="rounded-2xl bg-[#1D63B8]/5 border border-[#1D63B8]/25 p-3.5 mb-4 flex gap-2.5 text-sm text-slate-600">
-        <Info className="size-4 text-[#1D63B8] shrink-0 mt-0.5" />
-        <p>
+      <div className="homy-glass-soft rounded-2xl p-3.5 mb-4 flex gap-3 items-start">
+        <span aria-hidden className="homy-icon-chip homy-chip-ai size-8 shrink-0">
+          <Info className="size-4" />
+        </span>
+        <p className="text-sm text-slate-600 leading-relaxed">
           El estado se calcula solo: si la cantidad baja del <strong>stock mínimo</strong> pasa a <strong>por agotar</strong>, y con <strong>0</strong> queda <strong>agotado</strong>. Repone desde acá cuando quieras.
         </p>
       </div>
 
       {/* filtros */}
-      <div className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-4 mb-4 flex flex-col sm:flex-row gap-3">
+      <div className="homy-glass rounded-2xl p-4 mb-4 flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="size-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search aria-hidden className="size-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre…"
-            className="w-full rounded-xl border border-slate-300 pl-10 pr-4 py-2.5 text-sm outline-none focus:border-[#1D63B8] focus:ring-2 focus:ring-[#1D63B8]/20" aria-label="Buscar elemento por nombre" />
+            className="homy-glass-input w-full rounded-xl pl-10 pr-4 py-2.5 text-sm" aria-label="Buscar elemento por nombre" />
         </div>
         <select value={cat} onChange={(e) => setCat(e.target.value)} aria-label="Filtrar por categoría"
-          className="rounded-xl border border-slate-300 homy-glass px-3 py-2.5 text-sm font-semibold text-[#0A2540] outline-none focus:border-[#1D63B8]">
+          className="homy-glass-input rounded-xl px-3 py-2.5 text-sm font-semibold text-[#0A2540]">
           <option value="">Todas las categorías</option>
           {catOptions.map(([slug, name]) => <option key={slug} value={slug}>{name}</option>)}
         </select>
         <select value={statusF} onChange={(e) => setStatusF(e.target.value)} aria-label="Filtrar por estado"
-          className="rounded-xl border border-slate-300 homy-glass px-3 py-2.5 text-sm font-semibold text-[#0A2540] outline-none focus:border-[#1D63B8]">
+          className="homy-glass-input rounded-xl px-3 py-2.5 text-sm font-semibold text-[#0A2540]">
           <option value="">Todos los estados</option>
           {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -225,21 +227,21 @@ export default function ProviderStock() {
 
       {/* listado */}
       {stock.length === 0 ? (
-        <div className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-6">
-          <EmptyState icon="📦" title="Todavía no publicaste elementos"
+        <div className="homy-glass rounded-3xl p-6">
+          <EmptyState icon={<PackageOpen />} title="Todavía no publicaste elementos"
             hint="Elegí elementos del catálogo estándar (tornillos, caños, cables…) y publicá tu precio y stock. Los profesionales te van a encontrar al buscar materiales."
             action={
-              <button onClick={() => setOpen(true)} className="rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] text-white font-bold px-5 py-2.5 mx-auto flex items-center gap-2 transition">
+              <button onClick={() => setOpen(true)} className="homy-btn-primary homy-focus px-5 py-2.5 text-sm mx-auto">
                 <Plus className="size-4" /> Publicar el primero
               </button>
             } />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-6">
-          <EmptyState icon="🔍" title="Sin resultados"
+        <div className="homy-glass rounded-3xl p-6">
+          <EmptyState icon={<Search />} title="Sin resultados"
             hint="Ningún elemento coincide con los filtros. Probá con otro nombre, categoría o estado."
             action={
-              <button onClick={() => { setQ(''); setCat(''); setStatusF('') }} className="rounded-xl border border-slate-300 text-[#0A2540] font-bold px-5 py-2.5 hover:border-[#1D63B8] transition">
+              <button onClick={() => { setQ(''); setCat(''); setStatusF('') }} className="homy-btn-dark homy-focus px-5 py-2.5 text-sm mx-auto">
                 Limpiar filtros
               </button>
             } />
@@ -247,13 +249,18 @@ export default function ProviderStock() {
       ) : (
         <div className="space-y-3">
           {filtered.map((s) => (
-            <div key={s.id} className={`rounded-2xl border p-4 shadow-sm transition ${rowTone(s.status)}`}>
+            <div key={s.id} className={`homy-lift rounded-2xl p-4 transition ${rowTone(s.status)}`}>
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="font-bold text-[#0A2540]">{s.name}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {s.category}{s.brand ? ` · ${s.brand}` : ''} · se vende por {s.unit}
-                  </p>
+                <div className="flex items-center gap-3 min-w-0">
+                  <span aria-hidden className="homy-icon-chip homy-chip-blue size-10 shrink-0">
+                    <Package className="size-5" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-bold text-[#0A2540]">{s.name}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {s.category}{s.brand ? ` · ${s.brand}` : ''} · se vende por {s.unit}
+                    </p>
+                  </div>
                 </div>
                 <StatusBadge status={s.status} />
               </div>
@@ -266,10 +273,10 @@ export default function ProviderStock() {
                     <input type="number" min={0} value={drafts[s.id]?.price ?? String(s.price)}
                       onChange={(e) => setDraft(s.id, 'price', e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter') savePrice(s) }}
-                      className="w-full min-w-0 rounded-xl border border-slate-300 homy-glass-input px-3 py-2.5 text-sm outline-none"
+                      className="homy-glass-input w-full min-w-0 rounded-xl px-3 py-2.5 text-sm text-right tabular-nums"
                       aria-label={`Precio de ${s.name}`} />
                     <button onClick={() => savePrice(s)} disabled={savingId === s.id} title="Guardar precio" aria-label={`Guardar precio de ${s.name}`}
-                      className="rounded-xl bg-[#1D63B8] hover:bg-[#164e8c] disabled:opacity-50 text-white px-3.5 transition shrink-0">
+                      className="homy-btn-dark px-3.5 py-2.5 disabled:opacity-50 shrink-0">
                       <Check className="size-4" />
                     </button>
                   </div>
@@ -280,17 +287,17 @@ export default function ProviderStock() {
                   <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Cantidad ({s.unit})</label>
                   <div className="flex gap-1.5 mt-1">
                     <button onClick={() => bump(s, -1)} disabled={savingId === s.id} title="Restar 1" aria-label={`Restar 1 a ${s.name}`}
-                      className="rounded-xl border border-slate-300 homy-glass w-11 grid place-items-center hover:border-[#FF5A1F] hover:text-[#FF5A1F] disabled:opacity-50 transition shrink-0">
+                      className="homy-glass-soft rounded-xl w-11 grid place-items-center hover:text-[#FF5A1F] disabled:opacity-50 transition shrink-0">
                       <Minus className="size-4" />
                     </button>
                     <input type="number" min={0} value={drafts[s.id]?.qty ?? String(s.quantity)}
                       onChange={(e) => setDraft(s.id, 'qty', e.target.value)}
                       onBlur={() => saveQty(s)}
                       onKeyDown={(e) => { if (e.key === 'Enter') saveQty(s) }}
-                      className="w-full min-w-0 rounded-xl border border-slate-300 homy-glass px-2 py-2.5 text-sm text-center outline-none focus:border-[#1D63B8]"
+                      className="homy-glass-input w-full min-w-0 rounded-xl px-2 py-2.5 text-sm text-center tabular-nums"
                       aria-label={`Cantidad de ${s.name}`} />
                     <button onClick={() => bump(s, +1)} disabled={savingId === s.id} title="Sumar 1" aria-label={`Sumar 1 a ${s.name}`}
-                      className="rounded-xl border border-slate-300 homy-glass w-11 grid place-items-center hover:border-[#FF5A1F] hover:text-[#FF5A1F] disabled:opacity-50 transition shrink-0">
+                      className="homy-glass-soft rounded-xl w-11 grid place-items-center hover:text-[#FF5A1F] disabled:opacity-50 transition shrink-0">
                       <Plus className="size-4" />
                     </button>
                   </div>
@@ -300,10 +307,10 @@ export default function ProviderStock() {
                 <div className="flex sm:flex-col sm:items-end justify-between gap-2">
                   <div>
                     <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Stock mínimo</label>
-                    <p className="text-sm font-extrabold text-[#0A2540] mt-1">{s.minStock} {s.unit}</p>
+                    <p className="text-sm font-extrabold text-[#0A2540] mt-1 tabular-nums">{s.minStock} {s.unit}</p>
                   </div>
                   <button onClick={() => setDeleteTarget(s)}
-                    className="rounded-xl border border-slate-200 homy-glass text-slate-400 hover:text-red-500 hover:border-red-300 px-3 py-2 flex items-center gap-1.5 text-sm font-semibold transition">
+                    className="homy-glass-soft rounded-xl text-slate-400 hover:text-red-500 px-3 py-2 flex items-center gap-1.5 text-sm font-semibold transition">
                     <Trash2 className="size-4" /> Eliminar
                   </button>
                 </div>
@@ -317,7 +324,10 @@ export default function ProviderStock() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Package className="size-5 text-[#1D63B8]" /> Publicar elemento</DialogTitle>
+            <DialogTitle className="flex items-center gap-2.5">
+              <span aria-hidden className="homy-icon-chip homy-chip-blue size-8"><Package className="size-4" /></span>
+              Publicar elemento
+            </DialogTitle>
             <DialogDescription>
               Elegí un elemento del catálogo estándar y publicá tu precio y stock. Los profesionales te van a encontrar al buscar materiales.
             </DialogDescription>
@@ -326,7 +336,7 @@ export default function ProviderStock() {
             <div>
               <label className="text-sm font-semibold text-[#0A2540]">Categoría</label>
               <select value={dlgCat} onChange={(e) => { setDlgCat(e.target.value); setElementId('') }}
-                className="mt-1 w-full rounded-xl border border-slate-300 homy-glass-input px-3 py-2.5 text-sm outline-none">
+                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm">
                 <option value="">Elegí una categoría…</option>
                 {catalog.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
               </select>
@@ -334,7 +344,7 @@ export default function ProviderStock() {
             <div>
               <label className="text-sm font-semibold text-[#0A2540]">Elemento</label>
               <select value={elementId} onChange={(e) => setElementId(e.target.value)} disabled={!dlgCat}
-                className="mt-1 w-full rounded-xl border border-slate-300 homy-glass-input px-3 py-2.5 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400">
+                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm disabled:text-slate-400">
                 <option value="">{dlgCat ? 'Elegí un elemento…' : 'Primero elegí una categoría'}</option>
                 {dlgElements.map((el) => <option key={el.id} value={el.id}>{el.name} ({el.unit})</option>)}
               </select>
@@ -348,28 +358,27 @@ export default function ProviderStock() {
               <div>
                 <label className="text-sm font-semibold text-[#0A2540]">Precio (ARS)</label>
                 <input type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0"
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]" />
+                  className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm text-right tabular-nums" />
               </div>
               <div>
                 <label className="text-sm font-semibold text-[#0A2540]">Cantidad</label>
                 <input type="number" min={0} value={qty} onChange={(e) => setQty(e.target.value)} placeholder="0"
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]" />
+                  className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-semibold text-[#0A2540]">Stock mínimo</label>
                 <input type="number" min={0} value={minStock} onChange={(e) => setMinStock(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]" />
+                  className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm" />
               </div>
               <div>
                 <label className="text-sm font-semibold text-[#0A2540]">Marca <span className="text-slate-400 font-normal">(opcional)</span></label>
                 <input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Ej: Acero San Martín"
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]" />
+                  className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm" />
               </div>
             </div>
-            <button onClick={publish} disabled={busy}
-              className="w-full rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] disabled:opacity-60 text-white font-bold py-3 transition">
+            <button onClick={publish} disabled={busy} className="homy-btn-primary w-full py-3 disabled:opacity-60">
               {busy ? 'Publicando…' : 'Publicar elemento'}
             </button>
           </div>

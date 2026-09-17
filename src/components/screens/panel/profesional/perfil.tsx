@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { PageHeader, StatusBadge, Loading, UAvatar } from '@/components/app/ui-bits'
 import { useSession } from '@/lib/store'
 import { toast } from 'sonner'
-import { BadgeCheck, Upload, ShieldCheck, Loader2 } from 'lucide-react'
+import { BadgeCheck, Upload, ShieldCheck, Loader2, UserRound, BriefcaseBusiness } from 'lucide-react'
 
 const CATEGORIES = [
   { slug: 'plomeria', name: 'Plomería' },
@@ -120,7 +120,7 @@ export default function ProProfile() {
       })
       if (!res.ok) { toast.error((await res.json()).error); return }
       await refresh()
-      toast.success('Perfil actualizado ✓')
+      toast.success('Perfil actualizado')
     } finally { setBusy(false) }
   }
 
@@ -160,25 +160,24 @@ export default function ProProfile() {
         subtitle="Cuanto más completo, más presupuestos aceptás"
         right={
           verified ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#00C4FF]/10 text-[#1D63B8] font-bold px-4 py-2 text-sm">
-              <BadgeCheck className="size-4" /> Verificado
-            </span>
+            <span className="homy-pill"><BadgeCheck className="size-3.5 text-[#1D63B8]" aria-hidden /> Verificado</span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-600 font-bold px-4 py-2 text-sm">
-              <ShieldCheck className="size-4" /> Sin verificar
-            </span>
+            <span className="homy-pill"><ShieldCheck className="size-3.5 text-amber-600" aria-hidden /> Sin verificar</span>
           )
         }
       />
 
       <div className="space-y-5">
         {/* identidad */}
-        <section className="rounded-2xl homy-glass border border-slate-200 p-5 shadow-sm">
-          <h2 className="font-extrabold text-[#0A2540] mb-4">Datos de contacto</h2>
+        <section className="homy-glass rounded-2xl p-5 sm:p-6">
+          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-4">
+            <span className="homy-icon-chip homy-chip-blue size-8 [&_svg]:size-4" aria-hidden><UserRound /></span>
+            Datos de contacto
+          </h2>
           <div className="flex items-center gap-4 mb-4">
             <UAvatar name={displayName || email} url={avatarUrl} size={56} />
             <div className="min-w-0">
-              <p className="font-bold text-[#0A2540] truncate">{email || '—'}</p>
+              <p className="font-bold text-[#0A2540] line-clamp-1">{email || '—'}</p>
               <p className="text-xs text-slate-400">El email no se puede cambiar</p>
             </div>
           </div>
@@ -190,26 +189,29 @@ export default function ProProfile() {
         </section>
 
         {/* perfil profesional */}
-        <section className="rounded-2xl homy-glass border border-slate-200 p-5 shadow-sm">
-          <h2 className="font-extrabold text-[#0A2540] mb-4">Tu perfil profesional</h2>
+        <section className="homy-glass rounded-2xl p-5 sm:p-6">
+          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-4">
+            <span className="homy-icon-chip homy-chip-orange size-8 [&_svg]:size-4" aria-hidden><BriefcaseBusiness /></span>
+            Tu perfil profesional
+          </h2>
 
           {/* persona | empresa */}
-          <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1 mb-4 max-w-sm">
+          <div className="grid grid-cols-2 gap-1 rounded-full homy-glass-soft p-1 mb-4 max-w-sm">
             {(['persona', 'empresa'] as const).map((t) => (
               <button key={t} type="button" onClick={() => setPersonType(t)}
-                className={`rounded-lg py-2 text-sm font-bold capitalize transition ${personType === t ? 'homy-glass text-[#0A2540] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                className={`rounded-full py-2 text-sm font-bold capitalize transition ${personType === t ? 'homy-glass text-[#0A2540] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
                 {t === 'persona' ? 'Persona' : 'Empresa'}
               </button>
             ))}
           </div>
 
-          <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Profesiones (elegí una o varias)</p>
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Profesiones (elegí una o varias)</p>
           <div className="flex flex-wrap gap-2 mb-5">
             {CATEGORIES.map((c) => {
               const active = professions.includes(c.slug)
               return (
                 <button key={c.slug} type="button" onClick={() => toggleProfession(c.slug)} aria-pressed={active}
-                  className={`rounded-full px-3.5 py-1.5 text-sm font-bold border transition ${active ? 'bg-[#1D63B8] border-[#1D63B8] text-white' : 'homy-glass border-slate-300 text-slate-500 hover:border-[#1D63B8]/50'}`}>
+                  className={`rounded-full px-3.5 py-1.5 text-sm font-bold transition ${active ? 'bg-[#1D63B8] text-white shadow-lg shadow-[#1D63B8]/25' : 'homy-glass-soft text-slate-500 hover:text-[#1D63B8]'}`}>
                   {c.name}
                 </button>
               )
@@ -224,7 +226,7 @@ export default function ProProfile() {
             <label className="text-sm font-semibold text-[#0A2540]">Bio</label>
             <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3}
               placeholder="Contá tu experiencia, especialidades y por qué contratarte…"
-              className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#1D63B8] focus:ring-2 focus:ring-[#1D63B8]/20 resize-none" />
+              className="homy-glass-input mt-1 w-full rounded-xl px-4 py-3 text-sm resize-none" />
           </div>
 
           {personType === 'persona' ? (
@@ -241,27 +243,31 @@ export default function ProProfile() {
           )}
 
           <div className="mt-5">
-            <label className="text-xs font-semibold text-slate-500 uppercase">Radio de servicio: {serviceRadiusKm} km</label>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Radio de servicio: {serviceRadiusKm} km</label>
             <input type="range" min={1} max={100} value={serviceRadiusKm} onChange={(e) => setServiceRadiusKm(parseInt(e.target.value))}
-              className="w-full max-w-sm accent-[#00C4FF] mt-1 block" aria-label="Radio de servicio en kilómetros" />
+              className="homy-range w-full max-w-sm mt-2 block" style={{ '--range-progress': `${serviceRadiusKm}%` } as React.CSSProperties}
+              aria-label="Radio de servicio en kilómetros" />
             <p className="text-xs text-slate-400 mt-1">A qué distancia aceptás trabajar. Los clientes te ven dentro de este radio.</p>
           </div>
 
           <button onClick={save} disabled={busy}
-            className="mt-5 w-full sm:w-auto rounded-xl bg-[#0A2540] hover:bg-[#123455] disabled:opacity-60 text-white font-bold px-8 py-3 transition">
+            className="homy-btn-dark mt-5 w-full sm:w-auto px-8 py-3 disabled:opacity-60">
             {busy ? 'Guardando…' : 'Guardar perfil'}
           </button>
         </section>
 
         {/* verificación de identidad */}
-        <section className="rounded-2xl homy-glass border border-slate-200 p-5 shadow-sm">
-          <h2 className="font-extrabold text-[#0A2540] mb-1 flex items-center gap-2"><ShieldCheck className="size-5 text-[#1D63B8]" /> Documentos — verificación de identidad</h2>
+        <section className="homy-glass rounded-2xl p-5 sm:p-6">
+          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-1">
+            <span className="homy-icon-chip homy-chip-mint size-8 [&_svg]:size-4" aria-hidden><ShieldCheck /></span>
+            Documentos — verificación de identidad
+          </h2>
           <p className="text-sm text-slate-500 mb-4">Subí tu DNI (frente y reverso) para obtener el sello de verificado. Solo lo ve el equipo de HomIA.</p>
 
           {documents.length > 0 && (
             <div className="space-y-2 mb-4">
               {documents.map((d) => (
-                <div key={d.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3.5">
+                <div key={d.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl homy-glass-soft p-3.5">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="flex gap-1.5 shrink-0">
                       {d.frontUrl && (
@@ -281,21 +287,21 @@ export default function ProProfile() {
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
-              <span className="text-xs font-semibold text-slate-500 uppercase">DNI — frente</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">DNI — frente</span>
               <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf"
                 onChange={(e) => setFrontFile(e.target.files?.[0] || null)}
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-[#1D63B8] file:text-white file:px-3 file:py-1.5 file:text-xs file:font-bold" />
+                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm text-slate-500 file:mr-3 file:rounded-full file:border-0 file:bg-[#1D63B8] file:text-white file:px-3 file:py-1.5 file:text-xs file:font-bold" />
             </label>
             <label className="block">
-              <span className="text-xs font-semibold text-slate-500 uppercase">DNI — reverso</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">DNI — reverso</span>
               <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf"
                 onChange={(e) => setBackFile(e.target.files?.[0] || null)}
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-[#1D63B8] file:text-white file:px-3 file:py-1.5 file:text-xs file:font-bold" />
+                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm text-slate-500 file:mr-3 file:rounded-full file:border-0 file:bg-[#1D63B8] file:text-white file:px-3 file:py-1.5 file:text-xs file:font-bold" />
             </label>
           </div>
           <button onClick={submitDocument} disabled={uploadingDoc || !frontFile || !backFile}
-            className="mt-4 rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] disabled:opacity-40 text-white font-bold px-6 py-2.5 transition flex items-center gap-2">
-            {uploadingDoc ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+            className="homy-btn-primary mt-4 px-6 py-2.5 text-sm disabled:opacity-40">
+            {uploadingDoc ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Upload className="size-4" aria-hidden />}
             {uploadingDoc ? 'Subiendo…' : 'Enviar DNI para verificación'}
           </button>
         </section>
@@ -309,7 +315,7 @@ function Field({ label, value, onChange, type = 'text', placeholder }: { label: 
     <div>
       <label className="text-sm font-semibold text-[#0A2540]">{label}</label>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-[#1D63B8] focus:ring-2 focus:ring-[#1D63B8]/20" />
+        className="homy-glass-input mt-1 w-full rounded-xl px-4 py-2.5 text-sm" />
     </div>
   )
 }

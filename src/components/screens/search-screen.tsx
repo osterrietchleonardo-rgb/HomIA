@@ -11,7 +11,7 @@ import { formatARS, URGENCY_LABEL } from '@/lib/format'
 import { formatDistance } from '@/lib/geo'
 import type { MapPin } from '@/components/app/map-view'
 import { toast } from 'sonner'
-import { Search, MapPin as MapPinIcon, Compass, Sparkles, X, Lock, Home, Hammer } from 'lucide-react'
+import { Search, SearchX, MapPin as MapPinIcon, Compass, Sparkles, X, Lock, Home, Hammer, BadgeCheck, Store } from 'lucide-react'
 
 const MapView = dynamic(() => import('@/components/app/map-view'), { ssr: false, loading: () => <div className="h-[320px] sm:h-[420px] lg:h-[480px] rounded-3xl homy-glass animate-pulse" /> })
 
@@ -195,7 +195,7 @@ export default function SearchScreen() {
           <button
             onClick={() => askAgent(query || aiMessage || '')}
             disabled={aiBusy}
-            className="shrink-0 rounded-full bg-[#FF5A1F] hover:bg-[#e64d15] disabled:opacity-60 text-white font-bold px-3.5 sm:px-5 py-2.5 sm:py-3 text-sm transition flex items-center gap-2"
+            className="homy-btn-primary shrink-0 px-3.5 sm:px-5 py-2.5 sm:py-3 text-sm"
           >
             <Sparkles className="size-4" />
             <span className="hidden sm:inline">{aiBusy ? 'Pensando…' : 'Preguntale a Homy'}</span>
@@ -208,7 +208,7 @@ export default function SearchScreen() {
               <button
                 key={m}
                 onClick={() => setMode(m)}
-                className={`flex items-center gap-1.5 rounded-full px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-bold transition ${mode === m ? 'bg-[#00C4FF] text-[#0A2540]' : 'text-slate-300 hover:text-white'}`}
+                className={`flex items-center gap-1.5 rounded-full px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-bold transition ${mode === m ? 'bg-white text-[#0A2540] shadow-[0_4px_12px_-4px_rgba(10,37,64,0.4)]' : 'text-slate-300 hover:text-white'}`}
               >
                 {m === 'cliente' ? <Home className="size-3.5 sm:size-4" aria-hidden /> : <Hammer className="size-3.5 sm:size-4" aria-hidden />}
                 <span className="whitespace-nowrap">{m === 'cliente' ? 'Busco un pro' : 'Trabajo y materiales'}</span>
@@ -221,7 +221,7 @@ export default function SearchScreen() {
                 <button
                   key={c.slug}
                   onClick={() => setCat(c.slug)}
-                  className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition ${cat === c.slug ? 'border-[#00C4FF] bg-[#00C4FF]/15 text-[#00C4FF]' : 'border-white/15 text-slate-300 hover:border-white/40'}`}
+                  className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition ${cat === c.slug ? 'border-white bg-white text-[#0A2540] shadow-[0_4px_12px_-4px_rgba(10,37,64,0.4)]' : 'border-white/15 text-slate-300 hover:border-white/40'}`}
                 >
                   {c.name}
                 </button>
@@ -296,7 +296,8 @@ export default function SearchScreen() {
             <input
               type="range" min={1} max={100} value={location.radiusKm}
               onChange={(e) => location.setRadius(parseInt(e.target.value))}
-              className="w-28 sm:w-40 accent-[#00C4FF]"
+              className="homy-range w-28 sm:w-40"
+              style={{ ['--range-progress' as string]: `${location.radiusKm}%` }}
               aria-label="Diámetro de alcance"
             />
           </div>
@@ -327,7 +328,7 @@ export default function SearchScreen() {
           <Loading text="Buscando en la base de HomIA…" />
         ) : !hasResults ? (
           <EmptyState
-            icon="🤷"
+            icon={<SearchX />}
             title="Sin resultados todavía"
             hint="Probá con otras palabras, ampliá el radio o preguntale a Homy para que interprete lo que necesitás."
           />
@@ -412,7 +413,7 @@ function ProCard({ pro, logged }: { pro: ProResult; logged: boolean }) {
             <span className="text-xs text-slate-500">{pro.rating > 0 ? `${pro.rating} (${pro.reviewsCount})` : 'Nuevo'}</span>
           </div>
         </div>
-        {pro.verified && <span title="Verificado" className="text-[#00C4FF]">✓</span>}
+        {pro.verified && <BadgeCheck title="Verificado" className="size-4 shrink-0 text-[#00C4FF]" aria-label="Verificado" />}
       </div>
       <div className="flex items-center justify-between mt-3 text-xs text-slate-400">
         <span>{pro.city || '—'}{pro.distanceKm !== undefined ? ` · ${formatDistance(pro.distanceKm)}` : ''}</span>
@@ -436,7 +437,7 @@ function MaterialCard({ m, logged, highlight }: { m: MaterialResult; logged: boo
       {m.brand && <p className="text-xs text-slate-400 mt-0.5">{m.brand}</p>}
       <p className="mt-2 text-xl font-extrabold text-[#16A34A]">{formatARS(m.price)}<span className="text-xs font-semibold text-slate-400"> /{m.unit}</span></p>
       <div className="flex items-center justify-between mt-2 text-xs text-slate-400">
-        <span className="truncate">🏪 {m.providerName}{m.providerCity ? ` · ${m.providerCity}` : ''}{m.distanceKm !== undefined ? ` · ${formatDistance(m.distanceKm)}` : ''}</span>
+        <span className="flex min-w-0 items-center gap-1 truncate"><Store className="size-3.5 shrink-0 text-tech" aria-hidden /> {m.providerName}{m.providerCity ? ` · ${m.providerCity}` : ''}{m.distanceKm !== undefined ? ` · ${formatDistance(m.distanceKm)}` : ''}</span>
         <span>stock: {m.quantity}</span>
       </div>
       {!logged && <GateBar />}

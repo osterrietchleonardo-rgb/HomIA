@@ -5,7 +5,7 @@ import { navigate } from '@/lib/router'
 import { PageHeader, StatCard, StatusBadge, Loading, EmptyState, UAvatar } from '@/components/app/ui-bits'
 import { formatARS } from '@/lib/format'
 import {
-  Boxes, AlertTriangle, PackageX, Link2, Users, ArrowRight, CheckCircle2, Plus,
+  Boxes, AlertTriangle, PackageX, PackageOpen, Link2, Users, ArrowRight, CheckCircle2, Plus, Wallet,
 } from 'lucide-react'
 
 type StockItem = {
@@ -48,39 +48,49 @@ export default function ProviderDashboard() {
         title="Tu negocio"
         subtitle="Stock, vinculaciones y tratos con profesionales — todo en un solo lugar"
         right={
-          <button onClick={() => navigate('/panel/proveedor/stock')} className="rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] text-white font-bold px-5 py-2.5 flex items-center gap-2 transition shadow-lg shadow-[#FF5A1F]/20">
+          <button onClick={() => navigate('/panel/proveedor/stock')} className="homy-btn-primary homy-focus px-5 py-2.5 text-sm">
             <Boxes className="size-4" /> Gestionar stock
           </button>
         }
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <StatCard label="Elementos publicados" value={stock.length} accent="#1D63B8" />
-        <StatCard label="Valor del stock" value={formatARS(stockValue)} accent="#0A2540" />
-        <StatCard label="Por agotar" value={low.length} accent="#D97706" />
-        <StatCard label="Agotados" value={out.length} accent="#DC2626" />
+        <StatCard label="Elementos publicados" value={stock.length} accent="#1D63B8" icon={<Boxes />} tone="blue" />
+        <StatCard label="Valor del stock" value={formatARS(stockValue)} accent="#0A2540" icon={<Wallet />} tone="ai" />
+        <StatCard label="Por agotar" value={low.length} accent="#D97706" icon={<AlertTriangle />} tone="gold" />
+        <StatCard label="Agotados" value={out.length} accent="#DC2626" icon={<PackageX />} tone="orange" />
       </div>
 
       {stock.length === 0 ? (
-        <section className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-6 mb-6">
-          <EmptyState icon="📦" title="Todavía no publicaste elementos"
+        <section className="homy-glass rounded-3xl p-6 mb-6">
+          <EmptyState icon={<PackageOpen />} title="Todavía no publicaste elementos"
             hint="Publicá precios y stock del catálogo estándar para aparecer en las búsquedas de materiales de los profesionales."
             action={
-              <button onClick={() => navigate('/panel/proveedor/stock')} className="rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] text-white font-bold px-5 py-2.5 flex items-center gap-2 mx-auto transition">
+              <button onClick={() => navigate('/panel/proveedor/stock')} className="homy-btn-primary homy-focus px-5 py-2.5 text-sm mx-auto">
                 <Plus className="size-4" /> Publicar el primero
               </button>
             } />
         </section>
       ) : alerts.length > 0 ? (
-        <section className={`rounded-3xl border-2 p-5 mb-6 ${out.length > 0 ? 'border-red-300 bg-red-50/60' : 'border-amber-300 bg-amber-50/60'}`}>
-          <h2 className="font-extrabold text-[#0A2540] flex items-center gap-2">
-            {out.length > 0 ? <PackageX className="size-5 text-red-500" /> : <AlertTriangle className="size-5 text-amber-500" />}
-            Alertas de stock ({alerts.length})
-          </h2>
-          <p className="text-sm text-slate-500 mt-0.5 mb-3">Repone antes de que un profesional necesite el material.</p>
-          <div className="space-y-2">
+        <section className={`rounded-3xl border p-5 mb-6 ${out.length > 0 ? 'border-red-200/80 bg-gradient-to-br from-red-50/90 via-red-50/40 to-transparent' : 'border-amber-200/80 bg-gradient-to-br from-amber-50/90 via-amber-50/40 to-transparent'}`}>
+          <div className="flex items-center gap-3">
+            {out.length > 0 ? (
+              <span aria-hidden className="homy-icon-chip size-10 shrink-0" style={{ background: 'linear-gradient(140deg, #fee2e2 0%, #fecaca 100%)', color: '#dc2626' }}>
+                <PackageX className="size-5" />
+              </span>
+            ) : (
+              <span aria-hidden className="homy-icon-chip homy-chip-orange size-10 shrink-0">
+                <AlertTriangle className="size-5" />
+              </span>
+            )}
+            <div className="min-w-0">
+              <h2 className="font-extrabold text-[#0A2540]">Alertas de stock ({alerts.length})</h2>
+              <p className="text-sm text-slate-500">Repone antes de que un profesional necesite el material.</p>
+            </div>
+          </div>
+          <div className="space-y-2 mt-4">
             {alerts.map((s) => (
-              <div key={s.id} className="rounded-2xl homy-glass border border-slate-200 p-3.5 flex flex-wrap items-center justify-between gap-2">
+              <div key={s.id} className="homy-glass rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-bold text-[#0A2540] truncate">{s.name}</p>
                   <p className="text-xs text-slate-500 mt-0.5">
@@ -90,7 +100,7 @@ export default function ProviderDashboard() {
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <StatusBadge status={s.status} />
-                  <button onClick={() => navigate('/panel/proveedor/stock')} className="rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] text-white text-sm font-bold px-4 py-2 transition">
+                  <button onClick={() => navigate('/panel/proveedor/stock')} className="homy-btn-primary px-4 py-2 text-sm">
                     Reponer
                   </button>
                 </div>
@@ -99,8 +109,10 @@ export default function ProviderDashboard() {
           </div>
         </section>
       ) : (
-        <section className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 mb-6 flex items-center gap-3">
-          <CheckCircle2 className="size-5 text-emerald-600 shrink-0" />
+        <section className="rounded-2xl border border-emerald-200/80 bg-gradient-to-r from-emerald-50/80 to-transparent p-4 mb-6 flex items-center gap-3">
+          <span aria-hidden className="homy-icon-chip homy-chip-mint size-9 shrink-0">
+            <CheckCircle2 className="size-5" />
+          </span>
           <p className="text-sm font-semibold text-emerald-800">Todo el stock está por encima del mínimo. No hay alertas de reposición.</p>
         </section>
       )}
@@ -108,13 +120,14 @@ export default function ProviderDashboard() {
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Vinculaciones activas */}
         <section>
+          <span className="homy-eyebrow mb-1">Cuentas de retiro</span>
           <h2 className="font-extrabold text-[#0A2540] mb-3">Vinculaciones activas ({activeLinks.length})</h2>
           {links.length === 0 ? (
-            <div className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-6">
-              <EmptyState icon="🔗" title="Sin profesionales vinculados"
+            <div className="homy-glass rounded-2xl p-6">
+              <EmptyState icon={<Link2 />} title="Sin profesionales vinculados"
                 hint="Vinculá profesionales con una cuenta de retiro para que retiren materiales por tu negocio."
                 action={
-                  <button onClick={() => navigate('/panel/proveedor/vinculaciones')} className="rounded-xl bg-[#1D63B8] hover:bg-[#164e8c] text-white font-bold px-5 py-2.5 mx-auto flex items-center gap-2 transition">
+                  <button onClick={() => navigate('/panel/proveedor/vinculaciones')} className="homy-btn-primary homy-focus px-5 py-2.5 text-sm mx-auto">
                     <Link2 className="size-4" /> Vincular el primero
                   </button>
                 } />
@@ -122,7 +135,7 @@ export default function ProviderDashboard() {
           ) : (
             <div className="space-y-2">
               {links.slice(0, 4).map((l) => (
-                <button key={l.id} onClick={() => navigate('/panel/proveedor/vinculaciones')} className="w-full text-left rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm hover:shadow-md transition flex items-center justify-between gap-3">
+                <button key={l.id} onClick={() => navigate('/panel/proveedor/vinculaciones')} className="homy-glass homy-lift homy-card-glow w-full text-left rounded-2xl p-4 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <UAvatar name={l.professional.companyName || l.professional.displayName} url={l.professional.avatarUrl} size={40} />
                     <div className="min-w-0">
@@ -131,7 +144,8 @@ export default function ProviderDashboard() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${l.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                    <span className="homy-pill">
+                      <span aria-hidden className={`homy-pill-dot ${l.active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
                       {l.active ? 'Activa' : 'Inactiva'}
                     </span>
                     <ArrowRight className="size-4 text-slate-300" />
@@ -149,10 +163,11 @@ export default function ProviderDashboard() {
 
         {/* Acceso rápido al CRM */}
         <section>
+          <span className="homy-eyebrow mb-1">Seguimiento</span>
           <h2 className="font-extrabold text-[#0A2540] mb-3">CRM</h2>
-          <button onClick={() => navigate('/panel/proveedor/crm')} className="w-full text-left rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm hover:shadow-md transition flex items-center gap-4">
-            <span className="size-11 rounded-2xl bg-[#1D63B8]/10 grid place-items-center shrink-0">
-              <Users className="size-5 text-[#1D63B8]" />
+          <button onClick={() => navigate('/panel/proveedor/crm')} className="homy-glass homy-lift homy-card-glow w-full text-left rounded-2xl p-4 flex items-center gap-4">
+            <span aria-hidden className="homy-icon-chip homy-chip-blue size-11 shrink-0">
+              <Users className="size-5" />
             </span>
             <span className="min-w-0 flex-1">
               <span className="block font-bold text-[#0A2540]">Clientes y profesionales</span>
@@ -160,9 +175,9 @@ export default function ProviderDashboard() {
             </span>
             <ArrowRight className="size-4 text-slate-300 shrink-0" />
           </button>
-          <button onClick={() => navigate('/panel/proveedor/vinculaciones')} className="w-full text-left rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm hover:shadow-md transition flex items-center gap-4 mt-2">
-            <span className="size-11 rounded-2xl bg-[#FF5A1F]/10 grid place-items-center shrink-0">
-              <Link2 className="size-5 text-[#FF5A1F]" />
+          <button onClick={() => navigate('/panel/proveedor/vinculaciones')} className="homy-glass homy-lift homy-card-glow w-full text-left rounded-2xl p-4 flex items-center gap-4 mt-2">
+            <span aria-hidden className="homy-icon-chip homy-chip-orange size-11 shrink-0">
+              <Link2 className="size-5" />
             </span>
             <span className="min-w-0 flex-1">
               <span className="block font-bold text-[#0A2540]">Vinculaciones y cuentas de retiro</span>

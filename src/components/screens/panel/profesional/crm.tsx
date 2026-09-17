@@ -5,7 +5,7 @@ import { PageHeader, Loading, EmptyState, UAvatar } from '@/components/app/ui-bi
 import { formatARS } from '@/lib/format'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Trash2, BarChart3, Handshake } from 'lucide-react'
 
 type Stage = { id: string; name: string; color: string; sortOrder: number }
 type Pipeline = { id: string; name: string; stages: Stage[] }
@@ -101,10 +101,8 @@ export default function ProCRM() {
     return (
       <div className="max-w-4xl">
         <PageHeader title="CRM" subtitle="Tu pipeline de clientes y oportunidades" />
-        <div className="rounded-2xl homy-glass border border-slate-200 p-6">
-          <EmptyState icon="📊" title="No tenés pipelines todavía"
-            hint="El pipeline se crea automáticamente la primera vez que entrás." />
-        </div>
+        <EmptyState icon={<BarChart3 />} title="No tenés pipelines todavía"
+          hint="El pipeline se crea automáticamente la primera vez que entrás." />
       </div>
     )
   }
@@ -119,60 +117,61 @@ export default function ProCRM() {
         right={
           pipelines.length > 1 ? (
             <select value={pipeline.id} onChange={(e) => setPipelineId(e.target.value)} aria-label="Pipeline"
-              className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-semibold outline-none focus:border-[#1D63B8] cursor-pointer">
+              className="homy-glass-input rounded-xl px-3 py-2.5 text-sm font-semibold cursor-pointer">
               {pipelines.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           ) : undefined
         }
       />
 
-      <p className="text-sm text-slate-500 mb-4">
-        {deals.length} trato{deals.length === 1 ? '' : 's'} · valor total del pipeline: <b className="text-[#0A2540]">{formatARS(totalValue)}</b>
+      <p className="text-sm text-slate-500 mb-4 flex items-center gap-1.5 flex-wrap">
+        <Handshake className="size-4 text-[#1D63B8]" aria-hidden />
+        {deals.length} trato{deals.length === 1 ? '' : 's'} · valor total del pipeline: <b className="text-[#0A2540] tabular-nums">{formatARS(totalValue)}</b>
       </p>
 
-      <div className="overflow-x-auto pb-4 -mx-1 px-1">
+      <div className="overflow-x-auto no-scrollbar pb-4 -mx-1 px-1">
         <div className="flex gap-3 min-w-max">
           {pipeline.stages.map((stage, i) => {
             const list = stageDeals.get(stage.id) || []
             return (
-              <div key={stage.id} className="min-w-[240px] w-[240px] shrink-0 rounded-2xl homy-glass-soft p-3 flex flex-col">
+              <div key={stage.id} className="min-w-[250px] w-[250px] shrink-0 rounded-2xl homy-glass-soft p-3 flex flex-col">
                 <div className="flex items-center justify-between gap-2 mb-3 px-1">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="size-2.5 rounded-full shrink-0" style={{ background: stage.color || '#1D63B8' }} />
+                    <span className="size-2.5 rounded-full shrink-0 ring-2 ring-white/70" style={{ background: stage.color || '#1D63B8' }} aria-hidden />
                     <p className="font-bold text-[#0A2540] text-sm truncate">{stage.name}</p>
                   </div>
-                  <span className="text-xs font-bold text-slate-400 homy-glass rounded-full px-2 py-0.5 border border-slate-200">{list.length}</span>
+                  <span className="homy-glass rounded-full px-2 py-0.5 text-xs font-bold text-slate-500 tabular-nums">{list.length}</span>
                 </div>
 
                 <div className="space-y-2 flex-1">
                   {list.map((d) => (
-                    <div key={d.id} className="rounded-xl homy-glass border border-slate-200 p-3 shadow-sm group">
+                    <div key={d.id} className="rounded-2xl homy-glass homy-card-glow p-3">
                       <p className="font-bold text-[#0A2540] text-sm leading-snug break-words">{d.title}</p>
-                      {d.value > 0 && <p className="text-sm font-extrabold text-[#FF5A1F] mt-1">{formatARS(d.value)}</p>}
+                      {d.value > 0 && <p className="text-sm font-extrabold text-[#FF5A1F] mt-1 text-right tabular-nums">{formatARS(d.value)}</p>}
                       {d.counterparty && (
                         <div className="flex items-center gap-1.5 mt-1.5">
                           <UAvatar name={d.counterparty.displayName} url={d.counterparty.avatarUrl} size={20} />
                           <span className="text-xs text-slate-500 truncate">{d.counterparty.displayName}</span>
                         </div>
                       )}
-                      {d.note && <p className="text-xs text-slate-400 mt-1.5 bg-slate-50 rounded-lg p-2">{d.note}</p>}
+                      {d.note && <p className="text-xs text-slate-400 mt-1.5 homy-glass-soft rounded-lg p-2">{d.note}</p>}
                       <div className="flex items-center justify-between mt-2.5">
                         <div className="flex gap-1">
                           <button disabled={busy || i === 0} onClick={() => moveDeal(d, -1)}
-                            className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:border-[#1D63B8] hover:text-[#1D63B8] transition disabled:opacity-30"
+                            className="homy-glass-soft rounded-lg p-1.5 text-slate-500 hover:text-[#1D63B8] transition disabled:opacity-30"
                             aria-label={`Mover "${d.title}" a la etapa anterior`} title="Etapa anterior">
-                            <ChevronLeft className="size-3.5" />
+                            <ChevronLeft className="size-3.5" aria-hidden />
                           </button>
                           <button disabled={busy || i === pipeline.stages.length - 1} onClick={() => moveDeal(d, 1)}
-                            className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:border-[#16A34A] hover:text-emerald-600 transition disabled:opacity-30"
+                            className="homy-glass-soft rounded-lg p-1.5 text-slate-500 hover:text-emerald-600 transition disabled:opacity-30"
                             aria-label={`Mover "${d.title}" a la etapa siguiente`} title="Etapa siguiente">
-                            <ChevronRight className="size-3.5" />
+                            <ChevronRight className="size-3.5" aria-hidden />
                           </button>
                         </div>
                         <button disabled={busy} onClick={() => deleteDeal(d.id)}
                           className="rounded-lg p-1.5 text-slate-300 hover:text-red-500 transition disabled:opacity-30"
                           aria-label={`Eliminar trato "${d.title}"`} title="Eliminar trato">
-                          <Trash2 className="size-3.5" />
+                          <Trash2 className="size-3.5" aria-hidden />
                         </button>
                       </div>
                     </div>
@@ -180,8 +179,8 @@ export default function ProCRM() {
                 </div>
 
                 <button onClick={() => { setNewForStage(stage); setNewTitle(''); setNewValue('') }}
-                  className="mt-3 w-full rounded-xl border-2 border-dashed border-slate-200 py-2 text-xs font-bold text-slate-400 hover:border-[#1D63B8]/50 hover:text-[#1D63B8] transition flex items-center justify-center gap-1">
-                  <Plus className="size-3.5" /> Nuevo trato
+                  className="mt-3 w-full rounded-xl border-2 border-dashed border-[#0A2540]/12 py-2 text-xs font-bold text-slate-400 hover:border-[#1D63B8]/50 hover:text-[#1D63B8] transition flex items-center justify-center gap-1">
+                  <Plus className="size-3.5" aria-hidden /> Nuevo trato
                 </button>
               </div>
             )
@@ -198,18 +197,18 @@ export default function ProCRM() {
           </DialogHeader>
           <div className="space-y-3">
             <label className="block">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Título</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Título</span>
               <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Ej: Reforma baño — Moreno 1234"
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]" />
+                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm" />
             </label>
             <label className="block">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Valor estimado (ARS)</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Valor estimado (ARS)</span>
               <input type="number" min="0" step="any" value={newValue} onChange={(e) => setNewValue(e.target.value)} placeholder="0"
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#1D63B8]" />
+                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm tabular-nums" />
             </label>
             <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setNewForStage(null)} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-500 hover:border-red-300 transition">Cancelar</button>
-              <button disabled={busy} onClick={createDeal} className="rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] text-white text-sm font-bold px-5 py-2.5 transition disabled:opacity-50">Crear trato</button>
+              <button onClick={() => setNewForStage(null)} className="homy-glass-soft rounded-full px-4 py-2.5 text-sm font-bold text-slate-500 hover:text-red-500 transition">Cancelar</button>
+              <button disabled={busy} onClick={createDeal} className="homy-btn-primary px-5 py-2.5 text-sm disabled:opacity-50">Crear trato</button>
             </div>
           </div>
         </DialogContent>

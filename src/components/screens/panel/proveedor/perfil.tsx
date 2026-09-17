@@ -76,7 +76,7 @@ export default function ProviderProfile() {
       })
       if (!res.ok) { toast.error((await res.json()).error); return }
       await refresh()
-      toast.success('Perfil actualizado ✓')
+      toast.success('Perfil actualizado')
     } finally { setBusy(false) }
   }
 
@@ -94,7 +94,7 @@ export default function ProviderProfile() {
       const data = await res.json()
       if (side === 'front') { setFrontUrl(data.url); setFrontName(file.name) }
       else { setBackUrl(data.url); setBackName(file.name) }
-      toast.success(side === 'front' ? 'Frente subido ✓' : 'Reverso subido ✓')
+      toast.success(side === 'front' ? 'Frente subido' : 'Reverso subido')
     } finally {
       setUploading(null)
       if (ref.current) ref.current.value = ''
@@ -110,7 +110,7 @@ export default function ProviderProfile() {
         body: JSON.stringify({ type: 'dni', frontUrl: frontUrl || undefined, backUrl: backUrl || undefined }),
       })
       if (!res.ok) { toast.error((await res.json()).error); return }
-      toast.success('Documento enviado a revisión ✓')
+      toast.success('Documento enviado a revisión')
       setFrontUrl(''); setBackUrl(''); setFrontName(''); setBackName('')
       load()
     } finally { setSendingDoc(false) }
@@ -126,16 +126,17 @@ export default function ProviderProfile() {
       <PageHeader title="Mi perfil" subtitle="Datos de tu negocio y verificación de identidad" />
 
       {/* encabezado con reputación */}
-      <div className="rounded-3xl homy-glass border border-slate-200 shadow-sm p-6 mb-5">
-        <div className="flex items-center gap-4">
+      <div className="homy-glass rounded-3xl p-6 mb-5 relative overflow-hidden">
+        <span aria-hidden className="pointer-events-none absolute -top-14 -right-14 size-44 rounded-full" style={{ background: 'radial-gradient(circle, rgba(0,196,255,0.16) 0%, transparent 70%)' }} />
+        <div className="relative flex items-center gap-4">
           <UAvatar name={me?.displayName || ''} url={me?.avatarUrl} size={60} />
           <div className="min-w-0">
             <p className="font-extrabold text-[#0A2540] truncate">{me?.provider?.businessName || me?.displayName}</p>
             <p className="text-sm text-slate-500 truncate">{me?.email}</p>
             <div className="flex items-center gap-2 mt-1">
               <UStars rating={rating} />
-              <span className="text-xs text-slate-500 flex items-center gap-1">
-                <Star className="size-3 text-[#FFC700] fill-[#FFC700]" />
+              <span className="text-xs text-slate-500 flex items-center gap-1 tabular-nums">
+                <Star aria-hidden className="size-3 text-[#FFC700] fill-[#FFC700]" />
                 {rating > 0 ? rating.toFixed(1) : '—'} · {reviewsCount} reseña{reviewsCount === 1 ? '' : 's'}
               </span>
             </div>
@@ -144,38 +145,47 @@ export default function ProviderProfile() {
       </div>
 
       {/* datos del negocio */}
-      <form onSubmit={save} className="rounded-3xl homy-glass border border-slate-200 shadow-sm p-6 space-y-4 mb-5">
-        <h2 className="font-extrabold text-[#0A2540] flex items-center gap-2"><Store className="size-5 text-[#1D63B8]" /> Datos del negocio</h2>
+      <form onSubmit={save} className="homy-glass rounded-3xl p-6 space-y-4 mb-5">
+        <div className="flex items-center gap-3">
+          <span aria-hidden className="homy-icon-chip homy-chip-blue size-9 shrink-0">
+            <Store className="size-4" />
+          </span>
+          <h2 className="font-extrabold text-[#0A2540]">Datos del negocio</h2>
+        </div>
         <Field label="Nombre del negocio" value={businessName} onChange={setBusinessName} placeholder="Ej: Corralón Central" required />
         <Field label="CUIT" value={cuit} onChange={setCuit} placeholder="30-12345678-9" />
         <div>
           <label className="text-sm font-semibold text-[#0A2540]">Descripción</label>
           <textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)}
             placeholder="Contá qué vendés, marcas, si hacés entregas, horarios…"
-            className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#1D63B8] focus:ring-2 focus:ring-[#1D63B8]/20 resize-none" />
+            className="homy-glass-input mt-1 w-full rounded-xl px-4 py-3 text-sm resize-none" />
         </div>
         <Field label="Dirección" value={address} onChange={setAddress} placeholder="Calle y número" />
         <Field label="Ciudad" value={city} onChange={setCity} placeholder="Ej: Córdoba" />
-        <button type="submit" disabled={busy}
-          className="w-full rounded-xl bg-[#0A2540] hover:bg-[#123455] disabled:opacity-60 text-white font-bold py-3.5 transition">
+        <button type="submit" disabled={busy} className="homy-btn-dark w-full py-3.5 disabled:opacity-60">
           {busy ? 'Guardando…' : 'Guardar cambios'}
         </button>
       </form>
 
       {/* documentos */}
-      <div className="rounded-3xl homy-glass border border-slate-200 shadow-sm p-6">
-        <h2 className="font-extrabold text-[#0A2540] flex items-center gap-2"><ShieldCheck className="size-5 text-[#1D63B8]" /> Documentos</h2>
-        <p className="text-sm text-slate-500 mt-1 mb-4">
+      <div className="homy-glass rounded-3xl p-6">
+        <div className="flex items-center gap-3">
+          <span aria-hidden className="homy-icon-chip homy-chip-mint size-9 shrink-0">
+            <ShieldCheck className="size-4" />
+          </span>
+          <h2 className="font-extrabold text-[#0A2540]">Documentos</h2>
+        </div>
+        <p className="text-sm text-slate-500 mt-1.5 mb-4">
           Subí tu DNI (frente y reverso) para verificar tu negocio. Queda privado: solo lo ve el equipo de HomIA.
         </p>
 
         {docs.length > 0 && (
           <div className="space-y-2 mb-4">
             {docs.map((d) => (
-              <div key={d.id} className="rounded-xl border border-slate-200 p-3 flex items-center justify-between gap-3">
+              <div key={d.id} className="homy-glass-soft rounded-xl p-3 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 min-w-0">
-                  {d.frontUrl && <img src={d.frontUrl} alt="DNI frente" className="size-10 rounded-lg object-cover border border-slate-200" />}
-                  {d.backUrl && <img src={d.backUrl} alt="DNI reverso" className="size-10 rounded-lg object-cover border border-slate-200" />}
+                  {d.frontUrl && <img src={d.frontUrl} alt="DNI frente" className="size-10 rounded-lg object-cover border border-[#0A2540]/10" />}
+                  {d.backUrl && <img src={d.backUrl} alt="DNI reverso" className="size-10 rounded-lg object-cover border border-[#0A2540]/10" />}
                   <span className="text-sm font-bold text-[#0A2540]">DNI</span>
                   <span className="text-xs text-slate-400 hidden sm:inline">· {formatDate(d.createdAt)}</span>
                 </div>
@@ -191,25 +201,25 @@ export default function ProviderProfile() {
           <input ref={backRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden"
             onChange={() => uploadSide('back')} aria-label="Subir reverso del DNI" />
           <button type="button" onClick={() => frontRef.current?.click()} disabled={uploading !== null}
-            className="rounded-2xl border-2 border-dashed border-slate-300 hover:border-[#1D63B8] hover:bg-[#1D63B8]/5 disabled:opacity-60 p-5 flex flex-col items-center gap-2 text-sm font-semibold text-slate-500 transition">
+            className="rounded-2xl border-2 border-dashed border-[#0A2540]/15 hover:border-[#1D63B8] hover:bg-[#1D63B8]/5 disabled:opacity-60 p-5 flex flex-col items-center gap-2 text-sm font-semibold text-slate-500 transition">
             {uploading === 'front'
-              ? <Loader2 className="size-5 text-[#00C4FF] animate-spin" />
-              : frontUrl ? <CheckCircle2 className="size-5 text-emerald-500" /> : <Upload className="size-5 text-[#1D63B8]" />}
+              ? <Loader2 aria-hidden className="size-5 text-[#00C4FF] animate-spin" />
+              : frontUrl ? <CheckCircle2 aria-hidden className="size-5 text-emerald-500" /> : <Upload aria-hidden className="size-5 text-[#1D63B8]" />}
             <span className="truncate max-w-full">{frontName || 'Frente del DNI'}</span>
             <span className="text-xs text-slate-400 font-normal">{frontUrl ? 'Listo para enviar' : 'JPG, PNG o PDF'}</span>
           </button>
           <button type="button" onClick={() => backRef.current?.click()} disabled={uploading !== null}
-            className="rounded-2xl border-2 border-dashed border-slate-300 hover:border-[#1D63B8] hover:bg-[#1D63B8]/5 disabled:opacity-60 p-5 flex flex-col items-center gap-2 text-sm font-semibold text-slate-500 transition">
+            className="rounded-2xl border-2 border-dashed border-[#0A2540]/15 hover:border-[#1D63B8] hover:bg-[#1D63B8]/5 disabled:opacity-60 p-5 flex flex-col items-center gap-2 text-sm font-semibold text-slate-500 transition">
             {uploading === 'back'
-              ? <Loader2 className="size-5 text-[#00C4FF] animate-spin" />
-              : backUrl ? <CheckCircle2 className="size-5 text-emerald-500" /> : <Upload className="size-5 text-[#1D63B8]" />}
+              ? <Loader2 aria-hidden className="size-5 text-[#00C4FF] animate-spin" />
+              : backUrl ? <CheckCircle2 aria-hidden className="size-5 text-emerald-500" /> : <Upload aria-hidden className="size-5 text-[#1D63B8]" />}
             <span className="truncate max-w-full">{backName || 'Reverso del DNI'}</span>
             <span className="text-xs text-slate-400 font-normal">{backUrl ? 'Listo para enviar' : 'JPG, PNG o PDF'}</span>
           </button>
         </div>
 
         <button type="button" onClick={sendDoc} disabled={sendingDoc || uploading !== null || (!frontUrl && !backUrl)}
-          className="mt-4 w-full rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] disabled:opacity-60 text-white font-bold py-3 transition">
+          className="homy-btn-primary mt-4 w-full py-3 disabled:opacity-60">
           {sendingDoc ? 'Enviando…' : 'Enviar documento a revisión'}
         </button>
       </div>
@@ -224,7 +234,7 @@ function Field({ label, value, onChange, type = 'text', placeholder, required }:
         {label}{!required && <span className="text-slate-400 font-normal"> (opcional)</span>}
       </label>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#1D63B8] focus:ring-2 focus:ring-[#1D63B8]/20" />
+        className="homy-glass-input mt-1 w-full rounded-xl px-4 py-3 text-sm" />
     </div>
   )
 }

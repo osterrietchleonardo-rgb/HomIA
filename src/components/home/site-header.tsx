@@ -73,7 +73,7 @@ export function SiteHeader() {
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-full px-4 py-2 text-[15px] font-semibold text-navy/70 transition-colors hover:bg-confort hover:text-navy"
+              className="homy-nav-link rounded-full px-4 py-2 text-[15px] font-semibold text-navy/70 transition-colors hover:text-navy"
             >
               {item.label}
             </Link>
@@ -99,13 +99,13 @@ export function SiteHeader() {
               >
                 Ingresar
               </Button>
-              <Button
-                className="rounded-full bg-action font-semibold text-white shadow-[0_10px_24px_-10px_rgba(255,90,31,0.7)] transition-all hover:bg-action-2 hover:shadow-[0_14px_30px_-10px_rgba(255,90,31,0.8)] active:scale-[0.98]"
+              <button
+                className="homy-btn-primary px-5 py-2.5 text-[14px]"
                 onClick={() => navigate("/registrarse")}
               >
                 <Sparkles className="size-4" aria-hidden />
                 Crear cuenta
-              </Button>
+              </button>
             </>
           )}
         </div>

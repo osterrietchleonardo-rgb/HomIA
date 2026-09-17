@@ -46,7 +46,7 @@ export default function ProviderLinks() {
         body: JSON.stringify({ email: email.trim(), accountLabel: accountLabel.trim(), notes: notes.trim() || undefined }),
       })
       if (!res.ok) { toast.error((await res.json()).error); return }
-      toast.success('Vinculación creada ✓ — le avisamos al profesional')
+      toast.success('Vinculación creada — le avisamos al profesional')
       setEmail(''); setAccountLabel(''); setNotes('')
       load()
     } finally { setBusy(false) }
@@ -76,9 +76,11 @@ export default function ProviderLinks() {
       <PageHeader title="Vinculaciones" subtitle="Profesionales que retiran materiales por tu negocio" />
 
       {/* explicación */}
-      <div className="rounded-2xl bg-[#1D63B8]/5 border border-[#1D63B8]/25 p-4 mb-5 flex gap-3 text-sm text-slate-600">
-        <Info className="size-4 text-[#1D63B8] shrink-0 mt-0.5" />
-        <p>
+      <div className="homy-glass-soft rounded-2xl p-4 mb-5 flex gap-3 items-start">
+        <span aria-hidden className="homy-icon-chip homy-chip-ai size-8 shrink-0">
+          <Info className="size-4" />
+        </span>
+        <p className="text-sm text-slate-600 leading-relaxed">
           La <strong>cuenta de retiro</strong> permite que el profesional retire materiales por tu negocio y se facturen a cada proyecto con aprobación del cliente.
           Podés pausar una cuenta cuando quieras sin borrar el historial.
         </p>
@@ -86,12 +88,12 @@ export default function ProviderLinks() {
 
       {/* listado */}
       {links.length === 0 ? (
-        <div className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-6">
-          <EmptyState icon="🔗" title="Todavía no vinculaste profesionales"
+        <div className="homy-glass rounded-3xl p-6 mb-6">
+          <EmptyState icon={<Link2 />} title="Todavía no vinculaste profesionales"
             hint="Vinculá por email a un profesional registrado en HomIA y creale su cuenta de retiro."
             action={
               <button onClick={() => document.getElementById('form-vincular')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                className="rounded-xl bg-[#1D63B8] hover:bg-[#164e8c] text-white font-bold px-5 py-2.5 mx-auto flex items-center gap-2 transition">
+                className="homy-btn-primary homy-focus px-5 py-2.5 text-sm mx-auto">
                 <Link2 className="size-4" /> Vincular el primero
               </button>
             } />
@@ -99,7 +101,7 @@ export default function ProviderLinks() {
       ) : (
         <div className="space-y-3 mb-6">
           {links.map((l) => (
-            <div key={l.id} className="rounded-2xl homy-glass border border-slate-200 p-4 shadow-sm flex flex-wrap items-start justify-between gap-4">
+            <div key={l.id} className="homy-glass homy-lift homy-card-glow rounded-2xl p-4 flex flex-wrap items-start justify-between gap-4">
               <div className="flex gap-3 min-w-0 flex-1">
                 <UAvatar name={l.professional.companyName || l.professional.displayName} url={l.professional.avatarUrl} size={48} />
                 <div className="min-w-0">
@@ -116,7 +118,10 @@ export default function ProviderLinks() {
                 </div>
               </div>
               <div className="flex items-center gap-2.5 shrink-0">
-                <span className={`text-xs font-bold ${l.active ? 'text-emerald-600' : 'text-slate-400'}`}>{l.active ? 'Activa' : 'Inactiva'}</span>
+                <span className="homy-pill">
+                  <span aria-hidden className={`homy-pill-dot ${l.active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                  {l.active ? 'Activa' : 'Inactiva'}
+                </span>
                 <Switch checked={l.active} disabled={togglingId === l.id}
                   onCheckedChange={(v) => toggle(l, v)}
                   aria-label={`${l.active ? 'Pausar' : 'Activar'} cuenta de retiro de ${l.professional.companyName || l.professional.displayName}`} />
@@ -127,30 +132,32 @@ export default function ProviderLinks() {
       )}
 
       {/* formulario de vinculación */}
-      <form id="form-vincular" onSubmit={submit} className="rounded-2xl homy-glass border border-slate-200 shadow-sm p-5 scroll-mt-24">
-        <h2 className="font-extrabold text-[#0A2540] flex items-center gap-2">
-          <Link2 className="size-5 text-[#1D63B8]" /> Vincular un profesional
-        </h2>
-        <p className="text-sm text-slate-500 mt-1 mb-4">Necesita estar registrado en HomIA con ese email. Al crear la cuenta le llega una notificación.</p>
+      <form id="form-vincular" onSubmit={submit} className="homy-glass rounded-3xl p-5 sm:p-6 scroll-mt-24">
+        <div className="flex items-center gap-3">
+          <span aria-hidden className="homy-icon-chip homy-chip-blue size-9 shrink-0">
+            <Link2 className="size-4" />
+          </span>
+          <h2 className="font-extrabold text-[#0A2540]">Vincular un profesional</h2>
+        </div>
+        <p className="text-sm text-slate-500 mt-1.5 mb-4">Necesita estar registrado en HomIA con ese email. Al crear la cuenta le llega una notificación.</p>
 
         <div className="space-y-3.5">
           <div>
             <label htmlFor="vl-email" className="text-sm font-semibold text-[#0A2540] flex items-center gap-1.5"><Mail className="size-3.5 text-slate-400" /> Email del profesional</label>
             <input id="vl-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="profesional@correo.com"
-              className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#1D63B8] focus:ring-2 focus:ring-[#1D63B8]/20" />
+              className="homy-glass-input mt-1 w-full rounded-xl px-4 py-3 text-sm" />
           </div>
           <div>
             <label htmlFor="vl-account" className="text-sm font-semibold text-[#0A2540] flex items-center gap-1.5"><Store className="size-3.5 text-slate-400" /> Nombre de la cuenta de retiro</label>
             <input id="vl-account" value={accountLabel} onChange={(e) => setAccountLabel(e.target.value)} placeholder="Ej: Retiro Juan Pérez — Corralón Central"
-              className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#1D63B8] focus:ring-2 focus:ring-[#1D63B8]/20" />
+              className="homy-glass-input mt-1 w-full rounded-xl px-4 py-3 text-sm" />
           </div>
           <div>
             <label htmlFor="vl-notes" className="text-sm font-semibold text-[#0A2540] flex items-center gap-1.5"><NotebookPen className="size-3.5 text-slate-400" /> Notas <span className="text-slate-400 font-normal">(opcional)</span></label>
             <textarea id="vl-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Condiciones de retiro, horarios, descuentos acordados…"
-              className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#1D63B8] focus:ring-2 focus:ring-[#1D63B8]/20 resize-none" />
+              className="homy-glass-input mt-1 w-full rounded-xl px-4 py-3 text-sm resize-none" />
           </div>
-          <button type="submit" disabled={busy}
-            className="w-full rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] disabled:opacity-60 text-white font-bold py-3 transition flex items-center justify-center gap-2">
+          <button type="submit" disabled={busy} className="homy-btn-primary w-full py-3 disabled:opacity-60">
             <UserRound className="size-4" /> {busy ? 'Vinculando…' : 'Crear vinculación'}
           </button>
         </div>
