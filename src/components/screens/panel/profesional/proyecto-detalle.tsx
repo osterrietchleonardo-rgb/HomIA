@@ -2,11 +2,11 @@
 // Detalle de proyecto (vista profesional): etapas, propuesta de materiales, alternativas, cuentas de retiro y facturación
 import { useEffect, useState } from 'react'
 import { navigate, Link } from '@/lib/router'
-import { PageHeader, StatusBadge, Loading, EmptyState, UAvatar } from '@/components/app/ui-bits'
+import { StatusBadge, Loading, UAvatar } from '@/components/app/ui-bits'
 import { formatARS, formatDate } from '@/lib/format'
 import { toast } from 'sonner'
 import {
-  ArrowRight, Receipt, Truck, Plus, RefreshCcw, Phone, Mail,
+  ArrowRight, Receipt, Truck, Plus, RefreshCcw, Phone, Mail, ArrowLeft,
   FolderOpen, Package, ClipboardPen, CircleX, History, Check,
 } from 'lucide-react'
 
@@ -166,7 +166,18 @@ export default function ProProjectDetail({ id }: { id: string }) {
   }
 
   if (loading) return <Loading />
-  if (!data) return <EmptyState icon={<FolderOpen />} title="Proyecto no encontrado" hint="Puede que el proyecto no exista o que no tengas acceso." action={<button onClick={() => navigate('/panel/profesional/proyectos')} className="homy-btn-primary px-5 py-2.5 text-sm">Volver a mis proyectos</button>} />
+  if (!data) return (
+    <div className="homy-page">
+      <div className="max-w-4xl">
+        <Empty
+          icon={<FolderOpen className="size-7" />}
+          title="Proyecto no encontrado"
+          hint="Puede que el proyecto no exista o que no tengas acceso."
+          action={<button onClick={() => navigate('/panel/profesional/proyectos')} className="homy-btn-primary min-h-[44px] px-5 py-2.5 text-sm">Volver a mis proyectos</button>}
+        />
+      </div>
+    </div>
+  )
 
   const p = data.project
   const stageIdx = STAGES.indexOf(p.stage)
@@ -176,305 +187,323 @@ export default function ProProjectDetail({ id }: { id: string }) {
   const others = data.materials.filter((m) => m.status === 'aprobado' || m.status === 'reemplazado')
   const selectedElement = catalog.flatMap((c) => c.elements).find((e) => e.id === elementId)
   const total = p.laborCost + p.materialsCost
+  const progress = stageIdx > 0 ? Math.round((stageIdx / (STAGES.length - 1)) * 100) : 0
 
   return (
-    <div className="max-w-4xl">
-      <PageHeader title={p.title} subtitle={`Proyecto para ${p.client.displayName} · creado el ${formatDate(p.createdAt)}`} />
+    <div className="homy-page">
+      <div className="max-w-4xl">
+        <Link to="/panel/profesional/proyectos"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-[#1D63B8] transition-colors mb-3">
+          <ArrowLeft className="size-3.5" aria-hidden /> Volver a mis proyectos
+        </Link>
 
-      {/* etapas */}
-      <div className="homy-glass rounded-2xl p-5 mb-5">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex gap-2 flex-wrap">
-            {STAGES.map((s, i) => (
-              <div key={s} className="flex items-center gap-2">
-                <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold transition ${p.stage === s ? 'bg-[#1D63B8] text-white shadow-lg shadow-[#1D63B8]/25' : stageIdx > i ? 'bg-emerald-100 text-emerald-700' : 'homy-glass-soft text-slate-400'}`}>
-                  {stageIdx > i && <Check className="size-3" aria-hidden />}
-                  {STAGE_LABEL[s]}
-                </span>
-                {i < STAGES.length - 1 && <ArrowRight className="size-3 text-slate-300" aria-hidden />}
-              </div>
-            ))}
+        {/* Encabezado */}
+        <header className="homy-page-head">
+          <div className="min-w-0">
+            <span className="homy-eyebrow">Proyecto · {STAGE_LABEL[p.stage] || p.stage}</span>
+            <h1 className="homy-page-title mt-1.5">{p.title}</h1>
+            <p className="homy-page-sub">Para {p.client.displayName} · creado el {formatDate(p.createdAt)}</p>
           </div>
-          {p.status !== 'finalizado' && (
-            <div className="flex gap-2">
-              {nextStage && nextStage !== 'finalizado' && (
-                <button disabled={busy} onClick={() => setStage(nextStage)} className="homy-btn-primary px-4 py-2 text-sm disabled:opacity-50">
-                  Avanzar a {STAGE_LABEL[nextStage]}
-                </button>
-              )}
-              {(p.stage === 'revision' || p.stage === 'ejecucion') && (
-                <button disabled={busy} onClick={() => setStage('finalizado')} className="homy-btn-dark px-4 py-2 text-sm disabled:opacity-50">
-                  Finalizar obra
-                </button>
-              )}
+        </header>
+
+        {/* etapas */}
+        <div className="homy-glass rounded-3xl p-5 mb-5">
+          <div className="homy-progress mb-4" role="img" aria-label={`Progreso del proyecto: etapa ${STAGE_LABEL[p.stage] || p.stage}`}>
+            <i style={{ width: `${progress}%` }} />
+          </div>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex gap-1.5 flex-wrap items-center">
+              {STAGES.map((s, i) => (
+                <div key={s} className="flex items-center gap-1.5">
+                  <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold transition ${p.stage === s ? 'bg-gradient-to-br from-[#103455] to-[#0A2540] text-white shadow-lg shadow-[#0A2540]/25 ring-1 ring-[#00C4FF]/35' : stageIdx > i ? 'bg-emerald-100 text-emerald-700' : 'homy-glass-soft text-slate-400'}`}>
+                    {stageIdx > i && <Check className="size-3" aria-hidden />}
+                    {STAGE_LABEL[s]}
+                  </span>
+                  {i < STAGES.length - 1 && <ArrowRight className="size-3 text-slate-300 shrink-0" aria-hidden />}
+                </div>
+              ))}
+            </div>
+            {p.status !== 'finalizado' && (
+              <div className="flex gap-2 flex-wrap">
+                {nextStage && nextStage !== 'finalizado' && (
+                  <button disabled={busy} onClick={() => setStage(nextStage)} className="homy-btn-primary min-h-[44px] px-4 py-2 text-sm disabled:opacity-50">
+                    Avanzar a {STAGE_LABEL[nextStage]}
+                  </button>
+                )}
+                {(p.stage === 'revision' || p.stage === 'ejecucion') && (
+                  <button disabled={busy} onClick={() => setStage('finalizado')} className="homy-btn-dark min-h-[44px] px-4 py-2 text-sm disabled:opacity-50">
+                    Finalizar obra
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
+            <MiniStat label="Mano de obra" value={formatARS(p.laborCost)} />
+            <MiniStat label="Materiales aprobados" value={formatARS(p.materialsCost)} />
+            <MiniStat label="Total del proyecto" value={formatARS(total)} accent />
+          </div>
+        </div>
+
+        {/* cliente + contacto */}
+        <div className="homy-glass rounded-3xl p-4 sm:p-5 mb-5 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3 min-w-0">
+            <UAvatar name={p.client.displayName} url={p.client.avatarUrl} size={46} />
+            <div className="min-w-0">
+              <p className="font-bold text-[#0A2540] line-clamp-1">{p.client.displayName}</p>
+              <p className="text-xs text-slate-500">Tu cliente en este proyecto</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {p.client.phone && (
+              <a href={`tel:${p.client.phone}`} className="homy-glass-soft rounded-full px-4 py-2.5 min-h-[44px] text-sm font-bold text-[#0A2540] transition hover:text-[#1D63B8] flex items-center gap-1.5">
+                <Phone className="size-4" aria-hidden /> {p.client.phone}
+              </a>
+            )}
+            {p.client.email && (
+              <a href={`mailto:${p.client.email}`} className="homy-glass-soft rounded-full px-4 py-2.5 min-h-[44px] text-sm font-bold text-[#0A2540] transition hover:text-[#1D63B8] flex items-center gap-1.5">
+                <Mail className="size-4" aria-hidden /> Email
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* formulario de materiales */}
+        {p.status !== 'finalizado' && (
+          <div className="homy-glass rounded-3xl p-5 mb-5">
+            <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-1">
+              <span className="homy-icon-chip homy-chip-orange size-8 [&_svg]:size-4" aria-hidden><Plus /></span>
+              Proponer material al cliente
+            </h2>
+            <p className="text-sm text-slate-500 mb-4">Elegí del catálogo estándar; si un proveedor lo tiene en stock, te autocompletamos el mejor precio.</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Material (catálogo estándar)</span>
+                <select value={elementId} onChange={(e) => setElementId(e.target.value)}
+                  className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm cursor-pointer">
+                  <option value="">Elegí un material…</option>
+                  {catalog.map((c) => (
+                    <optgroup key={c.slug} label={c.name}>
+                      {c.elements.map((el) => <option key={el.id} value={el.id}>{el.name}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                  Proveedor {loadingStock && <RefreshCcw className="inline size-3 animate-spin text-[#00C4FF]" aria-hidden />}
+                </span>
+                <select value={providerId} onChange={(e) => {
+                  setProviderId(e.target.value)
+                  const stock = stockOptions.find((s) => s.providerId === e.target.value)
+                  if (stock) setUnitPrice(String(stock.price))
+                }} disabled={!elementId || stockOptions.length === 0}
+                  className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm cursor-pointer disabled:text-slate-400">
+                  <option value="">Sin proveedor (compro por mi cuenta)</option>
+                  {stockOptions.map((s) => (
+                    <option key={s.stockId} value={s.providerId}>
+                      {s.providerName} — {formatARS(s.price)}/{selectedElement?.unit || 'u'} (stock {s.quantity})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Cantidad {selectedElement ? `(${selectedElement.unit})` : ''}</span>
+                <input type="number" min="0" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)}
+                  className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm tabular-nums" />
+              </label>
+              <label className="block">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Precio unitario (ARS)</span>
+                <input type="number" min="0" step="any" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)}
+                  className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm tabular-nums" />
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Nota para el cliente (opcional)</span>
+                <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej: marca recomendada, alternativa más duradera…"
+                  className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm" />
+              </label>
+            </div>
+            <div className="flex items-center justify-between mt-4 flex-wrap gap-2">
+              <p className="text-sm font-bold text-[#0A2540] tabular-nums">
+                Subtotal: {formatARS((parseFloat(quantity) || 0) * (parseFloat(unitPrice) || 0))}
+              </p>
+              <button disabled={busy} onClick={proposeMaterial} className="homy-btn-primary min-h-[44px] px-5 py-2.5 text-sm disabled:opacity-50">
+                Proponer al cliente
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* propuestos (esperando cliente) */}
+        {proposed.length > 0 && (
+          <div className="homy-glass homy-glass-featured rounded-3xl p-5 mb-5">
+            <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-3">
+              <span className="homy-icon-chip homy-chip-gold size-8 [&_svg]:size-4" aria-hidden><ClipboardPen /></span>
+              Esperando aprobación del cliente ({proposed.length})
+            </h2>
+            <div className="space-y-2">
+              {proposed.map((m) => (
+                <div key={m.id} className="rounded-2xl homy-glass p-4 flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-bold text-[#0A2540]">{m.name}</p>
+                    <p className="text-sm text-slate-500 tabular-nums">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}{m.providerName ? ` · ${m.providerName}` : ' · sin proveedor'}</p>
+                    {m.note && <p className="text-xs text-slate-400 mt-1">{m.note}</p>}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-lg font-extrabold text-[#0A2540] tabular-nums">{formatARS(m.subtotal)}</p>
+                    <div className="mt-1"><StatusBadge status={m.status} /></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* rechazados → sugerir alternativa */}
+        {rejected.length > 0 && (
+          <div className="rounded-3xl border border-red-100 bg-red-50 p-5 mb-5">
+            <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-3">
+              <span className="homy-icon-chip homy-chip-orange size-8 [&_svg]:size-4" aria-hidden><CircleX /></span>
+              Rechazados por el cliente ({rejected.length})
+            </h2>
+            <div className="space-y-3">
+              {rejected.map((m) => (
+                <div key={m.id} className="rounded-2xl border border-red-100 bg-white p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-bold text-[#0A2540]">{m.name}</p>
+                      <p className="text-sm text-slate-500 tabular-nums">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <StatusBadge status={m.status} />
+                      {altFor !== m.id && (
+                        <button onClick={() => { setAltFor(m.id); setAltName(m.name); setAltQty(String(m.quantity)); setAltPrice('') }}
+                          className="rounded-full border-2 border-[#1D63B8] text-[#1D63B8] hover:bg-[#1D63B8] hover:text-white text-sm font-bold px-4 py-2 min-h-[44px] transition">
+                          Sugerir alternativa más barata
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {altFor === m.id && (
+                    <div className="mt-3 rounded-2xl homy-glass p-4 grid gap-3 sm:grid-cols-3">
+                      <label className="block sm:col-span-3">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Alternativa</span>
+                        <input value={altName} onChange={(e) => setAltName(e.target.value)} placeholder="Nombre del material alternativo"
+                          className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm" />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Cantidad ({m.unit})</span>
+                        <input type="number" min="0" step="any" value={altQty} onChange={(e) => setAltQty(e.target.value)}
+                          className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm tabular-nums" />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Precio unitario</span>
+                        <input type="number" min="0" step="any" value={altPrice} onChange={(e) => setAltPrice(e.target.value)} placeholder={`antes ${m.unitPrice}`}
+                          className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm tabular-nums" />
+                      </label>
+                      <div className="flex items-end gap-2 flex-wrap">
+                        <button disabled={busy} onClick={() => suggestAlternative(m)} className="homy-btn-dark min-h-[44px] px-4 py-2.5 text-sm disabled:opacity-50">
+                          Enviar alternativa
+                        </button>
+                        <button onClick={() => setAltFor(null)} className="homy-glass-soft rounded-full min-h-[44px] text-slate-500 text-sm font-bold px-4 py-2.5 hover:text-red-500 transition">
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* aprobados / reemplazados */}
+        {others.length > 0 && (
+          <div className="homy-glass rounded-3xl p-5 mb-5">
+            <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-3">
+              <span className="homy-icon-chip homy-chip-blue size-8 [&_svg]:size-4" aria-hidden><History /></span>
+              Historial de materiales
+            </h2>
+            <div className="divide-y divide-[#0A2540]/6">
+              {others.map((m) => (
+                <div key={m.id} className="py-2.5 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-[#0A2540] line-clamp-1">{m.name}</p>
+                    <p className="text-xs text-slate-400 tabular-nums">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}{m.providerName ? ` · ${m.providerName}` : ''}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <StatusBadge status={m.status} />
+                    <p className="text-sm font-bold tabular-nums">{formatARS(m.subtotal)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* cuentas de retiro vinculadas */}
+        <div className="homy-glass rounded-3xl p-5 mb-5">
+          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-1">
+            <span className="homy-icon-chip homy-chip-ai size-8 [&_svg]:size-4" aria-hidden><Truck /></span>
+            Cuentas de retiro vinculadas
+          </h2>
+          <p className="text-sm text-slate-500 mb-3">Con estas cuentas podés retirar materiales en los proveedores y se facturan a este proyecto.</p>
+          {data.links.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              Todavía no tenés cuentas de retiro activas con los proveedores de este proyecto.{' '}
+              <Link to="/panel/profesional/vinculaciones" className="text-[#1D63B8] font-bold hover:underline">Vinculame acá</Link>.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {data.links.map((l) => (
+                <div key={l.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl homy-glass-soft p-3.5">
+                  <div className="min-w-0">
+                    <p className="font-bold text-[#0A2540] font-mono text-sm line-clamp-1">{l.accountLabel}</p>
+                    <p className="text-xs text-slate-400 line-clamp-1">Proveedor: {l.provider.businessName}{l.provider.city ? ` · ${l.provider.city}` : ''}</p>
+                  </div>
+                  <StatusBadge status={l.active ? 'activo' : 'cerrado'} label={l.active ? 'activa' : 'inactiva'} />
+                </div>
+              ))}
             </div>
           )}
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
-          <MiniStat label="Mano de obra" value={formatARS(p.laborCost)} />
-          <MiniStat label="Materiales aprobados" value={formatARS(p.materialsCost)} />
-          <MiniStat label="Total del proyecto" value={formatARS(total)} accent />
-        </div>
-      </div>
 
-      {/* cliente + contacto */}
-      <div className="homy-glass rounded-2xl p-4 mb-5 flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <UAvatar name={p.client.displayName} url={p.client.avatarUrl} size={46} />
-          <div>
-            <p className="font-bold text-[#0A2540]">{p.client.displayName}</p>
-            <p className="text-xs text-slate-500">Tu cliente en este proyecto</p>
+        {/* facturación */}
+        <div className="homy-glass rounded-3xl p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight">
+              <span className="homy-icon-chip homy-chip-navy size-8 [&_svg]:size-4" aria-hidden><Receipt /></span>
+              Facturas ({data.invoices.length})
+            </h2>
+            {p.status !== 'finalizado' && (
+              <button disabled={busy} onClick={issueInvoice} className="homy-btn-dark min-h-[44px] px-4 py-2.5 text-sm disabled:opacity-50">
+                Emitir factura
+              </button>
+            )}
           </div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {p.client.phone && (
-            <a href={`tel:${p.client.phone}`} className="homy-glass-soft rounded-full px-4 py-2 text-sm font-bold text-[#0A2540] transition hover:text-[#1D63B8] flex items-center gap-1.5">
-              <Phone className="size-4" aria-hidden /> {p.client.phone}
-            </a>
-          )}
-          {p.client.email && (
-            <a href={`mailto:${p.client.email}`} className="homy-glass-soft rounded-full px-4 py-2 text-sm font-bold text-[#0A2540] transition hover:text-[#1D63B8] flex items-center gap-1.5">
-              <Mail className="size-4" aria-hidden /> Email
-            </a>
-          )}
-        </div>
-      </div>
-
-      {/* formulario de materiales */}
-      {p.status !== 'finalizado' && (
-        <div className="homy-glass rounded-2xl p-5 mb-5">
-          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-1">
-            <span className="homy-icon-chip homy-chip-orange size-8 [&_svg]:size-4" aria-hidden><Plus /></span>
-            Proponer material al cliente
-          </h2>
-          <p className="text-sm text-slate-500 mb-4">Elegí del catálogo estándar; si un proveedor lo tiene en stock, te autocompletamos el mejor precio.</p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Material (catálogo estándar)</span>
-              <select value={elementId} onChange={(e) => setElementId(e.target.value)}
-                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm cursor-pointer">
-                <option value="">Elegí un material…</option>
-                {catalog.map((c) => (
-                  <optgroup key={c.slug} label={c.name}>
-                    {c.elements.map((el) => <option key={el.id} value={el.id}>{el.name}</option>)}
-                  </optgroup>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                Proveedor {loadingStock && <RefreshCcw className="inline size-3 animate-spin text-[#00C4FF]" aria-hidden />}
-              </span>
-              <select value={providerId} onChange={(e) => {
-                setProviderId(e.target.value)
-                const stock = stockOptions.find((s) => s.providerId === e.target.value)
-                if (stock) setUnitPrice(String(stock.price))
-              }} disabled={!elementId || stockOptions.length === 0}
-                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm cursor-pointer disabled:text-slate-400">
-                <option value="">Sin proveedor (compro por mi cuenta)</option>
-                {stockOptions.map((s) => (
-                  <option key={s.stockId} value={s.providerId}>
-                    {s.providerName} — {formatARS(s.price)}/{selectedElement?.unit || 'u'} (stock {s.quantity})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Cantidad {selectedElement ? `(${selectedElement.unit})` : ''}</span>
-              <input type="number" min="0" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)}
-                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm tabular-nums" />
-            </label>
-            <label className="block">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Precio unitario (ARS)</span>
-              <input type="number" min="0" step="any" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)}
-                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm tabular-nums" />
-            </label>
-            <label className="block sm:col-span-2">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Nota para el cliente (opcional)</span>
-              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej: marca recomendada, alternativa más duradera…"
-                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm" />
-            </label>
-          </div>
-          <div className="flex items-center justify-between mt-4 flex-wrap gap-2">
-            <p className="text-sm font-bold text-[#0A2540] tabular-nums">
-              Subtotal: {formatARS((parseFloat(quantity) || 0) * (parseFloat(unitPrice) || 0))}
-            </p>
-            <button disabled={busy} onClick={proposeMaterial} className="homy-btn-primary px-5 py-2.5 text-sm disabled:opacity-50">
-              Proponer al cliente
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* propuestos (esperando cliente) */}
-      {proposed.length > 0 && (
-        <div className="rounded-3xl border-2 border-amber-200/80 bg-amber-50/60 p-5 mb-5">
-          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-3">
-            <span className="homy-icon-chip homy-chip-gold size-8 [&_svg]:size-4" aria-hidden><ClipboardPen /></span>
-            Esperando aprobación del cliente ({proposed.length})
-          </h2>
-          <div className="space-y-2">
-            {proposed.map((m) => (
-              <div key={m.id} className="rounded-2xl homy-glass p-4 flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <p className="font-bold text-[#0A2540]">{m.name}</p>
-                  <p className="text-sm text-slate-500 tabular-nums">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}{m.providerName ? ` · ${m.providerName}` : ' · sin proveedor'}</p>
-                  {m.note && <p className="text-xs text-slate-400 mt-1">{m.note}</p>}
-                </div>
-                <div className="text-right">
-                  <p className="text-lg font-extrabold text-[#0A2540] tabular-nums">{formatARS(m.subtotal)}</p>
-                  <StatusBadge status={m.status} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* rechazados → sugerir alternativa */}
-      {rejected.length > 0 && (
-        <div className="homy-glass rounded-2xl p-5 mb-5">
-          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-3">
-            <span className="homy-icon-chip homy-chip-orange size-8 [&_svg]:size-4" aria-hidden><CircleX /></span>
-            Rechazados por el cliente ({rejected.length})
-          </h2>
-          <div className="space-y-3">
-            {rejected.map((m) => (
-              <div key={m.id} className="rounded-2xl border border-red-100 bg-red-50/50 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-2">
+          <p className="text-xs text-slate-400 mb-3">La factura incluye los materiales aprobados + mano de obra. El cliente la paga con Mercado Pago desde su panel.</p>
+          {data.invoices.length === 0 ? (
+            <div className="homy-glass-soft rounded-xl p-4 flex items-center gap-2 text-sm text-slate-500">
+              <Package className="size-4 shrink-0 text-slate-400" aria-hidden />
+              Todavía no emitiste facturas para este proyecto.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {data.invoices.map((inv) => (
+                <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl homy-glass-soft p-3.5">
                   <div>
-                    <p className="font-bold text-[#0A2540]">{m.name}</p>
-                    <p className="text-sm text-slate-500 tabular-nums">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}</p>
+                    <p className="font-bold text-[#0A2540] font-mono text-sm">{inv.number}</p>
+                    <p className="text-xs text-slate-400">{formatDate(inv.issuedAt)}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <StatusBadge status={m.status} />
-                    {altFor !== m.id && (
-                      <button onClick={() => { setAltFor(m.id); setAltName(m.name); setAltQty(String(m.quantity)); setAltPrice('') }}
-                        className="rounded-full border-2 border-[#1D63B8] text-[#1D63B8] hover:bg-[#1D63B8] hover:text-white text-sm font-bold px-4 py-2 transition">
-                        Sugerir alternativa más barata
-                      </button>
-                    )}
+                  <div className="flex items-center gap-3">
+                    <p className="font-extrabold tabular-nums">{formatARS(inv.total)}</p>
+                    <StatusBadge status={inv.status} />
                   </div>
                 </div>
-                {altFor === m.id && (
-                  <div className="mt-3 rounded-2xl homy-glass p-4 grid gap-3 sm:grid-cols-3">
-                    <label className="block sm:col-span-3">
-                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Alternativa</span>
-                      <input value={altName} onChange={(e) => setAltName(e.target.value)} placeholder="Nombre del material alternativo"
-                        className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm" />
-                    </label>
-                    <label className="block">
-                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Cantidad ({m.unit})</span>
-                      <input type="number" min="0" step="any" value={altQty} onChange={(e) => setAltQty(e.target.value)}
-                        className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm tabular-nums" />
-                    </label>
-                    <label className="block">
-                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Precio unitario</span>
-                      <input type="number" min="0" step="any" value={altPrice} onChange={(e) => setAltPrice(e.target.value)} placeholder={`antes ${m.unitPrice}`}
-                        className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm tabular-nums" />
-                    </label>
-                    <div className="flex items-end gap-2">
-                      <button disabled={busy} onClick={() => suggestAlternative(m)} className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-4 py-2.5 transition disabled:opacity-50">
-                        Enviar alternativa
-                      </button>
-                      <button onClick={() => setAltFor(null)} className="homy-glass-soft rounded-full text-slate-500 text-sm font-bold px-4 py-2.5 hover:text-red-500 transition">
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* aprobados / reemplazados */}
-      {others.length > 0 && (
-        <div className="homy-glass rounded-2xl p-5 mb-5">
-          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-3">
-            <span className="homy-icon-chip homy-chip-blue size-8 [&_svg]:size-4" aria-hidden><History /></span>
-            Historial de materiales
-          </h2>
-          <div className="divide-y divide-[#0A2540]/6">
-            {others.map((m) => (
-              <div key={m.id} className="py-2.5 flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[#0A2540] line-clamp-1">{m.name}</p>
-                  <p className="text-xs text-slate-400 tabular-nums">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}{m.providerName ? ` · ${m.providerName}` : ''}</p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <StatusBadge status={m.status} />
-                  <p className="text-sm font-bold tabular-nums">{formatARS(m.subtotal)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* cuentas de retiro vinculadas */}
-      <div className="homy-glass rounded-2xl p-5 mb-5">
-        <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-1">
-          <span className="homy-icon-chip homy-chip-blue size-8 [&_svg]:size-4" aria-hidden><Truck /></span>
-          Cuentas de retiro vinculadas
-        </h2>
-        <p className="text-sm text-slate-500 mb-3">Con estas cuentas podés retirar materiales en los proveedores y se facturan a este proyecto.</p>
-        {data.links.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            Todavía no tenés cuentas de retiro activas con los proveedores de este proyecto.{' '}
-            <Link to="/panel/profesional/vinculaciones" className="text-[#1D63B8] font-bold hover:underline">Vinculame acá</Link>.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {data.links.map((l) => (
-              <div key={l.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl homy-glass-soft p-3.5">
-                <div>
-                  <p className="font-bold text-[#0A2540]">{l.accountLabel}</p>
-                  <p className="text-xs text-slate-400">Proveedor: {l.provider.businessName}{l.provider.city ? ` · ${l.provider.city}` : ''}</p>
-                </div>
-                <StatusBadge status={l.active ? 'activo' : 'cerrado'} label={l.active ? 'activa' : 'inactiva'} />
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* facturación */}
-      <div className="homy-glass rounded-2xl p-5 mb-5">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight">
-            <span className="homy-icon-chip homy-chip-navy size-8 [&_svg]:size-4" aria-hidden><Receipt /></span>
-            Facturas ({data.invoices.length})
-          </h2>
-          {p.status !== 'finalizado' && (
-            <button disabled={busy} onClick={issueInvoice} className="homy-btn-dark px-4 py-2.5 text-sm disabled:opacity-50">
-              Emitir factura
-            </button>
+              ))}
+            </div>
           )}
         </div>
-        <p className="text-xs text-slate-400 mb-3">La factura incluye los materiales aprobados + mano de obra. El cliente la paga con Mercado Pago desde su panel.</p>
-        {data.invoices.length === 0 ? (
-          <div className="homy-glass-soft rounded-xl p-4 flex items-center gap-2 text-sm text-slate-500">
-            <Package className="size-4 shrink-0 text-slate-400" aria-hidden />
-            Todavía no emitiste facturas para este proyecto.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {data.invoices.map((inv) => (
-              <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl homy-glass-soft p-3.5">
-                <div>
-                  <p className="font-bold text-[#0A2540]">{inv.number}</p>
-                  <p className="text-xs text-slate-400">{formatDate(inv.issuedAt)}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <p className="font-extrabold tabular-nums">{formatARS(inv.total)}</p>
-                  <StatusBadge status={inv.status} />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   )
@@ -482,9 +511,21 @@ export default function ProProjectDetail({ id }: { id: string }) {
 
 function MiniStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="rounded-xl homy-glass-soft px-4 py-3">
-      <p className="text-xs text-slate-400 font-bold uppercase tracking-wide">{label}</p>
+    <div className="rounded-2xl homy-glass-soft px-4 py-3">
+      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.12em]">{label}</p>
       <p className={`text-lg font-extrabold tabular-nums ${accent ? 'text-[#FF5A1F]' : 'text-[#0A2540]'}`}>{value}</p>
+    </div>
+  )
+}
+
+/* Estado vacío diseñado: icono flotante + copy + acción */
+function Empty({ icon, title, hint, action }: { icon: React.ReactNode; title: string; hint: string; action?: React.ReactNode }) {
+  return (
+    <div className="homy-empty homy-glass-soft border border-dashed border-[#0A2540]/12">
+      <span className="homy-empty-icon homy-chip-blue" aria-hidden>{icon}</span>
+      <h3 className="font-bold text-[#0A2540] text-lg tracking-tight">{title}</h3>
+      <p className="text-sm text-slate-500 mt-1.5 max-w-md leading-relaxed">{hint}</p>
+      {action && <div className="mt-5">{action}</div>}
     </div>
   )
 }

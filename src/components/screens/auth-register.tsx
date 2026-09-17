@@ -7,8 +7,8 @@ import { useSession, useLocation, syncLocationToServer } from '@/lib/store'
 import { AuthShell } from '@/components/app/auth-shell'
 import { toast } from 'sonner'
 import {
-  BadgeCheck, Building2, Check, ChevronLeft, CircleCheck, HardHat,
-  House, MapPin, Store, Upload, UserRound,
+  ArrowRight, BadgeCheck, Building2, Check, ChevronLeft, CircleCheck, HardHat,
+  House, Loader2, MapPin, ShieldCheck, Sparkles, Store, Upload, UserRound,
 } from 'lucide-react'
 
 type Role = 'cliente' | 'profesional' | 'proveedor'
@@ -38,39 +38,53 @@ const ROLE_OPTIONS: { r: Role; icon: typeof House; title: string; desc: string; 
 
 const STEP_LABELS = ['Perfil', 'Tus datos', 'Verificación']
 
+// Stepper premium: pill con check para pasos completos, activo con gradiente,
+// conector que se enciende a medida que avanza el wizard.
 function StepDots({ step }: { step: 1 | 2 | 3 }) {
   return (
-    <ol className="mb-7 flex items-center justify-center gap-0" aria-label="Progreso del registro">
-      {STEP_LABELS.map((label, i) => {
-        const n = (i + 1) as 1 | 2 | 3
-        const done = step > n
-        const active = step === n
-        return (
-          <li key={label} className="flex items-center">
-            <div className="flex flex-col items-center gap-1.5">
+    <nav aria-label="Progreso del registro" className="mb-7">
+      <ol className="flex items-center">
+        {STEP_LABELS.map((label, i) => {
+          const n = (i + 1) as 1 | 2 | 3
+          const done = step > n
+          const active = step === n
+          return (
+            <li key={label} className={`flex items-center ${n < STEP_LABELS.length ? 'flex-1' : ''}`}>
               <span
-                className={`grid size-8 place-items-center rounded-full border text-[13px] font-bold transition-all duration-300 ${
-                  done
-                    ? 'border-transparent bg-gradient-to-br from-[#1D63B8] to-[#00C4FF] text-white'
-                    : active
-                      ? 'border-[#1D63B8] bg-white text-[#1D63B8] shadow-[0_0_0_4px_rgba(29,99,184,0.12)]'
-                      : 'border-slate-200 bg-white/70 text-slate-400'
-                }`}
                 aria-current={active ? 'step' : undefined}
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full py-1.5 pl-1.5 pr-2.5 text-[12.5px] font-extrabold transition-all duration-300 sm:gap-2 sm:pl-2 sm:pr-4 ${
+                  done
+                    ? 'homy-glass-soft text-[#1D63B8]'
+                    : active
+                      ? 'bg-gradient-to-r from-[#1D63B8] to-[#2b8fe0] text-white shadow-[0_12px_26px_-12px_rgba(29,99,184,0.75)]'
+                      : 'homy-glass-soft text-slate-400'
+                }`}
               >
-                {done ? <Check className="size-4" aria-hidden /> : n}
+                <span
+                  className={`grid size-6 place-items-center rounded-full text-[11px] ${
+                    done ? 'bg-[#1D63B8]/12 text-[#1D63B8]' : active ? 'bg-white/25 text-white' : 'bg-navy/8 text-slate-400'
+                  }`}
+                >
+                  {done ? <Check className="size-3.5" aria-hidden /> : n}
+                </span>
+                <span className="hidden uppercase tracking-wide sm:inline">{label}</span>
               </span>
-              <span className={`text-[11px] font-bold uppercase tracking-wide ${active ? 'text-[#1D63B8]' : 'text-slate-400'}`}>
-                {label}
-              </span>
-            </div>
-            {n < 3 && (
-              <span aria-hidden className={`mx-2.5 mb-5 h-0.5 w-10 rounded-full sm:w-14 ${step > n ? 'bg-gradient-to-r from-[#1D63B8] to-[#00C4FF]' : 'bg-slate-200'}`} />
-            )}
-          </li>
-        )
-      })}
-    </ol>
+              {n < 3 && (
+                <span
+                  aria-hidden
+                  className={`mx-2 h-0.5 flex-1 rounded-full transition-colors duration-500 sm:mx-3 ${
+                    step > n ? 'bg-gradient-to-r from-[#1D63B8] to-[#00C4FF]' : 'bg-navy/10'
+                  }`}
+                />
+              )}
+            </li>
+          )
+        })}
+      </ol>
+      <p className="mt-2.5 text-center text-[11px] font-extrabold uppercase tracking-[0.2em] text-slate-400 sm:hidden">
+        Paso {step} de 3 · {STEP_LABELS[step - 1]}
+      </p>
+    </nav>
   )
 }
 
@@ -116,6 +130,8 @@ export default function RegisterScreen() {
   const [businessName, setBusinessName] = useState('')
   const [cuit, setCuit] = useState('')
   const [description, setDescription] = useState('')
+
+  const roleOpt = role ? ROLE_OPTIONS.find((o) => o.r === role) : null
 
   const roles = useMemo(() => {
     const r = ['cliente']
@@ -214,45 +230,77 @@ export default function RegisterScreen() {
       <StepDots step={step} />
 
       {step === 1 && (
-        <div className="homy-glass-strong rounded-[28px] p-7 sm:p-8">
-          <h1 className="text-center text-[1.7rem] font-extrabold tracking-tight text-[#0A2540]">¿Cómo vas a usar HomIA?</h1>
-          <p className="mt-1 text-center text-sm text-slate-500">Elegí tu perfil principal (después podés sumar otros).</p>
+        <section className="homy-glass-strong homy-stagger rounded-[28px] p-6 sm:p-8">
+          <header className="text-center">
+            <span className="homy-eyebrow">Registro · Paso 1 de 3</span>
+            <h1 className="mt-2 text-[1.9rem] font-extrabold leading-[1.15] tracking-tight text-navy">¿Cómo vas a usar HomIA?</h1>
+            <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate-500">Elegí tu perfil principal (después podés sumar otros).</p>
+          </header>
           <div className="mt-7 grid gap-3.5">
-            {ROLE_OPTIONS.map((opt) => (
-              <button
-                key={opt.r}
-                onClick={() => { setRole(opt.r); setStep(2) }}
-                aria-label={`Elegir perfil: ${opt.title}`}
-                className={`group relative flex items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all duration-300 hover:-translate-y-0.5 ${
-                  role === opt.r
-                    ? 'border-[#1D63B8] bg-[#1D63B8]/5 shadow-[0_14px_34px_-16px_rgba(29,99,184,0.45)]'
-                    : 'border-slate-200/90 hover:border-[#1D63B8]/50 hover:shadow-[0_12px_30px_-18px_rgba(10,37,64,0.35)]'
-                }`}
-              >
-                <span className={`homy-icon-chip size-12 shrink-0 ${opt.tone} transition-transform duration-300 group-hover:scale-105`}>
-                  <opt.icon className="size-6" aria-hidden />
-                </span>
-                <span className="min-w-0">
-                  <span className="block font-bold text-[#0A2540]">{opt.title}</span>
-                  <span className="mt-0.5 block text-[13.5px] leading-snug text-slate-500">{opt.desc}</span>
-                </span>
-                <ChevronLeft className="ml-auto size-5 shrink-0 rotate-180 text-slate-300 transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-[#1D63B8]" aria-hidden />
-              </button>
-            ))}
+            {ROLE_OPTIONS.map((opt) => {
+              const selected = role === opt.r
+              return (
+                <button
+                  key={opt.r}
+                  onClick={() => { setRole(opt.r); setStep(2) }}
+                  aria-label={`Elegir perfil: ${opt.title}`}
+                  className={`group relative flex items-center gap-4 rounded-2xl border-2 bg-white/60 p-4 text-left transition-all duration-300 hover:-translate-y-0.5 ${
+                    selected
+                      ? 'border-[#1D63B8] shadow-[0_16px_36px_-18px_rgba(29,99,184,0.55)]'
+                      : 'border-navy/10 hover:border-[#1D63B8]/50 hover:shadow-[0_12px_30px_-18px_rgba(10,37,64,0.35)]'
+                  }`}
+                >
+                  {selected && (
+                    <span aria-hidden className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-r from-[#1D63B8]/6 to-[#00C4FF]/5" />
+                  )}
+                  <span className={`homy-icon-chip size-12 shrink-0 ${opt.tone} transition-transform duration-300 group-hover:scale-105`}>
+                    <opt.icon className="size-6" aria-hidden />
+                  </span>
+                  <span className="relative min-w-0">
+                    <span className="block font-extrabold tracking-tight text-navy">{opt.title}</span>
+                    <span className="mt-0.5 block text-[13.5px] leading-snug text-slate-500">{opt.desc}</span>
+                  </span>
+                  <span className="relative ml-auto grid size-6 shrink-0 place-items-center">
+                    {selected ? (
+                      <span className="grid size-6 place-items-center rounded-full bg-gradient-to-br from-[#1D63B8] to-[#2b8fe0] text-white shadow-[0_6px_14px_-6px_rgba(29,99,184,0.8)]">
+                        <Check className="size-3.5" aria-hidden />
+                      </span>
+                    ) : (
+                      <ArrowRight className="size-5 text-slate-300 transition-all duration-300 group-hover:translate-x-1 group-hover:text-[#1D63B8]" aria-hidden />
+                    )}
+                  </span>
+                </button>
+              )
+            })}
           </div>
           <p className="mt-6 text-center text-xs leading-relaxed text-slate-400">
             Podés combinar perfiles con la misma cuenta (ej.: profesional que además contrata otros profesionales).
           </p>
-        </div>
+        </section>
       )}
 
       {step === 2 && role && (
-        <div className="homy-glass-strong rounded-[28px] p-7 sm:p-8">
-          <button onClick={() => setStep(1)} className="mb-4 flex items-center gap-1 text-sm font-semibold text-slate-500 transition-colors hover:text-[#1D63B8]">
-            <ChevronLeft className="size-4" /> Cambiar perfil
+        <section className="homy-glass-strong homy-stagger rounded-[28px] p-6 sm:p-8">
+          <button
+            onClick={() => setStep(1)}
+            className="-ml-2 mb-4 inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-bold text-slate-500 transition-colors duration-300 hover:bg-navy/5 hover:text-[#1D63B8]"
+          >
+            <ChevronLeft className="size-4" aria-hidden /> Cambiar perfil
           </button>
-          <h1 className="text-[1.7rem] font-extrabold tracking-tight text-[#0A2540]">Tus datos</h1>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+            <div>
+              <span className="homy-eyebrow">Registro · Paso 2 de 3</span>
+              <h1 className="mt-1.5 text-[1.9rem] font-extrabold leading-[1.15] tracking-tight text-navy">Tus datos</h1>
+            </div>
+            {roleOpt && (
+              <span className="homy-pill">
+                <roleOpt.icon className="size-3.5" aria-hidden />
+                {roleOpt.title}
+              </span>
+            )}
+          </header>
+
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <Field label="Nombre y apellido (o negocio)" required value={displayName} onChange={setDisplayName} placeholder="Juan Pérez" />
             <Field label="Email" required type="email" value={email} onChange={setEmail} placeholder="tu@email.com" />
             <Field label="Contraseña" required type="password" value={password} onChange={setPassword} placeholder="Mínimo 6 caracteres" />
@@ -261,27 +309,39 @@ export default function RegisterScreen() {
             <Field label="Dirección" value={address} onChange={setAddress} placeholder="Calle y número" />
             <Field label="Ciudad / localidad" value={city} onChange={setCity} placeholder="Ej.: CABA" />
             <div>
-              <label className="text-sm font-semibold text-[#0A2540]">¿Cómo nos encontraste?</label>
-              <select value={howFoundUs} onChange={(e) => setHowFoundUs(e.target.value)} className="homy-glass-input mt-1.5 w-full rounded-xl px-4 py-3 text-[15px] outline-none">
-                <option value="">Elegí una opción…</option>
-                {HOW_FOUND.map((h) => <option key={h.value} value={h.value}>{h.label}</option>)}
-              </select>
+              <label className="block text-sm font-semibold text-navy">
+                ¿Cómo nos encontraste?
+                <select value={howFoundUs} onChange={(e) => setHowFoundUs(e.target.value)} className="homy-glass-input mt-1.5 w-full rounded-xl px-4 py-2.5 text-[15px] outline-none">
+                  <option value="">Elegí una opción…</option>
+                  {HOW_FOUND.map((h) => <option key={h.value} value={h.value}>{h.label}</option>)}
+                </select>
+              </label>
             </div>
           </div>
 
-          <div className="mt-5 rounded-2xl border border-[#00C4FF]/30 bg-[#00C4FF]/5 p-4">
-            <p className="flex items-center gap-2 text-sm font-bold text-[#0A2540]"><MapPin className="size-4 text-[#0092C4]" /> Ubicación</p>
-            <p className="mt-1 text-xs leading-relaxed text-slate-500">Con tu ubicación vemos pines cercanos en el mapa y filtramos por distancia. Podés activarla después también.</p>
-            {!location.shared ? (
-              <button type="button" onClick={() => location.request()} className="mt-2.5 text-sm font-bold text-[#1D63B8] hover:underline">
-                {location.requesting ? 'Pidiendo permiso…' : 'Compartir mi ubicación'}
-              </button>
-            ) : (
-              <p className="mt-1.5 flex items-center gap-1.5 text-sm font-semibold text-emerald-600">
-                <CircleCheck className="size-4" aria-hidden /> Ubicación lista
-              </p>
-            )}
-            {location.error && <p className="mt-1 text-xs text-red-500">{location.error}</p>}
+          <div className="homy-glass-soft mt-5 rounded-2xl p-4">
+            <div className="flex items-start gap-3">
+              <span className="homy-icon-chip homy-chip-ai size-10 shrink-0 !rounded-xl">
+                <MapPin className="size-5" aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-extrabold text-navy">Ubicación</p>
+                <p className="mt-0.5 text-xs leading-relaxed text-slate-500">Con tu ubicación vemos pines cercanos en el mapa y filtramos por distancia. Podés activarla después también.</p>
+                {!location.shared ? (
+                  <button
+                    type="button" onClick={() => location.request()}
+                    className="mt-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg text-sm font-bold text-[#1D63B8] transition-colors duration-300 hover:text-[#2b8fe0] hover:underline underline-offset-2"
+                  >
+                    {location.requesting ? (<><Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden /> Pidiendo permiso…</>) : 'Compartir mi ubicación'}
+                  </button>
+                ) : (
+                  <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-[#0e9f6e]">
+                    <CircleCheck className="size-4" aria-hidden /> Ubicación lista
+                  </p>
+                )}
+                {location.error && <p className="mt-1 text-xs font-semibold text-red-500">{location.error}</p>}
+              </div>
+            </div>
           </div>
 
           <button
@@ -290,56 +350,94 @@ export default function RegisterScreen() {
             className="homy-btn-dark mt-6 w-full py-3.5 text-[15px]"
           >
             Continuar
+            <ArrowRight className="size-4.5" aria-hidden />
           </button>
-        </div>
+        </section>
       )}
 
       {step === 3 && role && (
-        <div className="homy-glass-strong rounded-[28px] p-7 sm:p-8">
-          <button onClick={() => setStep(2)} className="mb-4 flex items-center gap-1 text-sm font-semibold text-slate-500 transition-colors hover:text-[#1D63B8]">
-            <ChevronLeft className="size-4" /> Volver
+        <section className="homy-glass-strong homy-stagger rounded-[28px] p-6 sm:p-8">
+          <button
+            onClick={() => setStep(2)}
+            className="-ml-2 mb-4 inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-bold text-slate-500 transition-colors duration-300 hover:bg-navy/5 hover:text-[#1D63B8]"
+          >
+            <ChevronLeft className="size-4" aria-hidden /> Volver
           </button>
-          <h1 className="text-[1.7rem] font-extrabold tracking-tight text-[#0A2540]">
-            {role === 'cliente' && 'Últimos detalles'}
-            {role === 'profesional' && 'Tu perfil profesional'}
-            {role === 'proveedor' && 'Tu negocio'}
-          </h1>
+          <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+            <div>
+              <span className="homy-eyebrow">Registro · Paso 3 de 3</span>
+              <h1 className="mt-1.5 text-[1.9rem] font-extrabold leading-[1.15] tracking-tight text-navy">
+                {role === 'cliente' && 'Últimos detalles'}
+                {role === 'profesional' && 'Tu perfil profesional'}
+                {role === 'proveedor' && 'Tu negocio'}
+              </h1>
+            </div>
+            {roleOpt && (
+              <span className="homy-pill">
+                <roleOpt.icon className="size-3.5" aria-hidden />
+                {roleOpt.title}
+              </span>
+            )}
+          </header>
 
           {/* DNI (todos los roles) */}
-          <div className="mt-5">
-            <p className="flex items-center gap-2 text-sm font-semibold text-[#0A2540]">
-              <BadgeCheck className="size-4 text-[#1D63B8]" aria-hidden /> Documento de identidad (DNI)
-            </p>
-            <p className="mt-0.5 text-xs text-slate-500">Frente y reverso — queda privado, solo lo ve HomIA para verificar tu cuenta.</p>
-            <div className="mt-2.5 grid grid-cols-2 gap-3">
+          <section className="mt-6">
+            <div className="flex items-start gap-3">
+              <span className="homy-icon-chip homy-chip-blue size-10 shrink-0 !rounded-xl">
+                <BadgeCheck className="size-5" aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-extrabold text-navy">Documento de identidad (DNI)</p>
+                <p className="mt-0.5 flex items-start gap-1 text-xs leading-relaxed text-slate-500">
+                  <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-[#1D63B8]" aria-hidden />
+                  Frente y reverso — queda privado, solo lo ve HomIA para verificar tu cuenta.
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3">
               <UploadBox id="dni-front" label="Frente" uploaded={dniFront} />
               <UploadBox id="dni-back" label="Reverso" uploaded={dniBack} />
             </div>
-          </div>
+          </section>
 
           {role === 'profesional' && (
-            <div className="mt-5 grid gap-4">
-              <div className="grid grid-cols-2 gap-3">
+            <div className="mt-6 grid gap-4">
+              <div className="homy-glass-soft grid grid-cols-2 gap-1.5 rounded-2xl p-1.5">
                 {([
                   { t: 'persona' as const, icon: UserRound, label: 'Persona única' },
                   { t: 'empresa' as const, icon: Building2, label: 'Empresa' },
                 ]).map((o) => (
-                  <button key={o.t} type="button" onClick={() => setPersonType(o.t)}
-                    className={`flex items-center justify-center gap-2 rounded-xl border-2 py-3 font-bold transition ${personType === o.t ? 'border-[#1D63B8] bg-[#1D63B8]/5 text-[#0A2540]' : 'border-slate-200 text-slate-500 hover:border-[#1D63B8]/40'}`}>
+                  <button
+                    key={o.t} type="button" onClick={() => setPersonType(o.t)} aria-pressed={personType === o.t}
+                    className={`flex min-h-11 items-center justify-center gap-2 rounded-xl text-sm font-bold transition-all duration-300 ${
+                      personType === o.t
+                        ? 'bg-white text-navy shadow-[0_6px_16px_-8px_rgba(10,37,64,0.4)]'
+                        : 'text-slate-500 hover:text-navy'
+                    }`}
+                  >
                     <o.icon className="size-4.5" aria-hidden /> {o.label}
                   </button>
                 ))}
               </div>
               <div>
-                <label className="text-sm font-semibold text-[#0A2540]">Profesiones / rubros *</label>
+                <p className="text-sm font-semibold text-navy">Profesiones / rubros <span className="text-action" aria-hidden>*</span></p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {CATEGORY_OPTIONS.map((c) => (
-                    <button key={c.slug} type="button"
-                      onClick={() => setProfessions((p) => p.includes(c.slug) ? p.filter((x) => x !== c.slug) : [...p, c.slug])}
-                      className={`rounded-full border px-3 py-1.5 text-[13px] font-semibold transition-all active:scale-[0.97] ${professions.includes(c.slug) ? 'border-transparent bg-gradient-to-r from-[#1D63B8] to-[#2b8fe0] text-white shadow-[0_6px_16px_-8px_rgba(29,99,184,0.6)]' : 'border-slate-300 text-slate-600 hover:border-[#1D63B8]/60'}`}>
-                      {professions.includes(c.slug) && <Check className="mr-1 inline size-3" aria-hidden />}{c.name}
-                    </button>
-                  ))}
+                  {CATEGORY_OPTIONS.map((c) => {
+                    const on = professions.includes(c.slug)
+                    return (
+                      <button
+                        key={c.slug} type="button" aria-pressed={on}
+                        onClick={() => setProfessions((p) => p.includes(c.slug) ? p.filter((x) => x !== c.slug) : [...p, c.slug])}
+                        className={`inline-flex min-h-11 items-center rounded-full border px-3.5 text-[13px] font-bold transition-all duration-300 active:scale-[0.97] ${
+                          on
+                            ? 'border-transparent bg-gradient-to-r from-[#1D63B8] to-[#2b8fe0] text-white shadow-[0_8px_18px_-8px_rgba(29,99,184,0.7)]'
+                            : 'border-navy/15 text-slate-600 hover:border-[#1D63B8]/60 hover:text-[#1D63B8]'
+                        }`}
+                      >
+                        {on && <Check className="mr-1.5 size-3.5" aria-hidden />}{c.name}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
               <Field label="Habilidades (separadas por coma)" value={skills} onChange={setSkills} placeholder="instalación de termos, destapaciones, plomería general" />
@@ -348,20 +446,26 @@ export default function RegisterScreen() {
                 <Field label={personType === 'empresa' ? 'CUIT empresa' : 'DNI o CUIL'} value={personType === 'empresa' ? companyCuit : dniCuil} onChange={personType === 'empresa' ? setCompanyCuit : setDniCuil} />
               </div>
               {personType === 'empresa' && (
-                <div className="grid gap-4 rounded-2xl homy-glass-soft p-4 sm:grid-cols-2">
+                <div className="homy-glass-soft grid gap-4 rounded-2xl p-4 sm:grid-cols-2">
                   <Field label="Razón social" value={companyName} onChange={setCompanyName} />
                   <Field label="Sitio web / Instagram" value={companyWebsite} onChange={setCompanyWebsite} />
                   <Field label="Cantidad de empleados" type="number" value={employeesCount} onChange={setEmployeesCount} />
                 </div>
               )}
               <div>
-                <label className="text-sm font-semibold text-[#0A2540]">Sobre vos / tu trabajo</label>
-                <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} placeholder="Contá tu experiencia, trabajos realizados, certificaciones…"
-                  className="homy-glass-input mt-1.5 w-full resize-none rounded-xl px-4 py-3 text-[15px] outline-none" />
+                <label className="block text-sm font-semibold text-navy">
+                  Sobre vos / tu trabajo
+                  <textarea
+                    value={bio} onChange={(e) => setBio(e.target.value)} rows={3}
+                    placeholder="Contá tu experiencia, trabajos realizados, certificaciones…"
+                    className="homy-glass-input mt-1.5 w-full resize-none rounded-xl px-4 py-2.5 text-[15px] outline-none"
+                  />
+                </label>
               </div>
               <div>
-                <label className="text-sm font-semibold text-[#0A2540]">Radio de servicio: {serviceRadiusKm} km</label>
+                <label htmlFor="service-radius" className="text-sm font-semibold text-navy">Radio de servicio: {serviceRadiusKm} km</label>
                 <input
+                  id="service-radius"
                   type="range" min="1" max="100" value={serviceRadiusKm}
                   onChange={(e) => setServiceRadiusKm(e.target.value)}
                   className="homy-range mt-2.5 w-full"
@@ -369,41 +473,58 @@ export default function RegisterScreen() {
                   aria-label="Radio de servicio en kilómetros"
                 />
               </div>
-              <label className="flex items-start gap-2.5 rounded-xl border border-[#1D63B8]/20 bg-[#1D63B8]/5 p-3.5 text-sm text-slate-600">
-                <input type="checkbox" checked={alsoPro} onChange={(e) => setAlsoPro(e.target.checked)} className="mt-0.5 accent-[#1D63B8]" />
+              <label className="homy-glass-soft flex cursor-pointer items-start gap-3 rounded-2xl p-4 text-sm leading-relaxed text-slate-600">
+                <input type="checkbox" checked={alsoPro} onChange={(e) => setAlsoPro(e.target.checked)} className="mt-0.5 size-4.5 shrink-0 accent-[#1D63B8]" />
                 <span>También quiero <b>contratar otros profesionales</b> (subcontratar, equipos, cuentas de retiro compartidas).</span>
               </label>
             </div>
           )}
 
           {role === 'proveedor' && (
-            <div className="mt-5 grid gap-4">
+            <div className="mt-6 grid gap-4">
               <Field label="Nombre del local o negocio *" value={businessName} onChange={setBusinessName} placeholder="Ferretería El Tornillo" />
               <Field label="CUIT" value={cuit} onChange={setCuit} placeholder="30-12345678-9" />
               <div>
-                <label className="text-sm font-semibold text-[#0A2540]">Sobre el negocio</label>
-                <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Qué vendés, horarios, si hacés entregas…"
-                  className="homy-glass-input mt-1.5 w-full resize-none rounded-xl px-4 py-3 text-[15px] outline-none" />
+                <label className="block text-sm font-semibold text-navy">
+                  Sobre el negocio
+                  <textarea
+                    value={description} onChange={(e) => setDescription(e.target.value)} rows={3}
+                    placeholder="Qué vendés, horarios, si hacés entregas…"
+                    className="homy-glass-input mt-1.5 w-full resize-none rounded-xl px-4 py-2.5 text-[15px] outline-none"
+                  />
+                </label>
               </div>
             </div>
           )}
 
           {role === 'cliente' && (
-            <div className="mt-5 rounded-2xl border border-[#FF5A1F]/20 bg-[#FF5A1F]/5 p-4 text-sm leading-relaxed text-slate-600">
-              ¡Listo! Con tu cuenta vas a poder buscar profesionales en el mapa, publicar trabajos, recibir presupuestos, aprobar materiales y pagar con Mercado Pago.
+            <div className="mt-6 flex items-start gap-3 rounded-2xl border border-action/25 bg-gradient-to-br from-action/8 to-action/3 p-4">
+              <span className="homy-icon-chip homy-chip-orange size-10 shrink-0 !rounded-xl">
+                <Sparkles className="size-5" aria-hidden />
+              </span>
+              <p className="text-sm leading-relaxed text-slate-600">
+                ¡Listo! Con tu cuenta vas a poder buscar profesionales en el mapa, publicar trabajos, recibir presupuestos, aprobar materiales y pagar con Mercado Pago.
+              </p>
             </div>
           )}
 
-          <button onClick={submit} disabled={busy} className="homy-btn-primary mt-6 w-full py-3.5 text-[15px]">
-            {busy ? 'Creando tu cuenta…' : 'Crear mi cuenta'}
+          <button onClick={submit} disabled={busy} className="homy-btn-primary mt-7 w-full py-3.5 text-[15px]">
+            {busy ? (
+              <>
+                <Loader2 className="size-4.5 animate-spin motion-reduce:animate-none" aria-hidden />
+                Creando tu cuenta…
+              </>
+            ) : (
+              'Crear mi cuenta'
+            )}
           </button>
-          <p className="mt-3 text-center text-xs text-slate-400">Al crear la cuenta aceptás nuestros términos. Tus documentos quedan privados.</p>
-        </div>
+          <p className="mt-3.5 text-center text-xs leading-relaxed text-slate-400">Al crear la cuenta aceptás nuestros términos. Tus documentos quedan privados.</p>
+        </section>
       )}
 
       <p className="mt-6 text-center text-sm text-slate-500">
         ¿Ya tenés cuenta?{' '}
-        <button onClick={() => navigate('/ingresar')} className="font-bold text-[#1D63B8] hover:underline">Ingresá</button>
+        <button onClick={() => navigate('/ingresar')} className="rounded font-bold text-[#1D63B8] underline-offset-2 transition-colors duration-300 hover:text-[#2b8fe0] hover:underline">Ingresá</button>
       </p>
     </AuthShell>
   )
@@ -422,16 +543,14 @@ function Field({
   max?: string
 }) {
   return (
-    <div>
-      <label className="text-sm font-semibold text-[#0A2540]">
-        {label} {required && <span className="text-[#FF5A1F]">*</span>}
-      </label>
+    <label className="block text-sm font-semibold text-navy">
+      {label} {required && <span className="text-action" aria-hidden>*</span>}
       <input
         type={type} value={value} onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder} min={min} max={max} required={required}
-        className="homy-glass-input mt-1.5 w-full rounded-xl px-4 py-3 text-[15px] outline-none"
+        className="homy-glass-input mt-1.5 w-full rounded-xl px-4 py-2.5 text-[15px] outline-none"
       />
-    </div>
+    </label>
   )
 }
 
@@ -440,13 +559,13 @@ function UploadBox({ id, label, uploaded }: { id: string; label: string; uploade
   return (
     <label
       htmlFor={id}
-      className="group flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white/50 px-3 py-5 transition-all duration-300 hover:border-[#1D63B8] hover:bg-[#1D63B8]/5"
+      className="group flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-navy/15 bg-white/50 px-3 py-5 text-center transition-all duration-300 hover:border-[#1D63B8] hover:bg-[#1D63B8]/5"
     >
-      <span className="grid size-9 place-items-center rounded-xl homy-chip-blue transition-transform duration-300 group-hover:scale-105">
-        <Upload className="size-4.5" aria-hidden />
+      <span className={`homy-icon-chip size-9 !rounded-xl transition-transform duration-300 group-hover:scale-105 ${uploaded ? 'homy-chip-mint' : 'homy-chip-blue'}`}>
+        {uploaded ? <CircleCheck className="size-4.5" aria-hidden /> : <Upload className="size-4.5" aria-hidden />}
       </span>
-      <span className="mt-1.5 text-sm font-bold text-[#0A2540]">DNI {label}</span>
-      <span className="mt-0.5 text-xs text-slate-400">
+      <span className="mt-1.5 text-sm font-extrabold text-navy">DNI {label}</span>
+      <span className={`mt-0.5 text-xs font-semibold ${uploaded ? 'text-[#0e9f6e]' : 'text-slate-400'}`}>
         {uploaded ? 'Subido' : name ? name : 'JPG, PNG o PDF'}
       </span>
       <input

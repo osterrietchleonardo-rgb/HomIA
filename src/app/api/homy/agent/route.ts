@@ -9,7 +9,8 @@ export const runtime = 'nodejs'
 const BodySchema = z.object({
   message: z.string().min(1).max(800),
   mode: z.enum(['cliente', 'profesional', 'auto']).default('auto'),
-  sessionId: z.string().optional(),
+  // el cliente envía sessionId null en la primera búsqueda de cada sesión
+  sessionId: z.string().optional().nullable(),
   lat: z.number().optional().nullable(),
   lng: z.number().optional().nullable(),
 })
@@ -19,7 +20,8 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ ok: false, error: 'Datos inválidos' }, { status: 400 })
   }
-  const { message, mode, sessionId, lat, lng } = parsed.data
+  const { message, mode, lat, lng } = parsed.data
+  const sessionId = parsed.data.sessionId ?? undefined
   const user = await getSessionUser()
 
   try {

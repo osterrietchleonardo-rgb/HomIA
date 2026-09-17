@@ -2,11 +2,11 @@
 // Buscador de materiales + comparables de precios entre proveedores
 import { useEffect, useMemo, useState } from 'react'
 import { navigate } from '@/lib/router'
-import { PageHeader, StatusBadge, Loading, EmptyState } from '@/components/app/ui-bits'
+import { StatusBadge, Loading } from '@/components/app/ui-bits'
 import { formatARS } from '@/lib/format'
 import { formatDistance } from '@/lib/geo'
 import { useLocation } from '@/lib/store'
-import { MapPin, Compass, Trophy, ExternalLink, Package, Scale, Store } from 'lucide-react'
+import { MapPin, Compass, Trophy, ExternalLink, Package, Scale, Store, Search, TrendingDown } from 'lucide-react'
 
 const CATEGORIES = [
   { slug: 'plomeria', name: 'Plomería' },
@@ -95,34 +95,39 @@ export default function ProMaterials() {
   const cheapestStockId = bestPerElement[0]?.stockId
 
   return (
-    <div className="max-w-5xl">
-      <PageHeader
-        title="Materiales y precios"
-        subtitle="Stock en proveedores de tu zona + comparables para no pagar de más"
-        right={
-          <button onClick={() => navigate('/buscar?mode=profesional')} className="homy-btn-dark px-4 py-2.5 text-sm">
-            <Compass className="size-4" /> Ir a la búsqueda completa con mapa
-          </button>
-        }
-      />
+    <div className="homy-page">
+      {/* Encabezado */}
+      <header className="homy-page-head">
+        <div className="min-w-0">
+          <span className="homy-eyebrow">Abastecimiento inteligente</span>
+          <h1 className="homy-page-title mt-1.5">Materiales y precios</h1>
+          <p className="homy-page-sub">Stock en proveedores de tu zona + comparables para no pagar de más.</p>
+        </div>
+        <button onClick={() => navigate('/buscar?mode=profesional')} className="homy-btn-dark min-h-[44px] shrink-0 px-5 py-2.5 text-sm">
+          <Compass className="size-4" /> Búsqueda con mapa
+        </button>
+      </header>
 
       {/* Filtros */}
-      <div className="homy-glass rounded-2xl p-4 sm:p-5 mb-5">
+      <div className="homy-glass rounded-3xl p-4 sm:p-5 mb-6">
         <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-          <input
-            value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar material: caño, cemento, cable…"
-            className="homy-glass-input rounded-xl px-4 py-2.5 text-sm"
-            aria-label="Buscar materiales"
-          />
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-slate-400 pointer-events-none" aria-hidden />
+            <input
+              value={q} onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar material: caño, cemento, cable…"
+              className="homy-glass-input w-full rounded-xl pl-11 pr-4 py-2.5 text-sm"
+              aria-label="Buscar materiales"
+            />
+          </div>
           <select value={cat} onChange={(e) => setCat(e.target.value)} aria-label="Categoría"
-            className="homy-glass-input rounded-xl px-3 py-2.5 text-sm font-semibold cursor-pointer">
+            className="homy-glass-input rounded-xl px-3 py-2.5 text-sm font-semibold cursor-pointer sm:min-w-[190px]">
             <option value="">Todas las categorías</option>
             {CATEGORIES.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
           </select>
         </div>
         {!location.shared && (
-          <button onClick={() => location.request()} className="mt-4 flex items-center gap-1.5 text-xs font-bold text-[#1D63B8] hover:underline">
+          <button onClick={() => location.request()} className="mt-3.5 flex items-center gap-1.5 text-xs font-bold text-[#1D63B8] hover:underline">
             <MapPin className="size-3.5 shrink-0" aria-hidden />
             Compartir ubicación para ver distancias y ordenar por cercanía
           </button>
@@ -130,21 +135,30 @@ export default function ProMaterials() {
       </div>
 
       {/* Stock de proveedores */}
-      <section className="mb-8">
-        <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-3">
-          <span className="homy-icon-chip homy-chip-blue size-7 [&_svg]:size-3.5" aria-hidden><Package /></span>
-          Stock en proveedores
-          {materials.length > 0 && <span className="homy-glass-soft rounded-full px-2.5 py-0.5 text-xs font-bold text-slate-500">({materials.length})</span>}
-        </h2>
+      <section className="mb-9">
+        <div className="homy-section-head">
+          <h2 className="homy-section-title">
+            <span className="homy-icon-chip homy-chip-blue size-7 [&_svg]:size-3.5" aria-hidden><Package /></span>
+            Stock en proveedores
+          </h2>
+          {materials.length > 0 && (
+            <span className="homy-glass-soft rounded-full px-2.5 py-0.5 text-xs font-bold text-slate-500 tabular-nums">
+              {materials.length} resultado{materials.length === 1 ? '' : 's'}
+            </span>
+          )}
+        </div>
         {loading ? (
           <Loading text="Buscando materiales…" />
         ) : materials.length === 0 ? (
-          <EmptyState icon={<Package />} title="Sin resultados de stock"
-            hint="Probá con otro término (buscamos también por alias: 'caño' encuentra 'tubo') o cambiá la categoría." />
+          <Empty
+            icon={<Package className="size-7" />}
+            title="Sin resultados de stock"
+            hint="Probá con otro término (buscamos también por alias: 'caño' encuentra 'tubo') o cambiá la categoría."
+          />
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="homy-stagger grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {materials.map((m) => (
-              <div key={m.id} className="rounded-2xl homy-glass homy-lift homy-card-glow p-4">
+              <div key={m.id} className="homy-glass homy-lift homy-card-glow rounded-2xl p-4">
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-bold text-[#0A2540] leading-snug">{m.name}</p>
                   <StatusBadge status={m.status} />
@@ -153,16 +167,17 @@ export default function ProMaterials() {
                 <p className="mt-2 text-xl font-extrabold text-emerald-600 tabular-nums">
                   {formatARS(m.price)}<span className="text-xs font-semibold text-slate-400"> /{m.unit}</span>
                 </p>
-                <div className="flex items-center justify-between gap-2 mt-2 text-xs text-slate-400">
-                  <span className="truncate flex items-center gap-1">
+                <div className="flex items-center justify-between gap-2 mt-2.5 text-xs text-slate-400">
+                  <span className="homy-glass-soft rounded-full px-2.5 py-1 inline-flex items-center gap-1.5 font-semibold min-w-0">
                     <Store className="size-3.5 shrink-0" aria-hidden />
-                    {m.providerName}{m.providerCity ? ` · ${m.providerCity}` : ''}
+                    <span className="line-clamp-1">{m.providerName}</span>
                   </span>
                   <span className="shrink-0 tabular-nums">stock: {m.quantity}</span>
                 </div>
-                {(m.distanceKm !== undefined || !location.shared) && (
-                  <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
-                    <MapPin className="size-3.5 shrink-0" aria-hidden /> {m.distanceKm !== undefined ? formatDistance(m.distanceKm) : 'compartí ubicación para distancia'}
+                {(m.distanceKm !== undefined || m.providerCity) && (
+                  <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1">
+                    <MapPin className="size-3.5 shrink-0" aria-hidden />
+                    {m.distanceKm !== undefined ? formatDistance(m.distanceKm) : m.providerCity}
                   </p>
                 )}
               </div>
@@ -173,13 +188,14 @@ export default function ProMaterials() {
 
       {/* Comparables */}
       <section>
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight">
+        <div className="homy-section-head">
+          <h2 className="homy-section-title">
             <span className="homy-icon-chip homy-chip-gold size-7 [&_svg]:size-3.5" aria-hidden><Trophy /></span>
             Comparables: mejor precio por elemento
           </h2>
           {bestPerElement.length > 0 && (
-            <p className="text-xs text-slate-400 tabular-nums">
+            <p className="text-xs text-slate-400 tabular-nums hidden sm:flex items-center gap-1.5">
+              <TrendingDown className="size-3.5 shrink-0" aria-hidden />
               {bestPerElement.length} elemento{bestPerElement.length === 1 ? '' : 's'} · promedio general {formatARS(averagePrice)}
             </p>
           )}
@@ -187,13 +203,16 @@ export default function ProMaterials() {
         {loadingCmp ? (
           <Loading text="Comparando precios entre proveedores…" />
         ) : bestPerElement.length === 0 ? (
-          <EmptyState icon={<Scale />} title="Nada para comparar todavía"
-            hint="Cuando haya stock cargado en dos o más proveedores, acá ves el mejor precio por elemento." />
+          <Empty
+            icon={<Scale className="size-7" />}
+            title="Nada para comparar todavía"
+            hint="Cuando haya stock cargado en dos o más proveedores, acá ves el mejor precio por elemento."
+          />
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="homy-stagger grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {bestPerElement.map((c) => (
               <div key={c.stockId}
-                className={`homy-glass homy-lift rounded-2xl p-4 transition ${c.stockId === cheapestStockId ? 'outline-2 outline-offset-2 outline-emerald-500/60' : ''}`}>
+                className={`homy-glass homy-lift homy-card-glow rounded-2xl p-4 ${c.stockId === cheapestStockId ? 'outline-2 outline-offset-2 outline-emerald-500/60' : ''}`}>
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-bold text-[#0A2540] leading-snug">{c.elementName}</p>
                   {c.stockId === cheapestStockId && (
@@ -204,14 +223,14 @@ export default function ProMaterials() {
                 <p className="mt-2 text-xl font-extrabold text-emerald-600 tabular-nums">
                   {formatARS(c.price)}<span className="text-xs font-semibold text-slate-400"> /{c.unit}</span>
                 </p>
-                <div className="flex items-center justify-between gap-2 mt-2 text-xs text-slate-400">
-                  <span className="truncate flex items-center gap-1">
+                <div className="flex items-center justify-between gap-2 mt-2.5 text-xs text-slate-400">
+                  <span className="homy-glass-soft rounded-full px-2.5 py-1 inline-flex items-center gap-1.5 font-semibold min-w-0">
                     <Store className="size-3.5 shrink-0" aria-hidden />
-                    {c.providerName}{c.providerCity ? ` · ${c.providerCity}` : ''}
+                    <span className="line-clamp-1">{c.providerName}</span>
                   </span>
                   <StatusBadge status={c.status} />
                 </div>
-                <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+                <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1">
                   <MapPin className="size-3.5 shrink-0" aria-hidden />
                   {c.distanceKm !== undefined ? formatDistance(c.distanceKm) : (c.providerCity || 'distancia no disponible')}
                   {' · '}stock: {c.quantity}
@@ -222,9 +241,20 @@ export default function ProMaterials() {
         )}
       </section>
 
-      <p className="mt-6 text-xs text-slate-400 flex items-center gap-1.5">
+      <p className="mt-7 text-xs text-slate-400 flex items-center gap-1.5">
         <ExternalLink className="size-3.5 shrink-0" aria-hidden /> ¿Querés ver pines en el mapa? La búsqueda completa tiene mapa con radio ajustable.
       </p>
+    </div>
+  )
+}
+
+/* Estado vacío diseñado: icono flotante + copy claro */
+function Empty({ icon, title, hint }: { icon: React.ReactNode; title: string; hint: string }) {
+  return (
+    <div className="homy-empty homy-glass-soft border border-dashed border-[#0A2540]/12">
+      <span className="homy-empty-icon homy-chip-blue" aria-hidden>{icon}</span>
+      <h3 className="font-bold text-[#0A2540] text-lg tracking-tight">{title}</h3>
+      <p className="text-sm text-slate-500 mt-1.5 max-w-md leading-relaxed">{hint}</p>
     </div>
   )
 }

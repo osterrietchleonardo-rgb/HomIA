@@ -7,6 +7,10 @@ import { useSession, useLocation, syncLocationToServer } from '@/lib/store'
 import { Loading } from '@/components/app/ui-bits'
 import { BackdropFX } from '@/components/app/backdrop-fx'
 import { Toaster } from '@/components/ui/sonner'
+import {
+  ArrowLeft, ArrowRight, BadgeCheck, Boxes, Compass, CornerDownRight,
+  HardHat, ShieldCheck, Sparkles, User,
+} from 'lucide-react'
 
 // Pantallas públicas
 const HomeScreen = dynamic(() => import('@/components/screens/home-screen'), { ssr: false, loading: () => <Loading /> })
@@ -151,18 +155,39 @@ function panelScreen(route: ReturnType<typeof useRoute>) {
   return <RolePicker />
 }
 
+// Metadatos visuales por rol (icono + tono de chip + microcopy)
+const ROLE_META: Record<string, { icon: typeof User; tone: string; desc: string }> = {
+  cliente: { icon: User, tone: 'homy-chip-blue', desc: 'Seguí tus trabajos, presupuestos y pagos.' },
+  profesional: { icon: HardHat, tone: 'homy-chip-orange', desc: 'Gestioná ofertas, clientes y obras.' },
+  proveedor: { icon: Boxes, tone: 'homy-chip-ai', desc: 'Administrá tu stock, precios y ventas.' },
+}
+
 function RolePicker() {
   const { user } = useSession()
   return (
-    <div className="max-w-md mx-auto py-16 px-4 text-center">
-      <h1 className="text-2xl font-extrabold text-[#0A2540]">¿Con qué perfil querés entrar?</h1>
-      <p className="text-sm text-slate-500 mt-2">Podés tener varios perfiles con la misma cuenta.</p>
-      <div className="grid gap-3 mt-6">
-        {user?.roles.map((r) => (
-          <Link key={r} to={`/panel/${r}`} className="homy-glass homy-lift rounded-2xl p-4 font-bold text-[#0A2540] capitalize">
-            {r} →
-          </Link>
-        ))}
+    <div className="mx-auto max-w-lg px-4 py-14 text-center sm:py-20">
+      <p className="homy-eyebrow">Tu ecosistema</p>
+      <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-navy sm:text-4xl">¿Con qué perfil querés entrar?</h1>
+      <p className="mx-auto mt-2.5 max-w-sm text-[15px] leading-relaxed text-slate-500">Podés tener varios perfiles con la misma cuenta.</p>
+      <div className="homy-stagger mt-8 grid gap-3.5 text-left">
+        {user?.roles.map((r) => {
+          const meta = ROLE_META[r] ?? { icon: User, tone: 'homy-chip-navy', desc: 'Entrá a tu panel.' }
+          return (
+            <Link
+              key={r} to={`/panel/${r}`}
+              className="homy-glass homy-lift homy-card-glow group flex items-center gap-4 rounded-2xl p-4 sm:p-5"
+            >
+              <span className={`homy-icon-chip size-12 shrink-0 ${meta.tone}`}>
+                <meta.icon className="size-6" aria-hidden />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-lg font-extrabold capitalize tracking-tight text-navy">{r}</span>
+                <span className="mt-0.5 block text-[13.5px] leading-snug text-slate-500">{meta.desc}</span>
+              </span>
+              <ArrowRight className="ml-auto size-5 shrink-0 text-slate-300 transition-all duration-300 group-hover:translate-x-1 group-hover:text-[#1D63B8]" aria-hidden />
+            </Link>
+          )
+        })}
       </div>
     </div>
   )
@@ -170,26 +195,47 @@ function RolePicker() {
 
 function AuthGate({ path }: { path: string }) {
   return (
-    <div className="min-h-[70vh] flex items-center justify-center px-4">
-      <div className="homy-glass max-w-md w-full rounded-3xl p-8 text-center">
-        <div className="text-4xl mb-2">🔒</div>
-        <h2 className="text-xl font-extrabold text-[#0A2540]">Creá tu cuenta para seguir</h2>
-        <p className="text-sm text-slate-500 mt-2">
-          Buscar es gratis y libre. Para ver datos de contacto, abrir tarjetas y operar necesitás una cuenta (tarda menos de 1 minuto).
-        </p>
-        <div className="flex flex-col gap-2 mt-6">
-          <button
-            onClick={() => navigate(`/registrarse?volver=${encodeURIComponent(path)}`)}
-            className="w-full rounded-xl bg-[#FF5A1F] hover:bg-[#e64d15] text-white font-bold py-3 transition"
-          >
-            Crear cuenta
-          </button>
-          <button
-            onClick={() => navigate(`/ingresar?volver=${encodeURIComponent(path)}`)}
-            className="w-full rounded-xl border border-slate-300 hover:border-[#1D63B8] text-[#0A2540] font-bold py-3 transition"
-          >
-            Ya tengo cuenta
-          </button>
+    <div className="flex min-h-[70vh] items-center justify-center px-4 py-16">
+      <div className="homy-glass relative w-full max-w-md overflow-hidden rounded-3xl">
+        {/* Decoración de ambiente (sin interacción, fuera del árbol accesible) */}
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          <div className="absolute -top-24 right-[-12%] size-60 rounded-full bg-ai/15 blur-3xl" />
+          <div className="absolute -bottom-28 left-[-12%] size-60 rounded-full bg-action/10 blur-3xl" />
+        </div>
+        <div className="homy-stagger relative z-10 p-7 text-center sm:p-9">
+          <span className="homy-icon-chip homy-chip-blue mx-auto size-14">
+            <ShieldCheck className="size-7" aria-hidden />
+          </span>
+          <p className="homy-eyebrow mt-5">Acceso requerido</p>
+          <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-navy sm:text-[1.7rem]">Creá tu cuenta para seguir</h2>
+          <p className="mx-auto mt-2.5 max-w-sm text-sm leading-relaxed text-slate-500">
+            Buscar es gratis y libre. Para ver datos de contacto, abrir tarjetas y operar necesitás una cuenta (tarda menos de 1 minuto).
+          </p>
+          <div className="mt-4 flex justify-center">
+            <span className="homy-pill max-w-full">
+              <CornerDownRight className="size-3.5 shrink-0 text-[#1D63B8]" aria-hidden />
+              <span className="truncate font-mono text-[11px] font-semibold text-slate-600">{path}</span>
+            </span>
+          </div>
+          <div className="mt-6 flex flex-col gap-2.5">
+            <button
+              onClick={() => navigate(`/registrarse?volver=${encodeURIComponent(path)}`)}
+              className="homy-btn-primary w-full px-6 py-3.5 text-[15px]"
+            >
+              Crear cuenta gratis
+            </button>
+            <button
+              onClick={() => navigate(`/ingresar?volver=${encodeURIComponent(path)}`)}
+              className="homy-btn-dark w-full px-6 py-3.5 text-[15px]"
+            >
+              Ya tengo cuenta
+            </button>
+          </div>
+          <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-[11px] font-bold text-slate-400" aria-label="Confianza HomIA">
+            <li className="flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-[#1D63B8]" aria-hidden />Escrow</li>
+            <li className="flex items-center gap-1.5"><BadgeCheck className="size-3.5 text-[#0e9f6e]" aria-hidden />Verificación</li>
+            <li className="flex items-center gap-1.5"><Sparkles className="size-3.5 text-[#0092c4]" aria-hidden />IA</li>
+          </ul>
         </div>
       </div>
     </div>
@@ -198,14 +244,23 @@ function AuthGate({ path }: { path: string }) {
 
 function NotFound() {
   return (
-    <div className="min-h-[70vh] flex flex-col items-center justify-center px-4 text-center">
-      <div className="homy-glass rounded-3xl px-10 py-8">
-        <div className="text-6xl mb-4">🧩</div>
-        <h1 className="text-2xl font-extrabold text-[#0A2540]">Esta página no existe</h1>
-        <p className="text-slate-500 mt-2">El enlace se rompió o la página se movió.</p>
-        <button onClick={() => navigate('/')} className="mt-6 rounded-xl bg-[#0A2540] text-white font-bold px-6 py-3 hover:bg-[#123455] transition">
-          Volver al inicio
-        </button>
+    <div className="flex min-h-[70vh] flex-col items-center justify-center px-4 py-16 text-center">
+      <div className="homy-glass relative w-full max-w-md overflow-hidden rounded-3xl px-8 py-10 sm:px-12">
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          <div className="absolute -top-20 left-1/2 size-56 -translate-x-1/2 rounded-full bg-ai/12 blur-3xl" />
+        </div>
+        <div className="homy-stagger relative z-10">
+          <span className="homy-empty-icon homy-chip-navy mx-auto">
+            <Compass className="size-7" aria-hidden />
+          </span>
+          <p className="homy-eyebrow">Error 404</p>
+          <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-navy sm:text-[1.7rem]">Esta página no existe</h1>
+          <p className="mx-auto mt-2 max-w-xs text-[15px] leading-relaxed text-slate-500">El enlace se rompió o la página se movió.</p>
+          <button onClick={() => navigate('/')} className="homy-btn-dark mt-7 px-6 py-3.5 text-[15px]">
+            <ArrowLeft className="size-4.5" aria-hidden />
+            Volver al inicio
+          </button>
+        </div>
       </div>
     </div>
   )

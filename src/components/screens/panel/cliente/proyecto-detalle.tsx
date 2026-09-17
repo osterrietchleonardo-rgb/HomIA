@@ -2,10 +2,13 @@
 // Detalle de proyecto (cliente): aprobar materiales, etapas, facturas con Mercado Pago, reseña final
 import { useEffect, useState } from 'react'
 import { navigate } from '@/lib/router'
-import { PageHeader, StatusBadge, Loading, EmptyState, UAvatar, UStars } from '@/components/app/ui-bits'
+import { StatusBadge, Loading, UAvatar } from '@/components/app/ui-bits'
 import { formatARS, formatDate } from '@/lib/format'
 import { toast } from 'sonner'
-import { Check, ArrowRight, Star, FolderKanban, Phone, Mail, Package, ReceiptText } from 'lucide-react'
+import {
+  Check, ArrowRight, Star, FolderKanban, Phone, Mail, Package, ReceiptText,
+  Wallet, Flag, ListChecks, History, Info,
+} from 'lucide-react'
 
 type Material = { id: string; name: string; unit: string; quantity: number; unitPrice: number; subtotal: number; status: string; note: string | null; providerName: string | null; createdAt: string }
 type Invoice = { id: string; number: string; total: number; status: string; issuedAt: string }
@@ -36,7 +39,7 @@ export default function ClientProjectDetail({ id }: { id: string }) {
       }
     } finally { setLoading(false) }
   }
-  useEffect(() => { load()   }, [id])
+  useEffect(() => { load() }, [id])
 
   async function decideMaterial(materialId: string, action: 'aprobar' | 'rechazar') {
     setBusy(true)
@@ -90,131 +93,186 @@ export default function ClientProjectDetail({ id }: { id: string }) {
   }
 
   if (loading) return <Loading />
-  if (!data) return <EmptyState icon={<FolderKanban />} title="Proyecto no encontrado" />
+  if (!data) {
+    return (
+      <div className="homy-page">
+        <div className="homy-empty homy-glass-soft border border-dashed border-[#0A2540]/12">
+          <span className="homy-empty-icon homy-chip-blue" aria-hidden><FolderKanban className="size-6" /></span>
+          <h3 className="font-extrabold tracking-tight text-[#0A2540]">Proyecto no encontrado</h3>
+          <button onClick={() => navigate('/panel/cliente/proyectos')} className="homy-btn-dark mt-5 px-5 py-3 text-sm sm:py-2.5">Volver a mis proyectos</button>
+        </div>
+      </div>
+    )
+  }
   const p = data.project
   const stageIdx = STAGES.indexOf(p.stage)
+  const stageNum = Math.max(stageIdx, 0)
+  const progress = p.stage === 'finalizado' ? 100 : ((stageNum + 1) / STAGES.length) * 100
   const pending = data.materials.filter((m) => m.status === 'propuesto')
   const decided = data.materials.filter((m) => m.status !== 'propuesto')
 
   return (
-    <div className="max-w-4xl">
-      <PageHeader title={p.title} subtitle={`Proyecto con ${p.professional.companyName || p.professional.displayName}`} />
+    <div className="homy-page">
+      <header className="homy-page-head">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="homy-eyebrow">Proyecto</span>
+            <StatusBadge status={p.status} />
+          </div>
+          <h1 className="homy-page-title mt-1.5">{p.title}</h1>
+          <p className="homy-page-sub">Proyecto con {p.professional.companyName || p.professional.displayName}</p>
+        </div>
+        {p.status !== 'finalizado' && (
+          <div className="flex gap-2">
+            {p.stage !== 'finalizado' && (
+              <button onClick={() => setStage('finalizado')} className="homy-btn-primary homy-focus px-5 py-3 text-sm sm:py-2.5">
+                <Flag className="size-4" aria-hidden /> Finalizar obra
+              </button>
+            )}
+          </div>
+        )}
+      </header>
 
       {/* etapas */}
-      <div className="rounded-3xl homy-glass shadow-sm p-5 sm:p-6 mb-5">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-            {STAGES.map((s, i) => (
-              <div key={s} className="flex items-center gap-1.5 sm:gap-2">
-                <span className={`rounded-full px-3 py-1 text-xs font-bold capitalize inline-flex items-center gap-1 ${p.stage === s ? 'bg-[#0A2540] text-white shadow-md shadow-[#0A2540]/20' : stageIdx > i ? 'homy-glass-soft text-emerald-600' : 'homy-glass-soft text-slate-400'}`}>
-                  {stageIdx > i && <Check className="size-3" aria-hidden />}
-                  {s}
-                </span>
-                {i < STAGES.length - 1 && <ArrowRight className="size-3 text-[#0A2540]/20" aria-hidden />}
-              </div>
-            ))}
-          </div>
-          {p.status !== 'finalizado' && (
-            <div className="flex gap-2">
-              {p.stage !== 'finalizado' && <button onClick={() => setStage('finalizado')} className="homy-btn-primary px-4 py-2 text-sm">Finalizar obra</button>}
-            </div>
-          )}
+      <section className="homy-glass mb-5 rounded-3xl p-5 sm:p-6">
+        <div className="homy-section-head">
+          <h2 className="homy-section-title">
+            <span className="homy-icon-chip homy-chip-blue size-8 shrink-0 [&_svg]:size-4" aria-hidden><ListChecks /></span>
+            Etapas de la obra
+          </h2>
+          <span className="text-xs font-bold text-slate-400 tabular-nums">Etapa {stageNum + 1} de {STAGES.length}</span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-5">
+        <div className="homy-progress" role="img" aria-label={`Progreso: etapa ${stageNum + 1} de ${STAGES.length}`}>
+          <i style={{ width: `${progress}%` }} />
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-1.5 sm:gap-2">
+          {STAGES.map((s, i) => (
+            <span key={s} className="flex items-center gap-1.5 sm:gap-2">
+              <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold capitalize ${p.stage === s ? 'bg-[#0A2540] text-white shadow-md shadow-[#0A2540]/20' : stageIdx > i ? 'homy-glass-soft text-emerald-600' : 'homy-glass-soft text-slate-400'}`}>
+                {stageIdx > i && <Check className="size-3" aria-hidden />}
+                {s}
+              </span>
+              {i < STAGES.length - 1 && <ArrowRight className="size-3 text-[#0A2540]/20" aria-hidden />}
+            </span>
+          ))}
+        </div>
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
           <MiniStat label="Mano de obra" value={formatARS(p.laborCost)} />
           <MiniStat label="Materiales aprobados" value={formatARS(p.materialsCost)} />
           <MiniStat label="Total" value={formatARS(p.laborCost + p.materialsCost)} accent />
         </div>
-      </div>
+      </section>
 
       {/* contacto del profesional */}
-      <div className="rounded-2xl homy-glass p-4 mb-5 flex items-center justify-between gap-3 flex-wrap">
+      <section className="homy-row mb-5 flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="flex items-center gap-3">
           <UAvatar name={p.professional.displayName} url={p.professional.avatarUrl} size={46} />
-          <div>
+          <div className="min-w-0">
             <p className="font-bold text-[#0A2540]">{p.professional.companyName || p.professional.displayName}</p>
-            <p className="text-xs text-slate-500 capitalize">{p.professional.personType}</p>
+            <p className="text-xs capitalize text-slate-500">{p.professional.personType}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {p.professional.phone && <a href={`tel:${p.professional.phone}`} className="homy-glass-soft rounded-full px-4 py-2 text-sm font-bold text-[#0A2540] hover:text-[#1D63B8] transition inline-flex items-center gap-2"><Phone className="size-4" aria-hidden /> {p.professional.phone}</a>}
-          {p.professional.email && <a href={`mailto:${p.professional.email}`} className="homy-glass-soft rounded-full px-4 py-2 text-sm font-bold text-[#0A2540] hover:text-[#1D63B8] transition inline-flex items-center gap-2"><Mail className="size-4" aria-hidden /> Email</a>}
+        <div className="flex flex-wrap items-center gap-2">
+          {p.professional.phone && (
+            <a href={`tel:${p.professional.phone}`} className="homy-glass-soft homy-focus inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-[#0A2540] transition hover:text-[#1D63B8]">
+              <Phone className="size-4" aria-hidden /> {p.professional.phone}
+            </a>
+          )}
+          {p.professional.email && (
+            <a href={`mailto:${p.professional.email}`} className="homy-glass-soft homy-focus inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-[#0A2540] transition hover:text-[#1D63B8]">
+              <Mail className="size-4" aria-hidden /> Email
+            </a>
+          )}
         </div>
-      </div>
+      </section>
 
       {/* materiales por aprobar */}
       {pending.length > 0 && (
-        <div className="rounded-3xl border border-amber-300/70 bg-amber-100/40 p-5 mb-5">
-          <h2 className="font-extrabold text-[#0A2540] mb-3 flex items-center gap-2.5">
-            <span className="homy-icon-chip homy-chip-gold size-9 shrink-0 [&_svg]:size-4" aria-hidden><Package /></span>
-            Materiales por aprobar ({pending.length})
-          </h2>
-          <div className="space-y-2.5">
+        <section className="homy-glass homy-glass-featured mb-5 rounded-3xl p-5">
+          <div className="homy-section-head">
+            <h2 className="homy-section-title">
+              <span className="homy-icon-chip homy-chip-gold size-9 shrink-0 [&_svg]:size-4" aria-hidden><Package /></span>
+              Materiales por aprobar
+            </h2>
+            <span className="homy-pill">{pending.length} pendiente{pending.length > 1 ? 's' : ''}</span>
+          </div>
+          <div className="space-y-2.5 homy-stagger">
             {pending.map((m) => (
-              <div key={m.id} className="rounded-2xl homy-glass p-4">
+              <div key={m.id} className="homy-row p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="font-bold text-[#0A2540]">{m.name}</p>
                     <p className="text-sm text-slate-500">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}{m.providerName ? ` · ${m.providerName}` : ''}</p>
-                    {m.note && <p className="text-xs text-slate-400 mt-1">{m.note}</p>}
+                    {m.note && <p className="mt-1 text-xs text-slate-400">{m.note}</p>}
                   </div>
                   <p className="text-lg font-extrabold text-[#0A2540] tabular-nums">{formatARS(m.subtotal)}</p>
                 </div>
-                <div className="flex gap-2 mt-3 justify-end">
-                  <button disabled={busy} onClick={() => decideMaterial(m.id, 'rechazar')} className="homy-glass-soft rounded-full px-4 py-2 text-sm font-bold text-slate-600 hover:text-red-500 disabled:opacity-60 transition">Rechazar</button>
+                <div className="mt-3 flex justify-end gap-2">
+                  <button disabled={busy} onClick={() => decideMaterial(m.id, 'rechazar')} className="homy-glass-soft homy-focus rounded-full px-4 py-2 text-sm font-bold text-slate-600 transition hover:text-red-500 disabled:opacity-60">Rechazar</button>
                   <button disabled={busy} onClick={() => decideMaterial(m.id, 'aprobar')} className="homy-btn-primary px-4 py-2 text-sm">
-                    <Check className="size-4" /> Aprobar
+                    <Check className="size-4" aria-hidden /> Aprobar
                   </button>
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       {/* materiales decididos */}
       {decided.length > 0 && (
-        <div className="rounded-2xl homy-glass p-5 mb-5">
-          <h2 className="font-extrabold text-[#0A2540] mb-3">Historial de materiales</h2>
+        <section className="homy-glass mb-5 rounded-3xl p-5">
+          <div className="homy-section-head">
+            <h2 className="homy-section-title">
+              <span className="homy-icon-chip homy-chip-mint size-8 shrink-0 [&_svg]:size-4" aria-hidden><History /></span>
+              Historial de materiales
+            </h2>
+          </div>
           <div className="divide-y divide-[#0A2540]/5">
             {decided.map((m) => (
-              <div key={m.id} className="py-2.5 flex items-center justify-between gap-2">
+              <div key={m.id} className="flex items-center justify-between gap-2 py-2.5">
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[#0A2540] truncate">{m.name}</p>
+                  <p className="text-sm font-semibold text-[#0A2540] line-clamp-1">{m.name}</p>
                   <p className="text-xs text-slate-400">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}</p>
                 </div>
-                <div className="flex items-center gap-2.5 shrink-0">
+                <div className="flex shrink-0 items-center gap-2.5">
                   <StatusBadge status={m.status} />
                   <p className="text-sm font-bold tabular-nums">{formatARS(m.subtotal)}</p>
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       {/* facturas */}
-      <div className="rounded-2xl homy-glass p-5 mb-5">
-        <h2 className="font-extrabold text-[#0A2540] mb-3 flex items-center gap-2.5">
-          <span className="homy-icon-chip homy-chip-gold size-9 shrink-0 [&_svg]:size-4" aria-hidden><ReceiptText /></span>
-          Facturas ({data.invoices.length})
-        </h2>
+      <section className="homy-glass mb-5 rounded-3xl p-5">
+        <div className="homy-section-head">
+          <h2 className="homy-section-title">
+            <span className="homy-icon-chip homy-chip-gold size-9 shrink-0 [&_svg]:size-4" aria-hidden><ReceiptText /></span>
+            Facturas
+          </h2>
+          <span className="homy-pill">{data.invoices.length}</span>
+        </div>
         {data.invoices.length === 0 ? (
-          <p className="text-sm text-slate-500 homy-glass-soft rounded-xl p-3.5">El profesional factura con detalle explícito cuando haya materiales aprobados y mano de obra.</p>
+          <p className="homy-glass-soft flex items-start gap-2.5 rounded-xl p-3.5 text-sm text-slate-500">
+            <Info className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden />
+            El profesional factura con detalle explícito cuando haya materiales aprobados y mano de obra.
+          </p>
         ) : (
-          <div className="space-y-2.5">
+          <div className="space-y-2.5 homy-stagger">
             {data.invoices.map((inv) => (
-              <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl homy-glass-soft p-3.5">
-                <div>
+              <div key={inv.id} className="homy-row flex flex-wrap items-center justify-between gap-2 p-3.5">
+                <div className="min-w-0">
                   <p className="font-bold text-[#0A2540]">{inv.number}</p>
                   <p className="text-xs text-slate-400">{formatDate(inv.issuedAt)}</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <p className="font-extrabold tabular-nums">{formatARS(inv.total)}</p>
                   <StatusBadge status={inv.status} />
                   {inv.status === 'pendiente' && (
-                    <button disabled={busy} onClick={() => payInvoice(inv.id)} className="rounded-full bg-[#009EE3] hover:bg-[#0082bb] text-white text-sm font-bold px-4 py-2 transition shadow-lg shadow-[#009EE3]/25 disabled:opacity-60">
-                      Pagar con Mercado Pago
+                    <button disabled={busy} onClick={() => payInvoice(inv.id)} className="homy-btn-primary px-4 py-2 text-sm">
+                      <Wallet className="size-4" aria-hidden /> Pagar con Mercado Pago
                     </button>
                   )}
                 </div>
@@ -222,18 +280,18 @@ export default function ClientProjectDetail({ id }: { id: string }) {
             ))}
           </div>
         )}
-      </div>
+      </section>
 
       {/* reseña final */}
       {p.stage === 'finalizado' && !alreadyReviewed && (
-        <div className="homy-glass-dark rounded-3xl p-6 sm:p-7 text-white relative overflow-hidden">
-          <span aria-hidden className="pointer-events-none absolute -top-20 -right-16 size-56 rounded-full bg-[#00C4FF]/20 blur-3xl" />
-          <h2 className="font-extrabold text-lg flex items-center gap-2.5 relative">
+        <section className="homy-glass-dark relative overflow-hidden rounded-3xl p-6 text-white sm:p-7">
+          <span aria-hidden className="pointer-events-none absolute -right-16 -top-20 size-56 rounded-full bg-[#00C4FF]/20 blur-3xl" />
+          <h2 className="relative flex items-center gap-2.5 text-lg font-extrabold">
             <span className="homy-icon-chip homy-chip-gold size-9 shrink-0 [&_svg]:size-4" aria-hidden><Star /></span>
             ¿Cómo fue la obra?
           </h2>
-          <p className="text-sm text-slate-300 mt-2 relative">Tu reseña ayuda a otros usuarios. Queda en el perfil del profesional.</p>
-          <div className="flex gap-1.5 mt-4 relative">
+          <p className="relative mt-2 text-sm text-slate-300">Tu reseña ayuda a otros usuarios. Queda en el perfil del profesional.</p>
+          <div className="relative mt-4 flex gap-1.5">
             {[1, 2, 3, 4, 5].map((n) => (
               <button key={n} onClick={() => setRating(n)} className={`transition-transform duration-200 hover:scale-110 ${n <= rating ? 'text-[#FFC700] fill-[#FFC700]' : 'text-white/25'}`} aria-label={`${n} estrellas`}>
                 <Star className="size-7" />
@@ -241,11 +299,11 @@ export default function ClientProjectDetail({ id }: { id: string }) {
             ))}
           </div>
           <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} placeholder="Contá cómo trabajó, puntualidad, calidad…"
-            className="relative mt-4 w-full rounded-xl bg-white/10 border border-white/15 px-4 py-3 text-white placeholder:text-slate-400 outline-none focus:border-[#00C4FF] resize-none" />
-          <button onClick={submitReview} disabled={busy} className="relative mt-4 homy-btn-primary px-6 py-2.5 text-sm">
+            className="relative mt-4 w-full resize-none rounded-xl bg-white/10 border border-white/15 px-4 py-3 text-white placeholder:text-slate-400 outline-none focus:border-[#00C4FF]" />
+          <button onClick={submitReview} disabled={busy} className="homy-btn-primary relative mt-4 px-6 py-3 text-sm sm:py-2.5">
             Publicar reseña
           </button>
-        </div>
+        </section>
       )}
     </div>
   )
@@ -253,8 +311,8 @@ export default function ClientProjectDetail({ id }: { id: string }) {
 
 function MiniStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="rounded-2xl homy-glass-soft px-4 py-3">
-      <p className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-[0.09em]">{label}</p>
+    <div className="homy-glass-soft rounded-2xl px-4 py-3">
+      <p className="text-[0.68rem] font-bold uppercase tracking-[0.09em] text-slate-400">{label}</p>
       <p className={`text-lg font-extrabold tabular-nums ${accent ? 'text-[#FF5A1F]' : 'text-[#0A2540]'}`}>{value}</p>
     </div>
   )

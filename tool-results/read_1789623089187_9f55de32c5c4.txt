@@ -1,0 +1,1466 @@
+     1→     1→@import "tailwindcss";
+     2→     2→@import "tw-animate-css";
+     3→     3→
+     4→     4→@custom-variant dark (&:is(.dark *));
+     5→     5→
+     6→     6→/* ============================================================
+     7→     7→   HomIA — Sistema de Diseño
+     8→     8→   60% Azules corporativos · 30% Fondos suaves · 10% Acentos
+     9→     9→   ============================================================ */
+    10→    10→@theme {
+    11→    11→  /* Primarios / Textos (60%) */
+    12→    12→  --color-navy: #0a2540;
+    13→    13→  --color-navy-2: #103455;
+    14→    14→  --color-tech: #1d63b8;
+    15→    15→  --color-tech-2: #4a8ad4;
+    16→    16→
+    17→    17→  /* Fondos / Superficies (30%) */
+    18→    18→  --color-chalk: #fafafa;
+    19→    19→  --color-confort: #f0f2f5;
+    20→    20→  --color-line: #e4e9f0;
+    21→    21→
+    22→    22→  /* Acentos / Acciones (10%) */
+    23→    23→  --color-action: #ff5a1f;
+    24→    24→  --color-action-2: #ff7a45;
+    25→    25→  --color-ai: #00c4ff;
+    26→    26→  --color-ai-2: #66dfff;
+    27→    27→  --color-gold: #ffc700;
+    28→    28→
+    29→    29→  /* Animaciones de marca */
+    30→    30→  --animate-float: float 6s ease-in-out infinite;
+    31→    31→  --animate-float-slow: float 9s ease-in-out infinite;
+    32→    32→  --animate-core-pulse: core-pulse 2.8s ease-in-out infinite;
+    33→    33→  --animate-happy: happy 0.65s ease-in-out 2;
+    34→    34→  --animate-flow-q: flow-q 11s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+    35→    35→  --animate-flow-a: flow-a 11s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+    36→    36→  --animate-ring-ping: ring-ping 1.9s cubic-bezier(0, 0, 0.2, 1) infinite;
+    37→    37→  --animate-dot-bounce: dot-bounce 1.15s ease-in-out infinite;
+    38→    38→  --animate-shimmer: shimmer 2.2s linear infinite;
+    39→    39→  --animate-line-flow: line-flow 2.8s linear infinite;
+    40→    40→  --animate-spin-slow: spin 7s linear infinite;
+    41→    41→  --animate-blink: blink 1.05s step-end infinite;
+    42→    42→  --animate-glow-ai: glow-ai 2.6s ease-in-out infinite;
+    43→    43→}
+    44→    44→
+    45→    45→@theme inline {
+    46→    46→  --color-background: var(--background);
+    47→    47→  --color-foreground: var(--foreground);
+    48→    48→  --font-sans: var(--font-jakarta);
+    49→    49→  --font-mono: ui-monospace, monospace;
+    50→    50→  --color-sidebar-ring: var(--sidebar-ring);
+    51→    51→  --color-sidebar-border: var(--sidebar-border);
+    52→    52→  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    53→    53→  --color-sidebar-accent: var(--sidebar-accent);
+    54→    54→  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    55→    55→  --color-sidebar-primary: var(--sidebar-primary);
+    56→    56→  --color-sidebar-foreground: var(--sidebar-foreground);
+    57→    57→  --color-sidebar: var(--sidebar);
+    58→    58→  --color-chart-5: var(--chart-5);
+    59→    59→  --color-chart-4: var(--chart-4);
+    60→    60→  --color-chart-3: var(--chart-3);
+    61→    61→  --color-chart-2: var(--chart-2);
+    62→    62→  --color-chart-1: var(--chart-1);
+    63→    63→  --color-ring: var(--ring);
+    64→    64→  --color-input: var(--input);
+    65→    65→  --color-border: var(--border);
+    66→    66→  --color-destructive: var(--destructive);
+    67→    67→  --color-accent-foreground: var(--accent-foreground);
+    68→    68→  --color-accent: var(--accent);
+    69→    69→  --color-muted-foreground: var(--muted-foreground);
+    70→    70→  --color-muted: var(--muted);
+    71→    71→  --color-secondary-foreground: var(--secondary-foreground);
+    72→    72→  --color-secondary: var(--secondary);
+    73→    73→  --color-primary-foreground: var(--primary-foreground);
+    74→    74→  --color-primary: var(--primary);
+    75→    75→  --color-popover-foreground: var(--popover-foreground);
+    76→    76→  --color-popover: var(--popover);
+    77→    77→  --color-card-foreground: var(--card-foreground);
+    78→    78→  --color-card: var(--card);
+    79→    79→  --radius-sm: calc(var(--radius) - 4px);
+    80→    80→  --radius-md: calc(var(--radius) - 2px);
+    81→    81→  --radius-lg: var(--radius);
+    82→    82→  --radius-xl: calc(var(--radius) + 4px);
+    83→    83→}
+    84→    84→
+    85→    85→:root {
+    86→    86→  --radius: 1rem;
+    87→    87→  /* HomIA light theme */
+    88→    88→  --background: #fafafa;
+    89→    89→  --foreground: #0a2540;
+    90→    90→  --card: color-mix(in srgb, #ffffff 84%, transparent);
+    91→    91→  --card-foreground: #0a2540;
+    92→    92→  --popover: color-mix(in srgb, #ffffff 92%, transparent);
+    93→    93→  --popover-foreground: #0a2540;
+    94→    94→  --primary: #0a2540;
+    95→    95→  --primary-foreground: #fafafa;
+    96→    96→  --secondary: #f0f2f5;
+    97→    97→  --secondary-foreground: #0a2540;
+    98→    98→  --muted: #f0f2f5;
+    99→    99→  --muted-foreground: #54677e;
+   100→   100→  --accent: #eaf2fb;
+   101→   101→  --accent-foreground: #0a2540;
+   102→   102→  --destructive: #d64545;
+   103→   103→  --border: #e4e9f0;
+   104→   104→  --input: #e4e9f0;
+   105→   105→  --ring: #1d63b8;
+   106→   106→  --chart-1: #1d63b8;
+   107→   107→  --chart-2: #ff5a1f;
+   108→   108→  --chart-3: #00c4ff;
+   109→   109→  --chart-4: #ffc700;
+   110→   110→  --chart-5: #0a2540;
+   111→   111→  --sidebar: #ffffff;
+   112→   112→  --sidebar-foreground: #0a2540;
+   113→   113→  --sidebar-primary: #0a2540;
+   114→   114→  --sidebar-primary-foreground: #fafafa;
+   115→   115→  --sidebar-accent: #f0f2f5;
+   116→   116→  --sidebar-accent-foreground: #0a2540;
+   117→   117→  --sidebar-border: #e4e9f0;
+   118→   118→  --sidebar-ring: #1d63b8;
+   119→   119→}
+   120→   120→
+   121→   121→.dark {
+   122→   122→  --background: #0a2540;
+   123→   123→  --foreground: #fafafa;
+   124→   124→  --card: #103455;
+   125→   125→  --card-foreground: #fafafa;
+   126→   126→  --popover: #103455;
+   127→   127→  --popover-foreground: #fafafa;
+   128→   128→  --primary: #fafafa;
+   129→   129→  --primary-foreground: #0a2540;
+   130→   130→  --secondary: #103455;
+   131→   131→  --secondary-foreground: #fafafa;
+   132→   132→  --muted: #103455;
+   133→   133→  --muted-foreground: #9db2c9;
+   134→   134→  --accent: #103455;
+   135→   135→  --accent-foreground: #fafafa;
+   136→   136→  --destructive: #ff6b6b;
+   137→   137→  --border: rgba(255, 255, 255, 0.1);
+   138→   138→  --input: rgba(255, 255, 255, 0.15);
+   139→   139→  --ring: #00c4ff;
+   140→   140→  --chart-1: #00c4ff;
+   141→   141→  --chart-2: #ff5a1f;
+   142→   142→  --chart-3: #ffc700;
+   143→   143→  --chart-4: #4a8ad4;
+   144→   144→  --chart-5: #9db2c9;
+   145→   145→  --sidebar: #103455;
+   146→   146→  --sidebar-foreground: #fafafa;
+   147→   147→  --sidebar-primary: #00c4ff;
+   148→   148→  --sidebar-primary-foreground: #0a2540;
+   149→   149→  --sidebar-accent: #103455;
+   150→   150→  --sidebar-accent-foreground: #fafafa;
+   151→   151→  --sidebar-border: rgba(255, 255, 255, 0.1);
+   152→   152→  --sidebar-ring: #00c4ff;
+   153→   153→}
+   154→   154→
+   155→   155→@layer base {
+   156→   156→  * {
+   157→   157→    @apply border-border outline-ring/50;
+   158→   158→  }
+   159→   159→  html {
+   160→   160→    scroll-behavior: smooth;
+   161→   161→  }
+   162→   162→  body {
+   163→   163→    @apply bg-background text-foreground;
+   164→   164→    text-rendering: optimizeLegibility;
+   165→   165→  }
+   166→   166→  ::selection {
+   167→   167→    background: rgba(0, 196, 255, 0.25);
+   168→   168→    color: #0a2540;
+   169→   169→  }
+   170→   170→}
+   171→   171→
+   172→   172→/* ============================================================
+   173→   173→   Keyframes de marca
+   174→   174→   ============================================================ */
+   175→   175→@keyframes float {
+   176→   176→  0%,
+   177→   177→  100% {
+   178→   178→    transform: translateY(0);
+   179→   179→  }
+   180→   180→  50% {
+   181→   181→    transform: translateY(-8px);
+   182→   182→  }
+   183→   183→}
+   184→   184→
+   185→   185→@keyframes core-pulse {
+   186→   186→  0%,
+   187→   187→  100% {
+   188→   188→    transform: scale(1);
+   189→   189→    filter: brightness(1);
+   190→   190→  }
+   191→   191→  50% {
+   192→   192→    transform: scale(1.1);
+   193→   193→    filter: brightness(1.18);
+   194→   194→  }
+   195→   195→}
+   196→   196→
+   197→   197→@keyframes happy {
+   198→   198→  0%,
+   199→   199→  100% {
+   200→   200→    transform: translateY(0) rotate(0deg);
+   201→   201→  }
+   202→   202→  25% {
+   203→   203→    transform: translateY(-10px) rotate(-4deg);
+   204→   204→  }
+   205→   205→  60% {
+   206→   206→    transform: translateY(-2px) rotate(3deg);
+   207→   207→  }
+   208→   208→}
+   209→   209→
+   210→   210→/* Consultas: entran desde la izquierda y se disuelven al llegar a la barra */
+   211→   211→@keyframes flow-q {
+   212→   212→  0% {
+   213→   213→    transform: translateX(-130cqw);
+   214→   214→    opacity: 0;
+   215→   215→    filter: blur(6px);
+   216→   216→  }
+   217→   217→  7% {
+   218→   218→    opacity: 0.9;
+   219→   219→    filter: blur(1.5px);
+   220→   220→  }
+   221→   221→  16% {
+   222→   222→    filter: blur(0);
+   223→   223→  }
+   224→   224→  66% {
+   225→   225→    opacity: 0.9;
+   226→   226→    filter: blur(0);
+   227→   227→  }
+   228→   228→  86%,
+   229→   229→  100% {
+   230→   230→    transform: translateX(108cqw);
+   231→   231→    opacity: 0;
+   232→   232→    filter: blur(5px);
+   233→   233→  }
+   234→   234→}
+   235→   235→
+   236→   236→/* Respuestas del sistema: nacen en la barra y viajan hasta el borde derecho */
+   237→   237→@keyframes flow-a {
+   238→   238→  0% {
+   239→   239→    transform: translateX(-8cqw);
+   240→   240→    opacity: 0;
+   241→   241→    filter: blur(6px);
+   242→   242→  }
+   243→   243→  9% {
+   244→   244→    opacity: 0.95;
+   245→   245→    filter: blur(1px);
+   246→   246→  }
+   247→   247→  18% {
+   248→   248→    filter: blur(0);
+   249→   249→  }
+   250→   250→  68% {
+   251→   251→    opacity: 0.95;
+   252→   252→    filter: blur(0);
+   253→   253→  }
+   254→   254→  94%,
+   255→   255→  100% {
+   256→   256→    transform: translateX(112cqw);
+   257→   257→    opacity: 0;
+   258→   258→    filter: blur(5px);
+   259→   259→  }
+   260→   260→}
+   261→   261→
+   262→   262→@keyframes ring-ping {
+   263→   263→  0% {
+   264→   264→    transform: scale(1);
+   265→   265→    opacity: 0.55;
+   266→   266→  }
+   267→   267→  80%,
+   268→   268→  100% {
+   269→   269→    transform: scale(1.55);
+   270→   270→    opacity: 0;
+   271→   271→  }
+   272→   272→}
+   273→   273→
+   274→   274→@keyframes dot-bounce {
+   275→   275→  0%,
+   276→   276→  100% {
+   277→   277→    transform: translateY(0);
+   278→   278→    opacity: 0.45;
+   279→   279→  }
+   280→   280→  50% {
+   281→   281→    transform: translateY(-5px);
+   282→   282→    opacity: 1;
+   283→   283→  }
+   284→   284→}
+   285→   285→
+   286→   286→@keyframes shimmer {
+   287→   287→  0% {
+   288→   288→    background-position: -200% 0;
+   289→   289→  }
+   290→   290→  100% {
+   291→   291→    background-position: 200% 0;
+   292→   292→  }
+   293→   293→}
+   294→   294→
+   295→   295→@keyframes line-flow {
+   296→   296→  0% {
+   297→   297→    background-position: 200% 0;
+   298→   298→  }
+   299→   299→  100% {
+   300→   300→    background-position: -200% 0;
+   301→   301→  }
+   302→   302→}
+   303→   303→
+   304→   304→@keyframes blink {
+   305→   305→  0%,
+   306→   306→  100% {
+   307→   307→    opacity: 1;
+   308→   308→  }
+   309→   309→  50% {
+   310→   310→    opacity: 0;
+   311→   311→  }
+   312→   312→}
+   313→   313→
+   314→   314→@keyframes glow-ai {
+   315→   315→  0%,
+   316→   316→  100% {
+   317→   317→    box-shadow: 0 0 0 0 rgba(0, 196, 255, 0.35);
+   318→   318→  }
+   319→   319→  50% {
+   320→   320→    box-shadow: 0 0 24px 4px rgba(0, 196, 255, 0.22);
+   321→   321→  }
+   322→   322→}
+   323→   323→
+   324→   324→@keyframes plug-wiggle {
+   325→   325→  0%,
+   326→   326→  100% {
+   327→   327→    transform: rotate(0deg);
+   328→   328→  }
+   329→   329→  30% {
+   330→   330→    transform: rotate(-6deg);
+   331→   331→  }
+   332→   332→  70% {
+   333→   333→    transform: rotate(5deg);
+   334→   334→  }
+   335→   335→}
+   336→   336→
+   337→   337→/* ── Vida de Homy: capas con ritmos desfasados ── */
+   338→   338→@keyframes float-soft {
+   339→   339→  0%,
+   340→   340→  100% {
+   341→   341→    transform: translateY(0);
+   342→   342→  }
+   343→   343→  50% {
+   344→   344→    transform: translateY(-4px);
+   345→   345→  }
+   346→   346→}
+   347→   347→
+   348→   348→/* Respiración: squash & stretch sutil desde la base del cuerpo */
+   349→   349→@keyframes homy-breath {
+   350→   350→  0%,
+   351→   351→  100% {
+   352→   352→    transform: scale(1, 1);
+   353→   353→  }
+   354→   354→  50% {
+   355→   355→    transform: scale(1.012, 1.022);
+   356→   356→  }
+   357→   357→}
+   358→   358→
+   359→   359→/* La cabeza flota con su propio ritmo (desfase = paralaje orgánico) */
+   360→   360→@keyframes homy-head-bob {
+   361→   361→  0%,
+   362→   362→  100% {
+   363→   363→    transform: translateY(0) rotate(0deg);
+   364→   364→  }
+   365→   365→  30% {
+   366→   366→    transform: translateY(-3px) rotate(0.9deg);
+   367→   367→  }
+   368→   368→  62% {
+   369→   369→    transform: translateY(1.6px) rotate(-0.9deg);
+   370→   370→  }
+   371→   371→  82% {
+   372→   372→    transform: translateY(-0.5px) rotate(0.2deg);
+   373→   373→  }
+   374→   374→}
+   375→   375→
+   376→   376→/* Micro-gesto ocasional del torso (descansa el 60% del ciclo) */
+   377→   377→@keyframes homy-idle-tilt {
+   378→   378→  0%,
+   379→   379→  58%,
+   380→   380→  100% {
+   381→   381→    transform: rotate(0deg) translateY(0);
+   382→   382→  }
+   383→   383→  66% {
+   384→   384→    transform: rotate(-1.5deg) translateY(-1px);
+   385→   385→  }
+   386→   386→  74% {
+   387→   387→    transform: rotate(1deg) translateY(0);
+   388→   388→  }
+   389→   389→  82% {
+   390→   390→    transform: rotate(-0.4deg);
+   391→   391→  }
+   392→   392→}
+   393→   393→
+   394→   394→/* Latido cardíaco del emblema: tum-tum… y pausa */
+   395→   395→@keyframes homy-heartbeat {
+   396→   396→  0%,
+   397→   397→  100% {
+   398→   398→    transform: scale(1);
+   399→   399→  }
+   400→   400→  7% {
+   401→   401→    transform: scale(1.06);
+   402→   402→  }
+   403→   403→  14% {
+   404→   404→    transform: scale(1);
+   405→   405→  }
+   406→   406→  22% {
+   407→   407→    transform: scale(1.11);
+   408→   408→  }
+   409→   409→  36% {
+   410→   410→    transform: scale(1);
+   411→   411→  }
+   412→   412→}
+   413→   413→
+   414→   414→/* El halo del núcleo respira luz */
+   415→   415→@keyframes homy-halo {
+   416→   416→  0%,
+   417→   417→  100% {
+   418→   418→    opacity: 0.68;
+   419→   419→  }
+   420→   420→  22% {
+   421→   421→    opacity: 1;
+   422→   422→  }
+   423→   423→  48% {
+   424→   424→    opacity: 0.8;
+   425→   425→  }
+   426→   426→}
+   427→   427→
+   428→   428→/* El USB hace de antena: se sacude de vez en cuando */
+   429→   429→@keyframes homy-plug-idle {
+   430→   430→  0%,
+   431→   431→  52%,
+   432→   432→  100% {
+   433→   433→    transform: rotate(0deg);
+   434→   434→  }
+   435→   435→  60% {
+   436→   436→    transform: rotate(-7deg);
+   437→   437→  }
+   438→   438→  68% {
+   439→   439→    transform: rotate(5deg);
+   440→   440→  }
+   441→   441→  76% {
+   442→   442→    transform: rotate(-2.5deg);
+   443→   443→  }
+   444→   444→}
+   445→   445→
+   446→   446→/* Conductas aleatorias: se endereza / mira a un lado y al otro */
+   447→   447→@keyframes homy-perk {
+   448→   448→  0% {
+   449→   449→    transform: translateY(0) scale(1);
+   450→   450→  }
+   451→   451→  35% {
+   452→   452→    transform: translateY(-5px) scale(1.05);
+   453→   453→  }
+   454→   454→  100% {
+   455→   455→    transform: translateY(0) scale(1);
+   456→   456→  }
+   457→   457→}
+   458→   458→@keyframes homy-look-l {
+   459→   459→  0% {
+   460→   460→    transform: rotate(0) translateX(0);
+   461→   461→  }
+   462→   462→  35% {
+   463→   463→    transform: rotate(-3.5deg) translateX(-2.5px);
+   464→   464→  }
+   465→   465→  70% {
+   466→   466→    transform: rotate(-2deg) translateX(-1.5px);
+   467→   467→  }
+   468→   468→  100% {
+   469→   469→    transform: rotate(0) translateX(0);
+   470→   470→  }
+   471→   471→}
+   472→   472→@keyframes homy-look-r {
+   473→   473→  0% {
+   474→   474→    transform: rotate(0) translateX(0);
+   475→   475→  }
+   476→   476→  35% {
+   477→   477→    transform: rotate(3.5deg) translateX(2.5px);
+   478→   478→  }
+   479→   479→  70% {
+   480→   480→    transform: rotate(2deg) translateX(1.5px);
+   481→   481→  }
+   482→   482→  100% {
+   483→   483→    transform: rotate(0) translateX(0);
+   484→   484→  }
+   485→   485→}
+   486→   486→
+   487→   487→/* ============================================================
+   488→   488→   Componentes Homy (SVG animable — personaje “vivo”)
+   489→   489→   ============================================================ */
+   490→   490→/* Cabeza flotante: bob propio, distinto ritmo que el cuerpo */
+   491→   491→.homy-head {
+   492→   492→  transform-box: fill-box;
+   493→   493→  transform-origin: 50% 60%;
+   494→   494→  animation: homy-head-bob 5.6s ease-in-out infinite;
+   495→   495→}
+   496→   496→.homy-head-inner {
+   497→   497→  transform-box: fill-box;
+   498→   498→  transform-origin: 50% 65%;
+   499→   499→  transition: transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+   500→   500→}
+   501→   501→/* Cuerpo que respira desde la base + micro-gestos de torso */
+   502→   502→.homy-figure {
+   503→   503→  transform-box: fill-box;
+   504→   504→  transform-origin: 50% 96%;
+   505→   505→  animation: homy-breath 3.6s ease-in-out infinite;
+   506→   506→}
+   507→   507→.homy-tilt {
+   508→   508→  transform-box: fill-box;
+   509→   509→  transform-origin: 50% 92%;
+   510→   510→  animation: homy-idle-tilt 9.5s ease-in-out infinite;
+   511→   511→}
+   512→   512→/* Núcleo: latido + halo que respira luz */
+   513→   513→.homy-core {
+   514→   514→  animation: homy-heartbeat 3.6s ease-in-out infinite;
+   515→   515→  transform-box: fill-box;
+   516→   516→  transform-origin: center;
+   517→   517→}
+   518→   518→.homy-wrap[data-homy="thinking"] .homy-core,
+   519→   519→.homy-wrap[data-homy="listening"] .homy-core {
+   520→   520→  animation-duration: 1.05s;
+   521→   521→  filter: drop-shadow(0 0 10px rgba(0, 196, 255, 0.8));
+   522→   522→}
+   523→   523→.homy-halo {
+   524→   524→  animation: homy-halo 3.6s ease-in-out infinite;
+   525→   525→}
+   526→   526→.homy-plug {
+   527→   527→  transform-box: fill-box;
+   528→   528→  transform-origin: 8% 50%;
+   529→   529→  animation: homy-plug-idle 7.8s ease-in-out infinite;
+   530→   530→}
+   531→   531→.homy-wrap[data-homy="listening"] .homy-plug,
+   532→   532→.homy-wrap[data-homy="thinking"] .homy-plug {
+   533→   533→  animation: plug-wiggle 1.5s ease-in-out infinite;
+   534→   534→}
+   535→   535→.homy-body {
+   536→   536→  transform-box: fill-box;
+   537→   537→  transform-origin: center bottom;
+   538→   538→  transition: transform 0.4s ease;
+   539→   539→}
+   540→   540→.homy-wrap[data-homy="thinking"] .homy-body {
+   541→   541→  transform: rotate(-3deg);
+   542→   542→}
+   543→   543→
+   544→   544→/* Estados: la cabeza reacciona antes que el cuerpo */
+   545→   545→.homy-wrap[data-homy="listening"] {
+   546→   546→  animation: float-soft 5.4s ease-in-out infinite;
+   547→   547→}
+   548→   548→.homy-wrap[data-homy="listening"] .homy-head-inner {
+   549→   549→  transform: translateY(-2px) scale(1.045);
+   550→   550→}
+   551→   551→.homy-wrap[data-homy="thinking"] .homy-head-inner {
+   552→   552→  transform: rotate(-4deg) translateY(-1.5px);
+   553→   553→}
+   554→   554→.homy-wrap[data-homy="happy"] .homy-head-inner {
+   555→   555→  transform: rotate(3deg) translateY(-2px) scale(1.045);
+   556→   556→}
+   557→   557→
+   558→   558→/* Momentos de vida: gestos aleatorios + reacción al hover */
+   559→   559→.homy-wrap[data-mood="1"] .homy-head-inner {
+   560→   560→  animation: homy-perk 0.95s cubic-bezier(0.34, 1.56, 0.64, 1);
+   561→   561→}
+   562→   562→.homy-wrap[data-mood="2"] .homy-head-inner {
+   563→   563→  animation: homy-look-l 1.05s ease-in-out;
+   564→   564→}
+   565→   565→.homy-wrap[data-mood="3"] .homy-head-inner {
+   566→   566→  animation: homy-look-r 1.05s ease-in-out;
+   567→   567→}
+   568→   568→.homy-wrap:hover .homy-head-inner {
+   569→   569→  animation: homy-perk 0.9s cubic-bezier(0.34, 1.56, 0.64, 1);
+   570→   570→}
+   571→   571→
+   572→   572→/* ============================================================
+   573→   573→   Utilidades visuales HomIA
+   574→   574→   ============================================================ */
+   575→   575→
+   576→   576→/* Texto en relieve (consultas/respuestas del flujo) */
+   577→   577→.text-relief {
+   578→   578→  color: rgba(10, 37, 64, 0.34);
+   579→   579→  text-shadow:
+   580→   580→    0 1px 0 rgba(255, 255, 255, 0.92),
+   581→   581→    0 -1px 1px rgba(10, 37, 64, 0.08),
+   582→   582→    0 12px 22px rgba(10, 37, 64, 0.08);
+   583→   583→}
+   584→   584→.text-relief-ai {
+   585→   585→  color: rgba(29, 99, 184, 0.44);
+   586→   586→  text-shadow:
+   587→   587→    0 1px 0 rgba(255, 255, 255, 0.95),
+   588→   588→    0 -1px 1px rgba(0, 196, 255, 0.14),
+   589→   589→    0 12px 22px rgba(0, 196, 255, 0.12);
+   590→   590→}
+   591→   591→
+   592→   592→/* Barra de búsqueda: vidrio esmerilado con relieve interno */
+   593→   593→.bar-relief {
+   594→   594→  background: linear-gradient(
+   595→   595→    180deg,
+   596→   596→    rgba(255, 255, 255, 0.78),
+   597→   597→    rgba(255, 255, 255, 0.42)
+   598→   598→  );
+   599→   599→  box-shadow:
+   600→   600→    inset 0 2px 8px rgba(10, 37, 64, 0.07),
+   601→   601→    inset 0 -1px 0 rgba(255, 255, 255, 0.85),
+   602→   602→    0 14px 36px -14px rgba(10, 37, 64, 0.22),
+   603→   603→    0 2px 8px rgba(10, 37, 64, 0.05);
+   604→   604→  backdrop-filter: blur(16px);
+   605→   605→  -webkit-backdrop-filter: blur(16px);
+   606→   606→}
+   607→   607→
+   608→   608→/* Tarjeta de vidrio genérica */
+   609→   609→.glass-card {
+   610→   610→  background: rgba(255, 255, 255, 0.72);
+   611→   611→  backdrop-filter: blur(18px);
+   612→   612→  -webkit-backdrop-filter: blur(18px);
+   613→   613→  box-shadow:
+   614→   614→    0 20px 50px -20px rgba(10, 37, 64, 0.25),
+   615→   615→    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+   616→   616→}
+   617→   617→
+   618→   618→/* Grilla técnica sutil de fondo */
+   619→   619→.bg-grid-fade {
+   620→   620→  background-image:
+   621→   621→    linear-gradient(to right, rgba(10, 37, 64, 0.05) 1px, transparent 1px),
+   622→   622→    linear-gradient(to bottom, rgba(10, 37, 64, 0.05) 1px, transparent 1px);
+   623→   623→  background-size: 46px 46px;
+   624→   624→  mask-image: radial-gradient(
+   625→   625→    ellipse 85% 62% at 50% 32%,
+   626→   626→    black 28%,
+   627→   627→    transparent 74%
+   628→   628→  );
+   629→   629→  -webkit-mask-image: radial-gradient(
+   630→   630→    ellipse 85% 62% at 50% 32%,
+   631→   631→    black 28%,
+   632→   632→    transparent 74%
+   633→   633→  );
+   634→   634→}
+   635→   635→
+   636→   636→/* Línea de flujo animada (motor IA) */
+   637→   637→.flow-line {
+   638→   638→  background: linear-gradient(
+   639→   639→    90deg,
+   640→   640→    transparent,
+   641→   641→    rgba(0, 196, 255, 0.85),
+   642→   642→    transparent
+   643→   643→  );
+   644→   644→  background-size: 200% 100%;
+   645→   645→  animation: line-flow 2.8s linear infinite;
+   646→   646→}
+   647→   647→
+   648→   648→/* Shimmer de carga */
+   649→   649→.shimmer-ai {
+   650→   650→  background: linear-gradient(
+   651→   651→    90deg,
+   652→   652→    rgba(0, 196, 255, 0.08) 25%,
+   653→   653→    rgba(0, 196, 255, 0.28) 50%,
+   654→   654→    rgba(0, 196, 255, 0.08) 75%
+   655→   655→  );
+   656→   656→  background-size: 200% 100%;
+   657→   657→  animation: shimmer 2.2s linear infinite;
+   658→   658→}
+   659→   659→
+   660→   660→/* ============================================================
+   661→   661→   GLASS CORE HomIA — ADN visual (contrato en palabras)
+   662→   662→   1. Vidrio SIEMPRE con color-mix(in srgb, <color> N%, transparent),
+   663→   663→      nunca opacity en el elemento (mata el contenido).
+   664→   664→   2. Animaciones solo transform y opacity.
+   665→   665→   3. Todo lo decorativo lleva pointer-events-none + aria-hidden.
+   666→   666→   4. Z-order sagrado: fondo z-0 → app z-10 → paneles/modales z-50.
+   667→   667→   5. prefers-reduced-motion siempre — cada animación entra a la lista.
+   668→   668→   ============================================================ */
+   669→   669→
+   670→   670→/* Superficies de vidrio — el contenido siempre legible, el fondo siempre vivo */
+   671→   671→.homy-glass {
+   672→   672→  background: color-mix(in srgb, #ffffff 72%, transparent);
+   673→   673→  border: 1px solid color-mix(in srgb, #0a2540 7%, transparent);
+   674→   674→  box-shadow:
+   675→   675→    0 10px 34px -22px rgba(10, 37, 64, 0.28),
+   676→   676→    inset 0 1px 0 color-mix(in srgb, #ffffff 85%, transparent);
+   677→   677→  backdrop-filter: blur(16px) saturate(1.35);
+   678→   678→  -webkit-backdrop-filter: blur(16px) saturate(1.35);
+   679→   679→}
+   680→   680→
+   681→   681→/* Cromo estructural: header, sidebar, bottom-nav, diálogos, menús */
+   682→   682→.homy-glass-strong {
+   683→   683→  background: color-mix(in srgb, #ffffff 86%, transparent);
+   684→   684→  border: 1px solid color-mix(in srgb, #0a2540 6%, transparent);
+   685→   685→  box-shadow:
+   686→   686→    0 14px 44px -24px rgba(10, 37, 64, 0.3),
+   687→   687→    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+   688→   688→  backdrop-filter: blur(24px) saturate(1.4);
+   689→   689→  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+   690→   690→}
+   691→   691→
+   692→   692→/* Vidrio susurrado: chips, pill buttons, capas internas */
+   693→   693→.homy-glass-soft {
+   694→   694→  background: color-mix(in srgb, #ffffff 52%, transparent);
+   695→   695→  border: 1px solid color-mix(in srgb, #0a2540 5%, transparent);
+   696→   696→  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+   697→   697→  backdrop-filter: blur(10px) saturate(1.25);
+   698→   698→  -webkit-backdrop-filter: blur(10px) saturate(1.25);
+   699→   699→}
+   700→   700→
+   701→   701→/* Variante destacada (perfil profesional en la home): borde acción + tinte cálido */
+   702→   702→.homy-glass-featured {
+   703→   703→  border-color: color-mix(in srgb, #ff5a1f 28%, transparent);
+   704→   704→  background: linear-gradient(
+   705→   705→    180deg,
+   706→   706→    color-mix(in srgb, #ff5a1f 7%, transparent),
+   707→   707→    color-mix(in srgb, #ffffff 46%, transparent)
+   708→   708→  );
+   709→   709→  box-shadow:
+   710→   710→    0 24px 60px -24px rgba(255, 90, 31, 0.35),
+   711→   711→    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+   712→   712→}
+   713→   713→
+   714→   714→/* Vidrio nocturno: topbar/bandas navy — la grilla se adivina detrás */
+   715→   715→.homy-glass-dark {
+   716→   716→  background: color-mix(in srgb, #0a2540 78%, transparent);
+   717→   717→  border: 1px solid color-mix(in srgb, #ffffff 10%, transparent);
+   718→   718→  box-shadow:
+   719→   719→    0 18px 50px -24px rgba(10, 37, 64, 0.55),
+   720→   720→    inset 0 1px 0 color-mix(in srgb, #ffffff 8%, transparent);
+   721→   721→  backdrop-filter: blur(20px) saturate(1.3);
+   722→   722→  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+   723→   723→}
+   724→   724→
+   725→   725→/* Inputs sobre vidrio: relieve interior, focus que enciende el borde */
+   726→   726→.homy-glass-input {
+   727→   727→  background: color-mix(in srgb, #ffffff 58%, transparent);
+   728→   728→  border: 1px solid color-mix(in srgb, #0a2540 10%, transparent);
+   729→   729→  box-shadow:
+   730→   730→    inset 0 2px 6px rgba(10, 37, 64, 0.06),
+   731→   731→    inset 0 -1px 0 rgba(255, 255, 255, 0.8);
+   732→   732→  backdrop-filter: blur(8px);
+   733→   733→  -webkit-backdrop-filter: blur(8px);
+   734→   734→  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+   735→   735→}
+   736→   736→.homy-glass-input:focus,
+   737→   737→.homy-glass-input:focus-visible {
+   738→   738→  outline: none;
+   739→   739→  border-color: color-mix(in srgb, #00c4ff 55%, transparent);
+   740→   740→  box-shadow:
+   741→   741→    inset 0 2px 6px rgba(10, 37, 64, 0.05),
+   742→   742→    0 0 0 3px rgba(0, 196, 255, 0.16);
+   743→   743→}
+   744→   744→
+   745→   745→/* Fluidez: elevación al pasar (solo transform + shadow de apoyo) */
+   746→   746→.homy-lift {
+   747→   747→  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease;
+   748→   748→  will-change: transform;
+   749→   749→}
+   750→   750→.homy-lift:hover {
+   751→   751→  transform: translateY(-2px);
+   752→   752→  box-shadow:
+   753→   753→    0 18px 44px -20px rgba(10, 37, 64, 0.32),
+   754→   754→    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+   755→   755→}
+   756→   756→.homy-lift:active {
+   757→   757→  transform: translateY(0) scale(0.995);
+   758→   758→}
+   759→   759→
+   760→   760→/* Entrada de pantalla: fade puro (opacity-only: nunca rompe position:fixed) */
+   761→   761→.homy-screen {
+   762→   762→  animation: homy-fade-in 0.4s ease-out both;
+   763→   763→}
+   764→   764→@keyframes homy-fade-in {
+   765→   765→  from {
+   766→   766→    opacity: 0;
+   767→   767→  }
+   768→   768→  to {
+   769→   769→    opacity: 1;
+   770→   770→  }
+   771→   771→}
+   772→   772→
+   773→   773→/* ── Capa de ambiente global (backdrop-fx) ──
+   774→   774→   Grilla técnica continua + auroras + grano + viñeta.
+   775→   775→   Todo pointer-events-none / aria-hidden, fijado en z-0. */
+   776→   776→.homy-fx-grid {
+   777→   777→  background-image:
+   778→   778→    linear-gradient(to right, rgba(10, 37, 64, 0.045) 1px, transparent 1px),
+   779→   779→    linear-gradient(to bottom, rgba(10, 37, 64, 0.045) 1px, transparent 1px);
+   780→   780→  background-size: 46px 46px;
+   781→   781→  mask-image: linear-gradient(to bottom, black 0%, black 42%, transparent 96%);
+   782→   782→  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 42%, transparent 96%);
+   783→   783→}
+   784→   784→.homy-fx-aurora {
+   785→   785→  border-radius: 9999px;
+   786→   786→  filter: blur(90px);
+   787→   787→  will-change: transform;
+   788→   788→}
+   789→   789→.homy-fx-aurora-a {
+   790→   790→  animation: homy-aurora-a 26s ease-in-out infinite;
+   791→   791→}
+   792→   792→.homy-fx-aurora-b {
+   793→   793→  animation: homy-aurora-b 32s ease-in-out infinite;
+   794→   794→}
+   795→   795→@keyframes homy-aurora-a {
+   796→   796→  0%,
+   797→   797→  100% {
+   798→   798→    transform: translate3d(0, 0, 0) scale(1);
+   799→   799→  }
+   800→   800→  50% {
+   801→   801→    transform: translate3d(-6%, 8%, 0) scale(1.12);
+   802→   802→  }
+   803→   803→}
+   804→   804→@keyframes homy-aurora-b {
+   805→   805→  0%,
+   806→   806→  100% {
+   807→   807→    transform: translate3d(0, 0, 0) scale(1.05);
+   808→   808→  }
+   809→   809→  50% {
+   810→   810→    transform: translate3d(7%, -6%, 0) scale(0.94);
+   811→   811→  }
+   812→   812→}
+   813→   813→/* Sonar IA: ping que nace del costado del motor */
+   814→   814→.homy-fx-sonar {
+   815→   815→  animation: homy-sonar 5.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+   816→   816→}
+   817→   817→@keyframes homy-sonar {
+   818→   818→  0% {
+   819→   819→    transform: scale(0.4);
+   820→   820→    opacity: 0.5;
+   821→   821→  }
+   822→   822→  75%,
+   823→   823→  100% {
+   824→   824→    transform: scale(2.4);
+   825→   825→    opacity: 0;
+   826→   826→  }
+   827→   827→}
+   828→   828→
+   829→   829→/* Scroll oculto: carruseles y chips que se deslizan sin scrollbar nativa */
+   830→   830→.no-scrollbar {
+   831→   831→  -ms-overflow-style: none;
+   832→   832→  scrollbar-width: none;
+   833→   833→}
+   834→   834→.no-scrollbar::-webkit-scrollbar {
+   835→   835→  display: none;
+   836→   836→}
+   837→   837→
+   838→   838→/* ============================================================
+   839→   839→   SIGNATURE HomIA — vocabulario premium compartido
+   840→   840→   (títulos, botones, chips de icono, pills, reveal, sliders)
+   841→   841→   Reglas de contrato: animaciones solo transform/opacity,
+   842→   842→   decoración pointer-events-none, reduced-motion siempre.
+   843→   843→   ============================================================ */
+   844→   844→
+   845→   845→/* Titular con gradiente de marca (el "blue print" de HomIA) */
+   846→   846→.homy-gradient-text {
+   847→   847→  background: linear-gradient(96deg, #1d63b8 0%, #2b8fe0 42%, #00c4ff 100%);
+   848→   848→  -webkit-background-clip: text;
+   849→   849→  background-clip: text;
+   850→   850→  color: transparent;
+   851→   851→}
+   852→   852→.homy-gradient-text-warm {
+   853→   853→  background: linear-gradient(96deg, #ff5a1f 0%, #ff8a3d 55%, #ffc700 100%);
+   854→   854→  -webkit-background-clip: text;
+   855→   855→  background-clip: text;
+   856→   856→  color: transparent;
+   857→   857→}
+   858→   858→
+   859→   859→/* Eyebrow: etiqueta de sección (uppercase + tracking + punto IA) */
+   860→   860→.homy-eyebrow {
+   861→   861→  display: inline-flex;
+   862→   862→  align-items: center;
+   863→   863→  gap: 0.5rem;
+   864→   864→  font-size: 0.72rem;
+   865→   865→  font-weight: 800;
+   866→   866→  letter-spacing: 0.18em;
+   867→   867→  text-transform: uppercase;
+   868→   868→  color: color-mix(in srgb, #1d63b8 78%, transparent);
+   869→   869→}
+   870→   870→.homy-eyebrow::before {
+   871→   871→  content: "";
+   872→   872→  width: 1.35rem;
+   873→   873→  height: 2px;
+   874→   874→  border-radius: 9999px;
+   875→   875→  background: linear-gradient(90deg, #00c4ff, #1d63b8);
+   876→   876→}
+   877→   877→
+   878→   878→/* Botón primario: gradiente acción + brillo que barre al hover */
+   879→   879→.homy-btn-primary {
+   880→   880→  position: relative;
+   881→   881→  overflow: hidden;
+   882→   882→  display: inline-flex;
+   883→   883→  align-items: center;
+   884→   884→  justify-content: center;
+   885→   885→  gap: 0.5rem;
+   886→   886→  border-radius: 9999px;
+   887→   887→  font-weight: 700;
+   888→   888→  color: #fff;
+   889→   889→  background: linear-gradient(135deg, #ff5a1f 0%, #ff7a2e 55%, #ff9438 100%);
+   890→   890→  box-shadow:
+   891→   891→    0 10px 26px -10px rgba(255, 90, 31, 0.55),
+   892→   892→    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+   893→   893→  transition:
+   894→   894→    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+   895→   895→    box-shadow 0.3s ease,
+   896→   896→    filter 0.3s ease;
+   897→   897→}
+   898→   898→.homy-btn-primary::after {
+   899→   899→  content: "";
+   900→   900→  position: absolute;
+   901→   901→  inset: 0;
+   902→   902→  transform: translateX(-120%) skewX(-18deg);
+   903→   903→  background: linear-gradient(
+   904→   904→    100deg,
+   905→   905→    transparent 30%,
+   906→   906→    rgba(255, 255, 255, 0.35) 50%,
+   907→   907→    transparent 70%
+   908→   908→  );
+   909→   909→  pointer-events: none;
+   910→   910→}
+   911→   911→.homy-btn-primary:hover {
+   912→   912→  transform: translateY(-1px);
+   913→   913→  box-shadow:
+   914→   914→    0 16px 34px -12px rgba(255, 90, 31, 0.6),
+   915→   915→    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+   916→   916→  filter: brightness(1.03);
+   917→   917→}
+   918→   918→.homy-btn-primary:hover::after {
+   919→   919→  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+   920→   920→  transform: translateX(120%) skewX(-18deg);
+   921→   921→}
+   922→   922→.homy-btn-primary:active {
+   923→   923→  transform: translateY(0) scale(0.98);
+   924→   924→}
+   925→   925→.homy-btn-primary:disabled {
+   926→   926→  opacity: 0.55;
+   927→   927→  transform: none;
+   928→   928→  box-shadow: none;
+   929→   929→  filter: grayscale(0.15);
+   930→   930→}
+   931→   931→
+   932→   932→/* Botón navy (autoridad): para CTAs serios sobre vidrio */
+   933→   933→.homy-btn-dark {
+   934→   934→  display: inline-flex;
+   935→   935→  align-items: center;
+   936→   936→  justify-content: center;
+   937→   937→  gap: 0.5rem;
+   938→   938→  border-radius: 9999px;
+   939→   939→  font-weight: 700;
+   940→   940→  color: #fff;
+   941→   941→  background: linear-gradient(150deg, #103455 0%, #0a2540 70%);
+   942→   942→  box-shadow:
+   943→   943→    0 12px 28px -12px rgba(10, 37, 64, 0.65),
+   944→   944→    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+   945→   945→  transition:
+   946→   946→    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+   947→   947→    box-shadow 0.3s ease;
+   948→   948→}
+   949→   949→.homy-btn-dark:hover {
+   950→   950→  transform: translateY(-1px);
+   951→   951→  box-shadow:
+   952→   952→    0 18px 36px -14px rgba(10, 37, 64, 0.7),
+   953→   953→    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+   954→   954→}
+   955→   955→.homy-btn-dark:active {
+   956→   956→  transform: translateY(0) scale(0.98);
+   957→   957→}
+   958→   958→
+   959→   959→/* Chip de icono: azulejo de gradiente para lucide icons */
+   960→   960→.homy-icon-chip {
+   961→   961→  display: grid;
+   962→   962→  place-items: center;
+   963→   963→  border-radius: 0.9rem;
+   964→   964→  box-shadow:
+   965→   965→    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+   966→   966→    0 8px 18px -10px rgba(10, 37, 64, 0.35);
+   967→   967→}
+   968→   968→.homy-chip-blue {
+   969→   969→  background: linear-gradient(140deg, #e8f2fd 0%, #d4e7fa 100%);
+   970→   970→  color: #1d63b8;
+   971→   971→}
+   972→   972→.homy-chip-orange {
+   973→   973→  background: linear-gradient(140deg, #ffefe5 0%, #ffdfcd 100%);
+   974→   974→  color: #ff5a1f;
+   975→   975→}
+   976→   976→.homy-chip-ai {
+   977→   977→  background: linear-gradient(140deg, #e0f8ff 0%, #c8f0fe 100%);
+   978→   978→  color: #0092c4;
+   979→   979→}
+   980→   980→.homy-chip-gold {
+   981→   981→  background: linear-gradient(140deg, #fff7d6 0%, #ffedad 100%);
+   982→   982→  color: #b98a00;
+   983→   983→}
+   984→   984→.homy-chip-mint {
+   985→   985→  background: linear-gradient(140deg, #e2f9ee 0%, #ccf2e0 100%);
+   986→   986→  color: #0e9f6e;
+   987→   987→}
+   988→   988→.homy-chip-navy {
+   989→   989→  background: linear-gradient(140deg, #103455 0%, #0a2540 100%);
+   990→   990→  color: #66dfff;
+   991→   991→}
+   992→   992→
+   993→   993→/* Pill de estado: vidrio susurrado + punto de color */
+   994→   994→.homy-pill {
+   995→   995→  display: inline-flex;
+   996→   996→  align-items: center;
+   997→   997→  gap: 0.4rem;
+   998→   998→  border-radius: 9999px;
+   999→   999→  padding: 0.2rem 0.65rem;
+  1000→  1000→  font-size: 0.72rem;
+  1001→  1001→  font-weight: 700;
+  1002→  1002→  letter-spacing: 0.01em;
+  1003→  1003→  background: color-mix(in srgb, #ffffff 55%, transparent);
+  1004→  1004→  border: 1px solid color-mix(in srgb, #0a2540 6%, transparent);
+  1005→  1005→  backdrop-filter: blur(6px);
+  1006→  1006→  -webkit-backdrop-filter: blur(6px);
+  1007→  1007→  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  1008→  1008→}
+  1009→  1009→.homy-pill-dot {
+  1010→  1010→  width: 0.38rem;
+  1011→  1011→  height: 0.38rem;
+  1012→  1012→  border-radius: 9999px;
+  1013→  1013→  flex-shrink: 0;
+  1014→  1014→}
+  1015→  1015→
+  1016→  1016→/* Enlace de navegación con subrayado que crece */
+  1017→  1017→.homy-nav-link {
+  1018→  1018→  position: relative;
+  1019→  1019→}
+  1020→  1020→.homy-nav-link::after {
+  1021→  1021→  content: "";
+  1022→  1022→  position: absolute;
+  1023→  1023→  left: 0.25rem;
+  1024→  1024→  right: 0.25rem;
+  1025→  1025→  bottom: -0.35rem;
+  1026→  1026→  height: 2px;
+  1027→  1027→  border-radius: 9999px;
+  1028→  1028→  background: linear-gradient(90deg, #1d63b8, #00c4ff);
+  1029→  1029→  transform: scaleX(0);
+  1030→  1030→  transform-origin: left center;
+  1031→  1031→  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  1032→  1032→}
+  1033→  1033→.homy-nav-link:hover::after,
+  1034→  1034→.homy-nav-link[aria-current="true"]::after {
+  1035→  1035→  transform: scaleX(1);
+  1036→  1036→}
+  1037→  1037→
+  1038→  1038→/* Borde que se enciende al hover (tarjetas de vidrio destacadas) */
+  1039→  1039→.homy-card-glow {
+  1040→  1040→  transition:
+  1041→  1041→    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+  1042→  1042→    border-color 0.35s ease,
+  1043→  1043→    box-shadow 0.35s ease;
+  1044→  1044→}
+  1045→  1045→.homy-card-glow:hover {
+  1046→  1046→  border-color: color-mix(in srgb, #1d63b8 32%, transparent);
+  1047→  1047→  box-shadow:
+  1048→  1048→    0 22px 54px -22px rgba(29, 99, 184, 0.38),
+  1049→  1049→    0 6px 18px -10px rgba(10, 37, 64, 0.18),
+  1050→  1050→    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  1051→  1051→}
+  1052→  1052→
+  1053→  1053→/* Reveal al hacer scroll: entrada suave opacity+transform */
+  1054→  1054→.homy-reveal {
+  1055→  1055→  animation: homy-reveal-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  1056→  1056→  animation-play-state: paused;
+  1057→  1057→  animation-delay: var(--reveal-delay, 0s);
+  1058→  1058→}
+  1059→  1059→.homy-reveal[data-revealed="true"] {
+  1060→  1060→  animation-play-state: running;
+  1061→  1061→}
+  1062→  1062→@keyframes homy-reveal-up {
+  1063→  1063→  from {
+  1064→  1064→    opacity: 0;
+  1065→  1065→    transform: translateY(22px);
+  1066→  1066→  }
+  1067→  1067→  to {
+  1068→  1068→    opacity: 1;
+  1069→  1069→    transform: translateY(0);
+  1070→  1070→  }
+  1071→  1071→}
+  1072→  1072→
+  1073→  1073→/* Slider de radio: pista de vidrio + pulgar con acento IA */
+  1074→  1074→.homy-range {
+  1075→  1075→  -webkit-appearance: none;
+  1076→  1076→  appearance: none;
+  1077→  1077→  height: 6px;
+  1078→  1078→  border-radius: 9999px;
+  1079→  1079→  background: linear-gradient(
+  1080→  1080→    90deg,
+  1081→  1081→    #00c4ff var(--range-progress, 50%),
+  1082→  1082→    rgba(10, 37, 64, 0.14) var(--range-progress, 50%)
+  1083→  1083→  );
+  1084→  1084→  outline: none;
+  1085→  1085→  cursor: pointer;
+  1086→  1086→}
+  1087→  1087→.homy-range::-webkit-slider-thumb {
+  1088→  1088→  -webkit-appearance: none;
+  1089→  1089→  appearance: none;
+  1090→  1090→  width: 20px;
+  1091→  1091→  height: 20px;
+  1092→  1092→  border-radius: 9999px;
+  1093→  1093→  background: #fff;
+  1094→  1094→  border: 2.5px solid #00a8e0;
+  1095→  1095→  box-shadow:
+  1096→  1096→    0 4px 12px -2px rgba(0, 168, 224, 0.5),
+  1097→  1097→    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  1098→  1098→  transition: transform 0.2s ease;
+  1099→  1099→}
+  1100→  1100→.homy-range::-webkit-slider-thumb:hover {
+  1101→  1101→  transform: scale(1.12);
+  1102→  1102→}
+  1103→  1103→.homy-range::-moz-range-thumb {
+  1104→  1104→  width: 20px;
+  1105→  1105→  height: 20px;
+  1106→  1106→  border-radius: 9999px;
+  1107→  1107→  background: #fff;
+  1108→  1108→  border: 2.5px solid #00a8e0;
+  1109→  1109→  box-shadow:
+  1110→  1110→    0 4px 12px -2px rgba(0, 168, 224, 0.5),
+  1111→  1111→    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  1112→  1112→}
+  1113→  1113→
+  1114→  1114→/* Anillo de foco accesible y consistente en todo el sistema */
+  1115→  1115→.homy-focus:focus-visible {
+  1116→  1116→  outline: 2px solid #1d63b8;
+  1117→  1117→  outline-offset: 2px;
+  1118→  1118→  border-radius: 0.75rem;
+  1119→  1119→}
+  1120→  1120→
+  1121→  1121→/* Scrollbar fino para el chat de Homy */
+  1122→  1122→.homy-scroll::-webkit-scrollbar {
+  1123→  1123→  width: 6px;
+  1124→  1124→}
+  1125→  1125→.homy-scroll::-webkit-scrollbar-track {
+  1126→  1126→  background: transparent;
+  1127→  1127→}
+  1128→  1128→.homy-scroll::-webkit-scrollbar-thumb {
+  1129→  1129→  background: rgba(10, 37, 64, 0.16);
+  1130→  1130→  border-radius: 9999px;
+  1131→  1131→}
+  1132→  1132→.homy-scroll::-webkit-scrollbar-thumb:hover {
+  1133→  1133→  background: rgba(10, 37, 64, 0.28);
+  1134→  1134→}
+  1135→  1135→
+  1136→  1136→/* ============================================================
+  1137→  1137→   PAGE PRIMITIVES HomIA — vocabulario de páginas del panel
+  1138→  1138→   (page-head con kicker, stagger de entrada, KPIs, empty states,
+  1139→  1139→   tabs de filtro, filas de lista, secciones). Mismo contrato glass.
+  1140→  1140→   ============================================================ */
+  1141→  1141→
+  1142→  1142→/* Contenedor de página del panel: ancho de lectura + aire inferior */
+  1143→  1143→.homy-page {
+  1144→  1144→  max-width: 76rem;
+  1145→  1145→  margin-inline: auto;
+  1146→  1146→}
+  1147→  1147→
+  1148→  1148→/* Cabecera de página: kicker + título + subtítulo + acciones */
+  1149→  1149→.homy-page-head {
+  1150→  1150→  display: flex;
+  1151→  1151→  flex-wrap: wrap;
+  1152→  1152→  align-items: flex-end;
+  1153→  1153→  justify-content: space-between;
+  1154→  1154→  gap: 1rem;
+  1155→  1155→  margin-bottom: 1.5rem;
+  1156→  1156→}
+  1157→  1157→.homy-page-title {
+  1158→  1158→  font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem);
+  1159→  1159→  line-height: 1.12;
+  1160→  1160→  font-weight: 800;
+  1161→  1161→  letter-spacing: -0.02em;
+  1162→  1162→  color: #0a2540;
+  1163→  1163→}
+  1164→  1164→.homy-page-sub {
+  1165→  1165→  margin-top: 0.35rem;
+  1166→  1166→  font-size: 0.925rem;
+  1167→  1167→  color: color-mix(in srgb, #0a2540 62%, transparent);
+  1168→  1168→}
+  1169→  1169→
+  1170→  1170→/* Stagger de entrada: hijos aparecen en cascada (solo transform+opacity).
+  1171→  1171→   Uso: <div class="homy-stagger"> <card/> <card/> ... </div> */
+  1172→  1172→.homy-stagger > * {
+  1173→  1173→  animation: homy-stagger-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  1174→  1174→  animation-delay: calc(var(--stagger-step, 70ms) * min(var(--stagger-len, 8), 10) * 0);
+  1175→  1175→}
+  1176→  1176→.homy-stagger > *:nth-child(1) { animation-delay: 0.02s; }
+  1177→  1177→.homy-stagger > *:nth-child(2) { animation-delay: 0.09s; }
+  1178→  1178→.homy-stagger > *:nth-child(3) { animation-delay: 0.16s; }
+  1179→  1179→.homy-stagger > *:nth-child(4) { animation-delay: 0.23s; }
+  1180→  1180→.homy-stagger > *:nth-child(5) { animation-delay: 0.3s; }
+  1181→  1181→.homy-stagger > *:nth-child(6) { animation-delay: 0.37s; }
+  1182→  1182→.homy-stagger > *:nth-child(7) { animation-delay: 0.44s; }
+  1183→  1183→.homy-stagger > *:nth-child(8) { animation-delay: 0.51s; }
+  1184→  1184→.homy-stagger > *:nth-child(9) { animation-delay: 0.58s; }
+  1185→  1185→.homy-stagger > *:nth-child(10) { animation-delay: 0.65s; }
+  1186→  1186→.homy-stagger > *:nth-child(n + 11) { animation-delay: 0.72s; }
+  1187→  1187→@keyframes homy-stagger-rise {
+  1188→  1188→  from {
+  1189→  1189→    opacity: 0;
+  1190→  1190→    transform: translateY(16px) scale(0.985);
+  1191→  1191→  }
+  1192→  1192→  to {
+  1193→  1193→    opacity: 1;
+  1194→  1194→    transform: translateY(0) scale(1);
+  1195→  1195→  }
+  1196→  1196→}
+  1197→  1197→
+  1198→  1198→/* Tarjeta KPI: cifra grande + chip de gradiente + delta */
+  1199→  1199→.homy-kpi {
+  1200→  1200→  position: relative;
+  1201→  1201→  overflow: hidden;
+  1202→  1202→  border-radius: 1.5rem;
+  1203→  1203→  padding: 1.1rem 1.25rem;
+  1204→  1204→}
+  1205→  1205→.homy-kpi-value {
+  1206→  1206→  font-size: clamp(1.7rem, 1.4rem + 1vw, 2.1rem);
+  1207→  1207→  font-weight: 800;
+  1208→  1208→  letter-spacing: -0.03em;
+  1209→  1209→  line-height: 1;
+  1210→  1210→  color: #0a2540;
+  1211→  1211→  font-variant-numeric: tabular-nums;
+  1212→  1212→}
+  1213→  1213→.homy-kpi-label {
+  1214→  1214→  margin-top: 0.3rem;
+  1215→  1215→  font-size: 0.68rem;
+  1216→  1216→  font-weight: 800;
+  1217→  1217→  letter-spacing: 0.14em;
+  1218→  1218→  text-transform: uppercase;
+  1219→  1219→  color: color-mix(in srgb, #0a2540 55%, transparent);
+  1220→  1220→}
+  1221→  1221→/* Resplandor decorativo de esquina (pointer-events-none siempre) */
+  1222→  1222→.homy-kpi::before {
+  1223→  1223→  content: "";
+  1224→  1224→  position: absolute;
+  1225→  1225→  top: -34%;
+  1226→  1226→  right: -18%;
+  1227→  1227→  width: 55%;
+  1228→  1228→  aspect-ratio: 1;
+  1229→  1229→  border-radius: 9999px;
+  1230→  1230→  background: radial-gradient(
+  1231→  1231→    closest-side,
+  1232→  1232→    color-mix(in srgb, var(--kpi-glow, #00c4ff) 26%, transparent),
+  1233→  1233→    transparent
+  1234→  1234→  );
+  1235→  1235→  pointer-events: none;
+  1236→  1236→}
+  1237→  1237→
+  1238→  1238→/* Estado vacío premium: icono chip + título + copy + CTA */
+  1239→  1239→.homy-empty {
+  1240→  1240→  display: flex;
+  1241→  1241→  flex-direction: column;
+  1242→  1242→  align-items: center;
+  1243→  1243→  text-align: center;
+  1244→  1244→  padding: 2.75rem 1.5rem;
+  1245→  1245→  border-radius: 1.75rem;
+  1246→  1246→}
+  1247→  1247→.homy-empty-icon {
+  1248→  1248→  display: grid;
+  1249→  1249→  place-items: center;
+  1250→  1250→  width: 3.5rem;
+  1251→  1251→  height: 3.5rem;
+  1252→  1252→  border-radius: 1.25rem;
+  1253→  1253→  margin-bottom: 1rem;
+  1254→  1254→  animation: homy-empty-float 5s ease-in-out infinite;
+  1255→  1255→}
+  1256→  1256→@keyframes homy-empty-float {
+  1257→  1257→  0%,
+  1258→  1258→  100% {
+  1259→  1259→    transform: translateY(0);
+  1260→  1260→  }
+  1261→  1261→  50% {
+  1262→  1262→    transform: translateY(-6px);
+  1263→  1263→  }
+  1264→  1264→}
+  1265→  1265→
+  1266→  1266→/* Tab de filtro: pill de vidrio, activo navy con brillo IA */
+  1267→  1267→.homy-tab {
+  1268→  1268→  display: inline-flex;
+  1269→  1269→  align-items: center;
+  1270→  1270→  gap: 0.4rem;
+  1271→  1271→  white-space: nowrap;
+  1272→  1272→  border-radius: 9999px;
+  1273→  1273→  padding: 0.5rem 1rem;
+  1274→  1274→  font-size: 0.82rem;
+  1275→  1275→  font-weight: 700;
+  1276→  1276→  color: color-mix(in srgb, #0a2540 72%, transparent);
+  1277→  1277→  background: color-mix(in srgb, #ffffff 55%, transparent);
+  1278→  1278→  border: 1px solid color-mix(in srgb, #0a2540 8%, transparent);
+  1279→  1279→  backdrop-filter: blur(8px);
+  1280→  1280→  -webkit-backdrop-filter: blur(8px);
+  1281→  1281→  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  1282→  1282→  transition:
+  1283→  1283→    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+  1284→  1284→    background 0.25s ease,
+  1285→  1285→    color 0.25s ease,
+  1286→  1286→    border-color 0.25s ease,
+  1287→  1287→    box-shadow 0.25s ease;
+  1288→  1288→}
+  1289→  1289→.homy-tab:hover {
+  1290→  1290→  transform: translateY(-1px);
+  1291→  1291→  color: #0a2540;
+  1292→  1292→  border-color: color-mix(in srgb, #1d63b8 30%, transparent);
+  1293→  1293→}
+  1294→  1294→.homy-tab:active {
+  1295→  1295→  transform: translateY(0) scale(0.98);
+  1296→  1296→}
+  1297→  1297→.homy-tab[aria-pressed="true"],
+  1298→  1298→.homy-tab[aria-selected="true"] {
+  1299→  1299→  color: #fff;
+  1300→  1300→  background: linear-gradient(150deg, #103455 0%, #0a2540 80%);
+  1301→  1301→  border-color: color-mix(in srgb, #00c4ff 35%, transparent);
+  1302→  1302→  box-shadow:
+  1303→  1303→    0 10px 24px -12px rgba(10, 37, 64, 0.6),
+  1304→  1304→    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  1305→  1305→}
+  1306→  1306→
+  1307→  1307→/* Fila de lista: vidrio plano que se enciende al hover */
+  1308→  1308→.homy-row {
+  1309→  1309→  border-radius: 1.25rem;
+  1310→  1310→  background: color-mix(in srgb, #ffffff 66%, transparent);
+  1311→  1311→  border: 1px solid color-mix(in srgb, #0a2540 7%, transparent);
+  1312→  1312→  backdrop-filter: blur(12px) saturate(1.3);
+  1313→  1313→  -webkit-backdrop-filter: blur(12px) saturate(1.3);
+  1314→  1314→  box-shadow:
+  1315→  1315→    0 8px 26px -20px rgba(10, 37, 64, 0.3),
+  1316→  1316→    inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  1317→  1317→  transition:
+  1318→  1318→    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+  1319→  1319→    border-color 0.3s ease,
+  1320→  1320→    box-shadow 0.3s ease;
+  1321→  1321→}
+  1322→  1322→.homy-row:hover {
+  1323→  1323→  transform: translateY(-2px);
+  1324→  1324→  border-color: color-mix(in srgb, #1d63b8 30%, transparent);
+  1325→  1325→  box-shadow:
+  1326→  1326→    0 16px 40px -20px rgba(29, 99, 184, 0.35),
+  1327→  1327→    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  1328→  1328→}
+  1329→  1329→
+  1330→  1330→/* Cabecera de sección: chip de icono + título + acción a la derecha */
+  1331→  1331→.homy-section-head {
+  1332→  1332→  display: flex;
+  1333→  1333→  align-items: center;
+  1334→  1334→  justify-content: space-between;
+  1335→  1335→  gap: 0.75rem;
+  1336→  1336→  margin-bottom: 0.9rem;
+  1337→  1337→}
+  1338→  1338→.homy-section-title {
+  1339→  1339→  display: inline-flex;
+  1340→  1340→  align-items: center;
+  1341→  1341→  gap: 0.6rem;
+  1342→  1342→  font-size: 1.05rem;
+  1343→  1343→  font-weight: 800;
+  1344→  1344→  letter-spacing: -0.01em;
+  1345→  1345→  color: #0a2540;
+  1346→  1346→}
+  1347→  1347→
+  1348→  1348→/* Skeleton de vidrio: shimmer sobre superficie susurrada */
+  1349→  1349→.homy-skeleton {
+  1350→  1350→  border-radius: 1rem;
+  1351→  1351→  background: color-mix(in srgb, #ffffff 45%, transparent);
+  1352→  1352→  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  1353→  1353→  position: relative;
+  1354→  1354→  overflow: hidden;
+  1355→  1355→}
+  1356→  1356→.homy-skeleton::after {
+  1357→  1357→  content: "";
+  1358→  1358→  position: absolute;
+  1359→  1359→  inset: 0;
+  1360→  1360→  transform: translateX(-100%);
+  1361→  1361→  background: linear-gradient(
+  1362→  1362→    90deg,
+  1363→  1363→    transparent,
+  1364→  1364→    color-mix(in srgb, #ffffff 65%, transparent),
+  1365→  1365→    transparent
+  1366→  1366→  );
+  1367→  1367→  animation: homy-skeleton-sweep 1.6s ease-in-out infinite;
+  1368→  1368→}
+  1369→  1369→@keyframes homy-skeleton-sweep {
+  1370→  1370→  to {
+  1371→  1371→    transform: translateX(100%);
+  1372→  1372→  }
+  1373→  1373→}
+  1374→  1374→
+  1375→  1375→/* Progreso de etapa: barra de vidrio con relleno gradiente */
+  1376→  1376→.homy-progress {
+  1377→  1377→  height: 8px;
+  1378→  1378→  border-radius: 9999px;
+  1379→  1379→  background: color-mix(in srgb, #0a2540 8%, transparent);
+  1380→  1380→  box-shadow: inset 0 1px 2px rgba(10, 37, 64, 0.12);
+  1381→  1381→  overflow: hidden;
+  1382→  1382→}
+  1383→  1383→.homy-progress > i {
+  1384→  1384→  display: block;
+  1385→  1385→  height: 100%;
+  1386→  1386→  border-radius: 9999px;
+  1387→  1387→  background: linear-gradient(90deg, #1d63b8, #00c4ff);
+  1388→  1388→  box-shadow: 0 0 12px rgba(0, 196, 255, 0.5);
+  1389→  1389→  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  1390→  1390→}
+  1391→  1391→
+  1392→  1392→/* Badge numérico flotante (notificaciones, contadores) */
+  1393→  1393→.homy-badge-pop {
+  1394→  1394→  animation: homy-badge-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  1395→  1395→}
+  1396→  1396→@keyframes homy-badge-pop {
+  1397→  1397→  from {
+  1398→  1398→    transform: scale(0.4);
+  1399→  1399→    opacity: 0;
+  1400→  1400→  }
+  1401→  1401→  to {
+  1402→  1402→    transform: scale(1);
+  1403→  1403→    opacity: 1;
+  1404→  1404→  }
+  1405→  1405→}
+  1406→  1406→
+  1407→  1407→/* Accesibilidad: respetar preferencia de movimiento reducido */
+  1408→  1408→@media (prefers-reduced-motion: reduce) {
+  1409→  1409→  .animate-flow-q,
+  1410→  1410→  .animate-flow-a,
+  1411→  1411→  .animate-float,
+  1412→  1412→  .animate-float-slow,
+  1413→  1413→  .animate-glow-ai,
+  1414→  1414→  .animate-spin-slow,
+  1415→  1415→  .homy-wrap,
+  1416→  1416→  .homy-core,
+  1417→  1417→  .homy-halo,
+  1418→  1418→  .homy-plug,
+  1419→  1419→  .homy-head,
+  1420→  1420→  .homy-head-inner,
+  1421→  1421→  .homy-figure,
+  1422→  1422→  .homy-tilt,
+  1423→  1423→  .flow-line,
+  1424→  1424→  .homy-lift,
+  1425→  1425→  .homy-screen,
+  1426→  1426→  .homy-fx-aurora-a,
+  1427→  1427→  .homy-fx-aurora-b,
+  1428→  1428→  .homy-fx-sonar,
+  1429→  1429→  .animate-ring-ping,
+  1430→  1430→  .homy-reveal,
+  1431→  1431→  .homy-card-glow,
+  1432→  1432→  .homy-btn-primary,
+  1433→  1433→  .homy-btn-primary::after,
+  1434→  1434→  .homy-btn-dark,
+  1435→  1435→  .homy-nav-link::after,
+  1436→  1436→  .homy-range::-webkit-slider-thumb,
+  1437→  1437→  .homy-range::-moz-range-thumb,
+  1438→  1438→  .homy-stagger > *,
+  1439→  1439→  .homy-empty-icon,
+  1440→  1440→  .homy-skeleton::after,
+  1441→  1441→  .homy-badge-pop {
+  1442→  1442→    animation: none !important;
+  1443→  1443→    transition: none !important;
+  1444→  1444→  }
+  1445→  1445→  .homy-reveal {
+  1446→  1446→    animation: none !important;
+  1447→  1447→    opacity: 1 !important;
+  1448→  1448→    transform: none !important;
+  1449→  1449→  }
+  1450→  1450→  .homy-fx-aurora-a,
+  1451→  1451→  .homy-fx-aurora-b,
+  1452→  1452→  .homy-fx-sonar {
+  1453→  1453→    opacity: 0.6;
+  1454→  1454→  }
+  1455→  1455→  .homy-lift,
+  1456→  1456→  .homy-lift:hover,
+  1457→  1457→  .homy-lift:active,
+  1458→  1458→  .homy-btn-primary:hover,
+  1459→  1459→  .homy-btn-dark:hover {
+  1460→  1460→    transform: none;
+  1461→  1461→  }
+  1462→  1462→  html {
+  1463→  1463→    scroll-behavior: auto;
+  1464→  1464→  }
+  1465→  1465→}
+  1466→  1466→

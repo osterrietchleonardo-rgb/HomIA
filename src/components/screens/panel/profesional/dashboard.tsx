@@ -2,7 +2,7 @@
 // Dashboard Profesional HomIA — resumen de actividad, próximas acciones y accesos rápidos
 import { useEffect, useState } from 'react'
 import { navigate } from '@/lib/router'
-import { PageHeader, StatCard, StatusBadge, Loading, EmptyState } from '@/components/app/ui-bits'
+import { StatusBadge, Loading } from '@/components/app/ui-bits'
 import { formatARS, timeAgo } from '@/lib/format'
 import {
   Search, Boxes, Users, ArrowRight, BriefcaseBusiness, ClipboardPen,
@@ -60,36 +60,64 @@ export default function ProDashboard() {
   ].slice(0, 6)
 
   return (
-    <div>
-      <PageHeader
-        title="Tu panel profesional"
-        subtitle="Trabajos disponibles, proyectos en curso y materiales al mejor precio"
-        right={
-          <button onClick={() => navigate('/panel/profesional/bolsa')} className="homy-btn-primary px-5 py-2.5 text-sm">
-            <Search className="size-4" /> Buscar trabajos
-          </button>
-        }
-      />
+    <div className="homy-page">
+      {/* Encabezado */}
+      <header className="homy-page-head">
+        <div className="min-w-0">
+          <span className="homy-eyebrow">Panel profesional</span>
+          <h1 className="homy-page-title mt-1.5">Tu centro de mando</h1>
+          <p className="homy-page-sub">Trabajos disponibles, proyectos en curso y materiales al mejor precio.</p>
+        </div>
+        <button onClick={() => navigate('/panel/profesional/bolsa')} className="homy-btn-primary min-h-[44px] shrink-0 px-5 py-2.5 text-sm">
+          <Search className="size-4" /> Buscar trabajos
+        </button>
+      </header>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <StatCard label="Presupuestos enviados" value={quotesSent.length} hint="esperando respuesta" accent="#1D63B8" icon={<ClipboardPen />} tone="blue" />
-        <StatCard label="Proyectos activos" value={active.length} hint={pipelineValue > 0 ? formatARS(pipelineValue) + ' en cartera' : undefined} accent="#16A34A" icon={<FolderKanban />} tone="mint" />
-        <StatCard label="Trabajos en tu rubro" value={inMyField.length} hint="abiertos en la bolsa" accent="#FF5A1F" icon={<BriefcaseBusiness />} tone="orange" />
-        <StatCard label="Tu rating" value={rating > 0 ? rating.toFixed(1) : '—'} hint={rating > 0 ? 'según tus reseñas' : 'completá obras para recibir reseñas'} accent="#FFC700" icon={<Star />} tone="gold" />
+      {/* KPIs */}
+      <div className="homy-stagger grid grid-cols-2 lg:grid-cols-4 gap-3 mb-7">
+        <Kpi
+          glow="#1D63B8" valueColor="#1D63B8" chip="homy-chip-blue" icon={<ClipboardPen />}
+          label="Presupuestos enviados" value={String(quotesSent.length)} hint="esperando respuesta"
+        />
+        <Kpi
+          glow="#10B981" chip="homy-chip-mint" icon={<FolderKanban />}
+          label="Proyectos activos" value={String(active.length)}
+          hint={pipelineValue > 0 ? `${formatARS(pipelineValue)} en cartera` : 'sin cartera activa por ahora'}
+        />
+        <Kpi
+          glow="#FF5A1F" valueColor="#FF5A1F" chip="homy-chip-orange" icon={<BriefcaseBusiness />}
+          label="Trabajos en tu rubro" value={String(inMyField.length)} hint="abiertos en la bolsa"
+        />
+        <Kpi
+          glow="#FFC700" valueColor="#B98A00" chip="homy-chip-gold" icon={<Star />}
+          label="Tu rating" value={rating > 0 ? rating.toFixed(1) : '—'}
+          hint={rating > 0 ? 'según tus reseñas' : 'completá obras para recibir reseñas'}
+        />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
+        {/* Próximas acciones */}
         <section>
-          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-3">
-            <span className="homy-icon-chip homy-chip-orange size-7 [&_svg]:size-3.5" aria-hidden><Zap /></span>
-            Próximas acciones
-          </h2>
+          <div className="homy-section-head">
+            <h2 className="homy-section-title">
+              <span className="homy-icon-chip homy-chip-orange size-7 [&_svg]:size-3.5" aria-hidden><Zap /></span>
+              Próximas acciones
+            </h2>
+            {actions.length > 0 && (
+              <span className="homy-pill"><span className="homy-pill-dot bg-amber-500" aria-hidden />{actions.length} pendiente{actions.length === 1 ? '' : 's'}</span>
+            )}
+          </div>
           {actions.length === 0 ? (
-            <EmptyState icon={<BriefcaseBusiness />} title="Todo al día, campeón" hint="Cuando envíes presupuestos o propongas materiales, vas a ver acá lo que necesita tu atención." />
+            <Empty
+              icon={<BriefcaseBusiness className="size-7" />}
+              title="Todo al día, campeón"
+              hint="Cuando envíes presupuestos o propongas materiales, vas a ver acá lo que necesita tu atención."
+            />
           ) : (
-            <div className="space-y-2">
+            <div className="homy-stagger space-y-2">
               {actions.map(({ key, project: p, kind }) => (
-                <button key={key} onClick={() => navigate(`/panel/profesional/proyectos/${p.id}`)} className="w-full text-left rounded-2xl homy-glass homy-lift homy-card-glow p-4 flex items-center justify-between gap-3">
+                <button key={key} onClick={() => navigate(`/panel/profesional/proyectos/${p.id}`)}
+                  className="homy-row group w-full text-left p-4 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <span className={`homy-icon-chip size-9 shrink-0 [&_svg]:size-4 ${kind === 'quote' ? 'homy-chip-gold' : kind === 'materials' ? 'homy-chip-orange' : 'homy-chip-blue'}`} aria-hidden>
                       {kind === 'quote' ? <ClipboardPen /> : kind === 'materials' ? <Package /> : <HardHat />}
@@ -114,33 +142,39 @@ export default function ProDashboard() {
           )}
         </section>
 
+        {/* Accesos + oportunidades */}
         <section>
-          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-3">
-            <span className="homy-icon-chip homy-chip-blue size-7 [&_svg]:size-3.5" aria-hidden><LayoutGrid /></span>
-            Accesos rápidos
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <QuickCard icon={Search} title="Bolsa de trabajos" desc="Trabajos abiertos cerca tuyo" onClick={() => navigate('/panel/profesional/bolsa')} />
-            <QuickCard icon={Boxes} title="Materiales" desc="Precios y comparables entre proveedores" onClick={() => navigate('/panel/profesional/materiales')} />
-            <QuickCard icon={Users} title="CRM" desc="Tu pipeline de clientes y tratos" onClick={() => navigate('/panel/profesional/crm')} />
+          <div className="homy-section-head">
+            <h2 className="homy-section-title">
+              <span className="homy-icon-chip homy-chip-blue size-7 [&_svg]:size-3.5" aria-hidden><LayoutGrid /></span>
+              Accesos rápidos
+            </h2>
+          </div>
+          <div className="homy-stagger grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <QuickCard icon={Search} chip="homy-chip-orange" title="Bolsa de trabajos" desc="Trabajos abiertos cerca tuyo" onClick={() => navigate('/panel/profesional/bolsa')} />
+            <QuickCard icon={Boxes} chip="homy-chip-blue" title="Materiales" desc="Precios y comparables entre proveedores" onClick={() => navigate('/panel/profesional/materiales')} />
+            <QuickCard icon={Users} chip="homy-chip-mint" title="CRM" desc="Tu pipeline de clientes y tratos" onClick={() => navigate('/panel/profesional/crm')} />
           </div>
 
-          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-3 mt-6">
-            <span className="homy-icon-chip homy-chip-mint size-7 [&_svg]:size-3.5" aria-hidden><BriefcaseBusiness /></span>
-            Trabajos para vos
-          </h2>
+          <div className="homy-section-head mt-7">
+            <h2 className="homy-section-title">
+              <span className="homy-icon-chip homy-chip-mint size-7 [&_svg]:size-3.5" aria-hidden><BriefcaseBusiness /></span>
+              Oportunidades para vos
+            </h2>
+          </div>
           {inMyField.length === 0 ? (
-            <div className="homy-glass-soft rounded-2xl p-5 text-sm text-slate-500">
+            <div className="homy-glass-soft rounded-2xl border border-dashed border-[#0A2540]/12 p-5 text-sm text-slate-500 leading-relaxed">
               No hay trabajos abiertos en tu rubro ahora mismo. Volvé a chequear la bolsa pronto o ampliá tu radio de búsqueda.
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="homy-stagger space-y-2">
               {inMyField.slice(0, 4).map((j) => (
-                <button key={j.id} onClick={() => navigate(`/trabajo/${j.id}`)} className="w-full text-left rounded-2xl homy-glass homy-lift homy-card-glow p-4">
+                <button key={j.id} onClick={() => navigate(`/trabajo/${j.id}`)}
+                  className="homy-row w-full text-left p-4 group">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-bold text-[#0A2540] line-clamp-1">{j.title}</p>
-                      <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
+                      <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
                         <MapPin className="size-3.5 shrink-0" aria-hidden />
                         {j.city || '—'} · {j.bidsCount} presupuesto{j.bidsCount === 1 ? '' : 's'}
                       </p>
@@ -151,8 +185,9 @@ export default function ProDashboard() {
                   </div>
                 </button>
               ))}
-              <button onClick={() => navigate('/panel/profesional/bolsa')} className="homy-glass-soft w-full text-center rounded-2xl p-3.5 text-sm font-bold text-[#1D63B8] transition hover:text-[#0A2540] flex items-center justify-center gap-1.5">
-                Ver todos en la bolsa <ArrowRight className="size-4" aria-hidden />
+              <button onClick={() => navigate('/panel/profesional/bolsa')}
+                className="homy-glass-soft w-full text-center rounded-2xl p-3.5 min-h-[44px] text-sm font-bold text-[#1D63B8] transition hover:text-[#0A2540] flex items-center justify-center gap-1.5">
+                Ver todas en la bolsa <ArrowRight className="size-4" aria-hidden />
               </button>
             </div>
           )}
@@ -162,14 +197,42 @@ export default function ProDashboard() {
   )
 }
 
-function QuickCard({ icon: Icon, title, desc, onClick }: { icon: React.ComponentType<{ className?: string }>; title: string; desc: string; onClick: () => void }) {
+/* KPI Signature: cifra protagonista + chip de gradiente + resplandor de esquina */
+function Kpi({ label, value, hint, glow, valueColor, chip, icon }: {
+  label: string; value: string; hint?: string; glow: string; valueColor?: string
+  chip: string; icon: React.ReactNode
+}) {
   return (
-    <button onClick={onClick} className="rounded-2xl homy-glass homy-lift homy-card-glow p-4 text-left">
-      <span className="homy-icon-chip homy-chip-blue size-10 [&_svg]:size-5" aria-hidden>
+    <div className="homy-glass homy-kpi homy-lift" style={{ '--kpi-glow': glow } as React.CSSProperties}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="homy-kpi-label">{label}</p>
+        <span className={`homy-icon-chip size-8 shrink-0 [&_svg]:size-4 ${chip}`} aria-hidden>{icon}</span>
+      </div>
+      <p className="homy-kpi-value mt-2" style={valueColor ? { color: valueColor } : undefined}>{value}</p>
+      {hint && <p className="text-xs text-slate-400 mt-1.5 leading-snug line-clamp-1">{hint}</p>}
+    </div>
+  )
+}
+
+function QuickCard({ icon: Icon, chip, title, desc, onClick }: { icon: React.ComponentType<{ className?: string }>; chip: string; title: string; desc: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="homy-glass homy-lift homy-card-glow rounded-2xl p-4 text-left">
+      <span className={`homy-icon-chip size-10 [&_svg]:size-5 ${chip}`} aria-hidden>
         <Icon className="size-5" />
       </span>
       <p className="font-bold text-[#0A2540] mt-2.5 text-sm">{title}</p>
-      <p className="text-xs text-slate-400 mt-0.5">{desc}</p>
+      <p className="text-xs text-slate-400 mt-0.5 leading-snug">{desc}</p>
     </button>
+  )
+}
+
+/* Estado vacío del panel: icono flotante + copy claro */
+function Empty({ icon, title, hint }: { icon: React.ReactNode; title: string; hint: string }) {
+  return (
+    <div className="homy-empty homy-glass-soft border border-dashed border-[#0A2540]/12">
+      <span className="homy-empty-icon homy-chip-blue" aria-hidden>{icon}</span>
+      <h3 className="font-bold text-[#0A2540] text-lg tracking-tight">{title}</h3>
+      <p className="text-sm text-slate-500 mt-1.5 max-w-md leading-relaxed">{hint}</p>
+    </div>
   )
 }

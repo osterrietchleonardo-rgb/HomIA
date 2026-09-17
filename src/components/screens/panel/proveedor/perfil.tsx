@@ -1,7 +1,7 @@
 'use client'
 // Perfil del proveedor — datos del negocio, reputación y documentos (DNI frente/reverso)
 import { useEffect, useRef, useState } from 'react'
-import { PageHeader, StatusBadge, Loading, UAvatar, UStars } from '@/components/app/ui-bits'
+import { StatusBadge, Loading, UAvatar, UStars } from '@/components/app/ui-bits'
 import { formatDate } from '@/lib/format'
 import { toast } from 'sonner'
 import { useSession } from '@/lib/store'
@@ -122,119 +122,131 @@ export default function ProviderProfile() {
   const reviewsCount = me?.provider?.reviewsCount ?? 0
 
   return (
-    <div className="max-w-xl">
-      <PageHeader title="Mi perfil" subtitle="Datos de tu negocio y verificación de identidad" />
+    <div className="homy-page">
+      {/* Encabezado */}
+      <header className="homy-page-head">
+        <div className="min-w-0">
+          <span className="homy-eyebrow">Identidad del negocio</span>
+          <h1 className="homy-page-title mt-1.5">Mi perfil</h1>
+          <p className="homy-page-sub">Datos de tu negocio y verificación de identidad.</p>
+        </div>
+      </header>
 
-      {/* encabezado con reputación */}
-      <div className="homy-glass rounded-3xl p-6 mb-5 relative overflow-hidden">
-        <span aria-hidden className="pointer-events-none absolute -top-14 -right-14 size-44 rounded-full" style={{ background: 'radial-gradient(circle, rgba(0,196,255,0.16) 0%, transparent 70%)' }} />
-        <div className="relative flex items-center gap-4">
-          <UAvatar name={me?.displayName || ''} url={me?.avatarUrl} size={60} />
-          <div className="min-w-0">
-            <p className="font-extrabold text-[#0A2540] truncate">{me?.provider?.businessName || me?.displayName}</p>
-            <p className="text-sm text-slate-500 truncate">{me?.email}</p>
-            <div className="flex items-center gap-2 mt-1">
-              <UStars rating={rating} />
-              <span className="text-xs text-slate-500 flex items-center gap-1 tabular-nums">
-                <Star aria-hidden className="size-3 text-[#FFC700] fill-[#FFC700]" />
-                {rating > 0 ? rating.toFixed(1) : '—'} · {reviewsCount} reseña{reviewsCount === 1 ? '' : 's'}
-              </span>
+      <div className="max-w-2xl homy-stagger space-y-5">
+        {/* tarjeta de identidad del negocio */}
+        <section className="homy-glass rounded-3xl p-5 sm:p-6 relative overflow-hidden">
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -top-14 -right-14 size-44 rounded-full"
+            style={{ background: 'radial-gradient(circle, rgba(0,196,255,0.16) 0%, transparent 70%)' }}
+          />
+          <div className="relative flex items-center gap-4">
+            <UAvatar name={me?.displayName || ''} url={me?.avatarUrl} size={64} />
+            <div className="min-w-0 flex-1">
+              <p className="font-extrabold text-lg text-[#0A2540] truncate">{me?.provider?.businessName || me?.displayName}</p>
+              <p className="text-sm text-slate-500 truncate">{me?.email}</p>
+              <div className="flex items-center gap-2.5 mt-2 flex-wrap">
+                <UStars rating={rating} size="text-xs" />
+                <span className="text-xs text-slate-500 flex items-center gap-1 tabular-nums">
+                  <Star aria-hidden className="size-3 text-[#FFC700] fill-[#FFC700]" />
+                  {rating > 0 ? rating.toFixed(1) : '—'} · {reviewsCount} reseña{reviewsCount === 1 ? '' : 's'}
+                </span>
+                {me?.provider?.cuit && <span className="homy-pill font-mono">CUIT {me.provider.cuit}</span>}
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </section>
 
-      {/* datos del negocio */}
-      <form onSubmit={save} className="homy-glass rounded-3xl p-6 space-y-4 mb-5">
-        <div className="flex items-center gap-3">
-          <span aria-hidden className="homy-icon-chip homy-chip-blue size-9 shrink-0">
-            <Store className="size-4" />
-          </span>
-          <h2 className="font-extrabold text-[#0A2540]">Datos del negocio</h2>
-        </div>
-        <Field label="Nombre del negocio" value={businessName} onChange={setBusinessName} placeholder="Ej: Corralón Central" required />
-        <Field label="CUIT" value={cuit} onChange={setCuit} placeholder="30-12345678-9" />
-        <div>
-          <label className="text-sm font-semibold text-[#0A2540]">Descripción</label>
-          <textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)}
-            placeholder="Contá qué vendés, marcas, si hacés entregas, horarios…"
-            className="homy-glass-input mt-1 w-full rounded-xl px-4 py-3 text-sm resize-none" />
-        </div>
-        <Field label="Dirección" value={address} onChange={setAddress} placeholder="Calle y número" />
-        <Field label="Ciudad" value={city} onChange={setCity} placeholder="Ej: Córdoba" />
-        <button type="submit" disabled={busy} className="homy-btn-dark w-full py-3.5 disabled:opacity-60">
-          {busy ? 'Guardando…' : 'Guardar cambios'}
-        </button>
-      </form>
-
-      {/* documentos */}
-      <div className="homy-glass rounded-3xl p-6">
-        <div className="flex items-center gap-3">
-          <span aria-hidden className="homy-icon-chip homy-chip-mint size-9 shrink-0">
-            <ShieldCheck className="size-4" />
-          </span>
-          <h2 className="font-extrabold text-[#0A2540]">Documentos</h2>
-        </div>
-        <p className="text-sm text-slate-500 mt-1.5 mb-4">
-          Subí tu DNI (frente y reverso) para verificar tu negocio. Queda privado: solo lo ve el equipo de HomIA.
-        </p>
-
-        {docs.length > 0 && (
-          <div className="space-y-2 mb-4">
-            {docs.map((d) => (
-              <div key={d.id} className="homy-glass-soft rounded-xl p-3 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  {d.frontUrl && <img src={d.frontUrl} alt="DNI frente" className="size-10 rounded-lg object-cover border border-[#0A2540]/10" />}
-                  {d.backUrl && <img src={d.backUrl} alt="DNI reverso" className="size-10 rounded-lg object-cover border border-[#0A2540]/10" />}
-                  <span className="text-sm font-bold text-[#0A2540]">DNI</span>
-                  <span className="text-xs text-slate-400 hidden sm:inline">· {formatDate(d.createdAt)}</span>
-                </div>
-                <StatusBadge status={d.status} label={d.status === 'en_revision' ? 'en revisión' : undefined} />
-              </div>
-            ))}
+        {/* datos del negocio */}
+        <form onSubmit={save} className="homy-glass rounded-3xl p-5 sm:p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <span aria-hidden className="homy-icon-chip homy-chip-blue size-10 shrink-0 [&_svg]:size-5"><Store /></span>
+            <h2 className="homy-section-title">Datos del negocio</h2>
           </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-3">
-          <input ref={frontRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden"
-            onChange={() => uploadSide('front')} aria-label="Subir frente del DNI" />
-          <input ref={backRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden"
-            onChange={() => uploadSide('back')} aria-label="Subir reverso del DNI" />
-          <button type="button" onClick={() => frontRef.current?.click()} disabled={uploading !== null}
-            className="rounded-2xl border-2 border-dashed border-[#0A2540]/15 hover:border-[#1D63B8] hover:bg-[#1D63B8]/5 disabled:opacity-60 p-5 flex flex-col items-center gap-2 text-sm font-semibold text-slate-500 transition">
-            {uploading === 'front'
-              ? <Loader2 aria-hidden className="size-5 text-[#00C4FF] animate-spin" />
-              : frontUrl ? <CheckCircle2 aria-hidden className="size-5 text-emerald-500" /> : <Upload aria-hidden className="size-5 text-[#1D63B8]" />}
-            <span className="truncate max-w-full">{frontName || 'Frente del DNI'}</span>
-            <span className="text-xs text-slate-400 font-normal">{frontUrl ? 'Listo para enviar' : 'JPG, PNG o PDF'}</span>
+          <Field label="Nombre del negocio" value={businessName} onChange={setBusinessName} placeholder="Ej: Corralón Central" required />
+          <Field label="CUIT" value={cuit} onChange={setCuit} placeholder="30-12345678-9" mono />
+          <div>
+            <label htmlFor="pf-desc" className="text-[13px] font-bold text-[#0A2540]">Descripción</label>
+            <textarea id="pf-desc" rows={4} value={description} onChange={(e) => setDescription(e.target.value)}
+              placeholder="Contá qué vendés, marcas, si hacés entregas, horarios…"
+              className="homy-glass-input mt-1.5 w-full rounded-xl px-4 py-3 text-sm resize-none" />
+          </div>
+          <Field label="Dirección" value={address} onChange={setAddress} placeholder="Calle y número" />
+          <Field label="Ciudad" value={city} onChange={setCity} placeholder="Ej: Córdoba" />
+          <button type="submit" disabled={busy} className="homy-btn-primary homy-focus w-full min-h-[48px] disabled:opacity-60">
+            {busy ? 'Guardando…' : 'Guardar cambios'}
           </button>
-          <button type="button" onClick={() => backRef.current?.click()} disabled={uploading !== null}
-            className="rounded-2xl border-2 border-dashed border-[#0A2540]/15 hover:border-[#1D63B8] hover:bg-[#1D63B8]/5 disabled:opacity-60 p-5 flex flex-col items-center gap-2 text-sm font-semibold text-slate-500 transition">
-            {uploading === 'back'
-              ? <Loader2 aria-hidden className="size-5 text-[#00C4FF] animate-spin" />
-              : backUrl ? <CheckCircle2 aria-hidden className="size-5 text-emerald-500" /> : <Upload aria-hidden className="size-5 text-[#1D63B8]" />}
-            <span className="truncate max-w-full">{backName || 'Reverso del DNI'}</span>
-            <span className="text-xs text-slate-400 font-normal">{backUrl ? 'Listo para enviar' : 'JPG, PNG o PDF'}</span>
-          </button>
-        </div>
+        </form>
 
-        <button type="button" onClick={sendDoc} disabled={sendingDoc || uploading !== null || (!frontUrl && !backUrl)}
-          className="homy-btn-primary mt-4 w-full py-3 disabled:opacity-60">
-          {sendingDoc ? 'Enviando…' : 'Enviar documento a revisión'}
-        </button>
+        {/* documentos */}
+        <section className="homy-glass rounded-3xl p-5 sm:p-6">
+          <div className="flex items-center gap-3">
+            <span aria-hidden className="homy-icon-chip homy-chip-mint size-10 shrink-0 [&_svg]:size-5"><ShieldCheck /></span>
+            <div className="min-w-0">
+              <h2 className="homy-section-title">Documentos</h2>
+              <p className="text-sm text-slate-500 mt-0.5">
+                Subí tu DNI (frente y reverso) para verificar tu negocio. Queda privado: solo lo ve el equipo de HomIA.
+              </p>
+            </div>
+          </div>
+
+          {docs.length > 0 && (
+            <div className="space-y-2 mt-5 mb-4">
+              {docs.map((d) => (
+                <div key={d.id} className="homy-glass-soft rounded-xl p-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {d.frontUrl && <img src={d.frontUrl} alt="DNI frente" className="size-10 rounded-lg object-cover border border-[#0A2540]/10" />}
+                    {d.backUrl && <img src={d.backUrl} alt="DNI reverso" className="size-10 rounded-lg object-cover border border-[#0A2540]/10" />}
+                    <span className="text-sm font-bold text-[#0A2540]">DNI</span>
+                    <span className="text-xs text-slate-400 hidden sm:inline">· {formatDate(d.createdAt)}</span>
+                  </div>
+                  <StatusBadge status={d.status} label={d.status === 'en_revision' ? 'en revisión' : undefined} />
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <input ref={frontRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden"
+              onChange={() => uploadSide('front')} aria-label="Subir frente del DNI" />
+            <input ref={backRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden"
+              onChange={() => uploadSide('back')} aria-label="Subir reverso del DNI" />
+            <button type="button" onClick={() => frontRef.current?.click()} disabled={uploading !== null}
+              className="rounded-2xl border-2 border-dashed border-[#0A2540]/15 hover:border-[#1D63B8] hover:bg-[#1D63B8]/5 disabled:opacity-60 p-4 sm:p-5 flex flex-col items-center justify-center gap-2 text-sm font-semibold text-slate-500 transition min-h-[112px]">
+              {uploading === 'front'
+                ? <Loader2 aria-hidden className="size-5 text-[#00C4FF] animate-spin" />
+                : frontUrl ? <CheckCircle2 aria-hidden className="size-5 text-emerald-500" /> : <Upload aria-hidden className="size-5 text-[#1D63B8]" />}
+              <span className="truncate max-w-full">{frontName || 'Frente del DNI'}</span>
+              <span className="text-xs text-slate-400 font-normal">{frontUrl ? 'Listo para enviar' : 'JPG, PNG o PDF'}</span>
+            </button>
+            <button type="button" onClick={() => backRef.current?.click()} disabled={uploading !== null}
+              className="rounded-2xl border-2 border-dashed border-[#0A2540]/15 hover:border-[#1D63B8] hover:bg-[#1D63B8]/5 disabled:opacity-60 p-4 sm:p-5 flex flex-col items-center justify-center gap-2 text-sm font-semibold text-slate-500 transition min-h-[112px]">
+              {uploading === 'back'
+                ? <Loader2 aria-hidden className="size-5 text-[#00C4FF] animate-spin" />
+                : backUrl ? <CheckCircle2 aria-hidden className="size-5 text-emerald-500" /> : <Upload aria-hidden className="size-5 text-[#1D63B8]" />}
+              <span className="truncate max-w-full">{backName || 'Reverso del DNI'}</span>
+              <span className="text-xs text-slate-400 font-normal">{backUrl ? 'Listo para enviar' : 'JPG, PNG o PDF'}</span>
+            </button>
+          </div>
+
+          <button type="button" onClick={sendDoc} disabled={sendingDoc || uploading !== null || (!frontUrl && !backUrl)}
+            className="homy-btn-primary homy-focus mt-4 w-full min-h-[48px] disabled:opacity-60">
+            {sendingDoc ? 'Enviando…' : 'Enviar documento a revisión'}
+          </button>
+        </section>
       </div>
     </div>
   )
 }
 
-function Field({ label, value, onChange, type = 'text', placeholder, required }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string; required?: boolean }) {
+function Field({ label, value, onChange, type = 'text', placeholder, required, mono }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string; required?: boolean; mono?: boolean }) {
   return (
     <div>
-      <label className="text-sm font-semibold text-[#0A2540]">
-        {label}{!required && <span className="text-slate-400 font-normal"> (opcional)</span>}
+      <label className="text-[13px] font-bold text-[#0A2540]">
+        {label}{!required && <span className="text-slate-400 font-semibold"> (opcional)</span>}
       </label>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="homy-glass-input mt-1 w-full rounded-xl px-4 py-3 text-sm" />
+        className={`homy-glass-input mt-1.5 w-full rounded-xl px-4 py-3 min-h-[44px] text-sm ${mono ? 'font-mono tabular-nums' : ''}`} />
     </div>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 // CRM del profesional: pipeline kanban con etapas, tratos y movimiento entre columnas
 import { useEffect, useMemo, useState } from 'react'
-import { PageHeader, Loading, EmptyState, UAvatar } from '@/components/app/ui-bits'
+import { Loading, UAvatar } from '@/components/app/ui-bits'
 import { formatARS } from '@/lib/format'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
@@ -99,10 +99,15 @@ export default function ProCRM() {
 
   if (!pipeline) {
     return (
-      <div className="max-w-4xl">
-        <PageHeader title="CRM" subtitle="Tu pipeline de clientes y oportunidades" />
-        <EmptyState icon={<BarChart3 />} title="No tenés pipelines todavía"
-          hint="El pipeline se crea automáticamente la primera vez que entrás." />
+      <div className="homy-page">
+        <header className="homy-page-head">
+          <div className="min-w-0">
+            <span className="homy-eyebrow">CRM</span>
+            <h1 className="homy-page-title mt-1.5">Tu pipeline de clientes</h1>
+            <p className="homy-page-sub">Seguí tus oportunidades de trabajo columna por columna.</p>
+          </div>
+        </header>
+        <Empty />
       </div>
     )
   }
@@ -110,40 +115,61 @@ export default function ProCRM() {
   const totalValue = deals.reduce((a, d) => a + d.value, 0)
 
   return (
-    <div className="max-w-full">
-      <PageHeader
-        title="CRM"
-        subtitle="Seguí tus oportunidades de trabajo columna por columna"
-        right={
-          pipelines.length > 1 ? (
-            <select value={pipeline.id} onChange={(e) => setPipelineId(e.target.value)} aria-label="Pipeline"
-              className="homy-glass-input rounded-xl px-3 py-2.5 text-sm font-semibold cursor-pointer">
-              {pipelines.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          ) : undefined
-        }
-      />
+    <div className="homy-page">
+      {/* Encabezado */}
+      <header className="homy-page-head">
+        <div className="min-w-0">
+          <span className="homy-eyebrow">CRM</span>
+          <h1 className="homy-page-title mt-1.5">Tu pipeline de clientes</h1>
+          <p className="homy-page-sub">Seguí tus oportunidades de trabajo columna por columna.</p>
+        </div>
+        {pipelines.length > 1 && (
+          <select value={pipeline.id} onChange={(e) => setPipelineId(e.target.value)} aria-label="Pipeline"
+            className="homy-glass-input rounded-xl px-3 py-2.5 text-sm font-semibold cursor-pointer shrink-0 min-h-[44px]">
+            {pipelines.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        )}
+      </header>
 
-      <p className="text-sm text-slate-500 mb-4 flex items-center gap-1.5 flex-wrap">
-        <Handshake className="size-4 text-[#1D63B8]" aria-hidden />
-        {deals.length} trato{deals.length === 1 ? '' : 's'} · valor total del pipeline: <b className="text-[#0A2540] tabular-nums">{formatARS(totalValue)}</b>
-      </p>
+      {/* Resumen del pipeline */}
+      <div className="flex flex-wrap items-center gap-2.5 mb-5">
+        <span className="homy-glass rounded-full px-4 py-2.5 inline-flex items-center gap-2 text-sm font-semibold text-slate-500">
+          <Handshake className="size-4 text-[#1D63B8]" aria-hidden />
+          {deals.length} trato{deals.length === 1 ? '' : 's'} activo{deals.length === 1 ? '' : 's'}
+        </span>
+        <span className="homy-glass rounded-full px-4 py-2.5 inline-flex items-center gap-2 text-sm font-semibold text-slate-500">
+          Valor total del pipeline:
+          <b className="text-[#0A2540] tabular-nums">{formatARS(totalValue)}</b>
+        </span>
+      </div>
 
+      {/* Kanban */}
       <div className="overflow-x-auto no-scrollbar pb-4 -mx-1 px-1">
-        <div className="flex gap-3 min-w-max">
+        <div className="flex gap-3 min-w-max items-start">
           {pipeline.stages.map((stage, i) => {
             const list = stageDeals.get(stage.id) || []
+            const stageValue = list.reduce((a, d) => a + d.value, 0)
             return (
-              <div key={stage.id} className="min-w-[250px] w-[250px] shrink-0 rounded-2xl homy-glass-soft p-3 flex flex-col">
-                <div className="flex items-center justify-between gap-2 mb-3 px-1">
+              <div key={stage.id} className="min-w-[264px] w-[264px] shrink-0 rounded-3xl homy-glass-soft p-3 flex flex-col max-h-[36rem]">
+                <div className="flex items-center justify-between gap-2 mb-1 px-1.5 pt-1">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="size-2.5 rounded-full shrink-0 ring-2 ring-white/70" style={{ background: stage.color || '#1D63B8' }} aria-hidden />
                     <p className="font-bold text-[#0A2540] text-sm truncate">{stage.name}</p>
                   </div>
                   <span className="homy-glass rounded-full px-2 py-0.5 text-xs font-bold text-slate-500 tabular-nums">{list.length}</span>
                 </div>
+                {stageValue > 0 && (
+                  <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 tabular-nums px-1.5 mb-2">
+                    {formatARS(stageValue)}
+                  </p>
+                )}
 
-                <div className="space-y-2 flex-1">
+                <div className="space-y-2 flex-1 overflow-y-auto homy-scroll pt-1 px-0.5 -mx-0.5">
+                  {list.length === 0 && (
+                    <p className="text-xs text-slate-400 text-center py-5 border border-dashed border-[#0A2540]/10 rounded-2xl">
+                      Sin tratos en esta etapa
+                    </p>
+                  )}
                   {list.map((d) => (
                     <div key={d.id} className="rounded-2xl homy-glass homy-card-glow p-3">
                       <p className="font-bold text-[#0A2540] text-sm leading-snug break-words">{d.title}</p>
@@ -154,22 +180,22 @@ export default function ProCRM() {
                           <span className="text-xs text-slate-500 truncate">{d.counterparty.displayName}</span>
                         </div>
                       )}
-                      {d.note && <p className="text-xs text-slate-400 mt-1.5 homy-glass-soft rounded-lg p-2">{d.note}</p>}
+                      {d.note && <p className="text-xs text-slate-400 mt-1.5 homy-glass-soft rounded-lg p-2 leading-relaxed">{d.note}</p>}
                       <div className="flex items-center justify-between mt-2.5">
                         <div className="flex gap-1">
                           <button disabled={busy || i === 0} onClick={() => moveDeal(d, -1)}
-                            className="homy-glass-soft rounded-lg p-1.5 text-slate-500 hover:text-[#1D63B8] transition disabled:opacity-30"
+                            className="homy-glass-soft rounded-lg p-2 text-slate-500 hover:text-[#1D63B8] transition disabled:opacity-30"
                             aria-label={`Mover "${d.title}" a la etapa anterior`} title="Etapa anterior">
                             <ChevronLeft className="size-3.5" aria-hidden />
                           </button>
                           <button disabled={busy || i === pipeline.stages.length - 1} onClick={() => moveDeal(d, 1)}
-                            className="homy-glass-soft rounded-lg p-1.5 text-slate-500 hover:text-emerald-600 transition disabled:opacity-30"
+                            className="homy-glass-soft rounded-lg p-2 text-slate-500 hover:text-emerald-600 transition disabled:opacity-30"
                             aria-label={`Mover "${d.title}" a la etapa siguiente`} title="Etapa siguiente">
                             <ChevronRight className="size-3.5" aria-hidden />
                           </button>
                         </div>
                         <button disabled={busy} onClick={() => deleteDeal(d.id)}
-                          className="rounded-lg p-1.5 text-slate-300 hover:text-red-500 transition disabled:opacity-30"
+                          className="rounded-lg p-2 text-slate-300 hover:text-red-500 transition disabled:opacity-30"
                           aria-label={`Eliminar trato "${d.title}"`} title="Eliminar trato">
                           <Trash2 className="size-3.5" aria-hidden />
                         </button>
@@ -179,7 +205,7 @@ export default function ProCRM() {
                 </div>
 
                 <button onClick={() => { setNewForStage(stage); setNewTitle(''); setNewValue('') }}
-                  className="mt-3 w-full rounded-xl border-2 border-dashed border-[#0A2540]/12 py-2 text-xs font-bold text-slate-400 hover:border-[#1D63B8]/50 hover:text-[#1D63B8] transition flex items-center justify-center gap-1">
+                  className="mt-2.5 w-full rounded-xl border-2 border-dashed border-[#0A2540]/12 py-2.5 text-xs font-bold text-slate-400 hover:border-[#1D63B8]/50 hover:text-[#1D63B8] transition flex items-center justify-center gap-1">
                   <Plus className="size-3.5" aria-hidden /> Nuevo trato
                 </button>
               </div>
@@ -199,20 +225,33 @@ export default function ProCRM() {
             <label className="block">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Título</span>
               <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Ej: Reforma baño — Moreno 1234"
-                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm" />
+                className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm" />
             </label>
             <label className="block">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Valor estimado (ARS)</span>
               <input type="number" min="0" step="any" value={newValue} onChange={(e) => setNewValue(e.target.value)} placeholder="0"
-                className="homy-glass-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm tabular-nums" />
+                className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm tabular-nums" />
             </label>
             <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setNewForStage(null)} className="homy-glass-soft rounded-full px-4 py-2.5 text-sm font-bold text-slate-500 hover:text-red-500 transition">Cancelar</button>
-              <button disabled={busy} onClick={createDeal} className="homy-btn-primary px-5 py-2.5 text-sm disabled:opacity-50">Crear trato</button>
+              <button onClick={() => setNewForStage(null)} className="homy-glass-soft rounded-full min-h-[44px] px-4 py-2.5 text-sm font-bold text-slate-500 hover:text-red-500 transition">Cancelar</button>
+              <button disabled={busy} onClick={createDeal} className="homy-btn-primary min-h-[44px] px-5 py-2.5 text-sm disabled:opacity-50">Crear trato</button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+/* Estado vacío cuando no hay pipeline */
+function Empty() {
+  return (
+    <div className="homy-empty homy-glass-soft border border-dashed border-[#0A2540]/12">
+      <span className="homy-empty-icon homy-chip-blue" aria-hidden><BarChart3 className="size-7" /></span>
+      <h3 className="font-bold text-[#0A2540] text-lg tracking-tight">No tenés pipelines todavía</h3>
+      <p className="text-sm text-slate-500 mt-1.5 max-w-md leading-relaxed">
+        El pipeline se crea automáticamente la primera vez que entrás.
+      </p>
     </div>
   )
 }

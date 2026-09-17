@@ -2,10 +2,10 @@
 // Dashboard Proveedor HomIA — resumen de stock, alertas de reposición, vinculaciones y acceso al CRM
 import { useEffect, useState } from 'react'
 import { navigate } from '@/lib/router'
-import { PageHeader, StatCard, StatusBadge, Loading, EmptyState, UAvatar } from '@/components/app/ui-bits'
+import { StatusBadge, Loading, UAvatar } from '@/components/app/ui-bits'
 import { formatARS } from '@/lib/format'
 import {
-  Boxes, AlertTriangle, PackageX, PackageOpen, Link2, Users, ArrowRight, CheckCircle2, Plus, Wallet,
+  Boxes, AlertTriangle, PackageX, PackageOpen, Link2, Users, ArrowRight, CheckCircle2, Plus, Wallet, Zap,
 } from 'lucide-react'
 
 type StockItem = {
@@ -43,64 +43,95 @@ export default function ProviderDashboard() {
   const activeLinks = links.filter((l) => l.active)
 
   return (
-    <div>
-      <PageHeader
-        title="Tu negocio"
-        subtitle="Stock, vinculaciones y tratos con profesionales — todo en un solo lugar"
-        right={
-          <button onClick={() => navigate('/panel/proveedor/stock')} className="homy-btn-primary homy-focus px-5 py-2.5 text-sm">
-            <Boxes className="size-4" /> Gestionar stock
-          </button>
-        }
-      />
+    <div className="homy-page">
+      {/* Encabezado */}
+      <header className="homy-page-head">
+        <div className="min-w-0">
+          <span className="homy-eyebrow">Panel proveedor</span>
+          <h1 className="homy-page-title mt-1.5">Tu negocio</h1>
+          <p className="homy-page-sub">Stock, vinculaciones y tratos con profesionales — todo en un solo lugar.</p>
+        </div>
+        <button onClick={() => navigate('/panel/proveedor/stock')} className="homy-btn-primary homy-focus min-h-[44px] shrink-0 px-5 py-2.5 text-sm">
+          <Boxes className="size-4" /> Gestionar stock
+        </button>
+      </header>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <StatCard label="Elementos publicados" value={stock.length} accent="#1D63B8" icon={<Boxes />} tone="blue" />
-        <StatCard label="Valor del stock" value={formatARS(stockValue)} accent="#0A2540" icon={<Wallet />} tone="ai" />
-        <StatCard label="Por agotar" value={low.length} accent="#D97706" icon={<AlertTriangle />} tone="gold" />
-        <StatCard label="Agotados" value={out.length} accent="#DC2626" icon={<PackageX />} tone="orange" />
+      {/* KPIs del negocio */}
+      <div className="homy-stagger grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-7">
+        <Kpi
+          glow="#00C4FF" chip="homy-chip-blue" icon={<Boxes />}
+          label="Elementos publicados" value={String(stock.length)} hint="en tu catálogo propio"
+        />
+        <Kpi
+          glow="#FFC700" chip="homy-chip-gold" icon={<Wallet />}
+          label="Valor del stock" value={formatARS(stockValue)} hint="precio × cantidad en depósito"
+        />
+        <Kpi
+          glow="#FF5A1F" valueColor="#FF5A1F" chip="homy-chip-orange" icon={<AlertTriangle />}
+          label="Por agotar" value={String(low.length)} hint="bajo el stock mínimo"
+        />
+        <Kpi
+          glow="#DC2626" valueColor="#DC2626" chip="" chipStyle={{ background: 'linear-gradient(140deg, #fee2e2 0%, #fecaca 100%)', color: '#dc2626' }}
+          icon={<PackageX />}
+          label="Agotados" value={String(out.length)} hint="hay que reponer ya"
+        />
       </div>
 
       {stock.length === 0 ? (
-        <section className="homy-glass rounded-3xl p-6 mb-6">
-          <EmptyState icon={<PackageOpen />} title="Todavía no publicaste elementos"
+        <section className="mb-7">
+          <Empty
+            icon={<PackageOpen className="size-7" />}
+            title="Todavía no publicaste elementos"
             hint="Publicá precios y stock del catálogo estándar para aparecer en las búsquedas de materiales de los profesionales."
             action={
-              <button onClick={() => navigate('/panel/proveedor/stock')} className="homy-btn-primary homy-focus px-5 py-2.5 text-sm mx-auto">
+              <button onClick={() => navigate('/panel/proveedor/stock')} className="homy-btn-primary homy-focus min-h-[44px] px-5 py-2.5 text-sm">
                 <Plus className="size-4" /> Publicar el primero
               </button>
-            } />
+            }
+          />
         </section>
       ) : alerts.length > 0 ? (
-        <section className={`rounded-3xl border p-5 mb-6 ${out.length > 0 ? 'border-red-200/80 bg-gradient-to-br from-red-50/90 via-red-50/40 to-transparent' : 'border-amber-200/80 bg-gradient-to-br from-amber-50/90 via-amber-50/40 to-transparent'}`}>
-          <div className="flex items-center gap-3">
-            {out.length > 0 ? (
-              <span aria-hidden className="homy-icon-chip size-10 shrink-0" style={{ background: 'linear-gradient(140deg, #fee2e2 0%, #fecaca 100%)', color: '#dc2626' }}>
-                <PackageX className="size-5" />
+        /* Alertas de reposición */
+        <section className="homy-glass rounded-3xl p-5 sm:p-6 mb-7">
+          <div className="homy-section-head">
+            <h2 className="homy-section-title">
+              <span
+                aria-hidden
+                className={`homy-icon-chip size-8 shrink-0 [&_svg]:size-4 ${out.length > 0 ? '' : 'homy-chip-orange'}`}
+                style={out.length > 0 ? { background: 'linear-gradient(140deg, #fee2e2 0%, #fecaca 100%)', color: '#dc2626' } : undefined}
+              >
+                {out.length > 0 ? <PackageX /> : <AlertTriangle />}
               </span>
-            ) : (
-              <span aria-hidden className="homy-icon-chip homy-chip-orange size-10 shrink-0">
-                <AlertTriangle className="size-5" />
-              </span>
-            )}
-            <div className="min-w-0">
-              <h2 className="font-extrabold text-[#0A2540]">Alertas de stock ({alerts.length})</h2>
-              <p className="text-sm text-slate-500">Repone antes de que un profesional necesite el material.</p>
-            </div>
+              Alertas de stock ({alerts.length})
+            </h2>
+            <span className="homy-pill hidden sm:inline-flex">
+              <span aria-hidden className={`homy-pill-dot ${out.length > 0 ? 'bg-red-500' : 'bg-amber-500'}`} />
+              {out.length > 0 ? 'Crítico' : 'Reponer pronto'}
+            </span>
           </div>
-          <div className="space-y-2 mt-4">
+          <p className="text-sm text-slate-500 -mt-1 mb-4">Repone antes de que un profesional necesite el material.</p>
+          <div className="homy-stagger space-y-2">
             {alerts.map((s) => (
-              <div key={s.id} className="homy-glass rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="font-bold text-[#0A2540] truncate">{s.name}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Quedan <span className={`font-bold ${s.quantity <= 0 ? 'text-red-600' : 'text-amber-600'}`}>{s.quantity}</span> {s.unit}
-                    {' '}· mínimo {s.minStock}{s.brand ? ` · ${s.brand}` : ''}
-                  </p>
+              <div key={s.id} className="homy-row p-3.5 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <span
+                    aria-hidden
+                    className={`homy-icon-chip size-9 shrink-0 [&_svg]:size-4 ${s.status === 'agotado' ? '' : 'homy-chip-orange'}`}
+                    style={s.status === 'agotado' ? { background: 'linear-gradient(140deg, #fee2e2 0%, #fecaca 100%)', color: '#dc2626' } : undefined}
+                  >
+                    {s.status === 'agotado' ? <PackageX /> : <AlertTriangle />}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-bold text-[#0A2540] line-clamp-1">{s.name}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Quedan <span className={`font-bold ${s.quantity <= 0 ? 'text-red-600' : 'text-amber-600'}`}>{s.quantity}</span> {s.unit}
+                      {' '}· mínimo {s.minStock}{s.brand ? ` · ${s.brand}` : ''}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-2.5 shrink-0">
                   <StatusBadge status={s.status} />
-                  <button onClick={() => navigate('/panel/proveedor/stock')} className="homy-btn-primary px-4 py-2 text-sm">
+                  <button onClick={() => navigate('/panel/proveedor/stock')} className="homy-btn-dark homy-focus min-h-[44px] px-4 py-2.5 text-sm">
                     Reponer
                   </button>
                 </div>
@@ -109,84 +140,143 @@ export default function ProviderDashboard() {
           </div>
         </section>
       ) : (
-        <section className="rounded-2xl border border-emerald-200/80 bg-gradient-to-r from-emerald-50/80 to-transparent p-4 mb-6 flex items-center gap-3">
-          <span aria-hidden className="homy-icon-chip homy-chip-mint size-9 shrink-0">
-            <CheckCircle2 className="size-5" />
-          </span>
-          <p className="text-sm font-semibold text-emerald-800">Todo el stock está por encima del mínimo. No hay alertas de reposición.</p>
+        /* Stock saludable */
+        <section className="homy-glass-soft rounded-2xl p-4 mb-7 flex items-center gap-3">
+          <span aria-hidden className="homy-icon-chip homy-chip-mint size-10 shrink-0 [&_svg]:size-5"><CheckCircle2 /></span>
+          <div className="min-w-0">
+            <p className="font-bold text-[#0A2540] text-sm">Stock saludable</p>
+            <p className="text-sm text-slate-500">Todo el stock está por encima del mínimo. No hay alertas de reposición.</p>
+          </div>
         </section>
       )}
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Vinculaciones activas */}
         <section>
-          <span className="homy-eyebrow mb-1">Cuentas de retiro</span>
-          <h2 className="font-extrabold text-[#0A2540] mb-3">Vinculaciones activas ({activeLinks.length})</h2>
+          <div className="homy-section-head">
+            <h2 className="homy-section-title">
+              <span aria-hidden className="homy-icon-chip homy-chip-blue size-7 shrink-0 [&_svg]:size-3.5"><Link2 /></span>
+              Vinculaciones activas ({activeLinks.length})
+            </h2>
+          </div>
           {links.length === 0 ? (
-            <div className="homy-glass rounded-2xl p-6">
-              <EmptyState icon={<Link2 />} title="Sin profesionales vinculados"
-                hint="Vinculá profesionales con una cuenta de retiro para que retiren materiales por tu negocio."
-                action={
-                  <button onClick={() => navigate('/panel/proveedor/vinculaciones')} className="homy-btn-primary homy-focus px-5 py-2.5 text-sm mx-auto">
-                    <Link2 className="size-4" /> Vincular el primero
-                  </button>
-                } />
-            </div>
+            <Empty
+              icon={<Link2 className="size-7" />}
+              title="Sin profesionales vinculados"
+              hint="Vinculá profesionales con una cuenta de retiro para que retiren materiales por tu negocio."
+              action={
+                <button onClick={() => navigate('/panel/proveedor/vinculaciones')} className="homy-btn-primary homy-focus min-h-[44px] px-5 py-2.5 text-sm">
+                  <Link2 className="size-4" /> Vincular el primero
+                </button>
+              }
+            />
           ) : (
-            <div className="space-y-2">
+            <div className="homy-stagger space-y-2">
               {links.slice(0, 4).map((l) => (
-                <button key={l.id} onClick={() => navigate('/panel/proveedor/vinculaciones')} className="homy-glass homy-lift homy-card-glow w-full text-left rounded-2xl p-4 flex items-center justify-between gap-3">
+                <button key={l.id} onClick={() => navigate('/panel/proveedor/vinculaciones')} className="homy-row group w-full text-left p-4 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <UAvatar name={l.professional.companyName || l.professional.displayName} url={l.professional.avatarUrl} size={40} />
                     <div className="min-w-0">
-                      <p className="font-bold text-[#0A2540] truncate">{l.professional.companyName || l.professional.displayName}</p>
-                      <p className="text-xs text-slate-500 truncate">Cuenta de retiro: {l.accountLabel}</p>
+                      <p className="font-bold text-[#0A2540] line-clamp-1">{l.professional.companyName || l.professional.displayName}</p>
+                      <p className="text-xs text-slate-500 line-clamp-1">Cuenta de retiro: {l.accountLabel}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2.5 shrink-0">
                     <span className="homy-pill">
                       <span aria-hidden className={`homy-pill-dot ${l.active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
                       {l.active ? 'Activa' : 'Inactiva'}
                     </span>
-                    <ArrowRight className="size-4 text-slate-300" />
+                    <span aria-hidden className="homy-glass-soft grid size-8 shrink-0 place-items-center rounded-full text-slate-400 transition-colors group-hover:text-[#1D63B8]">
+                      <ArrowRight className="size-4" />
+                    </span>
                   </div>
                 </button>
               ))}
               {links.length > 4 && (
-                <button onClick={() => navigate('/panel/proveedor/vinculaciones')} className="w-full text-center text-xs font-semibold text-[#1D63B8] hover:underline py-1.5">
-                  +{links.length - 4} más — ver todas en Vinculaciones
+                <button onClick={() => navigate('/panel/proveedor/vinculaciones')} className="homy-glass-soft w-full rounded-2xl min-h-[44px] text-center text-xs font-bold text-[#1D63B8] hover:text-[#0A2540] transition flex items-center justify-center gap-1.5">
+                  +{links.length - 4} más — ver todas en Vinculaciones <ArrowRight className="size-3.5" aria-hidden />
                 </button>
               )}
             </div>
           )}
         </section>
 
-        {/* Acceso rápido al CRM */}
+        {/* Accesos rápidos */}
         <section>
-          <span className="homy-eyebrow mb-1">Seguimiento</span>
-          <h2 className="font-extrabold text-[#0A2540] mb-3">CRM</h2>
-          <button onClick={() => navigate('/panel/proveedor/crm')} className="homy-glass homy-lift homy-card-glow w-full text-left rounded-2xl p-4 flex items-center gap-4">
-            <span aria-hidden className="homy-icon-chip homy-chip-blue size-11 shrink-0">
-              <Users className="size-5" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-bold text-[#0A2540]">Clientes y profesionales</span>
-              <span className="block text-sm text-slate-500 mt-0.5">Seguí contactos, cotizaciones y compras en curso en tu pipeline.</span>
-            </span>
-            <ArrowRight className="size-4 text-slate-300 shrink-0" />
-          </button>
-          <button onClick={() => navigate('/panel/proveedor/vinculaciones')} className="homy-glass homy-lift homy-card-glow w-full text-left rounded-2xl p-4 flex items-center gap-4 mt-2">
-            <span aria-hidden className="homy-icon-chip homy-chip-orange size-11 shrink-0">
-              <Link2 className="size-5" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-bold text-[#0A2540]">Vinculaciones y cuentas de retiro</span>
-              <span className="block text-sm text-slate-500 mt-0.5">Gestioná qué profesionales pueden retirar material por tu negocio.</span>
-            </span>
-            <ArrowRight className="size-4 text-slate-300 shrink-0" />
-          </button>
+          <div className="homy-section-head">
+            <h2 className="homy-section-title">
+              <span aria-hidden className="homy-icon-chip homy-chip-orange size-7 shrink-0 [&_svg]:size-3.5"><Zap /></span>
+              Accesos rápidos
+            </h2>
+          </div>
+          <div className="homy-stagger space-y-2.5">
+            <QuickLink
+              icon={Boxes} chip="homy-chip-blue" title="Stock y catálogo"
+              desc="Publicá precios, repone cantidades y controlá los mínimos."
+              onClick={() => navigate('/panel/proveedor/stock')}
+            />
+            <QuickLink
+              icon={Users} chip="homy-chip-mint" title="CRM"
+              desc="Seguí contactos, cotizaciones y compras en curso en tu pipeline."
+              onClick={() => navigate('/panel/proveedor/crm')}
+            />
+            <QuickLink
+              icon={Link2} chip="homy-chip-orange" title="Vinculaciones"
+              desc="Gestioná qué profesionales pueden retirar material por tu negocio."
+              onClick={() => navigate('/panel/proveedor/vinculaciones')}
+            />
+          </div>
         </section>
       </div>
+    </div>
+  )
+}
+
+/* KPI Signature: cifra protagonista + chip de gradiente + resplandor de esquina */
+function Kpi({ label, value, hint, glow, valueColor, chip, chipStyle, icon }: {
+  label: string; value: string; hint?: string; glow: string; valueColor?: string
+  chip: string; chipStyle?: React.CSSProperties; icon: React.ReactNode
+}) {
+  return (
+    <div className="homy-glass homy-kpi homy-lift flex items-center gap-3.5" style={{ '--kpi-glow': glow } as React.CSSProperties}>
+      <span aria-hidden className={`homy-icon-chip size-11 shrink-0 [&_svg]:size-5 ${chip}`} style={chipStyle}>{icon}</span>
+      <div className="min-w-0">
+        <p className="homy-kpi-label">{label}</p>
+        <p className="homy-kpi-value mt-1 [overflow-wrap:anywhere]" style={valueColor ? { color: valueColor } : undefined}>{value}</p>
+        {hint && <p className="text-xs text-slate-400 mt-1 leading-snug line-clamp-1">{hint}</p>}
+      </div>
+    </div>
+  )
+}
+
+/* Acceso rápido: fila de vidrio con chip + flecha que se enciende al hover */
+function QuickLink({ icon: Icon, chip, title, desc, onClick }: {
+  icon: React.ComponentType<{ className?: string }>; chip: string; title: string; desc: string; onClick: () => void
+}) {
+  return (
+    <button onClick={onClick} className="homy-row group w-full text-left p-4 flex items-center gap-3.5">
+      <span aria-hidden className={`homy-icon-chip size-11 shrink-0 [&_svg]:size-5 ${chip}`}>
+        <Icon className="size-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-bold text-[#0A2540] text-sm">{title}</span>
+        <span className="block text-xs text-slate-500 mt-0.5 leading-snug">{desc}</span>
+      </span>
+      <span aria-hidden className="homy-glass-soft grid size-8 shrink-0 place-items-center rounded-full text-slate-400 transition-colors group-hover:text-[#1D63B8]">
+        <ArrowRight className="size-4" />
+      </span>
+    </button>
+  )
+}
+
+/* Estado vacío del panel: icono flotante + copy claro */
+function Empty({ icon, title, hint, action }: { icon: React.ReactNode; title: string; hint: string; action?: React.ReactNode }) {
+  return (
+    <div className="homy-empty rounded-3xl border-2 border-dashed border-[#0A2540]/10">
+      <span className="homy-empty-icon homy-icon-chip homy-chip-blue [&_svg]:size-7" aria-hidden>{icon}</span>
+      <h3 className="font-bold text-[#0A2540] text-lg tracking-tight">{title}</h3>
+      <p className="text-sm text-slate-500 mt-1.5 max-w-md leading-relaxed">{hint}</p>
+      {action && <div className="mt-5">{action}</div>}
     </div>
   )
 }
