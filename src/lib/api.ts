@@ -3,11 +3,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSessionUser, type SessionUser } from '@/lib/auth'
 
 export function ok(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
+  // Todo dato de HomIA es dinámico y por-usuario: nunca cacheable por el navegador
+  // (evita sesiones "fantasma" al volver al home o cambiar de rol).
+  return NextResponse.json(data, { status, headers: { 'Cache-Control': 'no-store' } })
 }
 
 export function fail(message: string, status = 400, extra?: Record<string, unknown>) {
-  return NextResponse.json({ error: message, ...extra }, { status })
+  return NextResponse.json({ error: message, ...extra }, { status, headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function requireAuth(): Promise<{ user: SessionUser } | { response: NextResponse }> {

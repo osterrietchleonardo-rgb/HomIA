@@ -53,7 +53,7 @@ const CATEGORY_TABS = [
   { slug: 'cerramientos', name: 'Cerramientos' },
 ]
 
-export default function SearchScreen() {
+export default function SearchScreen({ embedded = false }: { embedded?: boolean }) {
   // pantalla de búsqueda dual con superagente (re-render intencional)
   const route = useRoute()
   const { user, refresh } = useSession()
@@ -169,11 +169,13 @@ export default function SearchScreen() {
   }
 
   const hasResults = pros.length + jobs.length + materials.length + comparables.length > 0
+  // si el mensaje del agente ya ES la pregunta, no la repetimos en la tarjeta
+  const questionDuplicatesMessage = !!question && !!aiMessage && question.pregunta.trim().toLowerCase() === aiMessage.trim().toLowerCase()
 
   return (
     <div className="min-h-screen">
       {/* Header de búsqueda — vidrio nocturno */}
-      <header className="homy-glass-dark sticky top-0 z-40 overflow-hidden">
+      <header className={`homy-glass-dark sticky z-40 overflow-hidden ${embedded ? 'top-16' : 'top-0'}`}>
         <span
           aria-hidden
           className="pointer-events-none absolute inset-0"
@@ -267,7 +269,7 @@ export default function SearchScreen() {
               <div className="flex-1 min-w-0">
                 <p className="homy-eyebrow mb-1.5">Superagente Homy</p>
                 {aiMessage && <p className="text-[#0A2540] leading-relaxed font-medium">{aiMessage}</p>}
-                {question && (
+                {question && !questionDuplicatesMessage && (
                   <div className="mt-4">
                     <p className="font-bold text-[#0A2540]">{question.pregunta}</p>
                     <div className="flex flex-wrap gap-2 mt-2.5">

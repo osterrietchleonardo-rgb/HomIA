@@ -82,7 +82,7 @@ export default function ProviderLinks() {
         </div>
       </header>
 
-      <div className="max-w-3xl homy-stagger space-y-5">
+      <div className="homy-stagger space-y-5">
         {/* explicación */}
         <section className="homy-glass-dark rounded-3xl p-5 sm:p-6 relative overflow-hidden flex gap-4 items-start">
           <span

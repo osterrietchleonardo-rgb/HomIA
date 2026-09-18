@@ -2,7 +2,7 @@
 // Componentes compartidos HomIA — nivel Signature
 // (usados por los 3 paneles: al elevar acá, se eleva todo el sistema)
 import { Avatar as ShadAvatar } from '@/components/ui/avatar'
-import { Loader2 } from 'lucide-react'
+import { Loader2, BadgeCheck, ShieldAlert, ShieldQuestion, ShieldX } from 'lucide-react'
 import { initials, stars, URGENCY_COLOR, URGENCY_LABEL } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -21,6 +21,52 @@ export function UAvatar({ name, url, size = 40 }: { name: string; url?: string |
           <span className="text-xs font-bold text-[#0A2540]">{initials(name)}</span>
         )}
       </ShadAvatar>
+    </span>
+  )
+}
+
+/* Insignia de verificación de identidad (DNI + IA) — la ve TODO el mundo
+   junto al nombre. status: none (no subió DNI) | en_revision | verificado | rechazado */
+export function VerifyBadge({
+  status,
+  dark = false,
+  compact = true,
+}: {
+  status?: string | null
+  dark?: boolean // sobre fondo navy (perfiles, topbar)
+  compact?: boolean // true: solo ícono si verificado + pill corta si no
+}) {
+  const s = status || 'none'
+  if (s === 'verificado') {
+    return <BadgeCheck aria-label="Identidad verificada con DNI por IA" className={cn('shrink-0', compact ? 'size-4.5' : 'size-5', dark ? 'text-[#66DFFF]' : 'text-[#0e9f6e]')} />
+  }
+  if (s === 'en_revision') {
+    return (
+      <span
+        className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wider ring-1', dark ? 'bg-[#FFC700]/15 text-[#FFC700] ring-[#FFC700]/40' : 'bg-[#FFC700]/12 text-[#8a6d00] ring-[#FFC700]/40')}
+        title="Subió su DNI y el análisis de IA está en curso o en revisión"
+      >
+        <ShieldQuestion className="size-3" aria-hidden /> En revisión
+      </span>
+    )
+  }
+  if (s === 'rechazado') {
+    return (
+      <span
+        className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wider ring-1', dark ? 'bg-red-400/15 text-red-300 ring-red-400/40' : 'bg-red-500/10 text-red-600 ring-red-400/40')}
+        title="El análisis de IA no pudo validar su documento"
+      >
+        <ShieldX className="size-3" aria-hidden /> No verificado
+      </span>
+    )
+  }
+  // none — no subió DNI: todos lo ven como “no verificado”
+  return (
+    <span
+      className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wider ring-1', dark ? 'bg-white/8 text-slate-300 ring-white/20' : 'bg-slate-500/8 text-slate-500 ring-slate-400/30')}
+      title="Todavía no verificó su identidad con DNI + IA"
+    >
+      <ShieldAlert className="size-3" aria-hidden /> No verificado
     </span>
   )
 }
@@ -181,7 +227,7 @@ export function StatCard({
           </span>
         )}
       </div>
-      <p className="text-[1.65rem] font-extrabold mt-1.5 tracking-tight leading-none" style={{ color: accent }}>
+      <p className="homy-num-adapt text-[1.65rem] font-extrabold mt-1.5 tracking-tight leading-none" style={{ color: accent }}>
         {value}
       </p>
       {hint && <p className="text-xs text-slate-400 mt-1.5 leading-snug">{hint}</p>}

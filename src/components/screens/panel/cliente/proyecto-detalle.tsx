@@ -7,14 +7,29 @@ import { formatARS, formatDate } from '@/lib/format'
 import { toast } from 'sonner'
 import {
   Check, ArrowRight, Star, FolderKanban, Phone, Mail, Package, ReceiptText,
-  Wallet, Flag, ListChecks, History, Info,
+  Wallet, Flag, ListChecks, History, Info, ShieldCheck, ImagePlus, X, FileDown, FileText,
 } from 'lucide-react'
+
+function verPdf(id: string, number_: string) {
+  const w = window.open(`/api/invoices/${id}/pdf`, '_blank')
+  if (!w) {
+    const a = document.createElement('a')
+    a.href = `/api/invoices/${id}/pdf`
+    a.download = `Factura-${number_}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }
+}
 
 type Material = { id: string; name: string; unit: string; quantity: number; unitPrice: number; subtotal: number; status: string; note: string | null; providerName: string | null; createdAt: string }
 type Invoice = { id: string; number: string; total: number; status: string; issuedAt: string }
+type Brief = { urgency?: string | null; address?: string | null; deadline?: string | null; photos?: string[] }
 type Project = {
   id: string; title: string; description: string | null; stage: string; status: string
   laborCost: number; materialsCost: number
+  escrowStatus: string; escrowAmount: number
+  urgency?: string | null; address?: string | null; deadline?: string | null; photos?: string[]
   professional: { id: string; userId: string; displayName: string; avatarUrl: string | null; personType: string; companyName: string | null; phone: string | null; email: string | null }
 }
 const STAGES = ['presupuesto', 'materiales', 'ejecucion', 'revision', 'finalizado']
@@ -25,7 +40,10 @@ export default function ClientProjectDetail({ id }: { id: string }) {
   const [busy, setBusy] = useState(false)
   const [rating, setRating] = useState(5)
   const [comment, setComment] = useState('')
+  const [revPhotos, setRevPhotos] = useState<string[]>([])
+  const [revUploading, setRevUploading] = useState(false)
   const [alreadyReviewed, setAlreadyReviewed] = useState(false)
+  const [confirmRelease, setConfirmRelease] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -78,18 +96,61 @@ export default function ClientProjectDetail({ id }: { id: string }) {
     } finally { setBusy(false) }
   }
 
+  async function startEscrow() {
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/projects/${id}/escrow`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) {
+        if (data.needsConfig) {
+          toast.error('Mercado Pago no configurado en el servidor', { description: 'Agregá MP_ACCESS_TOKEN al archivo .env para retener pagos.' })
+        } else {
+          toast.error(data.error)
+        }
+        return
+      }
+      window.location.href = data.initPoint
+    } finally { setBusy(false) }
+  }
+
+  async function releaseEscrow() {
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/projects/${id}/escrow/release`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error); return }
+      toast.success('¡Pago liberado! La factura quedó emitida como pagada.')
+      setConfirmRelease(false)
+      load()
+    } finally { setBusy(false) }
+  }
+
   async function submitReview() {
     if (!data || !comment.trim()) { toast.error('Escribí un comentario'); return }
     setBusy(true)
     try {
       const res = await fetch('/api/reviews', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetUserId: data.project.professional.userId, rating, comment, context: 'proyecto', projectId: id }),
+        body: JSON.stringify({ targetUserId: data.project.professional.userId, rating, comment, photos: revPhotos, context: 'proyecto', projectId: id }),
       })
       if (!res.ok) { toast.error((await res.json()).error); return }
       toast.success('¡Reseña publicada!')
       load()
     } finally { setBusy(false) }
+  }
+
+  async function uploadReviewPhoto(file: File) {
+    if (revPhotos.length >= 4) { toast.error('Máximo 4 fotos por reseña'); return }
+    setRevUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('folder', 'resenas')
+      const res = await fetch('/api/uploads', { method: 'POST', body: fd })
+      const d = await res.json()
+      if (!res.ok) { toast.error(d.error); return }
+      setRevPhotos((prev) => [...prev, d.url])
+    } finally { setRevUploading(false) }
   }
 
   if (loading) return <Loading />
@@ -110,6 +171,9 @@ export default function ClientProjectDetail({ id }: { id: string }) {
   const progress = p.stage === 'finalizado' ? 100 : ((stageNum + 1) / STAGES.length) * 100
   const pending = data.materials.filter((m) => m.status === 'propuesto')
   const decided = data.materials.filter((m) => m.status !== 'propuesto')
+  const brief: Brief | null = (p.urgency || p.address || p.deadline || (p.photos && p.photos.length > 0))
+    ? { urgency: p.urgency, address: p.address, deadline: p.deadline, photos: p.photos || [] }
+    : null
 
   return (
     <div className="homy-page">
@@ -132,6 +196,40 @@ export default function ClientProjectDetail({ id }: { id: string }) {
           </div>
         )}
       </header>
+
+      {/* brief de la contratación guiada (si el cliente contrató por el directorio) */}
+      {brief && (
+        <section className="homy-glass mb-5 rounded-3xl p-5">
+          <div className="homy-section-head">
+            <h2 className="homy-section-title">
+              <span className="homy-icon-chip homy-chip-blue size-8 shrink-0 [&_svg]:size-4" aria-hidden><FileText /></span>
+              Brief de la contratación
+            </h2>
+            {brief.urgency && <span className="homy-pill">{({ ya: 'Lo antes posible', esta_semana: 'Próximas semanas', normal: 'Fecha flexible' } as Record<string, string>)[brief.urgency] || brief.urgency}</span>}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {brief.deadline && (
+              <div className="homy-glass-soft rounded-xl px-4 py-3">
+                <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Fecha deseada</p>
+                <p className="mt-0.5 text-sm font-bold text-[#0A2540]">{formatDate(brief.deadline)}</p>
+              </div>
+            )}
+            {brief.address && (
+              <div className="homy-glass-soft rounded-xl px-4 py-3">
+                <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Dirección del trabajo</p>
+                <p className="mt-0.5 text-sm font-bold text-[#0A2540]">{brief.address}</p>
+              </div>
+            )}
+          </div>
+          {brief.photos && brief.photos.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {brief.photos.map((ph, i) => (
+                <img key={ph} src={ph} alt={`Foto ${i + 1} del brief`} className="h-20 w-20 rounded-xl object-cover ring-1 ring-[#0A2540]/10" />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* etapas */}
       <section className="homy-glass mb-5 rounded-3xl p-5 sm:p-6">
@@ -161,6 +259,55 @@ export default function ClientProjectDetail({ id }: { id: string }) {
           <MiniStat label="Materiales aprobados" value={formatARS(p.materialsCost)} />
           <MiniStat label="Total" value={formatARS(p.laborCost + p.materialsCost)} accent />
         </div>
+      </section>
+
+      {/* pago protegido (escrow Mercado Pago) */}
+      <section className="homy-glass mb-5 rounded-3xl p-5">
+        <div className="homy-section-head">
+          <h2 className="homy-section-title">
+            <span className="homy-icon-chip homy-chip-gold size-8 shrink-0 [&_svg]:size-4" aria-hidden><ShieldCheck /></span>
+            Pago protegido (escrow)
+          </h2>
+          {p.escrowStatus === 'retained' && <span className="homy-pill">Fondos en garantía · {formatARS(p.escrowAmount)}</span>}
+          {p.escrowStatus === 'released' && <span className="homy-pill">Pago liberado</span>}
+        </div>
+        {p.escrowStatus === 'none' && (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="homy-glass-soft flex max-w-xl items-start gap-2.5 rounded-xl p-3.5 text-sm text-slate-500">
+              <Info className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden />
+              Retenés {formatARS(p.laborCost + p.materialsCost)} con Mercado Pago. El profesional trabaja sabiendo que el pago está asegurado y vos lo liberás cuando la obra quede bien.
+            </p>
+            <button disabled={busy || p.status !== 'activo'} onClick={startEscrow} className="homy-btn-primary px-5 py-3 text-sm">
+              <ShieldCheck className="size-4" aria-hidden /> Retener pago en garantía
+            </button>
+          </div>
+        )}
+        {p.escrowStatus === 'retained' && (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="homy-glass-soft flex max-w-xl items-start gap-2.5 rounded-xl p-3.5 text-sm text-slate-500">
+              <Info className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden />
+              Tus fondos están retenidos. Cuando confirmes que la obra quedó bien, liberás el pago y se emite la factura al profesional.
+            </p>
+            {confirmRelease ? (
+              <div className="flex items-center gap-2">
+                <button onClick={() => setConfirmRelease(false)} disabled={busy} className="homy-glass-soft homy-focus rounded-full px-4 py-2 text-sm font-bold text-slate-600 transition hover:text-[#0A2540]">Volver</button>
+                <button onClick={releaseEscrow} disabled={busy} className="homy-btn-primary px-5 py-3 text-sm">
+                  <Check className="size-4" aria-hidden /> Confirmar liberación
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setConfirmRelease(true)} disabled={busy} className="homy-btn-primary px-5 py-3 text-sm">
+                <Wallet className="size-4" aria-hidden /> Liberar pago al profesional
+              </button>
+            )}
+          </div>
+        )}
+        {p.escrowStatus === 'released' && (
+          <p className="homy-glass-soft flex items-start gap-2.5 rounded-xl p-3.5 text-sm text-slate-500">
+            <Info className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden />
+            Liberaste el pago y el profesional ya cobró. Podés ver la factura en la sección de abajo.
+          </p>
+        )}
       </section>
 
       {/* contacto del profesional */}
@@ -269,6 +416,14 @@ export default function ClientProjectDetail({ id }: { id: string }) {
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <p className="font-extrabold tabular-nums">{formatARS(inv.total)}</p>
+                  <button
+                    onClick={() => verPdf(inv.id, inv.number)}
+                    aria-label={`Ver factura ${inv.number} en PDF`}
+                    title="Ver / descargar PDF"
+                    className="homy-focus inline-flex min-h-[40px] items-center gap-1.5 rounded-xl homy-glass-soft px-3.5 py-2 text-xs font-bold text-[#1D63B8] transition hover:bg-[#1D63B8]/10"
+                  >
+                    <FileDown className="size-4" aria-hidden /> PDF
+                  </button>
                   <StatusBadge status={inv.status} />
                   {inv.status === 'pendiente' && (
                     <button disabled={busy} onClick={() => payInvoice(inv.id)} className="homy-btn-primary px-4 py-2 text-sm">
@@ -290,7 +445,7 @@ export default function ClientProjectDetail({ id }: { id: string }) {
             <span className="homy-icon-chip homy-chip-gold size-9 shrink-0 [&_svg]:size-4" aria-hidden><Star /></span>
             ¿Cómo fue la obra?
           </h2>
-          <p className="relative mt-2 text-sm text-slate-300">Tu reseña ayuda a otros usuarios. Queda en el perfil del profesional.</p>
+          <p className="relative mt-2 text-sm text-slate-300">Tu reseña ayuda a otros usuarios: contá cómo trabajó y sumá fotos del resultado — las reseñas con fotos son más fiables para la comunidad.</p>
           <div className="relative mt-4 flex gap-1.5">
             {[1, 2, 3, 4, 5].map((n) => (
               <button key={n} onClick={() => setRating(n)} className={`transition-transform duration-200 hover:scale-110 ${n <= rating ? 'text-[#FFC700] fill-[#FFC700]' : 'text-white/25'}`} aria-label={`${n} estrellas`}>
@@ -300,6 +455,29 @@ export default function ClientProjectDetail({ id }: { id: string }) {
           </div>
           <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} placeholder="Contá cómo trabajó, puntualidad, calidad…"
             className="relative mt-4 w-full resize-none rounded-xl bg-white/10 border border-white/15 px-4 py-3 text-white placeholder:text-slate-400 outline-none focus:border-[#00C4FF]" />
+          {/* fotos que avalan la reseña */}
+          <div className="relative mt-3.5 flex flex-wrap items-center gap-2.5">
+            {revPhotos.map((ph, i) => (
+              <span key={i} className="group relative">
+                <img src={ph} alt={`Foto ${i + 1} de la reseña`} className="h-16 w-16 rounded-xl object-cover ring-1 ring-white/25" />
+                <button
+                  onClick={() => setRevPhotos((prev) => prev.filter((_, j) => j !== i))}
+                  aria-label={`Quitar foto ${i + 1}`}
+                  className="absolute -top-1.5 -right-1.5 grid size-5 place-items-center rounded-full bg-red-500 text-white shadow"
+                >
+                  <X className="size-3" aria-hidden />
+                </button>
+              </span>
+            ))}
+            {revPhotos.length < 4 && (
+              <label className="flex h-16 w-16 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-xl border border-dashed border-white/25 text-slate-400 transition hover:border-[#00C4FF] hover:text-[#66DFFF]">
+                <ImagePlus className="size-4" aria-hidden />
+                <span className="text-[9.5px] font-bold">{revUploading ? 'Subiendo…' : 'Foto'}</span>
+                <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadReviewPhoto(f); e.currentTarget.value = '' }} />
+              </label>
+            )}
+            <span className="text-[11px] font-semibold text-slate-400">Hasta 4 fotos del trabajo terminado</span>
+          </div>
           <button onClick={submitReview} disabled={busy} className="homy-btn-primary relative mt-4 px-6 py-3 text-sm sm:py-2.5">
             Publicar reseña
           </button>

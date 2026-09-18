@@ -5,6 +5,7 @@ import { navigate } from '@/lib/router'
 import { StatusBadge, UrgencyBadge, Loading } from '@/components/app/ui-bits'
 import { formatARS } from '@/lib/format'
 import { Plus, ArrowRight, Wrench, Megaphone, FileText, FolderKanban, CircleCheck } from 'lucide-react'
+import { VerificationPrompt } from '../verificacion'
 
 type Project = { id: string; title: string; stage: string; status: string; laborCost: number; materialsCost: number; materialsPending: number; updatedAt: string }
 type Job = { id: string; title: string; status: string; urgency: string; bids: { id: string; amount: number; professional: { user: { displayName: string } } }[]; createdAt: string }
@@ -32,6 +33,7 @@ export default function ClientDashboard() {
 
   return (
     <div className="homy-page">
+      <VerificationPrompt role="cliente" />
       <header className="homy-page-head">
         <div className="min-w-0">
           <span className="homy-eyebrow">Panel del cliente</span>

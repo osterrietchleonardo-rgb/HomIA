@@ -157,7 +157,7 @@ export default function ProProfile() {
 
   return (
     <div className="homy-page">
-      <div className="max-w-3xl">
+      <div className="max-w-3xl mx-auto">
         {/* Encabezado */}
         <header className="homy-page-head">
           <div className="min-w-0">

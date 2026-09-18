@@ -1,19 +1,23 @@
 import { NextRequest } from 'next/server'
 import { ok, fail, parseJson } from '@/lib/api'
 import { db } from '@/lib/db'
+import { getSessionUser } from '@/lib/auth'
 
-// Perfil público de proveedor: catálogo visible + reseñas
+// Perfil de proveedor (requiere sesión): catálogo visible + reseñas
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
+  const viewer = await getSessionUser()
+  if (!viewer) return fail('Iniciá sesión para ver el perfil de este proveedor', 401)
   const prov = await db.providerProfile.findUnique({
     where: { id },
     include: {
       user: {
         select: {
-          id: true, displayName: true, avatarUrl: true, city: true, lat: true, lng: true, createdAt: true,
+          id: true, displayName: true, avatarUrl: true, city: true, lat: true, lng: true,
+          createdAt: true, roles: true, verificationStatus: true,
         },
       },
     },
@@ -30,8 +34,18 @@ export async function GET(
     where: { targetUserId: prov.userId },
     orderBy: { createdAt: 'desc' },
     take: 20,
-    include: { author: { select: { id: true, displayName: true, avatarUrl: true } } },
+    include: { author: { select: { id: true, displayName: true, avatarUrl: true, verificationStatus: true } } },
   })
+
+  // Regla de comunidad: los clientes escriben primero (si el espectador no es
+  // cliente y el perfil es de un cliente sin hilo previo, bloquear contacto).
+  const targetRoles = parseJson<string[]>(prov.user.roles, [])
+  let chatBlocked = false
+  if (viewer.id !== prov.userId && !viewer.roles.includes('cliente') && targetRoles.includes('cliente')) {
+    const pair = viewer.id < prov.userId ? { userAId: viewer.id, userBId: prov.userId } : { userAId: prov.userId, userBId: viewer.id }
+    const conv = await db.conversation.findUnique({ where: { userAId_userBId: pair } })
+    chatBlocked = !conv
+  }
 
   return ok({
     profile: {
@@ -46,11 +60,16 @@ export async function GET(
       city: prov.city || prov.user.city,
       lat: prov.lat || prov.user.lat,
       lng: prov.lng || prov.user.lng,
-      verified: prov.verified,
+      // la verificación la define el DNI + IA del usuario (visible para todos)
+      verified: prov.user.verificationStatus === 'verificado',
+      verificationStatus: prov.user.verificationStatus,
+      subscription: prov.subscription,
+      proSince: prov.proSince,
       rating: prov.rating,
       reviewsCount: reviews.length,
       memberSince: prov.user.createdAt,
     },
+    chatBlocked,
     stock: stock.map((s) => ({
       id: s.id,
       name: s.element.name,

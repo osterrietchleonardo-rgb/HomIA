@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
     targetUserId: string
     rating: number
     comment: string
+    photos?: string[] // URLs de /api/uploads que avalan la reseña
     context?: string // proyecto|obra|perfil
     projectId?: string
     workId?: string
@@ -21,6 +22,10 @@ export async function POST(req: NextRequest) {
   }
   if (d.rating < 1 || d.rating > 5) return fail('El puntaje va de 1 a 5')
   if (d.targetUserId === user.id) return fail('No podés reseñarte a vos mismo')
+  // fotos: máx 4, solo rutas de subida reales de HomIA
+  const photos = Array.isArray(d.photos)
+    ? d.photos.filter((p) => typeof p === 'string' && /^\/uploads\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_/-]+\.(jpg|jpeg|png|webp)$/i.test(p)).slice(0, 4)
+    : []
 
   const target = await db.user.findUnique({ where: { id: d.targetUserId } })
   if (!target) return fail('Usuario no encontrado', 404)
@@ -39,6 +44,7 @@ export async function POST(req: NextRequest) {
       targetUserId: d.targetUserId,
       rating: d.rating,
       comment: d.comment,
+      photos: JSON.stringify(photos),
       context: d.context || 'proyecto',
       projectId: d.projectId || null,
       workId: d.workId || null,
@@ -65,7 +71,7 @@ export async function POST(req: NextRequest) {
       userId: d.targetUserId,
       type: 'nueva_reseña',
       title: 'Nueva reseña',
-      body: `${user.displayName} te calificó con ${d.rating}★`,
+      body: `${user.displayName} te calificó con ${d.rating}★${photos.length ? ` con ${photos.length} foto${photos.length > 1 ? 's' : ''}` : ''}`,
       link: '#/panel',
     },
   })

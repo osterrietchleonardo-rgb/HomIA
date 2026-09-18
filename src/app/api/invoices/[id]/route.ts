@@ -35,7 +35,7 @@ export async function POST(
   const user = await getSessionUser()
   if (!user) return fail('Necesitás iniciar sesión', 401)
 
-  const invoice = await db.invoice.findUnique({ where: { id } })
+  const invoice = await db.invoice.findUnique({ where: { id }, include: { items: true } })
   if (!invoice) return fail('Factura no encontrada', 404)
   if (invoice.clientId !== user.id) return fail('Solo el cliente paga la factura', 403)
   if (invoice.status === 'pagada') return fail('La factura ya está pagada')

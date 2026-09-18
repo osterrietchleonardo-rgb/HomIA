@@ -5,7 +5,21 @@ import { navigate } from '@/lib/router'
 import { StatusBadge, Loading } from '@/components/app/ui-bits'
 import { formatARS, formatDate } from '@/lib/format'
 import { toast } from 'sonner'
-import { Wallet, ReceiptText, CircleCheck, ArrowLeft } from 'lucide-react'
+import { Wallet, ReceiptText, CircleCheck, ArrowLeft, FileDown } from 'lucide-react'
+
+function verPdf(id: string, number_: string) {
+  // abre el PDF real generado por el servidor (cookies httpOnly viajan solas)
+  const w = window.open(`/api/invoices/${id}/pdf`, '_blank')
+  if (!w) {
+    // popup bloqueado → descarga directa
+    const a = document.createElement('a')
+    a.href = `/api/invoices/${id}/pdf`
+    a.download = `Factura-${number_}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }
+}
 
 type Invoice = { id: string; number: string; total: number; status: string; issuedAt: string; laborCost: number; materialsCost: number }
 type Project = { id: string; title: string }
@@ -72,7 +86,7 @@ export default function ClientInvoices() {
           <button onClick={() => navigate('/panel/cliente/proyectos')} className="homy-btn-dark mt-5 px-5 py-3 text-sm sm:py-2.5">Ver mis proyectos</button>
         </div>
       ) : (
-        <div className="max-w-3xl space-y-7">
+        <div className="space-y-7">
           {/* total destacado */}
           <div className="homy-glass-featured flex flex-wrap items-center justify-between gap-4 rounded-3xl p-5 sm:p-6">
             {pendientes.length > 0 ? (
@@ -116,6 +130,14 @@ export default function ClientInvoices() {
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
                       <p className="text-xl font-extrabold text-[#0A2540] tabular-nums">{formatARS(inv.total)}</p>
+                      <button
+                        onClick={() => verPdf(inv.id, inv.number)}
+                        aria-label={`Ver factura ${inv.number} en PDF`}
+                        title="Ver / descargar PDF"
+                        className="homy-focus inline-flex min-h-[44px] items-center gap-1.5 rounded-xl homy-glass-soft px-4 py-3 text-sm font-bold text-[#1D63B8] transition hover:bg-[#1D63B8]/10 sm:py-2.5"
+                      >
+                        <FileDown className="size-4" aria-hidden /> PDF
+                      </button>
                       <button disabled={busy} onClick={() => pay(inv)} className="homy-btn-primary px-4 py-3 text-sm sm:py-2.5">
                         <Wallet className="size-4" aria-hidden /> Pagar con Mercado Pago
                       </button>
@@ -144,6 +166,14 @@ export default function ClientInvoices() {
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
                       <p className="font-bold tabular-nums">{formatARS(inv.total)}</p>
+                      <button
+                        onClick={() => verPdf(inv.id, inv.number)}
+                        aria-label={`Ver factura ${inv.number} en PDF`}
+                        title="Ver / descargar PDF"
+                        className="homy-focus inline-flex min-h-[40px] items-center gap-1.5 rounded-xl homy-glass-soft px-3.5 py-2 text-xs font-bold text-[#1D63B8] transition hover:bg-[#1D63B8]/10"
+                      >
+                        <FileDown className="size-4" aria-hidden /> PDF
+                      </button>
                       <StatusBadge status="pagada" />
                     </div>
                   </div>

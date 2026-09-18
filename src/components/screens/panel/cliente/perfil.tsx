@@ -60,7 +60,7 @@ export default function ClientProfile() {
         </div>
       </header>
 
-      <div className="max-w-2xl space-y-5">
+      <div className="max-w-2xl mx-auto space-y-5">
         {/* identidad + datos */}
         <section className="homy-glass rounded-3xl p-6 sm:p-7">
           <div className="flex items-center gap-4">

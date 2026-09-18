@@ -31,6 +31,10 @@ model User {
   searchRadiusKm Float   @default(10)
   rating        Float    @default(0)
   reviewsCount  Int      @default(0)
+  // Verificación de identidad por DNI + IA: none (no subió) | en_revision | verificado | rechazado
+  // Se muestra PÚBLICamente junto al nombre (directorio, perfiles, mensajes).
+  verificationStatus String @default("none")
+  verifiedAt    DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -47,6 +51,9 @@ model User {
   homySessions    HomySession[]
   favorites       Favorite[]
   dealsCounterparty CrmDeal[]    @relation("DealCounterparty")
+  conversationsA  Conversation[] @relation("ConversationA")
+  conversationsB  Conversation[] @relation("ConversationB")
+  messagesSent    Message[]      @relation("MessageSender")
 }
 
 model IdentityDocument {
@@ -55,7 +62,11 @@ model IdentityDocument {
   type      String   @default("dni") // dni|pasaporte|cuit
   frontUrl  String?
   backUrl   String?
-  status    String   @default("pendiente") // pendiente|en_revision|verificado|rechazado
+  status    String   @default("en_revision") // en_revision|verificado|rechazado
+  // Dictamen del modelo de IA de visión que analiza frente+dorso
+  aiVerdict String?  // JSON: { esDocumento, pareceReal, legible, mismoTitular, motivo... }
+  aiScore   Float?   // confianza 0..1 de que sea un documento real
+  aiNotes   String?
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -85,6 +96,8 @@ model ProfessionalProfile {
   lng            Float?
   city           String?
   subscription   String   @default("free") // free|pro
+  mpPreapprovalId String?  // id de preapproval de Mercado Pago (suscripción PRO)
+  proSince       DateTime? // desde cuándo está activo el plan PRO
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -107,6 +120,10 @@ model ProviderProfile {
   verified     Boolean  @default(false)
   rating       Float    @default(0)
   reviewsCount Int      @default(0)
+  // Plan PRO del proveedor (suscripción Mercado Pago — primera etapa del monetización)
+  subscription  String   @default("free") // free|pro
+  mpPreapprovalId String?  // id de preapproval de Mercado Pago (suscripción PRO)
+  proSince      DateTime? // desde cuándo está activo el plan PRO
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -235,6 +252,16 @@ model Project {
   stage          String   @default("presupuesto") // presupuesto|materiales|ejecucion|revision|finalizado
   laborCost      Float    @default(0)
   materialsCost  Float    @default(0)
+  // Contratación guiada desde el directorio (wizard "Contratar")
+  urgency        String? // ya|esta_semana|normal
+  address        String?
+  deadline       DateTime?
+  photos         String? // JSON de URLs (fotos del trabajo a realizar)
+  // Escrow Mercado Pago: el cliente retiene el pago hasta dar conformidad
+  escrowStatus   String   @default("none") // none|retained|released
+  escrowPaymentId String?  // payment id de MP del depósito en garantía
+  escrowAmount   Float    @default(0)
+  escrowReleasedAt DateTime?
   lat            Float?
   lng            Float?
   createdAt      DateTime @default(now())
@@ -355,6 +382,7 @@ model Review {
   workId       String?
   rating       Int
   comment      String
+  photos       String   @default("[]") // JSON: URLs de fotos que avalan la reseña
   reply        String?
   replyAt      DateTime?
   createdAt    DateTime @default(now())
@@ -405,6 +433,38 @@ model CrmDeal {
   pipeline CrmPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
   stage    CrmStage    @relation(fields: [stageId], references: [id], onDelete: Cascade)
   counterparty User?   @relation("DealCounterparty", fields: [counterpartyId], references: [id])
+}
+
+// ─────────────────────────── MENSAJES DIRECTOS ───────────────────────────
+
+// Conversación 1:1 entre cualquier par de usuarios (cliente/profesional/proveedor).
+// userAId < userBId lexicográficamente para que la unicidad funcione en ambas direcciones.
+model Conversation {
+  id            String   @id @default(cuid())
+  userAId       String
+  userBId       String
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  userA    User      @relation("ConversationA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB    User      @relation("ConversationB", fields: [userBId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@unique([userAId, userBId])
+}
+
+model Message {
+  id             String    @id @default(cuid())
+  conversationId String
+  senderId       String
+  body           String
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
 }
 
 // ─────────────────────────── NOTIFICACIONES + IA ───────────────────────────

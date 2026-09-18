@@ -1,0 +1,742 @@
+     1→"use client";
+     2→
+     3→import {
+     4→  useCallback,
+     5→  useEffect,
+     6→  useMemo,
+     7→  useRef,
+     8→  useState,
+     9→  type FormEvent,
+    10→} from "react";
+    11→import { AnimatePresence, MotionConfig, motion } from "framer-motion";
+    12→import { ArrowRight, BadgeCheck, Briefcase, Loader2, MapPin, Package, Sparkles, Star, Wrench, X } from "lucide-react";
+    13→import { Homy, type HomyState } from "@/components/homy/homy-character";
+    14→import { formatARS } from "@/lib/format";
+    15→import { navigate } from "@/lib/router";
+    16→import { useLocation } from "@/lib/store";
+    17→import { cn } from "@/lib/utils";
+    18→
+    19→/* ------------------------------------------------------------------ */
+    20→/*  Respuesta del superagente (loop + herramientas reales)             */
+    21→/* ------------------------------------------------------------------ */
+    22→type AgentIntent = "contratar" | "trabajar" | "materiales" | "ayuda";
+    23→
+    24→type AgentReply = {
+    25→  ok: boolean;
+    26→  message: string;
+    27→  suggestions: string[];
+    28→  intent?: AgentIntent;
+    29→  question?: { pregunta: string; opciones: string[] };
+    30→  results?: {
+    31→    professionals?: { id: string; displayName: string; city: string | null; rating: number; reviewsCount: number; verified: boolean }[];
+    32→    jobs?: { id: string; title: string; categorySlug: string; budgetMin: number | null; budgetMax: number | null; city: string | null }[];
+    33→    materials?: { stockId: string; elementName: string; price: number; unit: string; providerName: string; providerId: string }[];
+    34→    comparables?: { stockId: string; elementName: string; price: number; unit: string; providerName: string; providerId: string }[];
+    35→  };
+    36→  error?: string;
+    37→};
+    38→
+    39→const INTENT_CTA: Record<AgentIntent, { label: string; href: string; icon: typeof Wrench }> = {
+    40→  contratar: { label: "Ver profesionales en el mapa", href: "/buscar?mode=cliente", icon: MapPin },
+    41→  trabajar: { label: "Ver la bolsa de trabajos", href: "/buscar?mode=profesional", icon: Briefcase },
+    42→  materiales: { label: "Comparar precios de materiales", href: "/buscar?mode=profesional", icon: Package },
+    43→  ayuda: { label: "Abrir el buscador inteligente", href: "/buscar", icon: Sparkles },
+    44→};
+    45→
+    46→/* ------------------------------------------------------------------ */
+    47→/*  Ejemplos clickeables: demuestran el razonamiento de intención      */
+    48→/* ------------------------------------------------------------------ */
+    49→const EXAMPLES = [
+    50→  "Necesito un plomero urgente",
+    51→  "¿Qué hay para plomeros?",
+    52→  "Precio del cemento de 50kg",
+    53→  "¿Cómo funciona el escrow?",
+    54→];
+    55→
+    56→/* Coreografía ambiental del hero (máquina de vidrio): la consulta VUELA desde
+    57→   la izquierda legible y, al llegar, NO queda adentro: sigue su camino DETRÁS
+    58→   del vidrio de la barra mientras se desvanece (el vidrio la esmerila y la
+    59→   absorbe). Después la RESPUESTA SURGE desde detrás del vidrio, afuera de la
+    60→   barra, se deja leer y se desvanece contra el borde de la página. De a una,
+    61→   lento, sin superponerse. Se frena al enfocar, escribir o pasar el mouse. */
+    62→const DEMO_PAIRS = [
+    63→  { q: "Necesito un plomero urgente", a: "Encontré plomeros verificados cerca tuyo" },
+    64→  { q: "¿Qué hay para plomeros?", a: "Hay trabajos de plomería en la bolsa" },
+    65→  { q: "Precio del cemento de 50kg", a: "Comparé precios entre proveedores" },
+    66→  { q: "¿Cómo funciona el escrow?", a: "Tu pago queda protegido hasta dar conformidad" },
+    67→] as const;
+    68→
+    69→type DemoFlight =
+    70→  | { kind: "q"; q: string }
+    71→  | { kind: "a"; stage: "in" | "hold" | "out"; q: string; a: string };
+    72→
+    73→/* Ritmo pedido por el usuario: de a una, lento y leíble. La consulta es un
+    74→   solo vuelo continuo que termina fundiéndose detrás del vidrio; la respuesta
+    75→   surge afuera de la barra y muere contra el borde de la página. */
+    76→const DEMO_T = {
+    77→  qFly: 4200, // vuelo completo de la consulta (se lee y se derrite detrás del vidrio)
+    78→  gap: 420, // respiro sin nada en escena (sin pisarse)
+    79→  aIn: 1200, // la respuesta surge desde detrás del vidrio
+    80→  aHold: 2700, // queda afuera de la barra, leíble
+    81→  aOut: 1600, // deriva hacia el borde de la página desvaneciéndose
+    82→  next: 1300, // pausa antes del siguiente par
+    83→  restart: 1400, // cooldown al reanudar después de una interacción
+    84→} as const;
+    85→
+    86→const TYPE_PHRASES = [
+    87→  "Contame qué necesita tu hogar…",
+    88→  "¿Una fuga, una pintura, una mudanza?",
+    89→  "Escribilo como se lo dirías a un vecino…",
+    90→];
+    91→
+    92→/* ------------------------------------------------------------------ */
+    93→/*  Placeholder con máquina de escribir (barra sin foco)               */
+    94→/* ------------------------------------------------------------------ */
+    95→function useTypewriter(active: boolean) {
+    96→  const [text, setText] = useState("");
+    97→  const stateRef = useRef({ phrase: 0, char: 0, deleting: false });
+    98→
+    99→  useEffect(() => {
+   100→    if (!active) return;
+   101→    const tick = () => {
+   102→      const s = stateRef.current;
+   103→      const phrase = TYPE_PHRASES[s.phrase % TYPE_PHRASES.length];
+   104→      if (!s.deleting) {
+   105→        s.char += 1;
+   106→        if (s.char >= phrase.length) {
+   107→          s.deleting = true;
+   108→          return 1700;
+   109→        }
+   110→        return 48;
+   111→      }
+   112→      s.char -= 1;
+   113→      if (s.char <= 0) {
+   114→        s.deleting = false;
+   115→        s.phrase += 1;
+   116→        return 420;
+   117→      }
+   118→      return 26;
+   119→    };
+   120→
+   121→    let timeout: ReturnType<typeof setTimeout>;
+   122→    const loop = () => {
+   123→      const delay = tick();
+   124→      const s = stateRef.current;
+   125→      setText(
+   126→        TYPE_PHRASES[s.phrase % TYPE_PHRASES.length].slice(0, s.char)
+   127→      );
+   128→      timeout = setTimeout(loop, delay);
+   129→    };
+   130→    loop();
+   131→    return () => clearTimeout(timeout);
+   132→  }, [active]);
+   133→
+   134→  return text;
+   135→}
+   136→
+   137→/* ------------------------------------------------------------------ */
+   138→/*  HeroSearch                                                         */
+   139→/* ------------------------------------------------------------------ */
+   140→export function HeroSearch() {
+   141→  const [value, setValue] = useState("");
+   142→  const [focused, setFocused] = useState(false);
+   143→  const [phase, setPhase] = useState<"idle" | "thinking" | "done">("idle");
+   144→  const [reply, setReply] = useState<AgentReply | null>(null);
+   145→  const [degraded, setDegraded] = useState(false);
+   146→  const [lastQuery, setLastQuery] = useState("");
+   147→  // Coreografía del pedido: la consulta entra por la izquierda (in), se acopla
+   148→  // al motor mientras piensa (think) y sale hacia la derecha con la respuesta (out)
+   149→  const [flight, setFlight] = useState<{ text: string; stage: "in" | "think" | "out" } | null>(null);
+   150→  // Demo ambiental (sin interacción del usuario): muestra el razonamiento en loop
+   151→  const [demo, setDemo] = useState<DemoFlight | null>(null);
+   152→  const [reducedMotion, setReducedMotion] = useState(false);
+   153→  // La demo ambiental se frena mientras el mouse está sobre la barra
+   154→  const [hovered, setHovered] = useState(false);
+   155→  const inputRef = useRef<HTMLInputElement>(null);
+   156→  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+   157→  const happyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+   158→  const location = useLocation();
+   159→
+   160→  // Geometría de la escena: la respuesta tiene que posarse afuera de la barra
+   161→  // y desvanecerse contra el borde REAL de la página → se mide la barra, el
+   162→  // viewport y el ancho de la propia tarjeta.
+   163→  const barWrapRef = useRef<HTMLDivElement>(null);
+   164→  const respChipRef = useRef<HTMLSpanElement>(null);
+   165→  const [geo, setGeo] = useState({ vw: 1280, barW: 576, respW: 300 });
+   166→
+   167→  useEffect(() => {
+   168→    const measure = () => {
+   169→      const bar = barWrapRef.current;
+   170→      if (!bar) return;
+   171→      const vw = window.innerWidth;
+   172→      const barW = bar.getBoundingClientRect().width;
+   173→      setGeo((g) => (g.vw !== vw || g.barW !== barW ? { ...g, vw, barW } : g));
+   174→    };
+   175→    measure();
+   176→    window.addEventListener("resize", measure);
+   177→    return () => window.removeEventListener("resize", measure);
+   178→  }, []);
+   179→
+   180→  // Cuando monta la tarjeta de respuesta, medir su ancho real
+   181→  useEffect(() => {
+   182→    if (demo?.kind !== "a") return;
+   183→    const el = respChipRef.current;
+   184→    const bar = barWrapRef.current;
+   185→    if (!el || !bar || el.offsetWidth === 0) return;
+   186→    const vw = window.innerWidth;
+   187→    const barW = bar.getBoundingClientRect().width;
+   188→    setGeo((g) =>
+   189→      g.respW !== el.offsetWidth || g.vw !== vw || g.barW !== barW
+   190→        ? { vw, barW, respW: el.offsetWidth }
+   191→        : g
+   192→    );
+   193→  }, [demo?.kind, demo?.q]);
+   194→
+   195→  const askHomy = useCallback(
+   196→    async (question: string, lat?: number | null, lng?: number | null) => {
+   197→      const trimmed = question.trim();
+   198→      if (trimmed.length < 4) return;
+   199→
+   200→      setPhase("thinking");
+   201→      setDegraded(false);
+   202→      setLastQuery(trimmed);
+   203→      setFlight({ text: trimmed, stage: "in" });
+   204→      try {
+   205→        const res = await fetch("/api/homy/agent", {
+   206→          method: "POST",
+   207→          headers: { "Content-Type": "application/json" },
+   208→          body: JSON.stringify({
+   209→            message: trimmed,
+   210→            mode: "auto",
+   211→            lat: lat ?? null,
+   212→            lng: lng ?? null,
+   213→          }),
+   214→        });
+   215→        const data = (await res.json()) as AgentReply;
+   216→        if (!res.ok || !data.ok) {
+   217→          setReply({
+   218→            ok: false,
+   219→            message:
+   220→              "El superagente tuvo un problema para razonar tu pedido. Probá de nuevo en unos segundos que sigo acá.",
+   221→            suggestions: [],
+   222→          });
+   223→          setDegraded(true);
+   224→        } else {
+   225→          setReply(data);
+   226→        }
+   227→      } catch {
+   228→        setReply({
+   229→          ok: false,
+   230→          message:
+   231→            "No pude conectarme con el motor en este momento. Revisá tu conexión y volvé a intentar: sigo acá, cuidando tu hogar.",
+   232→          suggestions: [],
+   233→        });
+   234→        setDegraded(true);
+   235→      } finally {
+   236→        setPhase("done");
+   237→        setValue("");
+   238→        inputRef.current?.blur();
+   239→        setFlight((f) => (f ? { ...f, stage: "out" } : null));
+   240→        if (happyTimer.current) clearTimeout(happyTimer.current);
+   241→        happyTimer.current = setTimeout(() => setPhase("idle"), 1900);
+   242→      }
+   243→    },
+   244→    []
+   245→  );
+   246→
+   247→  const onChange = (next: string) => {
+   248→    setValue(next);
+   249→    if (debounceRef.current) clearTimeout(debounceRef.current);
+   250→    if (next.trim().length >= 8) {
+   251→      debounceRef.current = setTimeout(
+   252→        () => void askHomy(next, location.lat, location.lng),
+   253→        1400
+   254→      );
+   255→    }
+   256→  };
+   257→
+   258→  const onSubmit = (e: FormEvent) => {
+   259→    e.preventDefault();
+   260→    if (debounceRef.current) clearTimeout(debounceRef.current);
+   261→    void askHomy(value, location.lat, location.lng);
+   262→  };
+   263→
+   264→  useEffect(
+   265→    () => () => {
+   266→      if (debounceRef.current) clearTimeout(debounceRef.current);
+   267→      if (happyTimer.current) clearTimeout(happyTimer.current);
+   268→      setFlight(null);
+   269→    },
+   270→    []
+   271→  );
+   272→
+   273→  // prefers-reduced-motion: la demo ambiental no corre si el usuario la pide
+   274→  useEffect(() => {
+   275→    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+   276→    setReducedMotion(mq.matches);
+   277→    const onChange = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+   278→    mq.addEventListener("change", onChange);
+   279→    return () => mq.removeEventListener("change", onChange);
+   280→  }, []);
+   281→
+   282→  const ambientAllowed =
+   283→    !reducedMotion &&
+   284→    phase === "idle" &&
+   285→    !focused &&
+   286→    !hovered &&
+   287→    value === "" &&
+   288→    !reply &&
+   289→    !flight;
+   290→
+   291→  // Loop de la demo: consulta (izq → motor) · respuesta (motor → der).
+   292→  // Un elemento por vez; cada etapa espera a que la anterior termine.
+   293→  useEffect(() => {
+   294→    if (!ambientAllowed) return;
+   295→    let alive = true;
+   296→    const timers: ReturnType<typeof setTimeout>[] = [];
+   297→    const wait = (ms: number) =>
+   298→      new Promise<void>((res) => {
+   299→        const t = setTimeout(res, ms);
+   300→        timers.push(t);
+   301→      });
+   302→    (async () => {
+   303→      // Cooldown al (re)iniciar: sin parpadeos cuando el mouse cruza la barra
+   304→      await wait(DEMO_T.restart);
+   305→      if (!alive) return;
+   306→      while (alive) {
+   307→        for (let i = 0; i < DEMO_PAIRS.length && alive; i += 1) {
+   308→          const { q, a } = DEMO_PAIRS[i];
+   309→          // 1) La consulta vuela desde la izquierda y, al llegar, se desvanece
+   310→          //    DETRÁS del vidrio de la barra (un solo vuelo continuo)
+   311→          setDemo({ kind: "q", q });
+   312→          await wait(DEMO_T.qFly);
+   313→          if (!alive) return;
+   314→          setDemo(null); // respiro: la escena queda vacía un instante (sin pisarse)
+   315→          await wait(DEMO_T.gap);
+   316→          if (!alive) return;
+   317→          // 2) La respuesta surge desde detrás del vidrio hacia afuera de la
+   318→          //    barra, se deja leer y se desvanece contra el borde de la página
+   319→          setDemo({ kind: "a", stage: "in", q, a });
+   320→          await wait(DEMO_T.aIn);
+   321→          if (!alive) return;
+   322→          setDemo({ kind: "a", stage: "hold", q, a });
+   323→          await wait(DEMO_T.aHold);
+   324→          if (!alive) return;
+   325→          setDemo({ kind: "a", stage: "out", q, a });
+   326→          await wait(DEMO_T.aOut + DEMO_T.next);
+   327→          if (!alive) return;
+   328→        }
+   329→      }
+   330→    })();
+   331→    return () => {
+   332→      alive = false;
+   333→      timers.forEach(clearTimeout);
+   334→      setDemo(null);
+   335→    };
+   336→  }, [ambientAllowed]);
+   337→
+   338→  const placeholderText = useTypewriter(!focused && value === "" && phase !== "thinking");
+   339→  const demoRunning = demo !== null;
+   340→  const showPlaceholder = demoRunning ? "" : placeholderText || "¿Qué necesita tu hogar?";
+   341→
+   342→  const homyState: HomyState = useMemo(() => {
+   343→    if (phase === "thinking") return "thinking";
+   344→    if (phase === "done") return "happy";
+   345→    if (focused || value.length > 0) return "listening";
+   346→    // La demo también le cuenta la historia a la mascota
+   347→    if (demo?.kind === "q") return "listening";
+   348→    if (demo?.kind === "a") return "happy";
+   349→    return "idle";
+   350→  }, [phase, focused, value, demo]);
+   351→
+   352→  const busy = phase === "thinking";
+   353→
+   354→  return (
+   355→    <MotionConfig reducedMotion="user">
+   356→    <div className="mx-auto w-full max-w-6xl">
+   357→      {/* Homy flotando detrás de la barra: las piernas quedan ocultas
+   358→          tras el borde superior (z-0), nunca tapa el texto del input */}
+   359→      <div ref={barWrapRef} className="relative z-10 mx-auto w-full max-w-xl">
+   360→        <div
+   361→          aria-hidden
+   362→          className="pointer-events-none relative z-0 mx-auto w-fit origin-bottom animate-float-slow mb-[-26px] sm:mb-[-34px]"
+   363→        >
+   364→          <Homy size={88} state={homyState} />
+   365→        </div>
+   366→
+   367→        {/* Escenario ambiental DETRÁS del vidrio (z-[5] queda por debajo del
+   368→            form z-10): el backdrop-filter de la barra esmerila lo que pasa por
+   369→            detrás → la consulta se funde con el vidrio al llegar. */}
+   370→        <div
+   371→          aria-hidden
+   372→          className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] flex h-14 items-center sm:h-16"
+   373→        >
+   374→          {/* CONSULTA: un solo vuelo — entra desde la izquierda legible y, al
+   375→              llegar a la barra, sigue su camino POR DETRÁS del vidrio mientras
+   376→              se desvanece (el vidrio la va tragando de a poco) */}
+   377→          {demo?.kind === "q" && (
+   378→            <motion.span
+   379→              initial={{ opacity: 0, x: -350, scale: 0.88 }}
+   380→              animate={{
+   381→                opacity: [0, 1, 1, 0],
+   382→                x: [-350, -140, -45, 15],
+   383→                scale: [0.88, 1, 0.97, 0.93],
+   384→              }}
+   385→              transition={{
+   386→                duration: DEMO_T.qFly / 1000,
+   387→                times: [0, 0.32, 0.72, 1],
+   388→                ease: "easeInOut",
+   389→              }}
+   390→              className="homy-flight-chip max-w-[min(62vw,300px)] px-3.5 py-1.5 sm:max-w-[340px]"
+   391→            >
+   392→              <Sparkles className="size-3.5 shrink-0 text-tech" aria-hidden />
+   393→              <span className="min-w-0 truncate text-[13px] font-bold text-navy">
+   394→                {demo.q}
+   395→              </span>
+   396→            </motion.span>
+   397→          )}
+   398→
+   399→          {/* RESPUESTA: arranca escondida detrás del vidrio (x:-44), surge
+   400→              afuera de la barra, se deja leer y deriva hasta desvanecerse
+   401→              contra el borde real de la página (medido en vivo) */}
+   402→          {demo?.kind === "a" &&
+   403→            (() => {
+   404→              const gapPx = Math.max(0, (geo.vw - geo.barW) / 2);
+   405→              const flotante = gapPx < 130; // poco lugar: flota sobre el borde derecho de la barra
+   406→              const restX = flotante
+   407→                ? gapPx - 14
+   408→                : Math.min(24 + geo.respW, gapPx - 16);
+   409→              const restY = flotante ? -46 : 0;
+   410→              const exitX = gapPx + 40; // el borde derecho termina ~40px pasada la página
+   411→              return (
+   412→                <motion.span
+   413→                  ref={respChipRef}
+   414→                  initial={{ opacity: 0, x: -44, y: 0 }}
+   415→                  animate={
+   416→                    demo.stage === "in"
+   417→                      ? { opacity: 1, x: restX, y: restY }
+   418→                      : demo.stage === "hold"
+   419→                        ? { opacity: 1, x: restX, y: restY, scale: [1, 1.015, 1] }
+   420→                        : { opacity: 0, x: exitX, y: restY - 8, scale: 0.97 }
+   421→                  }
+   422→                  transition={
+   423→                    demo.stage === "in"
+   424→                      ? { duration: DEMO_T.aIn / 1000, ease: [0.22, 1, 0.36, 1] }
+   425→                      : demo.stage === "hold"
+   426→                        ? {
+   427→                            scale: { duration: 2.7, ease: "easeInOut" },
+   428→                            default: { duration: 0.3 },
+   429→                          }
+   430→                        : { duration: DEMO_T.aOut / 1000, ease: [0.6, 0.05, 0.9, 0.4] }
+   431→                  }
+   432→                  style={
+   433→                    flotante
+   434→                      ? undefined
+   435→                      : { maxWidth: Math.max(150, Math.min(340, gapPx - 40)) }
+   436→                  }
+   437→                  className="homy-flight-chip homy-flight-chip--ai ml-auto max-w-[min(58vw,280px)] px-3.5 py-1.5"
+   438→                >
+   439→                  <BadgeCheck className="size-3.5 shrink-0 text-tech" aria-hidden />
+   440→                  <span className="min-w-0 truncate text-[12.5px] font-bold text-navy/85">
+   441→                    {demo.a}
+   442→                  </span>
+   443→                </motion.span>
+   444→              );
+   445→            })()}
+   446→        </div>
+   447→
+   448→        {/* Barra premium */}
+   449→        <form
+   450→          onSubmit={onSubmit}
+   451→          className={cn(
+   452→            "bar-relief relative z-10 flex h-14 items-center gap-2 rounded-full pr-2 pl-5 transition-shadow duration-500 sm:h-16 sm:pl-6",
+   453→            "focus-within:shadow-[0_22px_54px_-16px_rgba(0,196,255,0.4),inset_0_2px_8px_rgba(10,37,64,0.05)]"
+   454→          )}
+   455→          role="search"
+   456→          onMouseEnter={() => setHovered(true)}
+   457→          onMouseLeave={() => setHovered(false)}
+   458→        >
+   459→          <Sparkles
+   460→            className={cn(
+   461→              "size-5 shrink-0 transition-colors duration-300",
+   462→              homyState === "idle" ? "text-tech/60" : "text-ai"
+   463→            )}
+   464→            aria-hidden
+   465→          />
+   466→          <input
+   467→            ref={inputRef}
+   468→            type="text"
+   469→            value={value}
+   470→            onChange={(e) => onChange(e.target.value)}
+   471→            onFocus={() => setFocused(true)}
+   472→            onBlur={() => setFocused(false)}
+   473→            placeholder={showPlaceholder}
+   474→            aria-label="Contale a Homy qué necesitás"
+   475→            maxLength={280}
+   476→            className="h-full min-w-0 flex-1 bg-transparent text-[15px] font-medium text-navy outline-none placeholder:text-navy/35 sm:text-base"
+   477→          />
+   478→          <button
+   479→            type="submit"
+   480→            disabled={busy || value.trim().length === 0}
+   481→            aria-label="Preguntarle a Homy"
+   482→            className="homy-btn-primary size-10 shrink-0 sm:size-11"
+   483→          >
+   484→            {busy ? (
+   485→              <Loader2 className="size-4.5 animate-spin" aria-hidden />
+   486→            ) : (
+   487→              <ArrowRight className="size-4.5" aria-hidden />
+   488→            )}
+   489→          </button>
+   490→        {/* Vuelo de la consulta REAL (usuario): entra por la izquierda, se acopla al motor
+   491→            y sale hacia la derecha cuando llega la respuesta (solo transform/opacity) */}
+   492→        {flight && (
+   493→          <div
+   494→            aria-hidden
+   495→            className="pointer-events-none absolute inset-y-0 left-1/2 z-20 flex w-0 items-center"
+   496→          >
+   497→            <motion.span
+   498→              initial={{ opacity: 0, x: -270, scale: 0.7 }}
+   499→              animate={
+   500→                flight.stage === "in"
+   501→                  ? { opacity: 1, x: "-50%", scale: 1 }
+   502→                  : flight.stage === "think"
+   503→                    ? {
+   504→                        opacity: 1,
+   505→                        x: "-50%",
+   506→                        scale: [1, 1.06, 1],
+   507→                      }
+   508→                    : { opacity: 0, scale: 0.9 }
+   509→              }
+   510→              transition={
+   511→                flight.stage === "in"
+   512→                  ? { type: "spring", stiffness: 320, damping: 26 }
+   513→                  : flight.stage === "think"
+   514→                    ? {
+   515→                        scale: { repeat: Infinity, duration: 1.15, ease: "easeInOut" },
+   516→                        default: { duration: 0.25 },
+   517→                      }
+   518→                    : { duration: 0.45, ease: "easeIn" }
+   519→              }
+   520→              onAnimationComplete={() => {
+   521→                if (flight.stage === "in") setFlight((f) => (f ? { ...f, stage: "think" } : null));
+   522→                if (flight.stage === "out") setFlight(null);
+   523→              }}
+   524→              className="homy-flight-chip max-w-[300px] px-3.5 py-1.5 sm:max-w-[380px]"
+   525→            >
+   526→              <Sparkles className="size-3.5 shrink-0 text-tech" aria-hidden />
+   527→              <span className="min-w-0 truncate text-[13px] font-bold text-navy">
+   528→                {flight.text}
+   529→              </span>
+   530→            </motion.span>
+   531→          </div>
+   532→        )}
+   533→
+   534→        </form>
+   535→
+   536→        {/* Anillo de actividad IA */}
+   537→        {busy && (
+   538→          <span
+   539→            aria-hidden
+   540→            className="pointer-events-none absolute -inset-1.5 rounded-full border-2 border-ai/50 animate-ring-ping"
+   541→          />
+   542→        )}
+   543→      </div>
+   544→
+   545→      {/* Ejemplos de intención: clickeables, razonan como el agente */}
+   546→      <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+   547→        <span className="mr-1 hidden text-xs font-bold uppercase tracking-widest text-navy/40 sm:inline">
+   548→          Probá
+   549→        </span>
+   550→        {EXAMPLES.map((ex) => (
+   551→          <button
+   552→            key={ex}
+   553→            onClick={() => void askHomy(ex, location.lat, location.lng)}
+   554→            disabled={busy}
+   555→            aria-label={`Probar ejemplo: ${ex}`}
+   556→            className="homy-glass-soft homy-focus rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold text-navy/70 transition-all duration-300 hover:-translate-y-0.5 hover:border-tech/35 hover:text-tech active:scale-[0.97] disabled:opacity-50 sm:text-[13px]"
+   557→          >
+   558→            {ex}
+   559→          </button>
+   560→        ))}
+   561→      </div>
+   562→
+   563→      <p className="mt-4 text-center text-sm text-navy/50 sm:hidden">
+   564→        Escribí con tus palabras: Homy interpreta y arma tu pedido.
+   565→      </p>
+   566→
+   567→      {/* Panel de respuesta de Homy */}
+   568→      <AnimatePresence>
+   569→        {reply && (
+   570→          <motion.div
+   571→            key="homy-reply"
+   572→            initial={{ opacity: 0, x: 110, scale: 0.97 }}
+   573→            animate={{ opacity: 1, x: 0, scale: 1 }}
+   574→            exit={{ opacity: 0, x: 140, scale: 0.98 }}
+   575→            transition={{ type: "spring", stiffness: 260, damping: 24 }}
+   576→            className="relative z-10 mx-auto mt-7 w-[min(92vw,640px)]"
+   577→            role="status"
+   578→            aria-live="polite"
+   579→          >
+   580→            <div className="homy-glass-strong rounded-[28px] p-5 sm:p-6">
+   581→              <div className="flex items-start justify-between gap-3">
+   582→                <div className="flex items-center gap-3">
+   583→                  <Homy size={40} state={busy ? "thinking" : "idle"} />
+   584→                  <div>
+   585→                    <p className="flex items-center gap-2 text-sm font-bold text-navy">
+   586→                      Homy
+   587→                      <span className="inline-flex items-center gap-1 rounded-full bg-ai-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-tech">
+   588→                        <Sparkles className="size-3" aria-hidden />
+   589→                        Agente IA
+   590→                      </span>
+   591→                    </p>
+   592→                    <p className="text-xs text-navy/45">
+   593→                      Asistente de HomIA · interpreta tu pedido al instante
+   594→                    </p>
+   595→                  </div>
+   596→                </div>
+   597→                <button
+   598→                  onClick={() => setReply(null)}
+   599→                  aria-label="Cerrar respuesta"
+   600→                  className="grid size-8 place-items-center rounded-full text-navy/40 transition-colors hover:bg-confort hover:text-navy"
+   601→                >
+   602→                  <X className="size-4" />
+   603→                </button>
+   604→              </div>
+   605→
+   606→              <p className="mt-4 text-[15px] leading-relaxed text-navy/85">
+   607→                {reply.message}
+   608→              </p>
+   609→
+   610→              {/* Pregunta de aclaración del agente (loop de razonamiento) */}
+   611→              {reply.question && reply.question.opciones.length > 0 && (
+   612→                <div className="mt-4 flex flex-wrap gap-2">
+   613→                  {reply.question.opciones.map((op) => (
+   614→                    <button
+   615→                      key={op}
+   616→                      onClick={() => {
+   617→                        setReply(null);
+   618→                        void askHomy(op, location.lat, location.lng);
+   619→                      }}
+   620→                      className="rounded-full border border-ai/40 bg-white/80 px-3.5 py-1.5 text-[13px] font-semibold text-tech transition-all hover:border-ai hover:bg-ai/5 active:scale-[0.97]"
+   621→                    >
+   622→                      {op}
+   623→                    </button>
+   624→                  ))}
+   625→                </div>
+   626→              )}
+   627→
+   628→              {/* Resultados REALES de la base (chips compactos clickeables) */}
+   629→              {reply.results && (
+   630→                <div className="mt-4 space-y-1.5">
+   631→                  {(reply.results.jobs ?? []).slice(0, 2).map((j) => (
+   632→                    <button
+   633→                      key={j.id}
+   634→                      onClick={() => navigate(`/trabajo/${j.id}`)}
+   635→                      className="flex w-full items-center gap-2.5 rounded-xl border border-line/70 bg-white/70 px-3.5 py-2.5 text-left transition hover:border-tech/40 hover:bg-white"
+   636→                    >
+   637→                      <Briefcase className="size-4 shrink-0 text-tech" aria-hidden />
+   638→                      <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-navy">
+   639→                        {j.title}
+   640→                      </span>
+   641→                      <span className="shrink-0 text-xs font-bold text-action">
+   642→                        {j.budgetMin || j.budgetMax
+   643→                          ? formatARS(j.budgetMin ?? j.budgetMax ?? 0)
+   644→                          : "A presupuestar"}
+   645→                      </span>
+   646→                    </button>
+   647→                  ))}
+   648→                  {(reply.results.professionals ?? []).slice(0, 2).map((p) => (
+   649→                    <button
+   650→                      key={p.id}
+   651→                      onClick={() => navigate(`/profesional/${p.id}`)}
+   652→                      className="flex w-full items-center gap-2.5 rounded-xl border border-line/70 bg-white/70 px-3.5 py-2.5 text-left transition hover:border-tech/40 hover:bg-white"
+   653→                    >
+   654→                      <Wrench className="size-4 shrink-0 text-tech" aria-hidden />
+   655→                      <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-navy">
+   656→                        {p.displayName}
+   657→                        {p.verified && <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold text-tech"><BadgeCheck className="size-3" aria-hidden /> verificado</span>}
+   658→                      </span>
+   659→                      <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-[#B98A00]">
+   660→                        <Star className="size-3.5 fill-[#FFC700] text-[#FFC700]" aria-hidden />
+   661→                        {p.rating > 0 ? p.rating.toFixed(1) : "nuevo"}
+   662→                      </span>
+   663→                    </button>
+   664→                  ))}
+   665→                  {[...(reply.results.materials ?? []), ...(reply.results.comparables ?? [])]
+   666→                    .slice(0, 2)
+   667→                    .map((m) => (
+   668→                    <button
+   669→                      key={m.stockId}
+   670→                      onClick={() => navigate(`/proveedor/${m.providerId}`)}
+   671→                      className="flex w-full items-center gap-2.5 rounded-xl border border-line/70 bg-white/70 px-3.5 py-2.5 text-left transition hover:border-tech/40 hover:bg-white"
+   672→                    >
+   673→                      <Package className="size-4 shrink-0 text-tech" aria-hidden />
+   674→                      <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-navy">
+   675→                        {m.elementName}
+   676→                        <span className="ml-1.5 text-xs font-normal text-navy/45">{m.providerName}</span>
+   677→                      </span>
+   678→                      <span className="shrink-0 text-xs font-bold text-action">
+   679→                        {formatARS(m.price)}/{m.unit}
+   680→                      </span>
+   681→                    </button>
+   682→                  ))}
+   683→                </div>
+   684→              )}
+   685→
+   686→              {/* CTA según la intención razonada por el agente */}
+   687→              {(() => {
+   688→                const intent = reply.intent ?? "ayuda";
+   689→                const cta = INTENT_CTA[intent];
+   690→                const href = cta.href.includes("?")
+   691→                  ? `${cta.href}&q=${encodeURIComponent(lastQuery)}`
+   692→                  : cta.href;
+   693→                const CtaIcon = cta.icon;
+   694→                return (
+   695→                  <button
+   696→                    onClick={() => navigate(href)}
+   697→                    className="homy-btn-dark mt-4 w-full px-5 py-3 text-sm sm:w-auto"
+   698→                  >
+   699→                    <CtaIcon className="size-4" aria-hidden />
+   700→                    {cta.label}
+   701→                    <ArrowRight className="size-4" aria-hidden />
+   702→                  </button>
+   703→                );
+   704→              })()}
+   705→
+   706→              {reply.suggestions.length > 0 && (
+   707→                <div className="mt-5 border-t border-line/70 pt-4">
+   708→                  <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">
+   709→                    ¿Seguimos por acá?
+   710→                  </p>
+   711→                  <div className="mt-2.5 flex flex-wrap gap-2">
+   712→                    {reply.suggestions.map((s) => (
+   713→                      <button
+   714→                        key={s}
+   715→                        onClick={() => {
+   716→                          setReply(null);
+   717→                          inputRef.current?.focus();
+   718→                          void askHomy(s, location.lat, location.lng);
+   719→                        }}
+   720→                        className="rounded-full border border-tech/20 bg-white/70 px-3.5 py-1.5 text-[13px] font-medium text-tech transition-all hover:border-tech/40 hover:bg-tech/5 active:scale-[0.97]"
+   721→                      >
+   722→                        {s}
+   723→                      </button>
+   724→                    ))}
+   725→                  </div>
+   726→                </div>
+   727→              )}
+   728→
+   729→              {degraded && (
+   730→                <p className="mt-4 text-xs text-navy/40">
+   731→                  Nota: respondo con capacidad reducida en este momento.
+   732→                </p>
+   733→              )}
+   734→            </div>
+   735→          </motion.div>
+   736→        )}
+   737→      </AnimatePresence>
+   738→    </div>
+   739→    </MotionConfig>
+   740→  );
+   741→}
+   742→

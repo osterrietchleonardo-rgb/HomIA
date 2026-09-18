@@ -17,6 +17,8 @@ export type SessionUser = {
   displayName: string
   roles: string[]
   avatarUrl?: string | null
+  verificationStatus?: string
+  verifiedAt?: Date | null
   hasProfessional: boolean
   hasProvider: boolean
   lat?: number | null
@@ -81,6 +83,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       displayName: user.displayName,
       roles: parseRoles(user.roles),
       avatarUrl: user.avatarUrl,
+      verificationStatus: user.verificationStatus,
+      verifiedAt: user.verifiedAt,
       hasProfessional: !!user.professional,
       hasProvider: !!user.provider,
       lat: user.lat,

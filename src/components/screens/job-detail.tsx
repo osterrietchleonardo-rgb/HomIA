@@ -284,9 +284,10 @@ export default function JobDetailScreen({ id }: { id: string }) {
 }
 
 function BackHome() {
+  const { user } = useSession()
   return (
-    <button onClick={() => navigate('/')} className="homy-btn-dark homy-focus px-6 py-3 min-h-[44px] text-sm">
-      Volver al inicio
+    <button onClick={() => navigate(user ? `/panel/${user.roles[0] || 'cliente'}` : '/')} className="homy-btn-dark homy-focus px-6 py-3 min-h-[44px] text-sm">
+      {user ? 'Volver al panel' : 'Volver al inicio'}
     </button>
   )
 }

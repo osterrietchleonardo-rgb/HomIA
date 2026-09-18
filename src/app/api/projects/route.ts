@@ -71,6 +71,12 @@ export async function POST(req: NextRequest) {
     title: string
     description?: string
     laborCost?: number
+    urgency?: string // ya | esta_semana | normal
+    address?: string
+    city?: string
+    deadline?: string // ISO
+    photos?: string[]
+    firstMessage?: string // opcional: abre chat cliente→profesional con el brief
   }>(req)
 
   if (!d.title) return fail('El título es obligatorio')
@@ -78,19 +84,28 @@ export async function POST(req: NextRequest) {
 
   let professionalId = ''
   let clientId = ''
+  let proUserId = ''
   if (d.professionalProfileId) {
-    const pro = await db.professionalProfile.findUnique({ where: { id: d.professionalProfileId } })
+    const pro = await db.professionalProfile.findUnique({ where: { id: d.professionalProfileId }, select: { id: true, userId: true } })
     if (!pro) return fail('Profesional no encontrado', 404)
     professionalId = pro.id
+    proUserId = pro.userId
     clientId = auth.user.id
   } else if (d.counterpartyUserId && mePro) {
     // subcontratación: yo (profesional) contrato a otro profesional
-    const otherPro = await db.professionalProfile.findUnique({ where: { userId: d.counterpartyUserId } })
+    const otherPro = await db.professionalProfile.findUnique({ where: { userId: d.counterpartyUserId }, select: { id: true, userId: true } })
     if (!otherPro) return fail('El otro usuario no tiene perfil profesional', 404)
     professionalId = otherPro.id
+    proUserId = otherPro.userId
     clientId = auth.user.id
   } else {
     return fail('Indicá el profesional a contratar')
+  }
+
+  let deadline: Date | null = null
+  if (d.deadline) {
+    const parsed = new Date(d.deadline)
+    if (!isNaN(parsed.getTime())) deadline = parsed
   }
 
   const project = await db.project.create({
@@ -101,7 +116,51 @@ export async function POST(req: NextRequest) {
       description: d.description || null,
       laborCost: d.laborCost || 0,
       stage: 'presupuesto',
+      urgency: d.urgency || null,
+      address: d.address || null,
+      deadline,
+      photos: d.photos && d.photos.length > 0 ? JSON.stringify(d.photos) : null,
     },
   })
-  return ok({ project }, 201)
+
+  // Notificar al profesional contratado (visita su panel → Proyectos)
+  if (proUserId) {
+    await db.notification.create({
+      data: {
+        userId: proUserId,
+        type: 'contratacion',
+        title: 'Te contrataron para un trabajo',
+        body: `${auth.user.displayName} te contrató: ${d.title}`,
+        link: `/panel/profesional/proyectos/${project.id}`,
+      },
+    })
+  }
+
+  // Opcional: abrir conversación cliente→profesional con el brief (el cliente puede iniciar)
+  let conversationId: string | null = null
+  if (d.firstMessage && d.firstMessage.trim() && proUserId) {
+    const a = clientId < proUserId ? clientId : proUserId
+    const b = clientId < proUserId ? proUserId : clientId
+    const conv = await db.conversation.upsert({
+      where: { userAId_userBId: { userAId: a, userBId: b } },
+      create: { userAId: a, userBId: b },
+      update: {},
+    })
+    await db.message.create({
+      data: { conversationId: conv.id, senderId: clientId, body: d.firstMessage.trim().slice(0, 2000) },
+    })
+    await db.conversation.update({ where: { id: conv.id }, data: { lastMessageAt: new Date() } })
+    await db.notification.create({
+      data: {
+        userId: proUserId,
+        type: 'message',
+        title: 'Nuevo mensaje de ' + auth.user.displayName,
+        body: d.firstMessage.trim().slice(0, 120),
+        link: `/mensajes?c=${conv.id}`,
+      },
+    })
+    conversationId = conv.id
+  }
+
+  return ok({ project, conversationId }, 201)
 }

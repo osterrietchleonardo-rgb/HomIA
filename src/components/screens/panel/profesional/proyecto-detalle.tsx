@@ -7,7 +7,7 @@ import { formatARS, formatDate } from '@/lib/format'
 import { toast } from 'sonner'
 import {
   ArrowRight, Receipt, Truck, Plus, RefreshCcw, Phone, Mail, ArrowLeft,
-  FolderOpen, Package, ClipboardPen, CircleX, History, Check,
+  FolderOpen, Package, ClipboardPen, CircleX, History, Check, FileText,
 } from 'lucide-react'
 
 const STAGES = ['presupuesto', 'materiales', 'ejecucion', 'revision', 'finalizado']
@@ -32,6 +32,7 @@ type RetiroLink = {
 type Project = {
   id: string; title: string; description: string | null; stage: string; status: string
   laborCost: number; materialsCost: number; createdAt: string
+  urgency?: string | null; address?: string | null; deadline?: string | null; photos?: string[]
   job: { id: string; title: string } | null
   client: { id: string; displayName: string; avatarUrl: string | null; phone: string | null; email: string | null }
   professional: { id: string; displayName: string; personType: string }
@@ -168,7 +169,7 @@ export default function ProProjectDetail({ id }: { id: string }) {
   if (loading) return <Loading />
   if (!data) return (
     <div className="homy-page">
-      <div className="max-w-4xl">
+      <div>
         <Empty
           icon={<FolderOpen className="size-7" />}
           title="Proyecto no encontrado"
@@ -191,7 +192,7 @@ export default function ProProjectDetail({ id }: { id: string }) {
 
   return (
     <div className="homy-page">
-      <div className="max-w-4xl">
+      <div>
         <Link to="/panel/profesional/proyectos"
           className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-[#1D63B8] transition-colors mb-3">
           <ArrowLeft className="size-3.5" aria-hidden /> Volver a mis proyectos
@@ -205,6 +206,42 @@ export default function ProProjectDetail({ id }: { id: string }) {
             <p className="homy-page-sub">Para {p.client.displayName} · creado el {formatDate(p.createdAt)}</p>
           </div>
         </header>
+
+        {/* brief de la contratación (si vino del wizard del directorio) */}
+        {(p.urgency || p.address || p.deadline || (p.photos && p.photos.length > 0)) && (
+          <div className="homy-glass rounded-3xl p-4 sm:p-5 mb-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="flex items-center gap-2 text-sm font-extrabold text-[#0A2540]">
+                <span className="homy-icon-chip homy-chip-blue size-8 shrink-0 [&_svg]:size-4" aria-hidden><FileText /></span>
+                Brief del cliente
+              </p>
+              {p.urgency && (
+                <span className="homy-pill">{({ ya: 'Lo antes posible', esta_semana: 'Próximas semanas', normal: 'Fecha flexible' } as Record<string, string>)[p.urgency] || p.urgency}</span>
+              )}
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {p.deadline && (
+                <div className="homy-glass-soft rounded-xl px-4 py-3">
+                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Fecha deseada</p>
+                  <p className="mt-0.5 text-sm font-bold text-[#0A2540]">{formatDate(p.deadline)}</p>
+                </div>
+              )}
+              {p.address && (
+                <div className="homy-glass-soft rounded-xl px-4 py-3">
+                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Dirección del trabajo</p>
+                  <p className="mt-0.5 text-sm font-bold text-[#0A2540]">{p.address}</p>
+                </div>
+              )}
+            </div>
+            {p.photos && p.photos.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {p.photos.map((ph, i) => (
+                  <img key={ph} src={ph} alt={`Foto ${i + 1} del brief del cliente`} className="h-20 w-20 rounded-xl object-cover ring-1 ring-[#0A2540]/10" />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* etapas */}
         <div className="homy-glass rounded-3xl p-5 mb-5">

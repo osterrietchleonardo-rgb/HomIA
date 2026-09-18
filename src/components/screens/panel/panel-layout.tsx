@@ -4,40 +4,52 @@
 import { useEffect, useState } from 'react'
 import { navigate, Link, type RouteState } from '@/lib/router'
 import { useSession } from '@/lib/store'
+import { VerifyBadge } from '@/components/app/ui-bits'
+import RoleSwitcher from '@/components/app/role-switcher'
 import { Homy, HomIAWordmark } from '@/components/homy/homy-character'
 import { toast } from 'sonner'
 import {
   LayoutDashboard, Briefcase, FolderKanban, FileText, User, Bell, LogOut,
   Search, Boxes, Users, Link2, HardHat, ClipboardList, Home, Sparkles,
+  Compass, MessageCircle, ShieldCheck,
 } from 'lucide-react'
 
-type NavItem = { to: string; label: string; icon: React.ComponentType<{ className?: string }> }
+type NavItem = { to: string; label: string; icon: React.ComponentType<{ className?: string }>; m?: boolean }
 
 const NAV: Record<string, NavItem[]> = {
   cliente: [
-    { to: '/panel/cliente', label: 'Inicio', icon: LayoutDashboard },
-    { to: '/panel/cliente/publicar', label: 'Publicar trabajo', icon: Briefcase },
-    { to: '/panel/cliente/trabajos', label: 'Mis trabajos', icon: ClipboardList },
-    { to: '/panel/cliente/proyectos', label: 'Proyectos', icon: FolderKanban },
+    { to: '/panel/cliente', label: 'Inicio', icon: LayoutDashboard, m: true },
+    { to: '/panel/cliente/publicar', label: 'Publicar trabajo', icon: Briefcase, m: true },
+    { to: '/panel/cliente/trabajos', label: 'Mis trabajos', icon: ClipboardList, m: true },
+    { to: '/panel/cliente/proyectos', label: 'Proyectos', icon: FolderKanban, m: true },
     { to: '/panel/cliente/facturas', label: 'Facturas', icon: FileText },
+    { to: '/panel/cliente/directorio', label: 'Directorio', icon: Compass },
+    { to: '/panel/cliente/mensajes', label: 'Mensajes', icon: MessageCircle, m: true },
+    { to: '/panel/cliente/verificacion', label: 'Verificación', icon: ShieldCheck },
     { to: '/panel/cliente/perfil', label: 'Mi perfil', icon: User },
   ],
   profesional: [
-    { to: '/panel/profesional', label: 'Inicio', icon: LayoutDashboard },
-    { to: '/panel/profesional/bolsa', label: 'Bolsa de trabajos', icon: Search },
+    { to: '/panel/profesional', label: 'Inicio', icon: LayoutDashboard, m: true },
+    { to: '/panel/profesional/bolsa', label: 'Bolsa de trabajos', icon: Search, m: true },
     { to: '/panel/profesional/materiales', label: 'Materiales', icon: Boxes },
     { to: '/panel/profesional/presupuestos', label: 'Mis presupuestos', icon: FileText },
-    { to: '/panel/profesional/proyectos', label: 'Proyectos', icon: FolderKanban },
-    { to: '/panel/profesional/crm', label: 'CRM clientes', icon: Users },
+    { to: '/panel/profesional/proyectos', label: 'Proyectos', icon: FolderKanban, m: true },
+    { to: '/panel/profesional/crm', label: 'CRM clientes', icon: Users, m: true },
     { to: '/panel/profesional/obras', label: 'Mis obras', icon: HardHat },
     { to: '/panel/profesional/vinculaciones', label: 'Cuentas de retiro', icon: Link2 },
+    { to: '/panel/profesional/directorio', label: 'Directorio', icon: Compass },
+    { to: '/panel/profesional/mensajes', label: 'Mensajes', icon: MessageCircle, m: true },
+    { to: '/panel/profesional/verificacion', label: 'Verificación', icon: ShieldCheck },
     { to: '/panel/profesional/perfil', label: 'Mi perfil', icon: User },
   ],
   proveedor: [
-    { to: '/panel/proveedor', label: 'Inicio', icon: LayoutDashboard },
-    { to: '/panel/proveedor/stock', label: 'Stock', icon: Boxes },
-    { to: '/panel/proveedor/crm', label: 'CRM', icon: Users },
-    { to: '/panel/proveedor/vinculaciones', label: 'Vinculaciones', icon: Link2 },
+    { to: '/panel/proveedor', label: 'Inicio', icon: LayoutDashboard, m: true },
+    { to: '/panel/proveedor/stock', label: 'Stock', icon: Boxes, m: true },
+    { to: '/panel/proveedor/crm', label: 'CRM', icon: Users, m: true },
+    { to: '/panel/proveedor/vinculaciones', label: 'Vinculaciones', icon: Link2, m: true },
+    { to: '/panel/proveedor/directorio', label: 'Directorio', icon: Compass },
+    { to: '/panel/proveedor/mensajes', label: 'Mensajes', icon: MessageCircle, m: true },
+    { to: '/panel/proveedor/verificacion', label: 'Verificación', icon: ShieldCheck },
     { to: '/panel/proveedor/perfil', label: 'Mi perfil', icon: User },
   ],
 }
@@ -51,23 +63,22 @@ const ROLE_LABEL: Record<string, string> = {
 export default function PanelLayout({ route, children }: { route: RouteState; children: React.ReactNode }) {
   const { user, logout } = useSession()
   const [unread, setUnread] = useState(0)
+  const [msgUnread, setMsgUnread] = useState(0)
 
-  const role = route.segments[1] || user?.roles?.[0] || 'cliente'
+  const role = (route.segments[0] === 'panel' ? route.segments[1] : undefined) || user?.roles?.[0] || 'cliente'
   const items = NAV[role] || NAV.cliente
   const currentPath = route.path
 
   useEffect(() => {
     async function poll() {
       try {
-        const res = await fetch('/api/notifications')
-        if (res.ok) {
-          const data = await res.json()
-          setUnread(data.unread || 0)
-        }
+        const [resNotif, resMsg] = await Promise.all([fetch('/api/notifications'), fetch('/api/messages/unread')])
+        if (resNotif.ok) setUnread((await resNotif.json()).unread || 0)
+        if (resMsg.ok) setMsgUnread((await resMsg.json()).total || 0)
       } catch { /* silencioso */ }
     }
     poll()
-    const t = setInterval(poll, 30000)
+    const t = setInterval(poll, 15000)
     return () => clearInterval(t)
   }, [currentPath])
 
@@ -131,16 +142,7 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
                 </span>
               )}
             </button>
-            {otherRoles.length > 0 && (
-              <select
-                value={role}
-                onChange={(e) => navigate(`/panel/${e.target.value}`)}
-                className="rounded-full bg-white/10 border border-white/15 text-sm font-semibold px-3 py-2 text-white outline-none cursor-pointer hover:bg-white/15 transition [&>option]:text-[#0A2540]"
-                aria-label="Cambiar de perfil"
-              >
-                {user!.roles.map((r) => <option key={r} value={r}>Perfil: {ROLE_LABEL[r] || r}</option>)}
-              </select>
-            )}
+            {otherRoles.length > 0 && <RoleSwitcher roles={user!.roles} role={role} />}
             <span className="hidden md:block text-sm font-semibold max-w-[140px] truncate text-white/90">{user?.displayName}</span>
             <button onClick={doLogout} className="rounded-full p-2.5 text-white hover:bg-white/10 transition" aria-label="Cerrar sesión" title="Cerrar sesión">
               <LogOut className="size-5" aria-hidden />
@@ -160,7 +162,10 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
                   <User className="size-5 text-white" />
                 </span>
                 <span className="relative min-w-0">
-                  <span className="block truncate text-[13px] font-bold text-white">{user.displayName}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate text-[13px] font-bold text-white">{user.displayName}</span>
+                    <VerifyBadge status={user.verificationStatus} dark />
+                  </span>
                   <span className="block text-[10.5px] font-extrabold uppercase tracking-[0.16em] text-[#66dfff]">{ROLE_LABEL[role] || role}</span>
                 </span>
               </div>
@@ -183,7 +188,12 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
                     <span aria-hidden className="pointer-events-none absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-white/90" />
                   )}
                   <Icon className={`size-4.5 transition-transform duration-300 ${active ? '' : 'group-hover:scale-110'}`} aria-hidden />
-                  {item.label}
+                  <span className="flex-1">{item.label}</span>
+                  {item.label === 'Mensajes' && msgUnread > 0 && (
+                    <span className="homy-badge-pop grid min-w-[19px] h-[19px] place-items-center rounded-full bg-gradient-to-br from-[#FF5A1F] to-[#ff8a3d] px-1 text-[10px] font-extrabold text-white shadow-[0_4px_12px_-4px_rgba(255,90,31,0.8)]">
+                      {msgUnread > 9 ? '9+' : msgUnread}
+                    </span>
+                  )}
                 </Link>
               )
             })}
@@ -201,7 +211,7 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
       {/* bottom nav mobile — vidrio fuerte flotante */}
       <nav className="homy-glass-strong lg:hidden fixed bottom-3 inset-x-3 z-40 rounded-[1.65rem] shadow-[0_18px_50px_-18px_rgba(10,37,64,0.45)]" aria-label="Navegación inferior" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="flex justify-around px-1 py-1">
-          {items.slice(0, 5).map((item) => {
+          {(items.some((i) => i.m) ? items.filter((i) => i.m) : items).slice(0, 5).map((item) => {
             const active = currentPath === item.to
             const Icon = item.icon
             return (
@@ -216,6 +226,9 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
                 />
                 <Icon className={`relative size-5 transition-all duration-300 ${active ? 'text-[#1D63B8] -translate-y-px' : 'text-slate-400'}`} aria-hidden />
                 <span className={`relative truncate max-w-[66px] transition-colors duration-300 ${active ? 'text-[#1D63B8]' : 'text-slate-400'}`}>{item.label}</span>
+                {item.label === 'Mensajes' && msgUnread > 0 && (
+                  <span className="homy-badge-pop absolute -top-0.5 right-1.5 grid min-w-[16px] h-[16px] place-items-center rounded-full bg-gradient-to-br from-[#FF5A1F] to-[#ff8a3d] px-1 text-[9px] font-extrabold text-white ring-2 ring-white">{msgUnread > 9 ? '9+' : msgUnread}</span>
+                )}
               </Link>
             )
           })}

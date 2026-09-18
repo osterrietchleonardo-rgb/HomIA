@@ -18,11 +18,20 @@ import { navigate } from "@/lib/router";
 import { LayoutDashboard } from "lucide-react";
 
 const NAV_ITEMS = [
+  { label: "Directorio", href: "#/directorio", route: "/directorio" },
   { label: "Cómo funciona", href: "#como-funciona" },
   { label: "Motor IA", href: "#motor-ia" },
   { label: "Beneficios", href: "#beneficios" },
   { label: "Comunidad", href: "#comunidad" },
 ];
+
+// Los items con `route` viven en el router SPA (#/...): next/link hace pushState
+// y no dispara hashchange, así que interceptamos el click y navegamos por el router propio.
+function goRoute(e: React.MouseEvent, item: (typeof NAV_ITEMS)[number]) {
+  if (!item.route) return;
+  e.preventDefault();
+  navigate(item.route);
+}
 
 export function SiteHeader() {
   const [scrolled, setScrolled] = useState(false);
@@ -73,6 +82,7 @@ export function SiteHeader() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={(e) => goRoute(e, item)}
               className="homy-nav-link rounded-full px-4 py-2 text-[15px] font-semibold text-navy/70 transition-colors hover:text-navy"
             >
               {item.label}
@@ -140,7 +150,10 @@ export function SiteHeader() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  onClick={() => setOpen(false)}
+                  onClick={(e) => {
+                    goRoute(e, item);
+                    setOpen(false);
+                  }}
                   className="rounded-2xl px-4 py-3 text-base font-semibold text-navy/80 transition-colors hover:bg-confort hover:text-navy"
                 >
                   {item.label}

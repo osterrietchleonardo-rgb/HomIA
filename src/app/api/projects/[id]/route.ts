@@ -52,9 +52,16 @@ export async function GET(
       stage: project.stage,
       laborCost: project.laborCost,
       materialsCost: project.materialsCost,
+      escrowStatus: project.escrowStatus,
+      escrowAmount: project.escrowAmount,
       createdAt: project.createdAt,
       job: project.job,
       client: project.client,
+      // brief de la contratación guiada (wizard del directorio)
+      urgency: project.urgency,
+      address: project.address,
+      deadline: project.deadline,
+      photos: project.photos ? JSON.parse(project.photos) as string[] : [],
       professional: {
         id: project.pro.id,
         userId: project.pro.userId,

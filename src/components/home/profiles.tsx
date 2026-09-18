@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { UserRound, HardHat, Package, ArrowRight, Check } from "lucide-react";
+import { UserRound, HardHat, Package, ArrowRight, Check, Compass } from "lucide-react";
 import { navigate } from "@/lib/router";
 import { SectionHeading } from "@/components/home/section-heading";
 
@@ -142,6 +142,39 @@ export function Profiles() {
             </motion.article>
           ))}
         </div>
+
+        {/* banda CTA al directorio de la comunidad */}
+        <motion.div
+          initial={{ opacity: 0, y: 26 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-40px" }}
+          transition={{ duration: 0.55, delay: 0.1 }}
+          className="homy-glass homy-glass-featured homy-lift relative mt-8 flex flex-col items-start gap-5 overflow-hidden rounded-[30px] p-7 sm:p-9 md:flex-row md:items-center"
+        >
+          <span aria-hidden className="pointer-events-none absolute -right-16 -top-20 size-56 rounded-full bg-ai/15 blur-3xl" />
+          <span aria-hidden className="pointer-events-none absolute -bottom-24 -left-10 size-56 rounded-full bg-action/10 blur-3xl" />
+          <span className="homy-icon-chip size-14 shrink-0 !rounded-2xl homy-chip-blue" aria-hidden>
+            <Compass className="size-7" />
+          </span>
+          <div className="relative flex-1">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-tech">Directorio HomIA</p>
+            <h3 className="mt-1.5 text-xl font-extrabold leading-snug text-navy sm:text-2xl">
+              Mirá quién está en la comunidad antes de decidir
+            </h3>
+            <p className="mt-1.5 max-w-2xl text-[14.5px] leading-relaxed text-navy/60">
+              Todos los profesionales y proveedores registrados en la app, ordenados de más a menos reseñas positivas, con su experiencia, trabajos realizados, catálogo y precios promedio. Abrí su tarjeta y escribile al toque.
+            </p>
+          </div>
+          <div className="relative flex shrink-0 flex-col gap-2.5 sm:flex-row">
+            <button
+              onClick={() => navigate("/directorio")}
+              className="homy-btn-primary inline-flex items-center justify-center gap-2 px-7 py-3.5 text-[15px]"
+            >
+              Abrir el directorio
+              <ArrowRight className="size-4" aria-hidden />
+            </button>
+          </div>
+        </motion.div>
       </div>
     </section>
   );

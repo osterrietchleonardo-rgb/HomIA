@@ -65,11 +65,11 @@ export default function NotificationsScreen() {
   const read = items.filter((n) => n.read)
 
   return (
-    <div className="min-h-screen">
-      <div className="max-w-2xl mx-auto px-4 py-8 sm:py-10">
-        <div className="mb-4 -ml-4">
-          <button onClick={() => navigate('/')} className="homy-focus inline-flex items-center gap-1.5 rounded-full min-h-[44px] px-4 text-sm font-semibold text-slate-500 hover:text-[#1D63B8] transition-colors">
-            <ChevronLeft className="size-4" aria-hidden /> Inicio
+    <div>
+      <div className="max-w-2xl mx-auto">
+        <div className="mb-4 -ml-2">
+          <button onClick={() => navigate(`/panel/${user?.roles?.[0] || 'cliente'}`)} className="homy-focus inline-flex items-center gap-1.5 rounded-full min-h-[44px] px-3 text-sm font-semibold text-slate-500 hover:text-[#1D63B8] transition-colors">
+            <ChevronLeft className="size-4" aria-hidden /> Volver al panel
           </button>
         </div>
         <div className="homy-page-head">

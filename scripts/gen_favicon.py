@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+# Genera el favicon de HomIA (src/app/icon.svg) y public/logo.svg
+# con la geometría del NUEVO Homy (port estático de homy-character.tsx).
+# Sin fondo (transparente), sin animaciones, IDs fijos.
+import os
+
+OUT_APP = "/home/z/my-project/src/app/icon.svg"
+OUT_PUBLIC = "/home/z/my-project/public/logo.svg"
+
+LOOP_S = "M 201.6 25.5 A 100 100 0 1 0 289.7 53.3 C 277 41 274 30 282 22 C 292 13 308 15 318 24 C 326 31 328 42 328 51"
+ACCENT = "M 203.9 38.3 A 87 87 0 1 0 280.5 62.5"
+SHADE = "M 199.7 14.7 A 111 111 0 1 0 297.5 45.5"
+BODY = (
+    "M 147.5 262 C 173.9 286 266.1 286 292.5 262 C 318.8 250 351.8 280 366 314 "
+    "C 380.3 352 406.7 368 410 396 C 410 425 396.8 448 370.5 452 C 348.6 453 336.5 441 334.3 424 "
+    "C 333.2 418 332.1 414 331 411 C 338.7 448 343.1 479 340.9 505 C 343.1 532 328.9 549 303.6 550 "
+    "C 282.7 551 271.6 540 270.5 524 C 269.4 498 249.6 479 220 479 C 190.4 479 168.4 498 169.5 524 "
+    "C 168.4 540 155.2 551 134.5 550 C 109.3 549 94.5 532 96.7 505 C 94.5 479 98.9 448 106.6 411 "
+    "C 105.5 414 104.4 418 103.3 424 C 101.1 441 89.1 453 66.9 452 C 41.2 448 27.3 425 27.3 396 "
+    "C 30.6 368 56.9 352 71.3 314 C 85.8 280 118.9 250 147.5 262 Z"
+)
+
+svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -20 440 580" fill="none">
+  <!-- Homy — mascota de HomIA (geometría nueva, cabeza centrada, USB alineado) -->
+  <defs>
+    <linearGradient id="hc-fill" gradientUnits="userSpaceOnUse" x1="135" y1="160" x2="360" y2="30">
+      <stop offset="0%" stop-color="#F8FAFD"/><stop offset="55%" stop-color="#FFFFFF"/>
+      <stop offset="82%" stop-color="#EDF8FE"/><stop offset="94%" stop-color="#A8E7FC"/>
+      <stop offset="100%" stop-color="#7FDBFA"/>
+    </linearGradient>
+    <linearGradient id="hc-acc" gradientUnits="userSpaceOnUse" x1="185" y1="20" x2="235" y2="258">
+      <stop offset="0%" stop-color="#7FD4F5" stop-opacity="0"/>
+      <stop offset="18%" stop-color="#6FC4EE" stop-opacity="0.55"/>
+      <stop offset="45%" stop-color="#3E86D9" stop-opacity="0.9"/>
+      <stop offset="70%" stop-color="#1D4E9E"/>
+      <stop offset="88%" stop-color="#2E6FD8" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#2E6FD8" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="hc-shd" gradientUnits="userSpaceOnUse" x1="195" y1="4" x2="235" y2="249">
+      <stop offset="0%" stop-color="#C9D4E6" stop-opacity="0"/>
+      <stop offset="45%" stop-color="#C9D4E6" stop-opacity="0.4"/>
+      <stop offset="80%" stop-color="#C9D4E6" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#C9D4E6" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="hc-fg" gradientUnits="userSpaceOnUse" x1="164" y1="39" x2="206" y2="21">
+      <stop offset="0%" stop-color="#FFFFFF"/><stop offset="45%" stop-color="#FFFFFF"/>
+      <stop offset="85%" stop-color="#0B0B0B"/><stop offset="100%" stop-color="#0B0B0B"/>
+    </linearGradient>
+    <mask id="hc-fade" maskUnits="userSpaceOnUse" x="0" y="-20" width="440" height="580">
+      <rect x="0" y="-20" width="440" height="580" fill="#FFFFFF"/>
+      <rect x="158" y="-20" width="95" height="115" fill="url(#hc-fg)"/>
+    </mask>
+    <linearGradient id="hc-usbb" gradientUnits="userSpaceOnUse" x1="318" y1="21" x2="432" y2="93">
+      <stop offset="0%" stop-color="#3AB5D6"/><stop offset="30%" stop-color="#F0962F"/>
+      <stop offset="64%" stop-color="#F0722A"/><stop offset="100%" stop-color="#EC4530"/>
+    </linearGradient>
+    <linearGradient id="hc-usbt" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F5922F"/><stop offset="100%" stop-color="#EC4530"/>
+    </linearGradient>
+    <linearGradient id="hc-usbf" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/><stop offset="100%" stop-color="#E9EEF6"/>
+    </linearGradient>
+    <linearGradient id="hb-body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/><stop offset="58%" stop-color="#FBFCFE"/>
+      <stop offset="100%" stop-color="#EDF1F8"/>
+    </linearGradient>
+    <linearGradient id="hb-shade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#C7D3E5" stop-opacity="0"/>
+      <stop offset="55%" stop-color="#C7D3E5" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#BCC9DE" stop-opacity="0.5"/>
+    </linearGradient>
+    <radialGradient id="hb-sidel" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#CBD6E8" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#CBD6E8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="hb-sider" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#CBD6E8" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#CBD6E8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="hb-ring" x1="0" y1="0" x2="1" y2="0.25">
+      <stop offset="0%" stop-color="#00C6FF"/>
+      <stop offset="48%" stop-color="#7FA0FF" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#FF6A2B"/>
+    </linearGradient>
+    <linearGradient id="hb-core" gradientUnits="userSpaceOnUse" x1="182" y1="350" x2="258" y2="354">
+      <stop offset="0%" stop-color="#2E6FE0"/><stop offset="34%" stop-color="#344FA8"/>
+      <stop offset="52%" stop-color="#7A4486"/><stop offset="70%" stop-color="#D05230"/>
+      <stop offset="100%" stop-color="#EF4123"/>
+    </linearGradient>
+    <linearGradient id="hc-accfade" gradientUnits="userSpaceOnUse" x1="120" y1="40" x2="300" y2="100">
+      <stop offset="0%" stop-color="#FFFFFF"/><stop offset="55%" stop-color="#0B0B0B"/>
+      <stop offset="100%" stop-color="#0B0B0B"/>
+    </linearGradient>
+    <mask id="hc-shdfade" maskUnits="userSpaceOnUse" x="0" y="-20" width="440" height="580">
+      <rect x="0" y="-20" width="440" height="580" fill="#FFFFFF"/>
+      <rect x="125" y="-5" width="240" height="130" fill="url(#hc-accfade)" opacity="0.55"/>
+    </mask>
+    <filter id="hb-blur" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="13"/>
+    </filter>
+    <filter id="hb-blur2" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <clipPath id="hb-clip"><path d="{BODY}"/></clipPath>
+  </defs>
+
+  <!-- Cabeza-cable flotante -->
+  <g mask="url(#hc-fade)">
+    <g stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <path d="{LOOP_S}" stroke="#102A45" stroke-width="61"/>
+      <path d="{LOOP_S}" stroke="url(#hc-fill)" stroke-width="48"/>
+      <path d="{SHADE}" stroke="url(#hc-shd)" stroke-width="8" mask="url(#hc-shdfade)"/>
+      <path d="{ACCENT}" stroke="url(#hc-acc)" stroke-width="16"/>
+    </g>
+  </g>
+
+  <!-- Resplandor coral bajo el conector -->
+  <ellipse cx="360" cy="92" rx="32" ry="8" fill="#E8563A" opacity="0.28" filter="url(#hb-blur2)"/>
+
+  <!-- Conector USB escalonado -->
+  <g transform="rotate(-6 322 57)">
+    <rect x="322" y="25" width="76" height="64" rx="17" fill="url(#hc-usbf)" stroke="url(#hc-usbb)" stroke-width="11" stroke-linejoin="round"/>
+    <rect x="396" y="37" width="34" height="40" rx="11" fill="#FFFBF7" stroke="url(#hc-usbt)" stroke-width="10" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Cuerpo -->
+  <path d="{BODY}" fill="url(#hb-body)" stroke="#102A45" stroke-width="14" stroke-linejoin="round"/>
+  <g clip-path="url(#hb-clip)">
+    <rect x="30" y="330" width="380" height="226" fill="url(#hb-shade)"/>
+    <ellipse cx="92" cy="445" rx="34" ry="88" fill="url(#hb-sidel)"/>
+    <ellipse cx="348" cy="445" rx="34" ry="88" fill="url(#hb-sider)"/>
+    <ellipse cx="219" cy="288" rx="52" ry="12" fill="#C9D4E6" opacity="0.32" filter="url(#hb-blur2)"/>
+    <ellipse cx="220" cy="530" rx="28" ry="13" fill="#C4D0E4" opacity="0.5" filter="url(#hb-blur2)"/>
+  </g>
+
+  <!-- Líneas internas: separación de brazos + sonrisa -->
+  <g stroke="#102A45" stroke-width="11" stroke-linecap="round" fill="none">
+    <path d="M 331 414 C 339.7 386 340.8 354 327.6 332"/>
+    <path d="M 106.6 414 C 100.3 386 99.2 354 112.4 332"/>
+    <path d="M 148.6 426 C 176 460 197 470 220 470 C 243 470 264 460 291.4 426"/>
+  </g>
+
+  <!-- Emblema de pecho: botón de encendido -->
+  <circle cx="220" cy="350" r="54" stroke="url(#hb-ring)" stroke-width="18" fill="none" filter="url(#hb-blur)" opacity="0.85"/>
+  <circle cx="220" cy="350" r="40" fill="url(#hb-core)"/>
+  <path d="M 220 308 L 220 352" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>
+  <ellipse cx="203" cy="334" rx="7" ry="4.5" fill="#FFFFFF" opacity="0.35" transform="rotate(-32 203 334)"/>
+</svg>
+'''
+
+for path in (OUT_APP, OUT_PUBLIC):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(svg)
+    print(f"OK {path} ({len(svg)} bytes)")

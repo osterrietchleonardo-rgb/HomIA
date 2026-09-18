@@ -8,6 +8,7 @@ import {
   Search, Boxes, Users, ArrowRight, BriefcaseBusiness, ClipboardPen,
   FolderKanban, Star, Package, HardHat, Zap, LayoutGrid, MapPin,
 } from 'lucide-react'
+import { VerificationPrompt } from '../verificacion'
 
 type Project = {
   id: string; title: string; status: string; stage: string
@@ -61,6 +62,7 @@ export default function ProDashboard() {
 
   return (
     <div className="homy-page">
+      <VerificationPrompt role="profesional" />
       {/* Encabezado */}
       <header className="homy-page-head">
         <div className="min-w-0">

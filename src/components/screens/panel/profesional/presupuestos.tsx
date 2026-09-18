@@ -47,7 +47,7 @@ export default function ProBids() {
 
   return (
     <div className="homy-page">
-      <div className="max-w-4xl">
+      <div>
         {/* Encabezado */}
         <header className="homy-page-head">
           <div className="min-w-0">

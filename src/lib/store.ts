@@ -8,6 +8,8 @@ export type SessionUserClient = {
   displayName: string
   roles: string[]
   avatarUrl?: string | null
+  verificationStatus?: string
+  verifiedAt?: string | null
   hasProfessional: boolean
   hasProvider: boolean
   lat?: number | null

@@ -393,3 +393,291 @@ Stage Summary:
 - Las ~30 pantallas del sistema ya usan el lenguaje de diseño HomIA completo (glass + stagger + KPIs + tabs + empty states premium), responsive validado en 3 viewports.
 - Issue 2 cerrado definitivamente (registro/login operativos para cliente, profesional y proveedor).
 - Pendiente siguiente: Issue 1 (razonamiento de intención del buscador super-agent) y Mercado Pago.
+
+---
+Task ID: 10
+Agent: Super Z (main)
+Task: Fix "Datos inválidos" al buscar + scrollbar anticuada (reporte con captura del usuario)
+
+Work Log:
+- DIAGNÓSTICO: (1) /api/homy/agent devolvía 400 "Datos inválidos" en TODA primera búsqueda porque el cliente envía sessionId null y el schema zod era z.string().optional() (rechaza null). (2) La tira de chips de /buscar usaba sm:no-scrollbar pero .no-scrollbar era una clase CSS plana que Tailwind 4 no puede combinar con variantes → scrollbar nativa clásica visible en desktop.
+- INCIDENTE DE ENTORNO detectado y resuelto: el árbol de trabajo fue revertido por la plataforma al commit Sep 14 (src/app con 2 APIs, sin screens/) mientras el dev server servía módulos cacheados. Recuperación completa desde /tmp/my-project (copia Sep 17 05:26): rsync --delete excluyendo node_modules/.git/.next, restauración de db/custom.db real (319KB), bun install (faltantes: leaflet, react-leaflet, @types/leaflet, bcryptjs, jose, mercadopago), bunx prisma generate, eliminación de src/app/page.tsx (conflicto de especificidad con catch-all [[...slug]] que impedía arrancar Next 16), servidor reiniciado vía .zscripts/dev.sh (mecanismo persistente del entorno).
+- Fixes aplicados (re-aplicados tras la restauración): (1) route.ts: sessionId z.string().optional().nullable() + normalización sessionId ?? undefined; (2) search-screen.tsx: body condicional ...(sessionId ? { sessionId } : {}) + lat/lng ?? null; (3) globals.css: @utility no-scrollbar (compatible con variantes sm:) + scrollbar global moderno en @layer base (píldora flotante translúcida navy 18%/34% hover, border+background-clip, sin flechas ni track, scrollbar-color Firefox thin, variante blanca translúcida para .homy-glass-dark).
+- Bonus UX: tarjeta del superagente duplicaba la pregunta cuando message == question.pregunta → agregado questionDuplicatesMessage para renderizar una sola vez.
+- Verificación E2E (agent-browser): /buscar 1280×800 y 390×844 → búsqueda real "un plomero" + Enter: 0 toasts de error, tira de chips con scrollbar-width none, agente responde intención "contratar" pidiendo ubicación; API curl "que hay para plomeros?" modo profesional → devuelve trabajo real de la DB con intención "trabajar". Sin errores JS. Screenshots en shots/fix-scroll/.
+- COMMIT DE SEGURIDAD: todo el estado del proyecto (app completa + fixes) quedó commiteado en git para que una reversión futura del entorno no vuelva a perder el trabajo.
+
+Stage Summary:
+- Buscar funciona de punta a punta para ambos modos; scrollbar del sistema es ahora píldora flotante moderna (o invisible en tiras decorativas); tarjeta del agente sin textos duplicados. Servidor dev estable vía dev.sh, Prisma cliente regenerado, dependencias sincronizadas, DB real restaurada.
+
+---
+Task ID: 11
+Agent: Super Z (main)
+Task: 3 reportes del usuario (login, sesión en home, animación del buscador) + Mercado Pago (escrow + PRO)
+
+Work Log:
+- LOGIN: el backend (bcrypt + JWT httpOnly) estaba sano; la ruta real del SPA es #/ingresar (no /login). E2E UI: registro → login → /panel/{rol} OK. Confirmado que varios reportes previos vinieron del entorno revertido (Task 10).
+- SESIÓN EN HOME: el header de home ya muestra "Mi panel" con sesión activa y vuelve al panel (E2E OK). ROOT CAUSE REAL encontrado y corregido: /api/auth/me (y todas las API) no enviaban Cache-Control → el navegador cacheaba respuestas de sesión → estados "fantasma" al volver al home o cambiar de rol. Fix global: ok()/fail() de lib/api.ts ahora envían Cache-Control: no-store.
+- ANIMACIÓN DEL BUSCADOR HOME: no existía la coreografía direccional. Implementada en hero-search.tsx: chip de la consulta vuela desde la IZQUIERDA hacia el motor (spring), se acopla y pulsa mientras Homy piensa (stage think con keyframes), sale hacia la DERECHA cuando llega la respuesta, y el panel de resultados entra desde la derecha (x:110→0, exit x:140). Todo transform/opacity, wrapper MotionConfig reducedMotion="user", chip pointer-events-none + aria-hidden. Verificado E2E (captura del chip acoplado en shots/fix-scroll/hero-flight-chip.png).
+- MERCADO PAGO (integración real, sin mocks; sin credenciales responde needsConfig honesto):
+  * Schema: Project.escrowStatus/escrowPaymentId/escrowAmount/escrowReleasedAt + ProfessionalProfile.mpPreapprovalId/proSince (prisma db push + migración SQL 0012_mercadopago_escrow_pro.sql como contrato).
+  * lib/mercadopago.ts: createEscrowPreference (external_reference escrow:{projectId}), createProPreapproval (preapproval mensual ARS, MP_PRO_PRICE_ARS), getPreapproval. Fix SDK: clase PreApproval (casing) y sin notification_url/sandbox_init_point en preapproval.
+  * Webhook ampliado: pagos con referencia escrow:{id} → retained + notifica a cliente y profesional; preapproval → authorized activa subscription='pro' + proSince, cancelled/paused → free.
+  * APIs nuevas: POST /api/projects/[id]/escrow (preferencia de garantía, valida cliente+activo+total>0) y /escrow/release (conformidad del cliente → marca released + liquida factura: pendiente→pagada con mpPaymentId, o genera factura final automática pagada + notifica). POST /api/pro/subscription (solo profesional; guarda mpPreapprovalId y devuelve initPoint).
+  * UI: proyecto-detalle cliente con panel "Pago protegido (escrow)" 3 estados (CTA retener / pill Fondos en garantía + liberación en 2 pasos / pill Pago liberado); perfil profesional con bloque Plan PRO (glass-dark + corona dorada) con CTA o estado Activo; perfil público con badge PRO dorado.
+  * E2E: escrow 503 needsConfig ✓; simulación retained en DB → UI muestra pill y monto → liberar (2 pasos) → escrowStatus released + factura HOM-2026-000001 pagada $46.980 con mpPaymentId + notificación escrow_liberado ✓; Plan PRO visible con sesión pro y toast needsConfig al suscribir ✓.
+  * Fix accesorio: /api/projects/[id] ahora mapea escrowStatus/escrowAmount en la respuesta.
+- .env: comentados MP_ACCESS_TOKEN y MP_PRO_PRICE_ARS como guía de credenciales.
+
+Stage Summary:
+- Login/sesión/animación verificados E2E y la causa raíz del estado de sesión cacheado corregida globalmente. Mercado Pago integrado de punta a punta (facturas, escrow con liberación por conformidad y factura automática, suscripción PRO con webhook) con comportamiento honesto cuando faltan credenciales: solo falta MP_ACCESS_TOKEN real en .env para operar con dinero.
+
+---
+Task ID: 12
+Agent: Super Z (main)
+Task: Ajustes del usuario — (1) suscripción PRO dirigida a PROVEEDORES (primera instancia), (2) favicon con el homy nuevo, (3) continuar con el resto; prueba de MP queda a cargo del usuario.
+
+Work Log:
+- FAVICON: src/app/icon.svg y public/logo.svg tenían el homy VIEJO (cabeza descentrada, fondo blanco). Nuevo script scripts/gen_favicon.py genera el SVG estático portando la geometría actual de homy-character.tsx (bucle-cabeza centrado en x=219, USB alineado, sin fondo, mismo degradado azul del borde interno, emblema de encendido azul→naranja). Verificado render en browser (shots/fix-pro/icon-new.png) y <link rel="icon"> sirve el nuevo.
+- SUSCRIPCIÓN PRO → PROVEEDORES: ProviderProfile ahora tiene subscription/mpPreapprovalId/proSince (prisma db push + migración contrato 0013_proveedor_pro.sql). Nueva API POST /api/provider/subscription (preapproval mensual ARS, external_reference provider_pro:<id>, back_url #/panel/proveedor/perfil); eliminada /api/pro (profesionales) y el bloque Plan PRO del perfil profesional. Webhook: handlePreapproval activa/free ProviderProfile según authorized|cancelled|paused + notificación. lib/mercadopago.ts: createProPreapproval apunta a proveedor con reason de negocio destacado.
+- UI: panel proveedor/perfil con bloque Plan PRO glass-dark (Crown dorado, estado Activo con fecha proSince, CTA naranja cuando free); perfil público de proveedor con badge PRO dorado (Crown + pill) junto al nombre; /api/profiles/provider/[id] expone subscription/proSince.
+- E2E: login proveedor → perfil free muestra CTA → click → toast honesto "Mercado Pago no configurado" (503 needsConfig, sin credenciales reales); simulación en DB de pro → panel muestra "ACTIVO desde 17 de septiembre de 2026" y perfil público muestra badge PRO → DB revertida a free (regla de oro: sin datos ficticios). Profesional: perfil sin bloque PRO. Home: 0 errores JS, sesión viva ("Mi panel").
+- INCIDENTE DE SERVIDOR: pkill del server viejo + 2 relanzamientos con & murieron al cerrar el tool call; el patrón que sí persiste es correr `setsid bash .zscripts/dev.sh` en PRIMER PLANO del tool call (sin &): el script queda en su sesión propia y el next-server disowneado sobrevive. Servidor OK con Prisma client regenerado (fields de suscripción visibles en queries).
+
+Stage Summary:
+- El plan PRO (Mercado Pago preapproval) pertenece ahora a los PROVEEDORES: alta por UI, badge PRO público, activación por webhook; profesionales quedan sin suscripción en esta etapa. Favicon y logo.svg con el homy nuevo. Cuando el usuario cargue MP_ACCESS_TOKEN real en .env, el CTA "Suscribirme al plan PRO" redirige a Mercado Pago y el webhook activa el badge automáticamente.
+
+---
+Task ID: 13
+Agent: Super Z (main)
+Task: "No se ven las consultas entrando por la izquierda y las respuestas por la derecha del buscador" — coreografía AMBIENTAL del hero + tarjetas de vidrio con relieve.
+
+Work Log:
+- CAUSA REAL: el vuelo del Task 11 solo ocurría al ENVIAR una consulta (no había nada en reposo). El usuario quiere ver el efecto en loop AMBIENTAL: consultas entrando por la izquierda y respuestas saliendo por la derecha, de a una, lento, sin superponerse.
+- COREOGRAFÍA AMBIENTAL (hero-search.tsx): máquina de estados con 4 pares consulta→respuesta (los mismos ejemplos del producto). Timeline por par (~8.6s): consulta vuela desde la IZQUIERDA y se acopla dentro de la barra (1.4s, ease suave) → pulsa "pensando" (1.25s) → sale hacia la derecha desvaneciéndose (0.5s) → GAP 300ms (sin pisarse: la respuesta entra recién cuando la consulta ya salió) → la RESPUESTA emerge del motor y se posa sobre el lado DERECHO de la barra (1.2s) → pausa (2.3s) → sale por la derecha (0.55s) → pausa 1.1s → siguiente par.
+- VIDRIO CON RELIEVE (globals.css): .homy-flight-chip (gradiente blanco translúcido + backdrop blur + borde claro) con relieve SUTIL: highlight interior superior (inset 0 1.5px blanco) + sombra interior inferior (inset 0 -2px navy 6%) + flotación exterior suave; variante --ai con borde/aura cian para la respuesta. Cumple contrato glass: color-mix, sin opacity de elemento, solo transform/opacity animado, aria-hidden + pointer-events-none, y la demo NO corre con prefers-reduced-motion.
+- FIJACIÓN DE POSICIÓN: las capas de vuelo (demo + vuelo real del usuario) se movieron DENTRO del <form> — antes centraban contra el wrapper completo (mascota incluida) y el chip quedaba flotando ENCIMA de la barra; ahora quedan centrados con la barra misma. Docks calibrados: consulta left-[2.9rem]/[3.4rem] (donde empezaría el texto), respuesta right-14 (libre del botón naranja).
+- CONVIVENCIA: la demo se pausa y limpia al enfocar/escribir/enviar (ambientAllowed = idle && !focused && sin texto && sin reply && sin flight). El placeholder máquina de escribir se blanked mientras la demo corre (no compiten). El vuelo REAL de consultas del usuario usa ahora la misma tarjeta de vidrio.
+- VERIFICACIÓN E2E: poll DOM 500ms×22 — exactamente 0 o 1 chip por sample, secuencia respuesta→consulta→respuesta rotando los 4 pares; capturas con opacidad >0.95: consulta dockeada a la IZQUIERDA y respuesta dockeada a la DERECHA de la barra (desktop 1280 y mobile 390); focus del input detiene la demo (pausa OK); overflowX=0 y 0 errores JS en ambos viewports.
+
+Stage Summary:
+- El buscador de la home ahora MUESTRA el razonamiento en loop: consultas de vidrio entrando por la izquierda, acoplándose al motor, y respuestas apareciendo por el lado derecho — de a una, ritmo lento, sin superponerse, con relieve sutil. Se detiene solo cuando el usuario interactúa. Verificado desktop + mobile, sin overflow ni errores.
+
+---
+Task ID: 14
+Agent: Super Z (main)
+Task: "las consultas no llegan adentro del buscador... se desvanecen al llegar... la respuesta se desvanece del borde derecho de la pantalla... no frena si el usuario escribe... tienen que ir más lento para que se puedan leer" — coreografía del buscador home rehecha.
+
+Work Log:
+- DIAGNÓSTICO por muestreo DOM: (1) la consulta hacía stage "out" volando x:+240 con fade → percibido como "llega y se desvanece en la barra"; (2) la respuesta salía x:+220 → en 390px el borde derecho quedaba en x≈533 (FUERA de pantalla) y en desktop derivaba hacia el borde; (3) reanudado instantáneo sin cooldown → parpadeos al cruzar la barra con el mouse; (4) holds de 1.2-2.3s ilegibles.
+- NUEVA COREOGRAFÍA (hero-search.tsx): máquina 5 etapas por par (~13.3s, antes 8.6s): consulta vuela desde la izquierda (1.8s) → queda DOCKEADA DENTRO de la barra 1.3s (tarjeta de vidrio leíble, respiración sutil 1.02) → se DISUELVE DENTRO del buscador (fade + x:-36 + scale 0.94, 650ms) mientras el TEXTO aparece escrito en la barra (ghost a la altura exacta del texto del input, left-12/3.25rem, fade-in 600ms) → ghost leíble 2.1s → se apaga 500ms → gap 350ms → respuesta emerge del motor (x:-110→0, 1.4s) → dockeada al lado derecho de la barra 3s → se desvanece EN SU LUGAR (x:0 EXPLÍCITO + y:-5 + scale 0.96, 800ms; la deriva se eliminó: framer-motion devolvía x al initial cuando el target omitía x — causa del "se desvanece yendo hacia un lado").
+- FIX TÉCNICO clave: en framer-motion, todo animate objetivo que cambia de forma debe incluir x explícito (x:0) o el valor vuelve al initial (medido: translateX(-110) durante el fade → drift de 103px).
+- FRENO TOTAL: ambientAllowed ahora también exige !hovered (onMouseEnter/Leave en el form) + cooldown de reinicio DEMO_T.restart=1400ms al (re)iniciar el loop. Verificado: foco→0 elems al instante; escribir→0; blur→reanuda tras cooldown; hover real (agent-browser hover)→frena; mouse leave→reanuda. Nota: React sintetiza onMouseEnter desde movimientos reales del puntero — dispatch sintético de 'mouseenter' NO lo dispara (por eso el primer test sintético dio falso negativo).
+- Homy participa en la historia: listening durante la consulta, thinking con el texto en la barra, happy con la respuesta (homyState demo-aware).
+- VERIFICACIÓN E2E (1280×800 y 390×844): muestreo 400-500ms×~32: máximo 1 elemento con opacity>0 (sin pisarse; única superposición = crossfade tarjeta→texto en el mismo lugar); consulta dockea en l≈54/62 (donde empieza el texto); ghost leíble ~2.1s; respuesta dockea rt≈520/576 (desktop, margen 407px al borde de pantalla) y wr≤320/390 (mobile, margen 70px; ANTES quedaba en x≈533 FUERA de pantalla); salida de respuesta con tx=0 confirmado por matrix() del transform. Screenshots: shots/fix-hero-anim/1-consulta-dockeada.png, 2-texto-dentro-barra.png (texto dentro del buscador con Homy thinking), 3-respuesta-derecha.png, 4-mobile-respuesta.png. overflowX 390=390, 0 errores JS.
+- El vuelo REAL del usuario (flight) también disuelve en su lugar (antes x:+300).
+
+Stage Summary:
+- La consulta ahora SÍ entra al buscador: la tarjeta de vidrio se acopla dentro de la barra y se funde con ella dejando el texto escrito dentro del buscador; la respuesta nace y muere sobre el lado derecho de la barra sin acercarse jamás al borde de la pantalla; todo el ciclo es ~50% más lento y leíble; la demo se frena al enfocar, escribir o pasar el mouse sobre la barra (con cooldown anti-parpadeo al reanudar). Al refrescar la página el loop ambiental vuelve a empezar (es decoración ambiental por diseño).
+
+---
+Task ID: 15
+Agent: Super Z (main)
+Task: Nueva coreografía del buscador home — "consulta vuela, NO queda dentro, se desvanece DETRÁS de la barra; la respuesta surge FUERA de la barra y se desvanece contra el borde de la página".
+
+Work Log:
+- REARQUITECTURA z-order: nueva capa ambiental hermana ANTERIOR al form (z-[5] < z-10) alineada a la caja de la barra (absolute inset-x-0 bottom-0 h-14/h-16). El backdrop-filter blur(16px) de bar-relief esmerila lo que se pinta detrás → la consulta se funde con el vidrio al llegar y la respuesta emerge esmerilada desde detrás. Contrato glass cumplido (solo transform/opacity, pointer-events-none, aria-hidden, reduced-motion no corre la demo).
+- CONSULTA (vuelo único 4.2s, keyframes): x -350→-140→-45→+15 con opacity [0,1,1,0] times [0,0.32,0.72,1] + scale 0.88→1→0.97→0.93. Legible en el vuelo (~1.5-2s nítida a la izquierda de la barra), al llegar el vidrio la va tragando: la parte que cruza el borde izquierdo se esmerila y el conjunto se desvanece detrás (verificado en DOM: o 1→0.05 mientras l -45→+12).
+- RESPUESTA (3 etapas): arranca escondida detrás del vidrio (x:-44, borde derecho a 44px del borde derecho de la barra) → surge afuera (in 1.2s: opacity 0→1) → queda afuera de la barra leíble 2.7s (hold con respiración 1.015) → deriva y se desvanece CONTRA el borde real de la página (out 1.6s easeIn, x hasta gapPx+40: el borde derecho termina ~40px pasada la página).
+- GEOMETRÍA EN VIVO: refs barWrapRef (ancho de barra) + respChipRef (ancho real de la tarjeta) + listener resize → restX/restY/exitX calculados: desktop restX=min(24+respW, gap-16) (posada afuera de la barra); si gap<130px (mobile) modo flotante: restY=-46 (flota sobre el borde derecho de la barra, fuera del vidrio) y restX=gap-14.
+- LIMPIEZA: eliminados el dock interno + texto-ghost dentro de la barra y sus estados (kind ghost/q.dock/q.absorb); machine simplificada (q = un vuelo; a = in/hold/out) con respiro de 420ms sin nada en escena (sin pisarse). Homy: listening en la consulta, happy con la respuesta. Fix durante la edición: restaurado el guard {flight && (} del vuelo real que un edit había borrado.
+- E2E (1280×800 y 390×844, muestreo DOM 350-400ms): desktop consulta o=1 nítida en l=-126..-67 → melt l=-45..+12 con o→0.05 DETRÁS del vidrio; respuesta emerge a l=599 (>barW 576 = afuera), hold 3.2s, salida rt 906→963 cruzando el borde de página (928) con o→0. Mobile: respuesta flotante top≈-34 (sobre la barra), hold 3.4s, salida rt 362→411 (borde 390). Sin pisarse (0-1 chips, respiro entre fases), 0 errores JS, overflow 390=390, foco sigue frenando la demo al instante.
+- Capturas: shots/fix-hero-anim/5-consulta-vuelo-nitida.png, 6-consulta-fundida-vidrio.png (el vidrio tragándose la consulta — keyframe del efecto), 7-respuesta-borde-pagina.png (desvaneciéndose contra el borde), 8-mobile-respuesta-flotante.png.
+
+Stage Summary:
+- El buscador home es ahora una "máquina de vidrio": la consulta vuela desde la izquierda y el vidrio esmerilado de la barra la absorbe por detrás (no queda adentro, no hay texto fantasma); la respuesta nace desde detrás del vidrio, surge afuera de la barra (en mobile flota sobre su borde derecho), se deja leer y muere disolviéndose contra el borde real de la página. De a una, lenta, sin superponerse, frenando con foco/escritura/hover. Verificado en ambos viewports con DOM-sampling y capturas.
+
+---
+Task ID: 16
+Agent: Super Z (main)
+Task: "lo de la izquierda hacia la barra, no tiene que llegar a entrar!!! asi no se corta lo que escribe de placeholder...no se tienen que pisar... son dos cosas diferentes" — la consulta NUNCA entra a la barra y el placeholder escribe sin cortes.
+
+Work Log:
+- DIAGNÓSTICO del Task 15: la consulta terminaba en x=+15 (≈245px DENTRO de la barra, encima de la zona del texto) y showPlaceholder blanqueaba el placeholder (demoRunning ? "" : ...) mientras la demo corría → el usuario veía la máquina de escribir tipear, la consulta entrar y "cortarle" lo escrito, y el placeholder volver recién en los respiros. Percibido como: la consulta entra y se pisa con el placeholder.
+- REARQUITECTURA de la consulta (hero-search.tsx): chip ahora anclado por su borde DERECHO al borde IZQUIERDO de la barra (absolute right-full top-1/2 -translate-y-1/2) → la posición de fusión es independiente del ancho del texto (no hace falta medir el chip). Vuelo único 4.2s: aparece a la izquierda legible (startX responsivo: -120 desktop / -34 mobile según gap medido con geo.vw/barW), deriva con desaceleración, se frena al rozar el vidrio y se disuelve EN el borde: x keyframes [startX, startX*0.5, -14, +6] con opacity [0,1,1,0] times [0,0.3,0.78,1] → la punta se asoma ≤6px detrás del vidrio ya a opacidad ~0; el placeholder (empieza a ~52px dentro) jamás es alcanzado.
+- CONVIVENCIA (fin del blanqueo): showPlaceholder = placeholderText || "¿Qué necesita tu hogar?" — la máquina de escribir escribe SIEMPRE que no hay foco/texto/thinking, la demo corre por FUERA. Son dos cosas distintas que no se pisan (pedido literal del usuario). Eliminada la variable demoRunning.
+- data-demo="q" / "a" en los chips para sampling DOM determinístico.
+- E2E desktop 1280×800 (muestreo 350ms×40): consulta o=1 legible con relR -54→-19.7 (borde derecho del chip SIEMPRE a la izquierda del vidrio), fusión relR -15.5(o=.62) → -12.7(o=.24) → -3.7(o=.06) → fuera; máximo relR visible -3.7px = NUNCA entra. Placeholder tipeando sin cortes todo el ciclo (len 23→40→1→36…). Respuesta: emerge detrás del vidrio derecha (o 0→.76), descansa FUERA (relL +14..24, o=1, 2.7s), muere contra el borde de página (relL→125, o→0). De a una, respiro de 420ms entre fases.
+- E2E mobile 390×844 (muestreo 380ms×34): consulta legible en el margen de 16px (relR -17..-15.4, o=1) y disolviéndose en el borde (relR -2.4, o=.04, sin cruzar); placeholder tipea frases completas de 40 chars; respuesta flotante sobre el borde derecho (top≈55, relL 1..4, o=1) y salida por la esquina de página. scrollWidth 390 = innerWidth (sin overflow; el chip se extiende hacia la izquierda, no genera scroll).
+- Freno intacto: focus → 0 chips al instante (chipThere:true → afterFocus:false). 0 errores JS. Capturas: shots/fix-hero-anim/10 (placeholder "Escrib…" dentro + respuesta fuera), 11 (placeholder avanzado "Escribilo como se lo dirías…" + respuesta siguiente fuera), 13 (frozen WAAPI), 14-consulta-volando.png (CLAVE: consulta legible fuera a la izquierda + placeholder "Contame qué necesita tu hogar…" escribiéndose dentro — las dos cosas conviviendo sin tocarse).
+- Nota técnica: document.getAnimations().forEach(pause) congela las WAAPI de framer-motion 12 pero los timers de React siguen → la máquina desmonta el chip congelado; para frame congelado usarlo solo para captura inmediata (<2s).
+
+Stage Summary:
+- La consulta vuela por FUERA de la barra, se frena en el vidrio y se disuelve en su borde sin entrar jamás (máximo 6px invisibles detrás del filo); el placeholder tipea adentro sin cortarse nunca: demo y máquina de escribir son dos capas independientes que conviven. Verificado en 1280×800 y 390×844 con sampling DOM, capturas y 0 errores.
+
+---
+Task ID: 17
+Agent: Super Z (main)
+Task: "las tarjetitas deben ser más variadas (cubriendo la mayoría de consultas posibles), un poco más rápido, y nunca dejar de aparecer" — demo ambiental: variedad + ritmo + persistencia.
+
+Work Log:
+- VARIEDAD: DEMO_PAIRS de 4 → 12 pares rotando los 3 roles, alineados a features REALES (sin números inventados): cliente (emergencia plomero, presupuesto pintura "obra y materiales", escrow, electricista con reseñas, gasista matriculado, mudanza), profesional (bolsa de trabajos, cobro con escrow, sobrantes → devolución/reembolso), proveedor (precio cemento comparado, plan PRO destaca, stock compartido). Textos cortos (≤41 chars) para no truncar en los chips. EXAMPLES (PROBÁ) ya estaba desacoplado y queda en 4.
+- RITMO: DEMO_T bajado ~23% por par (11.6s → ~9s): qFly 4200→3400, gap 420→380, aIn 1200→1000, aHold 2700→2000, aOut 1600→1300, next 1300→900, restart 1400→1100. La respiración de la respuesta ahora usa DEMO_T.aHold/1000 (antes 2.7s hardcoded). Rotación completa de 12 pares ≈ 108s.
+- NUNCA DEJA DE APARECER (causa real encontrada): reply NUNCA se limpiaba → tras la primera consulta real ambientAllowed quedaba false PARA SIEMPRE (la demo moría permanentemente; solo volvía al refrescar). Además frenaba por foco/escritura/hover — innecesario ahora que los chips vuelan POR FUERA de la barra. Fix: ambientAllowed = !reducedMotion && phase==="idle" && !flight — la demo sigue mientras escribís, enfocás o pasás el mouse; solo cede el escenario durante la consulta real (vuelo → thinking → done 1.9s) y RETOMA sola con el panel de respuesta abierto. Eliminado el estado hovered + onMouseEnter/Leave del form.
+- E2E: rotación 27s → pares nuevos visibles encadenados (cemento→escrow→pintura→cobro), par-a-par ≈9s. Escribiendo "plomero" (7 chars, sin auto-submit): chips 19/20 samples (el faltante = respiro natural). Hover REAL sobre la barra: 18/20. Consulta real ("Necesito un plomero urgente"): thinking → reply del agente (pregunta de ubicación + CTA mapa) → demo RETOMÓ con la respuesta en pantalla (snapshot reply:true + chip:true; captura 15-demo-convive-con-respuesta-real.png muestra consulta "Tengo materiales para vender" + placeholder escribiendo + panel del agente conviviendo). 0 errores JS; mobile 390 sin overflow.
+- Nota: un eval de observación falló por scope de variable (replyOpen declarado dentro del for) y un CDP evaluate de 30s timed out — el estado se verificó con snapshots cortos; el click de la consulta real sí se había ejecutado.
+
+Stage Summary:
+- La demo del buscador ahora muestra el potencial completo de HomIA: 12 pares que cubren cliente/profesional/proveedor (emergencias, presupuestos IA, escrow, reseñas, bolsa, sobrantes, plan PRO, stock), ~23% más rápida, y eterna: sigue mientras el usuario escribe/enfoca/hover y retoma sola después de cada consulta real (bug del reply permanente eliminado). Verificado E2E en ambos viewports.
+
+---
+Task ID: 18
+Agent: Super Z (main)
+Task: "cuando se escribe en el buscador que aumente un poco más el tiempo en el que se aprieta enter solo... hay gente que escribe despacio y se envía cortado... es estresante" — debounce del auto-envío del hero.
+
+Work Log:
+- CAUSA: el onChange del hero auto-enviaba la consulta a 1400ms de pausa; quien tipea despacio y respira >1.4s a mitad de frase le mandaba la consulta truncada al agente.
+- FIX: debounce 1400ms → 3000ms (comentario en el código explicando el porqué). Enter y los chips PROBÁ siguen enviando al instante; cada tecla reprograma el timer; el submit limpia el debounce.
+- VERIFICACIÓN E2E (tipeo simulado 500ms/tecla, 19 chars = 9.6s tipeando): submittedEarly=false (con 1400ms habría enviado a t≈5.5s con la frase a media); auto-envío a 3.1s de la ÚLTIMA tecla (12.1s - 9.0s real; el 2.5s medido incluye el sleep final del test). La consulta auto-enviada obtuvo respuesta del agente (reply:true). 0 errores JS.
+- Incidente menor: la tab del agent-browser apareció en about:blank a mitad de la sesión (por eso un eval falló con error truncado y otro "NO INPUT") — reabierto y re-verificado.
+
+Stage Summary:
+- El auto-envío del buscador ahora espera 3 segundos de silencio real: la gente que escribe despacio ya no le manda la consulta cortada al agente. Enter sigue siendo instantáneo.
+
+---
+Task ID: 19
+Agent: Super Z (main)
+Task: "es normal que en algunas paginas los formularios o secciones en pc no complete la pantalla hacia los costados?? si no es a proposito por vista, revisar todas las paginas del sistema" — auditoría de anchos en PC + fixes.
+
+Work Log:
+- AUDITORÍA de las 27 pantallas: el shell del panel ya es fluido (main flex-1 min-w-0, homy-page 76rem centrado con margin-inline:auto) y los dashboards llenan. El defecto real: 11 pantallas metían un SEGUNDO tope interno (max-w-4xl/3xl/2xl) SIN mx-auto dentro de homy-page → contenido clavado a la izquierda con vacío asimétrico a la derecha (la captura del usuario, ~320px de void en ventanas anchas). Públicas (buscar 7xl, perfiles pro 4xl, detalle 3xl, notificaciones 2xl), landing (secciones 7xl mx-auto) y auth (card centrada) ya estaban centradas por diseño — intencional, no se tocan.
+- FIX A — listados/gestión llenan homy-page (tope interno eliminado): prof/presupuestos, prof/bolsa, prof/proyectos, prof/vinculaciones, prof/proyecto-detalle (2 wrappers), prov/vinculaciones, cli/facturas.
+- FIX B — formularios/perfil en ancho de lectura pero CENTRADOS (mx-auto añadido): cli/publicar (form 3xl), cli/perfil (2xl), prof/perfil (3xl), prov/perfil (2xl). El aire se reparte parejo → se ve deliberado.
+- INCIDENTE de entorno: dev server colgado a mitad de la auditoría (curl 000, CDP timeouts) + el sandbox mata procesos background entre tool calls (.zscripts/dev.sh muere con el trap EXIT). Solución: scripts/width-audit-e2e.sh y width-audit-viewport.sh arrancan el server (setsid bun run dev) y hacen TODAS las mediciones y capturas dentro de una sola tool call. Browser: reabrir con pkill previo; 127.0.0.1 en vez de localhost; set viewport (no --viewport) para cambiar viewport de tab existente.
+- E2E DOM-sampling (usuarios efímeros width.audit@homia.test cliente+profesional / width.prov@homia.test proveedor): 8 páginas del panel con llena:true (borde derecho del contenido = borde derecho de homy-page ±2px) y centrado:true en 1280; en 1920 real: página 480→1696 (cap 76rem), gapIzq 192 = gapDer 192 (SIMÉTRICO, intencional), grid llega a 1696; dashboards y bolsa (control) 1696 ✓; 390 mobile sin overflow (scrollW 390). 0 errores JS. Capturas: shots/width-audit/02-presupuestos-full.png, 03-publicar-centrado.png, 04-presupuestos-1920-real.png, 05-presupuestos-390.png.
+- ROLLBACK: scripts/cleanup-width-audit-users.js eliminó los 2 usuarios de prueba y perfiles (verificado 0 restantes).
+
+Stage Summary:
+- En PC ya no hay contenido aplastado a la izquierda con vacío a la derecha: los listados y secciones del panel usan todo el ancho de la página (76rem centrado, márgenes simétricos en ultrawide) y los formularios de tarea enfocada quedan centrados en ancho de lectura. Criterio aplicado en las 27 pantallas: dashboards/listados llenan, formularios centrados, públicas ya estaban bien. Verificado en 1280, 1920 y 390.
+
+---
+Task ID: 20
+Agent: Super Z (main)
+Task: "esta seccion quedó muy básica... no tiene el estilo del sistema" (captura del selector de perfil del topbar) — reemplazar el <select> nativo por un menú glass HomIA.
+
+Work Log:
+- CAUSA: el cambiar-perfil del topbar era un <select> nativo → la lista de opciones la pinta el navegador (fondo blanco + highlight azul del SO) y es inestilizable: rompía el sistema glass sobre la barra oscura.
+- NUEVO src/components/app/role-switcher.tsx: trigger pill de vidrio (icono del rol actual en chip + "Perfil: X" + chevron que rota 180° al abrir, estado abierto bg-white/15) + panel homy-glass-strong 264px redondeado con: eyebrow cian "TUS PERFILES", opciones con chip de icono por rol (Cliente=User, Profesional=HardHat, Proveedor=Store), nombre en bold navy + microdescripción (Publicás, aprobás y pagás / Ofertás, ejecutás y cobrás / Vendés a profesionales), activo con gradiente azul→cian + ring + Check. Animación framer-motion (opacity/y/scale, 0.18s, easeOut suave) cumpliendo el contrato solo-transform/opacity; opciones con homy-stagger.
+- ACCESIBILIDAD: aria-haspopup/aria-expanded en trigger, role=menu + menuitemradio + aria-checked, Escape cierra y devuelve el foco al trigger, click-fuera (pointerdown fuera) cierra, focus-visible ring cian. Cambio de rol → navigate(/panel/:rol).
+- panel-layout.tsx: <select> reemplazado por <RoleSwitcher roles user!.roles role>; mismo guard otherRoles>0.
+- Ajuste fino tras primera captura: 248→264px + desc de proveedor acortada (descripciones completas sin truncate).
+- DECISIÓN DE ALCANCE: los <select> de formularios/filtros (homy-glass-input: stock, crm, obras, bolsa, materiales, proyecto-detalle, registro) quedan nativos — el trigger ya está estilizado, la lista nativa es UI del SO (especialmente mejor picker en mobile) y no rompe la estética del panel como sí lo hacía el del topbar oscuro.
+- E2E (scripts/role-switch-e2e.sh + reshot, server setsid dentro de la misma tool call por el reaping del sandbox): menú abre con 3 opciones y activo correcto (w 248→264), click-fuera cierra ✓, Escape cierra ✓, pick "Profesional" renderiza el dashboard profesional ("Tu centro de mando") ✓, mobile 390: menú alineado a la derecha (81→329) SIN overflow ✓, 0 errores JS. Capturas: shots/role-switcher/01-cerrado, 02-abierto, 03-profesional, 04-mobile-abierto, 05-final-desktop, 06-final-mobile.
+- ROLLBACK: usuario efímero role.switch@homia.test (3 roles) eliminado con cleanup-role-switch-user.js (verificado).
+
+Stage Summary:
+- El selector de perfil ahora es un menú de vidrio del sistema: trigger pill con icono y chevron animado, panel glass-strong con eyebrow, iconos por rol, microdescripciones, gradiente+check en el activo, animación suave y cierre por click-fuera/Escape. Verificado desktop y mobile con E2E y capturas; usuario de prueba eliminado.
+
+---
+Task ID: 21
+Agent: Super Z (main)
+Task: "si estoy en mi panel, aprieto la campanita y cuando salgo me manda al home... tendría que volver al panel... o en todo caso que el header del panel prevalezca... no me debería sacar de mi panel si ya estoy logeado... cada rincón del sistema tiene que tener el mismo estilo" — contexto de panel persistente para pantallas sueltas.
+
+Work Log:
+- CAUSA: /notificaciones (y /buscar, /trabajo/:id, /profesional/:id, /proveedor/:id) se renderizaban PELADOS fuera del panel (sin topbar ni sidebar) y su botón volver estaba clavado a navigate('/'): entrabas desde la campanita del panel, la pantalla te cambiaba todo el chrome y al salir te tiraba al home.
+- CRITERIO "el header del panel prevalece": con sesión activa esas 5 rutas ahora viven DENTRO del PanelLayout (app-root.tsx: helper publicOrPanel + wrapper .homy-embedded). Sin sesión siguen siendo públicas con su CTA de ingresar. La home (/) sigue siendo el landing público (el sidebar ya tiene "Ir a la home" explícito).
+- FLASH de shell público eliminado: si la sesión se está verificando sin usuario cacheado → Loading gate ("Verificando tu sesión…") en vez de mostrar el shell público un instante y luego el panel (inPanel = !!user, gate solo con loading && !user).
+- panel-layout.tsx: role = segments[1] SOLO si la ruta es /panel/* (antes /trabajo/:id tomaba el id como rol y el guardia de roles habría redirigido al panel). Para rutas embebidas role = user.roles[0] → sidebar correcta.
+- search-screen.tsx: prop embedded → su header sticky propio usa top-16 (64px) para apilarse DEBAJO del topbar del panel sin taparse (la regla CSS por cascada NO alcanzó para vencer a la utility top-0 → prop explícita, determinística).
+- notifications.tsx: botón "Volver al panel" → navigate(/panel/${user?.roles?.[0] || 'cliente'}) (antes "Inicio" → '/'); quitados min-h-screen y px/py propios (el main del panel ya provee padding, incl. pb-28 mobile para el bottom nav).
+- job-detail.tsx: BackHome context-aware — "Volver al panel" si hay sesión, "Volver al inicio" si no.
+- E2E (scripts/panel-context-e2e.sh, esperas por polling de VALORES — nota: el CLI devuelve el JSON con comillas escapadas, los greps debían limpiar \\ con tr -d): FLOW1 campanita → notificaciones con aside+topbar+botón "Volver al panel" ✓; FLOW1b click volver → dashboard "Tu panel" ✓; FLOW2 /buscar logueado → panel + search header apilado con top computado 64px ✓; FLOW3 /trabajo/fake → embebido + btn "Volver al panel" ✓; FLOW4 logout → notificaciones pelada con CTA "Ingresar" ✓; FLOW5 mobile 390 → embebido sin overflow ✓; 0 errores JS. Capturas: shots/notif-panel/01-notificaciones-en-panel, 02-buscar-en-panel, 03-trabajo-en-panel, 04-mobile-notif-panel. Rollback del usuario panel.ctx@homia.test ✓.
+
+Stage Summary:
+- Loggeado, nunca te sientes fuera de tu panel: notificaciones, buscar, detalle de trabajo y perfiles públicos mantienen el topbar y sidebar del panel (con sesión), con botón "Volver al panel" en vez de saltos al home; sin sesión siguen siendo pantallas públicas. Sin flashes de shell equivocado, sticky apilado correcto, verificado en 1280 y 390.
+
+---
+Task ID: 22
+Agent: Super Z (main)
+Task: 'en toda la app cambiar "HomiA" por "HomIA", es la i mayúscula también, porque representa "IA" de Inteligencia Artificial' — brand name correcto en el wordmark visual.
+
+Work Log:
+- AUDITORÍA: grep de variantes (HomiA/Homia/homIA/HOMIA) en src → 0 "HomiA" como texto (100 "HomIA" correctos: metadata, aria-labels, textos) + 2 HOMIA (acrónimo en comentario). Migraciones/DB/públicos: sin variantes viejas. El "HomiA" que veía el usuario era VISUAL: el wordmark (site-header, site-footer, auth-shell, topbar del panel) renderizaba Hom + "ı" MINÚSCULA sin punto (U+0131) + A con el punto de gradiente flotando encima → se leía "HomiA".
+- FIX (única fuente, homy-character.tsx HomIAWordmark): "ı" → "I" MAYÚSCULA; el punto multicolor de marca (gradiente action→gold→ai) se mantiene flotando sobre la I como acento (estilo İ), retamaño 0.26em→0.18em y reposición top 0.04em→-0.09em (pegado al tope de la I, no suelto). Iteración fina: un -ml-[0.05em] se probó y se REVIERTIÓ tras medir en DOM (Range API): dot cx vs centro del glyph de la I = 0.15px sin margen → centrado matemático perfecto.
+- VERIFICACIÓN: título de tab "HomIA — Tu hogar en buenas manos" ✓; textContent del wordmark "HomIA" ✓; zooms milimétricos (PIL) en home, login y footer confirman "HomIA" con el punto centrado sobre la I; 0 errores JS; tsc limpio. Capturas: shots/wordmark/01-home-header, 02-footer, 03-login + zooms (zoom-i-final, zoom-footer, zoom-home).
+- NOTA: "Homy" (la mascota/agente) NO cambia — es otro nombre del sistema; los técnicos (homy_session, homia.test, emails) quedan igual.
+
+Stage Summary:
+- La marca se lee "HomIA" en TODO el sistema (wordmark con I mayúscula + punto multicolor de marca encima, atributo visual del logo real): header de la landing, footer, auth y topbar del panel comparten el mismo componente corregido; metadata ya estaba bien. Medido en DOM y verificado con zooms en tres superficies.
+
+---
+Task ID: 23
+Agent: Super Z (main)
+Task: "crea 3 usuarios, uno de cada rol (cliente, profesional y proveedor) y llena su cuenta con toda la información — trabajos, reseñas, stock, CRM, publicaciones, vínculos, facturas de proyecto, conexión de proyecto entre los 3, todas las métricas — y da las credenciales para iniciar sesión con cada uno."
+
+Work Log:
+- SEED MAESTRO (scripts/demo-seed.mjs + demo-seed-lib.mjs): 3 usuarios con contraseñas bcrypt reales (login 100% funcional) + red de datos completa y FK-segura (cleanup idempotente por purga en orden correcto, re-ejecutable sin duplicar).
+- Cliente Valentina Ríos (cliente@homia.test): 5 JobPost (abierto/en_proceso/cerrado/cancelado + 2º abierto), 2 Projects (activo en ejecución con escrow retained $256.000 + finalizado con escrow released $634.800), 2 Invoice (pagada MP-DEMO-8831201 con Payment approved + pendiente con 4 items), 10 ProjectMaterial (ciclo completo: 8 aprobados de proveedor, 1 rechazado, 1 alternativo con alternativeOf), obras publicadas como cliente, reseñas 360°, favoritos, 3 notif sin leer, sesión Homy de 4 mensajes.
+- Profesional Matías Ferrer (profesional@homia.test): perfil verificado PRO (14 años, 3 oficios, skills, CUIL), 5 JobBid (2 pendientes + 2 aceptados con selectedBidId + 1 retirado), CRM "Clientes" 5 etapas con 5 deals ($1.236.800) con counterparty/jobId/projectId reales, 2 obras, reserva de stock activa, vinculación al corralón, rating 5.0 (2 reseñas, una con reply).
+- Proveedor Ferrer Hnos. (proveedor@homia.test): perfil verificado PRO, 28 ProviderStock en 6 categorías con marcas y estados derivados (2 por_agotar, 1 agotado → dashboard "Tu negocio" $12.324.700 y 3 alertas), 10 StockMovement (entrada/salida/ajuste), 3 StockReservation (activa/consumida/liberada), CRM "Clientes y Profesionales" 4 etapas con 4 deals, 2 ProviderLinks con el profesional (1 activa cuenta corriente 30 días + 1 archivada), rating 4.5.
+- Ratings recalculados con agregación real (recomputeRatings) → coherentes en User + ProfessionalProfile + ProviderProfile.
+- LIMPIEZA LEGADOS (scripts/cleanup-legacy-users.mjs): 12 cuentas de prueba de tareas anteriores eliminadas (sergio@plomero, *@test.com, *@homia.com diag/ui, loginflow, pro.mp) que ensuciaban bolsa/métricas; cuentas reales "leo" (leoosterriecth_96@hotmail/hotmil) preservadas.
+- E2E (scripts/demo-users-e2e.sh, server setsid + agent-browser 127.0.0.1): login 200 de los 3 por API+navegador; cliente: dashboard (2 abiertos/5 publicaciones, 2 presupuestos a revisar, proyecto $256.000 en ejecución) + trabajos (4 estados) + proyectos + facturas (A-0001-000187 pendiente + A-0001-000163 pagada); profesional: dashboard "Tu centro de mando" + bolsa (fuga+destape) + presupuestos (pendiente de respuesta) + proyectos (cocina+baño) + CRM kanban (5 tratos, Valentina como contraparte) + vinculaciones (Cuenta principal) + obras (2); proveedor: dashboard "Tu negocio" (28 items, 2 por agotar, 1 agotado) + stock (termofusión/agotado/Ferrum) + CRM (Pedido mensual — Matías) + vinculaciones (cuenta 30 días); gates API: jobs mine=5, notifications=5, /api/auth/me roles ok; 0 fallos de datos (3 "TIMEOUT" eran falsos negativos de keywords/regex — capturas demuestran render correcto). Capturas: shots/demo-users/01-12 (12 screenshots, 3 roles × 4 pantallas clave).
+- Credenciales entregadas en download/CREDENCIALES-DEMO.txt + en chat.
+
+Stage Summary:
+- Ecosistema demo completo y testeado: 3 cuentas (una por rol) con login real, toda la red de datos cruzada entre los 3 (proyectos conectan cliente↔profesional↔proveedor con materiales del stock real, reservas, CRM en ambas puntas, facturas con escrow y pagos), ratings coherentes, métricas de todos los dashboards pobladas. DB limpia de basura de testing sin tocar cuentas del dueño. Seed re-ejecutable (idempotente) y E2E re-verificable.
+
+---
+Task ID: 24
+Agent: Super Z (main)
+Task: "los usuarios (todos) puedan desde la home y desde una página del panel listar todos los profesionales y proveedores registrados, ordenados de más reseñas positivas a menos, con resumen en tarjetas (fotito, trabajos, reseñas); al abrir (SOLO logueado) detalle completo; filtros por rubro y precio promedio de presupuestos; mensajería estilo WhatsApp con bandeja de entrada entre todos los roles; todo con el estilo del sistema."
+
+Work Log:
+- DATOS: models Conversation (par normalizado userAId<userBId, @@unique, lastMessageAt) + Message (body, readAt acuse, @@index) en prisma/schema.prisma + db push + migración espejo supabase/migrations/0014_direct_messages.sql.
+- APIs: GET /api/directory (público: tarjetas unificadas pro/prov con rating, reviewsCount, worksCount/stockCount, avgBid de jobBid.groupBy, avgPrice de stock, filtros kind/cat/q/minRating/bid&price buckets, sorts reviews|rating|works|recent); GET+POST /api/messages/conversations (bandeja con último mensaje + unread groupBy, upsert get-or-create con pair()); GET+POST /api/messages/conversations/[id] (hilo ascendente, marca leídos ANTES de leer, envía + notificación type 'message' link /mensajes?c=, union discriminada ok:false/true para narrowing); GET /api/messages/unread (badge); perfiles /api/profiles/professional|provider/[id] ahora exigen sesión (401) — el detalle es gated en UI y API.
+- UI: directory-screen.tsx (hero navy público o embebido en panel; buscador, chips tipo/rubros/rating/precio, select orden; grid de tarjetas glass con avatar, BadgeCheck, PRO, rubros, ★+reseñas, "N obras · X años" o "N materiales" + "presupuesto/precio promedio", framer-motion stagger; banda CTA registro si !user); messages-screen.tsx (bandeja 340px + chat, burbujas: mías gradiente #1D63B8 con CheckCheck azul si readAt, del otro homy-glass-strong; separadores Hoy/Ayer/fecha; compose circular gradiente + Enter; polling 6s bandeja / 3s hilo; deep-link ?c=; mobile lista↔chat con back; empty state con CTA al directorio); profile-gate.tsx compartido ("Acceso requerido — Ingresá para ver este profesional/proveedor", CTAs registrarse/ingresar con volver, link al directorio).
+- INTEGRACIÓN: app-root (rutas /directorio público→embebido y /mensajes gated→AuthGate, sessionGated+panelScreen para los 3 roles); panel-layout (sidebar Directorio+Mensajes en los 3 roles con badge naranja de no leídos, polling /api/messages/unread cada 15s, bottom-nav móvil priorizada con flag m: Inicio/acción principal/Proyectos o Stock/CRM/Mensajes); perfiles pro/proveedor gate + botón "Contactar" (crea conversación y salta al chat, oculto en su propio perfil); home: link "Directorio" en site-header (BUG next/link: pushState con hash NO dispara hashchange → interceptado con goRoute(e) + navigate propio, desktop y mobile sheet) + banda CTA glass en sección Comunidad.
+- SEED (demo-seed.mjs part3): 3 conversaciones (Valentina↔Matías 4 msgs con 1 sin leer, Valentina↔Ferrer 2, Matías↔Ferrer 3 con 1 sin leer) — cada cuenta tiene un chat pendiente al entrar; purge ampliada a Conversation/Message; CREDENCIALES-DEMO.txt actualizado.
+- TSC: 0 errores en archivos nuevos/modificados (corregidos: EmptyState hint≠body, union discriminada en loadConvFor); errores pre-existentes (search/pins, comparables, jobs cast, invoices, validator) intactos.
+- E2E (scripts/directorio-msg-e2e.sh): F0 API gate 401 sin sesión ✓; F1 home→link→/directorio con tarjetas ✓ (tras fix next/link); F2 primera tarjeta = "Abrir tarjeta de Matías Ferrer" (orden reseñas↓) + click sin login → ProfileGate ✓; F3 directorio embebido en panel (aside) ✓; F4 filtro Proveedores (solo Ferrer, sin Matías) + rubro Plomería (Matías Y Ferrer — ambos operan plomería) ✓; F5 perfil completo + Contactar + Contratar ✓; F6 chat con hilo existente ("reservados los caños") ✓; F7 mensaje enviado por input real (native setter + input event) → burbuja propia ✓; F8 bandeja Valentina 2 conversaciones con "Vos:" ✓; F9 Matías: badge unread en sidebar + lista + chat con el mensaje nuevo de Valentina ✓; F10 mobile 390 sin overflow lista→chat→back ✓. 10 capturas shots/directorio-msg/.
+
+Stage Summary:
+- La comunidad ahora es navegable: directorio público desde home y panel (ordenado por reseñas positivas, con filtros por rubro/rating/precio), detalle de perfil solo para usuarios logueados (gate en UI y API), y mensajería 1:1 estilo WhatsApp en glass entre cualquier par de roles con acuse de lectura, badges de no leídos en sidebar/bottom-nav y notificaciones. Conversaciones demo listas para probar desde las 3 cuentas.
+
+---
+Task ID: 25
+Agent: Super Z (main)
+Task: "las 3 sugerencias hacelas + reseñas desglosadas (texto+foto) + clientes inician el chat + verificación DNI con IA que analice las dos fotos (no verificado visible junto al nombre) + números de tarjetas sin desborde"
+
+Work Log:
+- DATOS: Review.photos (JSON urls que avalan la reseña) + IdentityDocument.aiVerdict/aiScore/aiNotes + User.verificationStatus (none|en_revision|verificado|rechazado) + verifiedAt en prisma/schema.prisma; db push + migración espejo supabase/migrations/0015_reviews_photos_dni_verification.sql.
+- IA REAL DE VISIÓN: src/lib/dni-ai.ts con zai.chat.completions.createVision (glm-4.5v) — analiza FRENTE+DORSO juntos (¿es documento?, ¿legible?, ¿datos coinciden entre caras?, ¿parece real?, confianza 0-1) y mapea por niveles KYC: rechazado si no es documento o titulares distintos; en_revision si ilegible o confianza <0.7; verificado si consistente+legible+≥0.7 (guarda reserva de IA en notas si pareceReal=false). Dictamen COMPLETO del modelo queda en aiVerdict (transparente). Spike previo: la IA detectó correctamente DNIs sintéticos → generé retratos con images.generations + guilloche/holograma/microtexto/firma + post-proceso "fotografiado" (scripts/make-dni-images.py, photo-ify.py, gen-portraits.mjs) — veredictos reales y diferenciados: Valentina 85% ✓, Matías 75% ✓, Ferrer 65% en revisión, Carolina 30% en revisión (subió en vivo durante el E2E).
+- API: /api/verification/dni (GET estado+último documento con dictamen; POST registra frontUrl/backUrl de /api/uploads, corre IA, actualiza User.verificationStatus + notifica); /api/reviews acepta photos[] (máx 4, rutas /uploads validadas); /api/favorites (GET lista+ids, POST toggle); POST /api/messages/conversations ahora bloquea 403 {clientesFirst} si un profesional/proveedor (sin rol cliente) intenta SER EL PRIMERO en escribirle a un cliente (hilo existente = responder, permitido); sesión (auth.ts + store SessionUserClient) expone verificationStatus/verifiedAt.
+- APIs perfiles/directorio/mensajes: verified ahora lo define el DNI+IA del usuario (no profile.verified); cards y perfiles exponen verificationStatus; perfiles devuelven chatBlocked (espectador sin rol cliente + target cliente + sin hilo); reviews incluyen author.verificationStatus; bandeja/hilo exponen otherVerification.
+- UI: VerifyBadge en ui-bits (✓ verde / ámbar "En revisión" / gris "No verificado" / rojo rechazado, variante dark para navy) visible JUNTO AL NOMBRE en: tarjetas del directorio, headers de perfiles pro/prov, bandeja y header del chat, sidebar del panel, autores de reseñas; página /panel/{rol}/verificacion con estado actual, dictamen IA (chips Es documento/Legible/Datos consistentes/Reservas/Confianza%), previews del documento, subida frente+dorso con dropzones y banner de resultado; VerificationPrompt en los 3 dashboards; nav "Verificación" para los 3 roles; reseñas desglosadas en perfiles con grid de fotos + lightbox + chip "N fotos de la obra"; formulario de reseña del cliente sube hasta 4 fotos; botón Contactar se oculta y muestra hint "En HomIA los clientes escriben primero" si chatBlocked; corazón favorito (tarjetas como botón hermano HTML-válido + perfiles) y filtro "Mis favoritos" en directorio; botón Compartir (clipboard con fallback execCommand) en perfiles; "Ver perfil" del chat ahora visible también en móvil.
+- NÚMEROS SIN DESBORDE: utilidades CSS .homy-num (tabular+nowrap) y .homy-num-adapt (container-query: la cifra se encoge fluida clamp(0.68rem, 5.2cqw, 0.95rem) dentro de .homy-num-cell) — métricas del directorio ("$ 1.236.800" nunca salta de línea ni desborda; la tarjeta se adapta al número), precios del catálogo, StatCard de dashboards. E2E midió scrollWidth≤clientWidth en 8 cifras desktop y 8 mobile: 0 desbordes.
+- SEED: Carolina Páez (profesional electricista, SIN DNI → "No verificado") + Julián Sosa (cliente con trabajo de tablero) enriquecen directorio y demuestran la regla de chat; c1 Valentina↔Matías reescrita (LA CLIENTE escribe primero, coherente con la regla); reseñas con fotos (baño renovado + grifería → Matías; entrega materiales → Ferrer); part4 verifica los 3 DNI con IA real; purge incluye nuevos emails; assets cacheados en scripts/assets/{dni,reviews} y copiados a public/uploads/{userId}/; CREDENCIALES-DEMO.txt actualizado.
+- E2E (scripts/mejoras-e2e.sh + f9c/f10b, server setsid + agent-browser 127.0.0.1): F0 gate 401 + directorio expone estados ✓; F1 API pro→cliente nuevo 403 clientesFirst ✓ / pro→cliente con hilo 200 ✓ / cliente inicia 201 ✓; F2 badges en tarjetas (1 verificado, 2 no verificados) ✓; F3 8 cifras sin desborde + filtro favoritos (2) ✓; F4 reseñas con 2 fotos + chip + respuesta ✓; F5 lightbox ✓ + corazón/share ✓; F6 badges en bandeja (3/3) ✓; F7 página verificación de Matías "Identidad verificada" + dictamen completo ✓; F8 badge en sidebar ✓; F9 Carolina sube DNI en vivo vía /api/uploads+POST → IA real → en_revision 30% con dictamen en UI ✓; F10 mobile 390: chat con contraparte proveedor muestra "Ver perfil" + badge → navega al perfil ✓ + cifras sin desborde ✓. 12 capturas shots/mejoras/.
+- INCIDENTE RESUELTO: un dev server viejo (Task 24) seguía en el puerto 3000 con código pre-schema → directorio 500 y estados falsos "none"; pkill next-server + re-run todo verde. TSC: 0 errores en archivos nuevos/modificados (errores pre-existentes de tareas anteriores intactos).
+
+Stage Summary:
+- Confianza HomIA operativa de punta a punta: identidad verificada por IA de visión real (frente+dorso, dictamen público junto al nombre en todo el sistema), reseñas más fiables con fotos que avalan, comunidad con reglas claras (el cliente inicia el chat), favoritos/compartir desde el directorio y tarjetas que se adaptan a cualquier cifra sin romper. Ecosistema demo actualizado con 2 usuarios extra y los 4 estados de verificación representados.
+
+---
+Task ID: 26
+Agent: Super Z (main)
+Task: "1) contratar desde el directorio sea un proceso completo y fácil · 2) facturas se puedan ver/descargar como PDF · 3) todas las funcionalidades, lógicas, procesos y botones deben funcionar"
+
+Work Log:
+- DATOS: Project gana urgency|address|deadline|photos (JSON) en prisma/schema.prisma + db push + migración espejo supabase/migrations/0016_hire_wizard.sql.
+- WIZARD (src/components/app/hire-wizard.tsx): modal glass de 4 pasos (qué: título/detalle/rubro/hasta 4 fotos vía /api/uploads → cuándo-dónde: 3 urgencias + fecha + dirección/localidad → presupuesto: rango min/max opcional + mensaje inicial → resumen) con progreso, validación por paso, pantalla de éxito y accesos "Abrir el chat"/"Ver el proyecto"/"Seguir explorando". Entradas: botón "Contratar" EN las tarjetas de profesionales del directorio (botón hermano HTML-válido, para no-conectados muestra toast registro; no se puede contratar a uno mismo) y botón "Contratar" del header del perfil pro (reemplaza al POST de título genérico de Task 24).
+- API: POST /api/projects acepta brief completo (urgency/address/city/deadline/photos/firstMessage), crea Project con stage presupuesto, notifica al profesional (type contratacion, link a su detalle) y si hay firstMessage hace get-or-create de conversación + mensaje + notificación message (el cliente puede iniciar); GET /api/projects/[id] expone el brief parseado. Fix pre-existente: POST /api/invoices/[id] incluía items sin include (TS2339).
+- BRIEF VISIBLE: cliente/proyecto-detalle ("Brief de la contratación": urgencia pill, fecha, dirección, fotos) y profesional/proyecto-detalle ("Brief del cliente" igual estructura) — el profesional ve exactamente lo que el cliente pidió.
+- PDF REAL (pdf-lib): GET /api/invoices/[id]/pdf → A4 con banda navy + chip de estado (PAGADA/pendiente/vencida), cajas Cliente/Profesional/Proyecto/Detalle, tabla de ítems (mano de obra/materiales) con elipsis medida, totales ARS, pagos Mercado Pago, nota de escrow; winansi() limpia glifos fuera de WinAnsi; permiso solo partes del proyecto (cliente o profesional 200, tercero 403, sin sesión 401). UI: botón "PDF" (window.open + fallback descarga con download attr) en facturas del cliente (pendientes y pagadas) y en cada factura del detalle de proyecto.
+- AUDITORÍA "todo funciona" (scripts/audit-dead-buttons.mjs): escanea <button> sin onClick/submit/reset, <Link> a rutas no mapeadas y TODO/FIXME. Hallazgos: 2 botones X del lightbox muertos (pro-profile + provider-profile) → corregidos; 1 falso positivo (Link to={`/panel/${r}`} dinámico) y 3 "TODO el mundo" en comentarios. Fix responsive pre-existente descubierto midiendo: tablist del directorio desbordaba 27px en 390 → flex-wrap + rounded-2xl (scrollWidth 417→390).
+- E2E (scripts/hire-pdf-e2e.sh + f6-mobile-e2e.sh + recap-f2-e2e.sh, server setsid + agent-browser 127.0.0.1): F0 API 401/201/urgency persistida/notificación ✓; F1 PDF 401/%PDF 3341 bytes/pagada 200/tercero 403/pro 200 ✓; F2 wizard completo en directorio: botón en tarjeta → 4 pasos → éxito → "Ver el proyecto" → brief con dirección/fecha/urgencia ✓; F3 wizard desde perfil Carolina (rubros eléctricos) ✓; F4 3 botones PDF + fetch %PDF desde browser + visor real ✓; F5 profesional: notificación "Te contrataron" en /notificaciones + proyecto en lista + Brief del cliente con Av. Siempreviva ✓; F6 mobile 390 (browser fresco + set viewport): wizard anchoOk + sinScrollX + 0 PDFs desbordados ✓; F7 purga de datos E2E (projects/notifs/messages) deja el seed demo intacto ✓. FAILS finales 0/0/0 (por fases). Capturas: shots/hire-pdf/01-14.
+- NOTAS DE DEBUG: window.open del PDF no se testó por click (tabs de agent-browser) → verificado con fetch %PDF + go directo al endpoint (visor Chromium); --viewport de open no aplica en tabs ya creados → usar `agent-browser set viewport` tras abrir; la ruta de notificaciones del panel NO existe (page=notificaciones cae en dashboard) → la pantalla vive en /notificaciones (sessionGated) como siempre.
+
+Stage Summary:
+- Contratar desde el directorio es ahora un proceso completo y fácil: 4 pasos guiados en glass que capturan trabajo, fotos, urgencia, fecha, dirección y presupuesto, terminan en un Project real con brief visible para ambas partes, notificación al profesional y chat opcional con el brief. Las facturas se ven y descargan como PDF con identidad HomIA y detalle de ítems/escrow. La auditoría de botones dejó 0 acciones muertas y el sistema quedó sin desbordes en 1280 y 390. Base con migración 0016 y datos demo intactos (purga E2E automática).

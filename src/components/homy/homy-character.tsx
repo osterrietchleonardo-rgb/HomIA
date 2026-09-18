@@ -449,8 +449,8 @@ export function Homy({ size = 120, state = "idle", className }: HomyProps) {
 }
 
 /**
- * Wordmark HomIA — tipografía con el punto multicolor sobre la "i",
- * igual que en el logo real.
+ * Wordmark HomIA — la "IA" en mayúsculas (Inteligencia Artificial),
+ * con el punto multicolor de marca flotando sobre la I, igual que en el logo real.
  */
 export function HomIAWordmark({ className }: { className?: string }) {
   return (
@@ -462,14 +462,14 @@ export function HomIAWordmark({ className }: { className?: string }) {
     >
       Hom
       <span className="relative inline-block">
-        ı
+        I
         <span
           aria-hidden
           className="absolute left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-br from-action via-gold to-ai"
           style={{
-            width: "0.26em",
-            height: "0.26em",
-            top: "0.04em",
+            width: "0.18em",
+            height: "0.18em",
+            top: "-0.09em",
           }}
         />
       </span>

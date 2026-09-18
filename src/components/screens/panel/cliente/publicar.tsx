@@ -94,7 +94,7 @@ export default function PublishJob() {
         </div>
       </header>
 
-      <form onSubmit={submit} className="homy-glass max-w-3xl space-y-7 rounded-3xl p-5 sm:p-7">
+      <form onSubmit={submit} className="homy-glass max-w-3xl mx-auto space-y-7 rounded-3xl p-5 sm:p-7">
         {/* El trabajo */}
         <section className="space-y-5">
           <div className="homy-section-head !mb-0">

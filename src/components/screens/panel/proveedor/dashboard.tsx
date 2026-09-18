@@ -7,6 +7,7 @@ import { formatARS } from '@/lib/format'
 import {
   Boxes, AlertTriangle, PackageX, PackageOpen, Link2, Users, ArrowRight, CheckCircle2, Plus, Wallet, Zap,
 } from 'lucide-react'
+import { VerificationPrompt } from '../verificacion'
 
 type StockItem = {
   id: string; elementId: string; name: string; unit: string; category: string; categorySlug: string
@@ -44,6 +45,7 @@ export default function ProviderDashboard() {
 
   return (
     <div className="homy-page">
+      <VerificationPrompt role="proveedor" />
       {/* Encabezado */}
       <header className="homy-page-head">
         <div className="min-w-0">

@@ -21,6 +21,8 @@ const JobDetailScreen = dynamic(() => import('@/components/screens/job-detail'),
 const ProProfileScreen = dynamic(() => import('@/components/screens/pro-profile'), { ssr: false, loading: () => <Loading /> })
 const ProviderProfileScreen = dynamic(() => import('@/components/screens/provider-profile'), { ssr: false, loading: () => <Loading /> })
 const NotificationsScreen = dynamic(() => import('@/components/screens/notifications'), { ssr: false, loading: () => <Loading /> })
+const DirectoryScreen = dynamic(() => import('@/components/screens/directory-screen'), { ssr: false, loading: () => <Loading /> })
+const MessagesScreen = dynamic(() => import('@/components/screens/messages-screen'), { ssr: false, loading: () => <Loading /> })
 
 // Panel cliente
 const ClientDashboard = dynamic(() => import('@/components/screens/panel/cliente/dashboard'), { ssr: false, loading: () => <Loading /> })
@@ -49,6 +51,9 @@ const ProviderStock = dynamic(() => import('@/components/screens/panel/proveedor
 const ProviderCRM = dynamic(() => import('@/components/screens/panel/proveedor/crm'), { ssr: false, loading: () => <Loading /> })
 const ProviderLinks = dynamic(() => import('@/components/screens/panel/proveedor/vinculaciones'), { ssr: false, loading: () => <Loading /> })
 const ProviderProfileEdit = dynamic(() => import('@/components/screens/panel/proveedor/perfil'), { ssr: false, loading: () => <Loading /> })
+
+// Común a los 3 roles: verificación de identidad por DNI + IA
+const VerificationScreen = dynamic(() => import('@/components/screens/panel/verificacion').then((m) => m.default), { ssr: false, loading: () => <Loading /> })
 
 const PanelLayout = dynamic(() => import('@/components/screens/panel/panel-layout'), { ssr: false, loading: () => <Loading /> })
 
@@ -86,14 +91,30 @@ export default function AppRoot() {
   const s = route.segments
 
   let screen: React.ReactNode
+  // Con sesión activa el header del panel prevalece: buscar, detalle de trabajo,
+  // perfiles públicos y notificaciones viven DENTRO del panel (no te saca de tu contexto).
+  // Si la sesión se está verificando (sin usuario cacheado) se muestra el gate del panel
+  // para evitar el flash de shell público antes de entrar al panel.
+  const inPanel = !!user
+  const withPanel = (node: React.ReactNode) => (
+    <div className="homy-embedded"><PanelLayout route={route}>{node}</PanelLayout></div>
+  )
+  const sessionGated = ['buscar', 'trabajo', 'profesional', 'proveedor', 'notificaciones', 'mensajes'].includes(s[0] || '')
+  const publicOrPanel = (pub: React.ReactNode, emb: React.ReactNode) => {
+    if (inPanel) return withPanel(emb)
+    if (loading && sessionGated) return <Loading text="Verificando tu sesión…" />
+    return pub
+  }
   if (s.length === 0) screen = <HomeScreen />
-  else if (s[0] === 'buscar') screen = <SearchScreen />
+  else if (s[0] === 'buscar') screen = publicOrPanel(<SearchScreen />, <SearchScreen embedded />)
   else if (s[0] === 'ingresar') screen = <LoginScreen />
   else if (s[0] === 'registrarse') screen = <RegisterScreen />
-  else if (s[0] === 'trabajo' && s[1]) screen = <JobDetailScreen id={s[1]} />
-  else if (s[0] === 'profesional' && s[1]) screen = <ProProfileScreen id={s[1]} />
-  else if (s[0] === 'proveedor' && s[1]) screen = <ProviderProfileScreen id={s[1]} />
-  else if (s[0] === 'notificaciones') screen = <NotificationsScreen />
+  else if (s[0] === 'trabajo' && s[1]) screen = publicOrPanel(<JobDetailScreen id={s[1]} />, <JobDetailScreen id={s[1]} />)
+  else if (s[0] === 'profesional' && s[1]) screen = publicOrPanel(<ProProfileScreen id={s[1]} />, <ProProfileScreen id={s[1]} />)
+  else if (s[0] === 'proveedor' && s[1]) screen = publicOrPanel(<ProviderProfileScreen id={s[1]} />, <ProviderProfileScreen id={s[1]} />)
+  else if (s[0] === 'notificaciones') screen = publicOrPanel(<NotificationsScreen />, <NotificationsScreen />)
+  else if (s[0] === 'directorio') screen = publicOrPanel(<DirectoryScreen />, <DirectoryScreen embedded />)
+  else if (s[0] === 'mensajes') screen = publicOrPanel(<AuthGate path="/mensajes" />, <MessagesScreen embedded />)
   else if (s[0] === 'panel') {
     if (loading) screen = <Loading text="Verificando tu sesión…" />
     else if (!user) {
@@ -120,6 +141,11 @@ function panelScreen(route: ReturnType<typeof useRoute>) {
   const role = s[1]
   const page = s[2] || ''
   const sub = s[3]
+
+  // pantallas comunes a todos los roles (rutas embebidas en el panel)
+  if (page === 'directorio') return <DirectoryScreen embedded />
+  if (page === 'mensajes') return <MessagesScreen embedded />
+  if (page === 'verificacion') return <VerificationScreen />
 
   if (role === 'cliente') {
     if (page === '' ) return <ClientDashboard />
