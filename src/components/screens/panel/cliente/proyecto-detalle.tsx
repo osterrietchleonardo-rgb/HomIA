@@ -7,8 +7,9 @@ import { formatARS, formatDate } from '@/lib/format'
 import { toast } from 'sonner'
 import {
   Check, ArrowRight, Star, FolderKanban, Phone, Mail, Package, ReceiptText,
-  Wallet, Flag, ListChecks, History, Info, ShieldCheck, ImagePlus, X, FileDown, FileText,
+  Wallet, Flag, ListChecks, History, Info, ShieldCheck, FileDown, FileText, CircleCheck,
 } from 'lucide-react'
+import ReviewForm from '../review-form'
 
 function verPdf(id: string, number_: string) {
   const w = window.open(`/api/invoices/${id}/pdf`, '_blank')
@@ -22,7 +23,7 @@ function verPdf(id: string, number_: string) {
   }
 }
 
-type Material = { id: string; name: string; unit: string; quantity: number; unitPrice: number; subtotal: number; status: string; note: string | null; providerName: string | null; createdAt: string }
+type Material = { id: string; name: string; unit: string; quantity: number; unitPrice: number; subtotal: number; status: string; note: string | null; providerName: string | null; providerUserId: string | null; createdAt: string }
 type Invoice = { id: string; number: string; total: number; status: string; issuedAt: string }
 type Brief = { urgency?: string | null; address?: string | null; deadline?: string | null; photos?: string[] }
 type Project = {
@@ -38,11 +39,8 @@ export default function ClientProjectDetail({ id }: { id: string }) {
   const [data, setData] = useState<{ project: Project; materials: Material[]; invoices: Invoice[]; role: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
-  const [rating, setRating] = useState(5)
-  const [comment, setComment] = useState('')
-  const [revPhotos, setRevPhotos] = useState<string[]>([])
-  const [revUploading, setRevUploading] = useState(false)
-  const [alreadyReviewed, setAlreadyReviewed] = useState(false)
+  // targets ya reseñados en este proyecto (userId → reseña publicada)
+  const [reviewedTargets, setReviewedTargets] = useState<Set<string>>(new Set())
   const [confirmRelease, setConfirmRelease] = useState(false)
 
   async function load() {
@@ -53,7 +51,7 @@ export default function ClientProjectDetail({ id }: { id: string }) {
       const resRev = await fetch(`/api/reviews?mine=1&projectId=${id}`)
       if (resRev.ok) {
         const d = await resRev.json()
-        setAlreadyReviewed((d.reviews || []).some((r: { projectId: string }) => r.projectId === id))
+        setReviewedTargets(new Set((d.reviews || []).map((r: { targetUserId: string }) => r.targetUserId)))
       }
     } finally { setLoading(false) }
   }
@@ -123,34 +121,6 @@ export default function ClientProjectDetail({ id }: { id: string }) {
       setConfirmRelease(false)
       load()
     } finally { setBusy(false) }
-  }
-
-  async function submitReview() {
-    if (!data || !comment.trim()) { toast.error('Escribí un comentario'); return }
-    setBusy(true)
-    try {
-      const res = await fetch('/api/reviews', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetUserId: data.project.professional.userId, rating, comment, photos: revPhotos, context: 'proyecto', projectId: id }),
-      })
-      if (!res.ok) { toast.error((await res.json()).error); return }
-      toast.success('¡Reseña publicada!')
-      load()
-    } finally { setBusy(false) }
-  }
-
-  async function uploadReviewPhoto(file: File) {
-    if (revPhotos.length >= 4) { toast.error('Máximo 4 fotos por reseña'); return }
-    setRevUploading(true)
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      fd.append('folder', 'resenas')
-      const res = await fetch('/api/uploads', { method: 'POST', body: fd })
-      const d = await res.json()
-      if (!res.ok) { toast.error(d.error); return }
-      setRevPhotos((prev) => [...prev, d.url])
-    } finally { setRevUploading(false) }
   }
 
   if (loading) return <Loading />
@@ -437,52 +407,55 @@ export default function ClientProjectDetail({ id }: { id: string }) {
         )}
       </section>
 
-      {/* reseña final */}
-      {p.stage === 'finalizado' && !alreadyReviewed && (
-        <section className="homy-glass-dark relative overflow-hidden rounded-3xl p-6 text-white sm:p-7">
-          <span aria-hidden className="pointer-events-none absolute -right-16 -top-20 size-56 rounded-full bg-[#00C4FF]/20 blur-3xl" />
-          <h2 className="relative flex items-center gap-2.5 text-lg font-extrabold">
-            <span className="homy-icon-chip homy-chip-gold size-9 shrink-0 [&_svg]:size-4" aria-hidden><Star /></span>
-            ¿Cómo fue la obra?
-          </h2>
-          <p className="relative mt-2 text-sm text-slate-300">Tu reseña ayuda a otros usuarios: contá cómo trabajó y sumá fotos del resultado — las reseñas con fotos son más fiables para la comunidad.</p>
-          <div className="relative mt-4 flex gap-1.5">
-            {[1, 2, 3, 4, 5].map((n) => (
-              <button key={n} onClick={() => setRating(n)} className={`transition-transform duration-200 hover:scale-110 ${n <= rating ? 'text-[#FFC700] fill-[#FFC700]' : 'text-white/25'}`} aria-label={`${n} estrellas`}>
-                <Star className="size-7" />
-              </button>
-            ))}
-          </div>
-          <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} placeholder="Contá cómo trabajó, puntualidad, calidad…"
-            className="relative mt-4 w-full resize-none rounded-xl bg-white/10 border border-white/15 px-4 py-3 text-white placeholder:text-slate-400 outline-none focus:border-[#00C4FF]" />
-          {/* fotos que avalan la reseña */}
-          <div className="relative mt-3.5 flex flex-wrap items-center gap-2.5">
-            {revPhotos.map((ph, i) => (
-              <span key={i} className="group relative">
-                <img src={ph} alt={`Foto ${i + 1} de la reseña`} className="h-16 w-16 rounded-xl object-cover ring-1 ring-white/25" />
-                <button
-                  onClick={() => setRevPhotos((prev) => prev.filter((_, j) => j !== i))}
-                  aria-label={`Quitar foto ${i + 1}`}
-                  className="absolute -top-1.5 -right-1.5 grid size-5 place-items-center rounded-full bg-red-500 text-white shadow"
-                >
-                  <X className="size-3" aria-hidden />
-                </button>
-              </span>
-            ))}
-            {revPhotos.length < 4 && (
-              <label className="flex h-16 w-16 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-xl border border-dashed border-white/25 text-slate-400 transition hover:border-[#00C4FF] hover:text-[#66DFFF]">
-                <ImagePlus className="size-4" aria-hidden />
-                <span className="text-[9.5px] font-bold">{revUploading ? 'Subiendo…' : 'Foto'}</span>
-                <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadReviewPhoto(f); e.currentTarget.value = '' }} />
-              </label>
+      {/* reseñas 360° al finalizar: profesional + proveedores con materiales */}
+      {p.stage === 'finalizado' && (() => {
+        const providers = data.materials
+          .filter((m) => m.providerUserId && m.providerUserId !== p.professional.userId)
+          .filter((m, i, arr) => arr.findIndex((x) => x.providerUserId === m.providerUserId) === i)
+        const proReviewed = reviewedTargets.has(p.professional.userId)
+        const pendingProviders = providers.filter((m) => !reviewedTargets.has(m.providerUserId!))
+        const allReviewed = proReviewed && pendingProviders.length === 0
+        return (
+          <>
+            {allReviewed ? (
+              <section className="homy-glass flex flex-wrap items-center gap-3 rounded-3xl p-5">
+                <span className="homy-icon-chip homy-chip-mint size-10 shrink-0 [&_svg]:size-5" aria-hidden><CircleCheck /></span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-base font-extrabold tracking-tight text-[#0A2540]">Gracias por tus reseñas</h2>
+                  <p className="text-sm text-slate-500">Calificaste a todos los que participaron de esta obra. Tu opinión ayuda a que la comunidad contrate con confianza.</p>
+                </div>
+                <Star className="size-6 shrink-0 text-[#FFC700] fill-[#FFC700]" aria-hidden />
+              </section>
+            ) : (
+              <div className="mb-2 rounded-2xl homy-glass-soft px-4 py-3 text-sm font-semibold text-slate-600">
+                Se abre la reseña al finalizar la obra: calificá a cada participante por separado.
+              </div>
             )}
-            <span className="text-[11px] font-semibold text-slate-400">Hasta 4 fotos del trabajo terminado</span>
-          </div>
-          <button onClick={submitReview} disabled={busy} className="homy-btn-primary relative mt-4 px-6 py-3 text-sm sm:py-2.5">
-            Publicar reseña
-          </button>
-        </section>
-      )}
+            {!proReviewed && (
+              <div className="mb-5">
+                <ReviewForm
+                  targetUserId={p.professional.userId}
+                  targetName={p.professional.companyName || p.professional.displayName}
+                  targetLabel="al profesional"
+                  projectId={id}
+                  onDone={load}
+                />
+              </div>
+            )}
+            {pendingProviders.map((m) => (
+              <div key={m.providerUserId} className="mb-5">
+                <ReviewForm
+                  targetUserId={m.providerUserId!}
+                  targetName={m.providerName || 'el proveedor'}
+                  targetLabel="al proveedor"
+                  projectId={id}
+                  onDone={load}
+                />
+              </div>
+            ))}
+          </>
+        )
+      })()}
     </div>
   )
 }

@@ -19,7 +19,7 @@ export async function GET(
       pro: { include: { user: { select: { id: true, displayName: true, avatarUrl: true, phone: true, email: true } } } },
       materials: {
         include: {
-          provider: { include: { user: { select: { displayName: true } } } },
+          provider: { include: { user: { select: { id: true, displayName: true } } } },
           element: true,
         },
         orderBy: { createdAt: 'asc' },
@@ -87,6 +87,7 @@ export async function GET(
       note: m.note,
       providerId: m.providerId,
       providerName: m.provider?.businessName || null,
+      providerUserId: m.provider?.user?.id || null,
       createdAt: m.createdAt,
     })),
     links,

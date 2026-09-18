@@ -11,8 +11,8 @@ export async function GET(req: NextRequest) {
   const asClient = await db.project.findMany({
     where: { clientId: auth.user.id },
     include: {
-      pro: { include: { user: { select: { displayName: true, avatarUrl: true } } } },
-      materials: { select: { id: true, status: true } },
+      pro: { include: { user: { select: { id: true, displayName: true, avatarUrl: true } } } },
+      materials: { select: { id: true, status: true, provider: { select: { user: { select: { id: true } } } } } },
       invoices: { select: { id: true, number: true, total: true, status: true } },
       job: { select: { id: true } },
     },
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
         where: { professionalId: proProfile.id },
         include: {
           client: { select: { id: true, displayName: true, avatarUrl: true } },
-          materials: { select: { id: true, status: true } },
+          materials: { select: { id: true, status: true, provider: { select: { user: { select: { id: true } } } } } },
           invoices: { select: { id: true, number: true, total: true, status: true } },
           job: { select: { id: true } },
         },
@@ -32,9 +32,50 @@ export async function GET(req: NextRequest) {
       })
     : []
 
+  // reseñas que ya escribí, por proyecto — para calcular canReview (reseñas 360°)
+  const myReviews = await db.review.findMany({
+    where: { authorId: auth.user.id, projectId: { not: null } },
+    select: { projectId: true, targetUserId: true },
+  })
+  const reviewedByProject = new Map<string, Set<string>>()
+  for (const r of myReviews) {
+    if (!reviewedByProject.has(r.projectId!)) reviewedByProject.set(r.projectId!, new Set())
+    reviewedByProject.get(r.projectId!)!.add(r.targetUserId)
+  }
+
+  // destinatarios de reseña de un proyecto: cliente → pro + proveedores con materiales;
+  // profesional → cliente
+  type ProjLike = {
+    id: string; stage: string
+    client?: { id: string } | null
+    pro?: { user?: { id: string } | null } | null
+    materials: { provider?: { user?: { id: string } | null } | null }[]
+  }
+  const reviewTargets = (p: ProjLike, viewer: 'cliente' | 'profesional'): string[] => {
+    if (p.stage !== 'finalizado') return []
+    if (viewer === 'profesional') return p.client ? [p.client.id] : []
+    const ids = new Set<string>()
+    if (p.pro?.user?.id) ids.add(p.pro.user.id)
+    for (const m of p.materials) {
+      const pid = m.provider?.user?.id
+      if (pid) ids.add(pid)
+    }
+    return [...ids]
+  }
+  const canReview = (p: ProjLike, viewer: 'cliente' | 'profesional') => {
+    const done = reviewedByProject.get(p.id) || new Set<string>()
+    return reviewTargets(p, viewer).some((t) => !done.has(t))
+  }
+
   return ok({
-    asClient: role === 'profesional' ? [] : asClient.map((p) => serializeProject(p, 'cliente')),
-    asPro: asPro.map((p) => serializeProject(p, 'profesional')),
+    asClient: role === 'profesional' ? [] : asClient.map((p) => ({
+      ...serializeProject(p, 'cliente'),
+      canReview: canReview(p, 'cliente'),
+    })),
+    asPro: asPro.map((p) => ({
+      ...serializeProject(p, 'profesional'),
+      canReview: canReview(p, 'profesional'),
+    })),
   })
 }
 

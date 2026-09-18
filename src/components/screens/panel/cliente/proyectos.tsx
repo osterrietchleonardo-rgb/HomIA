@@ -4,16 +4,16 @@ import { useEffect, useState } from 'react'
 import { navigate } from '@/lib/router'
 import { StatusBadge, Loading, UAvatar } from '@/components/app/ui-bits'
 import { formatARS, formatDate } from '@/lib/format'
-import { FolderKanban } from 'lucide-react'
+import { FolderKanban, Star } from 'lucide-react'
+
+const STAGES = ['presupuesto', 'materiales', 'ejecucion', 'revision', 'finalizado']
 
 type Project = {
   id: string; title: string; stage: string; status: string; laborCost: number; materialsCost: number
-  materialsPending: number; updatedAt: string
+  materialsPending: number; updatedAt: string; canReview?: boolean
   pro?: { user?: { displayName: string; avatarUrl: string | null } }
   invoices?: { id: string; number: string; total: number; status: string }[]
 }
-
-const STAGES = ['presupuesto', 'materiales', 'ejecucion', 'revision', 'finalizado']
 
 export default function ClientProjects() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -67,6 +67,12 @@ export default function ClientProjects() {
                           <span className="homy-pill">
                             <span className="homy-pill-dot bg-amber-500" aria-hidden />
                             {p.materialsPending} material{p.materialsPending > 1 ? 'es' : ''} por aprobar
+                          </span>
+                        )}
+                        {p.canReview && (
+                          <span className="homy-pill" title="Abrí el proyecto para calificar al profesional y al proveedor">
+                            <Star className="size-3 text-[#FFC700] fill-[#FFC700]" aria-hidden />
+                            Dejá tu reseña
                           </span>
                         )}
                       </div>

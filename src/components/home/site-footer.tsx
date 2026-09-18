@@ -1,36 +1,53 @@
+"use client";
 import Link from "next/link";
 import { Homy, HomIAWordmark } from "@/components/homy/homy-character";
+import { navigate } from "@/lib/router";
 
 const FOOTER_COLUMNS = [
   {
     title: "Plataforma",
     links: [
-      { label: "Buscar servicios", href: "#" },
-      { label: "Soy profesional", href: "#comunidad" },
-      { label: "Soy proveedor", href: "#comunidad" },
-      { label: "Bolsa de trabajo", href: "#comunidad" },
+      { label: "Buscar servicios", href: "#", route: "/buscar" },
+      { label: "Soy profesional", href: "#comunidad", route: "#comunidad" },
+      { label: "Soy proveedor", href: "#comunidad", route: "#comunidad" },
+      { label: "Bolsa de trabajo", href: "#comunidad", route: "#comunidad" },
     ],
   },
   {
     title: "HomIA",
     links: [
-      { label: "Cómo funciona", href: "#como-funciona" },
-      { label: "Motor IA", href: "#motor-ia" },
-      { label: "Beneficios", href: "#beneficios" },
-      { label: "Suscripción PRO", href: "#comunidad" },
+      { label: "Cómo funciona", href: "#como-funciona", route: "#como-funciona" },
+      { label: "Motor IA", href: "#motor-ia", route: "#motor-ia" },
+      { label: "Beneficios", href: "#beneficios", route: "#beneficios" },
+      { label: "Directorio de la comunidad", href: "#", route: "/directorio" },
     ],
   },
   {
-    title: "Legal",
+    title: "Ayuda y confianza",
     links: [
-      { label: "Términos y condiciones", href: "#" },
-      { label: "Privacidad", href: "#" },
-      { label: "Pagos y escrow", href: "#beneficios" },
+      { label: "Centro de ayuda: dónde hago cada cosa", href: "#", route: "/ayuda" },
+      { label: "Escrow y pagos protegidos", href: "#", route: "/ayuda" },
+      { label: "Verificación de identidad por IA", href: "#", route: "/ayuda" },
+      { label: "Reseñas con fotos", href: "#", route: "/ayuda" },
     ],
   },
 ];
 
 export function SiteFooter() {
+  function go(e: React.MouseEvent, route: string) {
+    if (route.startsWith("#") && route !== "#") {
+      // ancla de la home: scroll nativo
+      const el = document.getElementById(route.slice(1));
+      e.preventDefault();
+      el?.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
+    if (route.startsWith("/")) {
+      e.preventDefault();
+      navigate(route);
+    }
+  }
+
   return (
     <footer className="homy-glass-strong pb-[env(safe-area-inset-bottom)]">
       <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
@@ -57,6 +74,7 @@ export function SiteFooter() {
                   <li key={link.label}>
                     <Link
                       href={link.href}
+                      onClick={(e) => go(e, link.route)}
                       className="text-sm font-medium text-navy/60 transition-colors hover:text-tech"
                     >
                       {link.label}

@@ -7,8 +7,9 @@ import { formatARS, formatDate } from '@/lib/format'
 import { toast } from 'sonner'
 import {
   ArrowRight, Receipt, Truck, Plus, RefreshCcw, Phone, Mail, ArrowLeft,
-  FolderOpen, Package, ClipboardPen, CircleX, History, Check, FileText,
+  FolderOpen, Package, ClipboardPen, CircleX, History, Check, FileText, CircleCheck,
 } from 'lucide-react'
+import ReviewForm from '../review-form'
 
 const STAGES = ['presupuesto', 'materiales', 'ejecucion', 'revision', 'finalizado']
 const STAGE_LABEL: Record<string, string> = {
@@ -48,6 +49,8 @@ export default function ProProjectDetail({ id }: { id: string }) {
   const [data, setData] = useState<{ project: Project; role: string; materials: Material[]; links: RetiroLink[]; invoices: Invoice[] } | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  // reseña 360°: ¿ya califiqué al cliente en este proyecto?
+  const [reviewedClient, setReviewedClient] = useState(false)
 
   // formulario de material
   const [catalog, setCatalog] = useState<CatalogCategory[]>([])
@@ -69,7 +72,13 @@ export default function ProProjectDetail({ id }: { id: string }) {
     setLoading(true)
     try {
       const res = await fetch(`/api/projects/${id}`)
-      if (res.ok) setData(await res.json())
+      const fresh = res.ok ? await res.json() : null
+      if (fresh) setData(fresh)
+      const resRev = await fetch(`/api/reviews?mine=1&projectId=${id}`)
+      if (resRev.ok && fresh) {
+        const d = await resRev.json()
+        setReviewedClient((d.reviews || []).some((r: { targetUserId: string }) => r.targetUserId === fresh.project.client.id))
+      }
     } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [id])
@@ -542,6 +551,29 @@ export default function ProProjectDetail({ id }: { id: string }) {
           )}
         </div>
       </div>
+
+      {/* reseña 360°: el profesional califica al cliente cuando la obra termina */}
+      {p.stage === 'finalizado' && (
+        reviewedClient ? (
+          <section className="homy-glass mt-5 flex flex-wrap items-center gap-3 rounded-3xl p-5">
+            <span className="homy-icon-chip homy-chip-mint size-10 shrink-0 [&_svg]:size-5" aria-hidden><CircleCheck /></span>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base font-extrabold tracking-tight text-[#0A2540]">Ya calificaste a {p.client.displayName}</h2>
+              <p className="text-sm text-slate-500">Gracias por dejar tu reseña: así la comunidad conoce cómo fue trabajar con este cliente.</p>
+            </div>
+          </section>
+        ) : (
+          <div className="mt-5">
+            <ReviewForm
+              targetUserId={p.client.id}
+              targetName={p.client.displayName}
+              targetLabel="al cliente"
+              projectId={id}
+              onDone={load}
+            />
+          </div>
+        )
+      )}
     </div>
   )
 }

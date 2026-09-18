@@ -26,6 +26,15 @@ function parseHash(): RouteState {
 }
 
 export function navigate(to: string, opts?: { replace?: boolean }) {
+  // En la home estática (pathname '/') la SPA no está montada: setear el hash
+  // cambia la URL pero NO re-renderiza nada (no hay AppRoot escuchando).
+  // Navegación real al catch-all ([[...slug]]), que arranca la SPA y hace el
+  // redirect pathname→hash. Aplica a CTAs del header/footer/hero de la home.
+  // (La SPA nunca corre con pathname '/': esa ruta es de page.tsx.)
+  if (typeof window !== 'undefined' && window.location.pathname === '/') {
+    window.location.assign(to.startsWith('/') ? to : `/${to}`)
+    return
+  }
   const target = `#${to.startsWith('/') ? to : `/${to}`}`
   if (opts?.replace) {
     window.history.replaceState(null, '', target)

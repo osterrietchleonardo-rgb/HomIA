@@ -8,6 +8,8 @@ import {
   Boxes, AlertTriangle, PackageX, PackageOpen, Link2, Users, ArrowRight, CheckCircle2, Plus, Wallet, Zap,
 } from 'lucide-react'
 import { VerificationPrompt } from '../verificacion'
+import OnboardingCard, { type OnboardingTask } from '../onboarding-card'
+import { useSession } from '@/lib/store'
 
 type StockItem = {
   id: string; elementId: string; name: string; unit: string; category: string; categorySlug: string
@@ -21,16 +23,21 @@ type ProviderLink = {
 }
 
 export default function ProviderDashboard() {
+  const { user } = useSession()
   const [stock, setStock] = useState<StockItem[]>([])
   const [links, setLinks] = useState<ProviderLink[]>([])
+  const [profileBio, setProfileBio] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     (async () => {
       try {
-        const [resS, resL] = await Promise.all([fetch('/api/provider/stock'), fetch('/api/provider/links')])
+        const [resS, resL, resMe] = await Promise.all([
+          fetch('/api/provider/stock'), fetch('/api/provider/links'), fetch('/api/profiles/me'),
+        ])
         if (resS.ok) setStock((await resS.json()).stock || [])
         if (resL.ok) setLinks((await resL.json()).asProvider || [])
+        if (resMe.ok) setProfileBio((await resMe.json()).user?.provider?.bio || null)
       } finally { setLoading(false) }
     })()
   }, [])
@@ -43,9 +50,34 @@ export default function ProviderDashboard() {
   const stockValue = stock.reduce((a, s) => a + s.price * s.quantity, 0)
   const activeLinks = links.filter((l) => l.active)
 
+  // checklist guiado con estado real del sistema
+  const onboardingTasks: OnboardingTask[] = [
+    {
+      id: 'verify', label: 'Verificá tu identidad',
+      desc: 'Subí tu DNI: la IA lo valida y tu check verde junto al nombre transmite confianza.',
+      done: user?.verificationStatus === 'verificado', href: '/panel/proveedor/verificacion', cta: 'Verificar ahora',
+    },
+    {
+      id: 'profile', label: 'Completá tu perfil de negocio',
+      desc: 'Presentá tu empresa y zona de despacho: los profesionales te van a encontrar en el directorio.',
+      done: !!profileBio, href: '/panel/proveedor/perfil', cta: 'Completar perfil',
+    },
+    {
+      id: 'stock', label: 'Publicá tu catálogo de stock',
+      desc: 'Cargá materiales con precio y cantidad: aparecés en el comparador de los profesionales.',
+      done: stock.length > 0, href: '/panel/proveedor/stock', cta: 'Cargar stock',
+    },
+    {
+      id: 'links', label: 'Vinculate con profesionales',
+      desc: 'Las cuentas de retiro conectan tu negocio con los profesionales que compran tus materiales.',
+      done: links.length > 0, href: '/panel/proveedor/vinculaciones', cta: 'Ver vinculaciones',
+    },
+  ]
+
   return (
     <div className="homy-page">
       <VerificationPrompt role="proveedor" />
+      <OnboardingCard role="proveedor" tasks={onboardingTasks} />
       {/* Encabezado */}
       <header className="homy-page-head">
         <div className="min-w-0">

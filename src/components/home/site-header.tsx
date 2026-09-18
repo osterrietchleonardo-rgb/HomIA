@@ -23,6 +23,7 @@ const NAV_ITEMS = [
   { label: "Motor IA", href: "#motor-ia" },
   { label: "Beneficios", href: "#beneficios" },
   { label: "Comunidad", href: "#comunidad" },
+  { label: "Ayuda", href: "#/ayuda", route: "/ayuda" },
 ];
 
 // Los items con `route` viven en el router SPA (#/...): next/link hace pushState

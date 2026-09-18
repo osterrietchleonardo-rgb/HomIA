@@ -11,7 +11,7 @@ import { toast } from 'sonner'
 import {
   LayoutDashboard, Briefcase, FolderKanban, FileText, User, Bell, LogOut,
   Search, Boxes, Users, Link2, HardHat, ClipboardList, Home, Sparkles,
-  Compass, MessageCircle, ShieldCheck,
+  Compass, MessageCircle, ShieldCheck, LifeBuoy,
 } from 'lucide-react'
 
 type NavItem = { to: string; label: string; icon: React.ComponentType<{ className?: string }>; m?: boolean }
@@ -27,6 +27,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/panel/cliente/mensajes', label: 'Mensajes', icon: MessageCircle, m: true },
     { to: '/panel/cliente/verificacion', label: 'Verificación', icon: ShieldCheck },
     { to: '/panel/cliente/perfil', label: 'Mi perfil', icon: User },
+    { to: '/ayuda', label: 'Ayuda', icon: LifeBuoy },
   ],
   profesional: [
     { to: '/panel/profesional', label: 'Inicio', icon: LayoutDashboard, m: true },
@@ -41,6 +42,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/panel/profesional/mensajes', label: 'Mensajes', icon: MessageCircle, m: true },
     { to: '/panel/profesional/verificacion', label: 'Verificación', icon: ShieldCheck },
     { to: '/panel/profesional/perfil', label: 'Mi perfil', icon: User },
+    { to: '/ayuda', label: 'Ayuda', icon: LifeBuoy },
   ],
   proveedor: [
     { to: '/panel/proveedor', label: 'Inicio', icon: LayoutDashboard, m: true },
@@ -51,6 +53,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/panel/proveedor/mensajes', label: 'Mensajes', icon: MessageCircle, m: true },
     { to: '/panel/proveedor/verificacion', label: 'Verificación', icon: ShieldCheck },
     { to: '/panel/proveedor/perfil', label: 'Mi perfil', icon: User },
+    { to: '/ayuda', label: 'Ayuda', icon: LifeBuoy },
   ],
 }
 

@@ -1,0 +1,11 @@
+import { PrismaClient } from '@prisma/client'
+const db = new PrismaClient()
+const users = await db.user.findMany({ where: { email: { contains: 'homia.test' } }, select: { id: true, displayName: true, email: true, verificationStatus: true } })
+console.log('USERS:', users.map(u => `${u.displayName}(${u.email.split('@')[0]}) ${u.verificationStatus}`).join(' | '))
+const projects = await db.project.findMany({ select: { id: true, title: true, stage: true, clientId: true, professionalId: true }, take: 8 })
+for (const p of projects) console.log('PROJECT:', JSON.stringify(p))
+const reviews = await db.review.findMany({ select: { id: true, authorId: true, targetUserId: true, projectId: true, rating: true, context: true } })
+for (const r of reviews) console.log('REVIEW:', JSON.stringify(r))
+const mats = await db.material.findMany({ where: { providerId: { not: null } }, select: { projectId: true, providerId: true, name: true }, take: 10 })
+for (const m of mats) console.log('MAT:', JSON.stringify(m))
+await db.$disconnect()

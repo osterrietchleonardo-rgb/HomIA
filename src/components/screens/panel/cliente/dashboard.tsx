@@ -6,14 +6,19 @@ import { StatusBadge, UrgencyBadge, Loading } from '@/components/app/ui-bits'
 import { formatARS } from '@/lib/format'
 import { Plus, ArrowRight, Wrench, Megaphone, FileText, FolderKanban, CircleCheck } from 'lucide-react'
 import { VerificationPrompt } from '../verificacion'
+import OnboardingCard, { type OnboardingTask } from '../onboarding-card'
+import { useSession } from '@/lib/store'
 
 type Project = { id: string; title: string; stage: string; status: string; laborCost: number; materialsCost: number; materialsPending: number; updatedAt: string }
 type Job = { id: string; title: string; status: string; urgency: string; bids: { id: string; amount: number; professional: { user: { displayName: string } } }[]; createdAt: string }
 
 export default function ClientDashboard() {
+  const { user } = useSession()
   const [projects, setProjects] = useState<Project[]>([])
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
+  const [myReviews, setMyReviews] = useState<{ projectId: string | null }[]>([])
+  const [convCount, setConvCount] = useState(0)
 
   useEffect(() => {
     (async () => {
@@ -21,6 +26,11 @@ export default function ClientDashboard() {
         const [resP, resJ] = await Promise.all([fetch('/api/projects?role=cliente'), fetch('/api/jobs?mine=1')])
         if (resP.ok) setProjects((await resP.json()).asClient || [])
         if (resJ.ok) setJobs((await resJ.json()).jobs || [])
+        // guía: reseñas escritas por mí y chats iniciados (para el checklist)
+        const resRev = await fetch('/api/reviews?mine=1')
+        if (resRev.ok) setMyReviews((await resRev.json()).reviews || [])
+        const resConv = await fetch('/api/messages/conversations')
+        if (resConv.ok) setConvCount(((await resConv.json()).conversations || []).length)
       } finally { setLoading(false) }
     })()
   }, [])
@@ -31,9 +41,42 @@ export default function ClientDashboard() {
   const bidsToReview = openJobs.reduce((a, j) => a + j.bids.length, 0)
   const doneProjects = projects.filter((p) => p.status === 'finalizado').length
 
+  // checklist guiado con estado real del sistema
+  const firstDone = projects.find((p) => p.stage === 'finalizado')
+  const reviewPending = firstDone && !myReviews.some((r) => r.projectId === firstDone.id)
+  const onboardingTasks: OnboardingTask[] = [
+    {
+      id: 'verify', label: 'Verificá tu identidad',
+      desc: 'Subí tu DNI: la IA lo valida y tu nombre muestra el check verde que genera confianza.',
+      done: user?.verificationStatus === 'verificado', href: '/panel/cliente/verificacion', cta: 'Verificar ahora',
+    },
+    {
+      id: 'publish', label: 'Publicá tu primer trabajo',
+      desc: 'Contá qué necesitás: los profesionales de tu zona te mandan presupuestos sin cargo.',
+      done: jobs.length > 0, href: '/panel/cliente/publicar', cta: 'Publicar trabajo',
+    },
+    {
+      id: 'chat', label: 'Escribí por chat a un profesional',
+      desc: 'En HomIA los clientes inician la conversación: elegí un perfil del directorio y preguntá lo que quieras.',
+      done: convCount > 0, href: '/panel/cliente/directorio', cta: 'Explorar directorio',
+    },
+    firstDone
+      ? {
+          id: 'review', label: 'Dejá tu reseña de la obra',
+          desc: `Tu proyecto "${firstDone.title}" terminó: calificá al profesional y al proveedor con fotos.`,
+          done: !reviewPending, href: `/panel/cliente/proyectos/${firstDone.id}`, cta: 'Dejar reseña',
+        }
+      : {
+          id: 'review', label: 'Dejá tu reseña cuando termine la obra',
+          desc: 'Al finalizar un proyecto vas a calificar al profesional y al proveedor desde el detalle del proyecto.',
+          done: false, blocked: true, cta: 'Se habilita cuando un proyecto finalice',
+        },
+  ]
+
   return (
     <div className="homy-page">
       <VerificationPrompt role="cliente" />
+      <OnboardingCard role="cliente" tasks={onboardingTasks} />
       <header className="homy-page-head">
         <div className="min-w-0">
           <span className="homy-eyebrow">Panel del cliente</span>

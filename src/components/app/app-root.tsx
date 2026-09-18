@@ -23,6 +23,7 @@ const ProviderProfileScreen = dynamic(() => import('@/components/screens/provide
 const NotificationsScreen = dynamic(() => import('@/components/screens/notifications'), { ssr: false, loading: () => <Loading /> })
 const DirectoryScreen = dynamic(() => import('@/components/screens/directory-screen'), { ssr: false, loading: () => <Loading /> })
 const MessagesScreen = dynamic(() => import('@/components/screens/messages-screen'), { ssr: false, loading: () => <Loading /> })
+const HelpScreen = dynamic(() => import('@/components/screens/help-screen'), { ssr: false, loading: () => <Loading /> })
 
 // Panel cliente
 const ClientDashboard = dynamic(() => import('@/components/screens/panel/cliente/dashboard'), { ssr: false, loading: () => <Loading /> })
@@ -115,6 +116,7 @@ export default function AppRoot() {
   else if (s[0] === 'notificaciones') screen = publicOrPanel(<NotificationsScreen />, <NotificationsScreen />)
   else if (s[0] === 'directorio') screen = publicOrPanel(<DirectoryScreen />, <DirectoryScreen embedded />)
   else if (s[0] === 'mensajes') screen = publicOrPanel(<AuthGate path="/mensajes" />, <MessagesScreen embedded />)
+  else if (s[0] === 'ayuda') screen = publicOrPanel(<HelpScreen />, <HelpScreen embedded />)
   else if (s[0] === 'panel') {
     if (loading) screen = <Loading text="Verificando tu sesión…" />
     else if (!user) {
@@ -146,6 +148,7 @@ function panelScreen(route: ReturnType<typeof useRoute>) {
   if (page === 'directorio') return <DirectoryScreen embedded />
   if (page === 'mensajes') return <MessagesScreen embedded />
   if (page === 'verificacion') return <VerificationScreen />
+  if (page === 'ayuda') return <HelpScreen embedded />
 
   if (role === 'cliente') {
     if (page === '' ) return <ClientDashboard />

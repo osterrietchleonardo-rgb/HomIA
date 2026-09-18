@@ -115,7 +115,7 @@ export default function DirectoryScreen({ embedded = false }: { embedded?: boole
     } finally { setLoading(false) }
   }
 
-  useEffect(() => { load() /* inicial */ /* eslint-disable-line react-hooks/exhaustive-deps */ }, [])
+  useEffect(() => { load() /* inicial */   }, [])
 
   function onFilter(next: Partial<{ k: typeof kind; c: string; s: string; mr: string; b: string }>) {
     const nk = next.k ?? kind

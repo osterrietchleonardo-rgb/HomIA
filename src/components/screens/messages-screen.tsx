@@ -81,7 +81,7 @@ export default function MessagesScreen({ embedded = false }: { embedded?: boolea
     loadConvs()
     const c = route.query.c
     if (c) openConv(c)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [route.query.c])
 
   // polling: bandeja 6s, hilo abierto 3s

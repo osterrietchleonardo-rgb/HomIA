@@ -9,6 +9,8 @@ import {
   FolderKanban, Star, Package, HardHat, Zap, LayoutGrid, MapPin,
 } from 'lucide-react'
 import { VerificationPrompt } from '../verificacion'
+import OnboardingCard, { type OnboardingTask } from '../onboarding-card'
+import { useSession } from '@/lib/store'
 
 type Project = {
   id: string; title: string; status: string; stage: string
@@ -17,10 +19,13 @@ type Project = {
 type SearchJob = { id: string; title: string; categorySlug: string; urgency: string; budgetMin: number | null; budgetMax: number | null; bidsCount: number; city: string | null; clientName: string }
 
 export default function ProDashboard() {
+  const { user } = useSession()
   const [projects, setProjects] = useState<Project[]>([])
   const [jobs, setJobs] = useState<SearchJob[]>([])
   const [myProfessions, setMyProfessions] = useState<string[]>([])
   const [rating, setRating] = useState(0)
+  const [profileBio, setProfileBio] = useState<string | null>(null)
+  const [worksCount, setWorksCount] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -39,8 +44,12 @@ export default function ProDashboard() {
           if (pro) {
             try { setMyProfessions(JSON.parse(pro.professions || '[]')) } catch { /* professions vacío */ }
             setRating(pro.rating || 0)
+            setProfileBio(pro.bio || null)
           }
         }
+        // guía: obras cargadas (para el checklist)
+        const resW = await fetch('/api/works')
+        if (resW.ok) setWorksCount(((await resW.json()).works || []).length)
       } finally { setLoading(false) }
     })()
   }, [])
@@ -60,9 +69,34 @@ export default function ProDashboard() {
     ...active.filter((p) => p.stage === 'ejecucion' && p.materialsPending === 0).map((p) => ({ key: `e-${p.id}`, project: p, kind: 'work' as const })),
   ].slice(0, 6)
 
+  // checklist guiado con estado real del sistema
+  const onboardingTasks: OnboardingTask[] = [
+    {
+      id: 'verify', label: 'Verificá tu identidad',
+      desc: 'Subí tu DNI: la IA lo valida y los clientes ven tu check verde antes de contratarte.',
+      done: user?.verificationStatus === 'verificado', href: '/panel/profesional/verificacion', cta: 'Verificar ahora',
+    },
+    {
+      id: 'profile', label: 'Completá tu perfil profesional',
+      desc: 'Presentación, experiencia y rubros: los perfiles completos reciben hasta 3× más contactos.',
+      done: !!profileBio, href: '/panel/profesional/perfil', cta: 'Completar perfil',
+    },
+    {
+      id: 'works', label: 'Mostrá tus obras',
+      desc: 'Subí fotos de trabajos terminados: son tu vitrina en el directorio y generan confianza.',
+      done: (worksCount ?? 0) > 0, href: '/panel/profesional/obras', cta: 'Cargar obras',
+    },
+    {
+      id: 'bids', label: 'Enviá tu primer presupuesto',
+      desc: 'Mirá la bolsa de trabajos y respondé a un cliente: los clientes escriben primero, vos respondés con tu precio.',
+      done: quotesSent.length > 0 || projects.length > 0, href: '/panel/profesional/bolsa', cta: 'Ver bolsa de trabajos',
+    },
+  ]
+
   return (
     <div className="homy-page">
       <VerificationPrompt role="profesional" />
+      <OnboardingCard role="profesional" tasks={onboardingTasks} />
       {/* Encabezado */}
       <header className="homy-page-head">
         <div className="min-w-0">
