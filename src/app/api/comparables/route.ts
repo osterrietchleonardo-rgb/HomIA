@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { ok } from '@/lib/api'
 import { db } from '@/lib/db'
 import { parseJson } from '@/lib/api'
-import { withinRadius, type WithGeo } from '@/lib/geo'
+import { withinRadius } from '@/lib/geo'
 
 // Comparables de materiales: mismo elemento entre todos los proveedores, ordenado por precio
 export async function GET(req: NextRequest) {
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
       providerVerified: s.provider.verified,
       lat: s.provider.lat,
       lng: s.provider.lng,
-    })) as (typeof matched[number] & WithGeo)[],
+    })),
     lat, lng, radius
   )
 

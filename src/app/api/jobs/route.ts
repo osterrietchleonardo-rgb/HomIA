@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { ok, requireAuth, body, fail } from '@/lib/api'
 import { db } from '@/lib/db'
-import { withinRadius, type WithGeo } from '@/lib/geo'
+import { withinRadius } from '@/lib/geo'
 import { parseJson } from '@/lib/api'
 
 // GET: bolsa de trabajos (abiertos) con filtros + los míos si mine=1
@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
         createdAt: j.createdAt,
         lat: j.lat,
         lng: j.lng,
-      })) as (typeof jobs[number] & WithGeo)[],
+      })),
     lat, lng, radius
   )
 

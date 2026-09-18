@@ -21,7 +21,8 @@ export async function POST(req: NextRequest) {
   const url = new URL(req.url)
   const baseUrl = `${url.protocol}//${url.host}`
   const pre = await createProPreapproval({
-    professionalId: pro.id,
+    kind: 'professional',
+    profileId: pro.id,
     payerEmail: user.email,
     baseUrl,
   })

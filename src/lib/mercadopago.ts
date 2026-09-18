@@ -113,9 +113,13 @@ export async function createEscrowPreference(input: {
   }
 }
 
-// ── SUSCRIPCIÓN PRO (proveedores, en primera instancia) ──
+// ── SUSCRIPCIÓN PRO (profesionales y proveedores) ──
+// external_reference = "pro:<kind>:<profileId>" — el webhook la usa para
+// activar/desactivar el plan en el perfil correcto.
+// (Legado: "provider_pro:<id>" sigue siendo aceptado por el webhook.)
 export async function createProPreapproval(input: {
-  providerId: string
+  kind: 'provider' | 'professional'
+  profileId: string
   payerEmail: string
   baseUrl: string
 }): Promise<{ id: string; initPoint: string }> {
@@ -130,8 +134,8 @@ export async function createProPreapproval(input: {
         currency_id: 'ARS',
       },
       payer_email: input.payerEmail,
-      external_reference: `provider_pro:${input.providerId}`,
-      back_url: `${input.baseUrl}/#/panel/proveedor/perfil`,
+      external_reference: `pro:${input.kind}:${input.profileId}`,
+      back_url: `${input.baseUrl}/#/panel/${input.kind === 'provider' ? 'proveedor' : 'profesional'}/perfil`,
     },
   })
   return {

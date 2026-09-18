@@ -6,7 +6,7 @@ import { createProPreapproval, mpConfigured, MP_PRO_PRICE_ARS } from '@/lib/merc
 
 // POST: el proveedor inicia la suscripción al plan PRO → preapproval de Mercado Pago.
 // El plan se activa cuando el webhook recibe el preapproval autorizado
-// (external_reference = provider_pro:<providerProfileId>).
+// (external_reference = pro:provider:<providerProfileId>).
 export async function POST(req: NextRequest) {
   const user = await getSessionUser()
   if (!user) return fail('Necesitás iniciar sesión', 401)
@@ -22,7 +22,8 @@ export async function POST(req: NextRequest) {
   const url = new URL(req.url)
   const baseUrl = `${url.protocol}//${url.host}`
   const pre = await createProPreapproval({
-    providerId: prov.id,
+    kind: 'provider',
+    profileId: prov.id,
     payerEmail: user.email,
     baseUrl,
   })

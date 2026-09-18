@@ -9,7 +9,14 @@ import { SiteFooter } from "@/components/home/site-footer";
 import { HomyWidget } from "@/components/home/homy-widget";
 import { SpaRedirect } from "@/components/home/spa-redirect";
 
-export default function Home() {
+/**
+ * Landing pública de HomIA.
+ * Vive como caso "sin slug" del catch-all [[...slug]]: Next.js no permite
+ * una ruta estática "/" junto a un optional catch-all en build de producción,
+ * así que "/" y "/cualquier-ruta" entran por la misma route handler y acá
+ * decidimos qué renderizar (landing vs SPA).
+ */
+export function Landing() {
   return (
     <div className="flex min-h-screen flex-col bg-chalk">
       <SpaRedirect />

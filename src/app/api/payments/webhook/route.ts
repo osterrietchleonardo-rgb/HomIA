@@ -129,33 +129,76 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// external_reference de suscripción PRO: "pro:provider:<id>" | "pro:professional:<id>"
+// (legado pre-producción: "provider_pro:<id>")
+function parseProReference(ref: string): { kind: 'provider' | 'professional'; profileId: string } | null {
+  if (ref.startsWith('provider_pro:')) {
+    return { kind: 'provider', profileId: ref.slice('provider_pro:'.length) }
+  }
+  const m = /^pro:(provider|professional):(.+)$/.exec(ref)
+  if (m) return { kind: m[1] as 'provider' | 'professional', profileId: m[2] }
+  return null
+}
+
 async function handlePreapproval(preapprovalId: string) {
   const pre = await getPreapproval(preapprovalId)
-  if (!pre.externalReference?.startsWith('provider_pro:')) return
-  const providerId = pre.externalReference.slice('provider_pro:'.length)
-  const prov = await db.providerProfile.findUnique({
-    where: { id: providerId },
+  const parsed = parseProReference(pre.externalReference || '')
+  if (!parsed) return
+
+  if (parsed.kind === 'provider') {
+    const prov = await db.providerProfile.findUnique({
+      where: { id: parsed.profileId },
+      select: { id: true, userId: true },
+    })
+    if (!prov) return
+
+    if (pre.status === 'authorized') {
+      await db.providerProfile.update({
+        where: { id: prov.id },
+        data: { subscription: 'pro', proSince: new Date(), mpPreapprovalId: pre.id },
+      })
+      await db.notification.create({
+        data: {
+          userId: prov.userId,
+          type: 'pro_activa',
+          title: 'Plan PRO activo',
+          body: 'Tu suscripción PRO está activa: tu negocio ya muestra el badge PRO.',
+          link: '#/panel/proveedor/perfil',
+        },
+      })
+    } else if (pre.status === 'cancelled' || pre.status === 'paused') {
+      await db.providerProfile.update({
+        where: { id: prov.id },
+        data: { subscription: 'free' },
+      })
+    }
+    return
+  }
+
+  // Suscripción PRO de profesional
+  const pro = await db.professionalProfile.findUnique({
+    where: { id: parsed.profileId },
     select: { id: true, userId: true },
   })
-  if (!prov) return
+  if (!pro) return
 
   if (pre.status === 'authorized') {
-    await db.providerProfile.update({
-      where: { id: prov.id },
+    await db.professionalProfile.update({
+      where: { id: pro.id },
       data: { subscription: 'pro', proSince: new Date(), mpPreapprovalId: pre.id },
     })
     await db.notification.create({
       data: {
-        userId: prov.userId,
+        userId: pro.userId,
         type: 'pro_activa',
         title: 'Plan PRO activo',
-        body: 'Tu suscripción PRO está activa: tu negocio ya muestra el badge PRO.',
-        link: '#/panel/proveedor/perfil',
+        body: 'Tu suscripción PRO está activa: tu perfil ya muestra el badge PRO.',
+        link: '#/panel/profesional/perfil',
       },
     })
   } else if (pre.status === 'cancelled' || pre.status === 'paused') {
-    await db.providerProfile.update({
-      where: { id: prov.id },
+    await db.professionalProfile.update({
+      where: { id: pro.id },
       data: { subscription: 'free' },
     })
   }

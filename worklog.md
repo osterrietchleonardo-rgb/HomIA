@@ -700,3 +700,25 @@ Work Log:
 
 Stage Summary:
 - HomIA queda producción-ready en claridad y confianza: cada rol sabe a simple vista dónde hacer cada cosa (checklist de primeros pasos con estado real en los 3 dashboards + centro de ayuda /ayuda con mapa de acciones por rol + chips y CTAs contextuales), las reseñas son 360° y guiadas (cliente→pro, cliente→proveedor, pro→cliente) con evidencia fotográfica, y se resolvió el bug crítico que bloqueaba TODA la navegación desde la home pública. E2E 0 fails, lint limpio, demo sin residuos.
+
+---
+Task ID: 28
+Agent: Super Z (main)
+Task: "hace lo que vos consideres que falta para ponerlo en producción" — matar el build error de pdf-lib y preparación integral de producción (deadline 2 días).
+
+Work Log:
+- BUILD ERROR (reportado por el usuario): `Module not found: Can't resolve 'pdf-lib'` — la ruta /api/invoices/[id]/pdf (Task 26) importaba pdf-lib pero nunca se instaló. Fix: `bun add pdf-lib` (v1.17.1).
+- BLOQUEANTE DE BUILD DE PRODUCCIÓN: `next build` rechaza la ruta estática "/" (page.tsx) junto al optional catch-all [[...slug]] ("same specificity"). En dev estaba tolerado, en producción no compila. FIX: landing movida a src/components/home/landing.tsx y page.tsx ELIMINADO — el catch-all renderiza <Landing /> si no hay slug y <AppRoot /> si lo hay. Preservado todo el flujo: SpaRedirect (#/ → /ruta), pathname→hash de AppRoot, navigate() full-load desde '/'.
+- BUG REAL #1 (pagos): POST /api/pro/subscription pasaba professionalId a createProPreapproval que esperaba providerId → external_reference 'provider_pro:undefined' → el webhook NUNCA hubiera activado el plan PRO de un profesional (pago cobrado, plan no activado). FIX: createProPreapproval generalizada ({kind: 'provider'|'professional', profileId}) con reference `pro:<kind>:<id>`; webhook parsea formatos nuevos + legado provider_pro: y activa/desactiva en el perfil correcto con notificación por rol. back_url por rol.
+- BUG REAL #2 (geolocalización): pines de materiales en /api/search/pins pasaban stock con lat/lng anidadas en provider a withinRadius (que filtra por lat/lng raíz) → el radio NO filtraba nada para materiales (bug silencioso runtime). FIX: map elevando provider.lat/lng a raíz antes del filtro.
+- TS: 13 errores de src/ → 0 (casts inválidos con shape equivocado eliminados en jobs/comparables — los objetos mapeados ya tienen lat/lng raíz; inferencia genérica correcta). tsconfig excluye examples/, skills/, supabase/ (scaffolding del sandbox). `tsc --noEmit`: 0 errores en todo el repo.
+- SEGURIDAD: AUTH_SECRET con fallback hardcodeado → fail-fast en producción si no está definida (error claro); generada e instalada AUTH_SECRET real en .env. Cookie de sesión ahora Secure AUTOMÁTICA vía x-forwarded-proto (https→secure, http local→funciona).
+- UI PRO COMPLETA: perfil profesional NO tenía upsell PRO (el endpoint existía huérfano). Agregada tarjeta Plan PRO (glass-dark, Crown, estado activo con proSince, botón suscribirse → /api/pro/subscription → initPoint de MP) espejando la del proveedor.
+- E2E API (scripts/prod-smoke.sh, 18 checks contra servidor standalone puerto 3100): landing/SPA 200, directorio público, login real 3 roles + 401 password mala, PDF factura (%PDF 3341 bytes, 401 sin sesión, 403 tercero), bandeja, badge unread, regla cliente-inicia (pro→cliente nuevo 403 clientesFirst; cliente→pro 200), gates perfiles 401/200, limpieza usuario de prueba. 18/18 PASS.
+- E2E VISUAL (scripts/prod-e2e.sh, 14 checks con agent-browser sobre el build de producción): landing con marca, login por UI completo, panel cliente, directorio con tarjetas, abrir tarjeta por aria-label, perfil con CTAs, mensajería, botón PDF + fetch %PDF dentro del browser, 0 errores de consola, móvil 390 sin overflow. 14/14 PASS. Capturas: shots/prod/01-07 (incluida facturas con botones PDF y PDF renderizado verificado con pdftoppm).
+- NOTAS DE DEBUG: agent-browser `set viewport` toma args SEPARADOS por espacio (1280 800, no 1280x800 — el formato x los tragaba como hostname); `open` tras `close` es cold-start (usar polling, no sleep fijo); goto de '/' a '/#/ruta' NO recarga (misma URL+hash) → para tests entrar por pathname (/ingresar) que el catch-all redirige; /api/projects responde {asClient, asPro} (no {projects}).
+- PRODUCCION.md: guía de despliegue (env vars con AUTH_SECRET obligatoria y DATABASE_URL absoluta, build/standalone, persistencia de db/custom.db y public/uploads/, webhook MP, checklist pre-lanzamiento, cuentas demo a eliminar).
+- SERVIDORES: dev :3000 re-levantado y verificado 200 (200 en /directorio) con pdf-lib instalado; standalone de producción en :3100 18/18 + 14/14.
+
+Stage Summary:
+- HomIA compila y funciona en build de producción real: el error de pdf-lib resuelto, el bloqueante de rutas "/"/catch-all eliminado, 2 bugs reales de pago y geolocalización corregidos, 0 errores TS, secreto de sesión con fail-fast, PRO upsell completo para profesionales. 32 checks E2E verdes (18 API + 14 visual) sobre el servidor standalone con capturas. Guía de producción documentada en PRODUCCION.md. Listo para deploy: instalar, configurar .env, build, arrancar.

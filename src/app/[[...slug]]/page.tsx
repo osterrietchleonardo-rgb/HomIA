@@ -1,6 +1,22 @@
 import AppRoot from '@/components/app/app-root'
+import { Landing } from '@/components/home/landing'
 
-// Catch-all: toda la app navega por hash (#/ruta) desde esta única entrada
-export default function CatchAll() {
+/**
+ * Entrada única de HomIA (build de producción exige UNA ruta que matchee "/").
+ *
+ * - "/"            → landing pública (con SpaRedirect para deep-links #/...)
+ * - "/cualquiera"  → SPA (AppRoot hace el redirect pathname → hash)
+ *
+ * La SPA navega por hash: #/panel/profesional, #/directorio, etc.
+ */
+export default async function CatchAll({
+  params,
+}: {
+  params: Promise<{ slug?: string[] }>
+}) {
+  const { slug } = await params
+  if (!slug || slug.length === 0) {
+    return <Landing />
+  }
   return <AppRoot />
 }

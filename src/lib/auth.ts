@@ -2,11 +2,21 @@
 import 'server-only'
 import bcrypt from 'bcryptjs'
 import { SignJWT, jwtVerify } from 'jose'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { db } from '@/lib/db'
 
+const RAW_SECRET = process.env.AUTH_SECRET
+
+// Fail-fast: en producción NO se arranca con un secreto conocido/publicado
+// (cualquiera podría falsificar cookies de sesión).
+if (!RAW_SECRET && process.env.NODE_ENV === 'production') {
+  throw new Error(
+    'AUTH_SECRET no está definida. Generá una clave aleatoria (openssl rand -base64 48) ' +
+    'y agregala al archivo .env del servidor antes de arrancar en producción.'
+  )
+}
 const SECRET = new TextEncoder().encode(
-  process.env.AUTH_SECRET || 'homy-dev-secret-cambiar-en-produccion-9f2a'
+  RAW_SECRET || 'homy-dev-secret-cambiar-en-produccion-9f2a'
 )
 const COOKIE = 'homy_session'
 const MAX_AGE = 60 * 60 * 24 * 30 // 30 días
@@ -41,10 +51,14 @@ export async function createSession(userId: string) {
     .setExpirationTime(`${MAX_AGE}s`)
     .sign(SECRET)
   const store = await cookies()
+  // Cookie Secure automática: si el request llega por https (proxy con
+  // x-forwarded-proto), la cookie viaja solo por https. En http local sigue OK.
+  const h = await headers()
+  const proto = (h.get('x-forwarded-proto') || '').split(',')[0].trim()
   store.set(COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: false, // el preview usa http; en producción con https poner true
+    secure: proto === 'https',
     maxAge: MAX_AGE,
     path: '/',
   })

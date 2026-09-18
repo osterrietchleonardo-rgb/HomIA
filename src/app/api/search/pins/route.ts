@@ -60,13 +60,17 @@ export async function GET(req: NextRequest) {
       })
     }
     if (cat) matched = matched.filter((s) => s.element.category.slug === cat)
+    // withinRadius filtra por lat/lng a NIVEL RAÍZ: las coords del stock viven
+    // en s.provider — las subimos antes de filtrar (si no, el radio no filtra nada).
     const geo = withinRadius(
-      matched.filter((s) => s.provider.lat && s.provider.lng),
+      matched
+        .filter((s) => s.provider.lat != null && s.provider.lng != null)
+        .map((s) => ({ ...s, lat: s.provider.lat as number, lng: s.provider.lng as number })),
       lat, lng, radius
     )
     for (const s of geo.slice(0, 40)) {
       pins.push({
-        id: s.id, lat: s.provider.lat!, lng: s.provider.lng!,
+        id: s.id, lat: s.lat, lng: s.lng,
         label: s.element.name,
         sub: s.provider.businessName,
         kind: 'material',
