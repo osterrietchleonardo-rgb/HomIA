@@ -3,10 +3,11 @@
 """
 Generador de videitos explicativos HomIA (T31)
 - Slides de marca renderizados con PIL (1280x720, glass navy + acentos)
-- Locución en español (rioplatense) con z-ai TTS (una wav por slide)
+- Locución en ESPAÑOL RIPLATENSE con edge-tts (voces Microsoft es-AR/Elena y
+  es-AR/Tomás — el z-ai TTS interno lee el español con acento inglés: descartado)
 - Ensamblado con ffmpeg: segmentos con fade + concat + faststart
 Salida: public/videos/<id>.mp4 + <id>.jpg (poster)
-Reanudable: si el png/wav/segmento ya existe, se reutiliza.
+Reanudable: si el png/mp3/segmento ya existe, se reutiliza.
 """
 import json
 import math
@@ -38,6 +39,14 @@ SOFT = (214, 231, 246)
 
 ROLE_ACCENT = {'cliente': CYAN, 'profesional': ORANGE, 'proveedor': GOLD}
 ROLE_LABEL = {'cliente': 'CLIENTE', 'profesional': 'PROFESIONAL', 'proveedor': 'PROVEEDOR'}
+
+# Voces nativas es-AR (rioplatense) — Elena para cliente, Tomás para pro/prov
+VOICE_FOR_ROLE = {
+    'cliente': 'es-AR-ElenaNeural',
+    'profesional': 'es-AR-TomasNeural',
+    'proveedor': 'es-AR-TomasNeural',
+}
+TTS_RATE = '-4%'  # levemente más pausado para tutorial
 
 # ---------------------------------------------------------------- VIDEOS ----
 V = []
@@ -314,21 +323,24 @@ def render_slide(video, si, slide, total_slides):
     return png
 
 
-def tts(text, wav: Path):
-    if wav.exists() and wav.stat().st_size > 4000:
+def tts(text, mp3: Path, voice: str):
+    """Locución en español rioplatense con edge-tts (Microsoft neural es-AR)."""
+    if mp3.exists() and mp3.stat().st_size > 4000:
         return True
     for attempt in range(3):
         try:
-            r = subprocess.run(['z-ai', 'tts', '-i', text, '-o', str(wav), '--format', 'wav'],
-                               capture_output=True, text=True, timeout=180)
-            if r.returncode == 0 and wav.exists() and wav.stat().st_size > 4000:
+            r = subprocess.run(
+                ['python3', '-m', 'edge_tts', '--voice', voice, f'--rate={TTS_RATE}',
+                 '--text', text, '--write-media', str(mp3)],
+                capture_output=True, text=True, timeout=180)
+            if r.returncode == 0 and mp3.exists() and mp3.stat().st_size > 4000:
                 return True
-            print(f'  tts intento {attempt + 1} falló: {r.stdout[-160:]} {r.stderr[-160:]}')
+            print(f'  tts intento {attempt + 1} falló: {r.stderr[-160:]}')
         except Exception as e:
             print(f'  tts excepción: {e}')
     # fallback: silencio 5s (el video sigue siendo útil)
     subprocess.run(['ffmpeg', '-y', '-f', 'lavfi', '-i', 'anullsrc=r=24000:cl=mono',
-                    '-t', '5', str(wav)], capture_output=True)
+                    '-t', '5', str(mp3)], capture_output=True)
     return False
 
 
@@ -357,14 +369,15 @@ def main():
             continue
         print(f"▶ {v['id']} ({v['role']}) — {v['title']}")
         segs = []
+        voice = VOICE_FOR_ROLE[v['role']]
         for si, s in enumerate(v['slides']):
             base = WORK / f"{v['id']}_s{si:02d}"
             png = render_slide(v, si, s, len(v['slides']))
-            wav = base.with_suffix('.wav')
-            ok = tts(s['narr'], wav)
+            aud = base.with_suffix('.mp3')
+            ok = tts(s['narr'], aud, voice)
             if not ok:
                 print(f'  ⚠ audio de reserva (silencio) en slide {si + 1}')
-            adur = probe_dur(wav)
+            adur = probe_dur(aud)
             D = round(0.25 + adur + 0.55, 2)
             seg = base.with_suffix('.mp4')
             if not seg.exists():
@@ -372,7 +385,7 @@ def main():
                       f"fade=t=in:st=0:d=0.35,fade=t=out:st={max(0.1, D - 0.45)}:d=0.4")
                 af = "adelay=250:all=1,apad=pad_dur=0.5,aresample=24000"
                 if not run(['ffmpeg', '-y', '-loop', '1', '-framerate', '24', '-i', str(png),
-                            '-i', str(wav), '-filter_complex',
+                            '-i', str(aud), '-filter_complex',
                             f'[0:v]{vf}[v];[1:a]{af}[a]',
                             '-map', '[v]', '-map', '[a]', '-t', str(D),
                             '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '27',

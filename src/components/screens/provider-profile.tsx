@@ -12,9 +12,19 @@ import { ChevronLeft, MapPin, Lock, Store, Search, Star, Package, Crown, SendHor
 
 type Profile = {
   id: string; userId: string; displayName: string; avatarUrl: string | null
-  businessName: string; cuit: string | null; description: string | null
+  businessName: string; kind?: string; cuit: string | null; description: string | null
   address: string | null; city: string | null; verified: boolean; verificationStatus?: string; rating: number
   reviewsCount: number; memberSince: string; subscription?: string; proSince?: string | null
+}
+
+// Etiqueta legible del rubro del negocio (mismo vocabulario que el editor de perfil)
+const PROVIDER_KIND_LABELS: Record<string, string> = {
+  corralon: 'Corralón', ferreteria: 'Ferretería', electricidad: 'Casa de electricidad',
+  pintura: 'Pinturería', sanitarios: 'Sanitarios', gas: 'Casa de gas',
+  maderera: 'Maderera', carpinteria: 'Carpintería', aberturas: 'Aberturas',
+  techos: 'Techos', jardin: 'Jardinería', limpieza: 'Limpieza',
+  climatizacion: 'Climatización', herramientas: 'Herramientas', muebles: 'Muebles',
+  pisos: 'Pisos', seguridad: 'Seguridad · Industrial', multi: 'Multiproducto',
 }
 type Stock = {
   id: string; name: string; category: string; categorySlug: string; brand: string | null
@@ -129,6 +139,11 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
               <h1 className="min-w-0 break-words text-2xl font-extrabold leading-tight tracking-tight text-white sm:w-auto sm:text-[1.7rem]">{p.businessName}</h1>
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
                 <VerifyBadge status={p.verificationStatus} dark compact={false} />
+                {p.kind && p.kind !== 'multi' && PROVIDER_KIND_LABELS[p.kind] && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-[#66DFFF]/30 bg-[#00C4FF]/12 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-widest text-[#66DFFF]" title="Rubro del negocio">
+                    {PROVIDER_KIND_LABELS[p.kind]}
+                  </span>
+                )}
                 {p.subscription === 'pro' && (
                   <span
                     className="inline-flex items-center gap-1 rounded-full border border-[#FFC700]/40 bg-[#FFC700]/15 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-widest text-[#FFC700]"

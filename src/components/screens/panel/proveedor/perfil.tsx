@@ -14,12 +14,34 @@ type MeUser = {
   displayName: string
   avatarUrl?: string | null
   provider: {
-    businessName: string; cuit: string | null; description: string | null
+    businessName: string; kind?: string; cuit: string | null; description: string | null
     address: string | null; city: string | null; rating: number; reviewsCount: number
     subscription?: string; proSince?: string | null
   } | null
   documents: Doc[]
 }
+
+// Tipos de negocio que puede tener un proveedor (catálogo completo de rubros)
+const PROVIDER_KINDS: { value: string; label: string }[] = [
+  { value: 'corralon', label: 'Corralón de materiales' },
+  { value: 'ferreteria', label: 'Ferretería' },
+  { value: 'electricidad', label: 'Casa de electricidad' },
+  { value: 'pintura', label: 'Pinturería' },
+  { value: 'sanitarios', label: 'Sanitarios · Plomería' },
+  { value: 'gas', label: 'Casa de gas' },
+  { value: 'maderera', label: 'Maderera' },
+  { value: 'carpinteria', label: 'Carpintería · Herrajes' },
+  { value: 'aberturas', label: 'Aberturas · Vidrios' },
+  { value: 'techos', label: 'Techos · Impermeabilización' },
+  { value: 'jardin', label: 'Jardinería · Exterior' },
+  { value: 'limpieza', label: 'Artículos de limpieza' },
+  { value: 'climatizacion', label: 'Climatización' },
+  { value: 'herramientas', label: 'Herramientas' },
+  { value: 'muebles', label: 'Muebles · Equipamiento' },
+  { value: 'pisos', label: 'Pisos · Revestimientos' },
+  { value: 'seguridad', label: 'Seguridad · Industrial' },
+  { value: 'multi', label: 'Multiproducto (de todo un poco)' },
+]
 
 export default function ProviderProfile() {
   const { refresh } = useSession()
@@ -28,6 +50,7 @@ export default function ProviderProfile() {
 
   // formulario del negocio
   const [businessName, setBusinessName] = useState('')
+  const [kind, setKind] = useState('multi')
   const [cuit, setCuit] = useState('')
   const [description, setDescription] = useState('')
   const [address, setAddress] = useState('')
@@ -58,6 +81,7 @@ export default function ProviderProfile() {
       setMe(u)
       if (u) {
         setBusinessName(u.provider?.businessName || '')
+        setKind(u.provider?.kind || 'multi')
         setCuit(u.provider?.cuit || '')
         setDescription(u.provider?.description || '')
         setAddress(u.provider?.address || '')
@@ -80,7 +104,7 @@ export default function ProviderProfile() {
     try {
       const res = await fetch('/api/profiles/me', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ businessName: businessName.trim(), cuit: cuit.trim(), description: description.trim(), address: address.trim(), city: city.trim() }),
+        body: JSON.stringify({ businessName: businessName.trim(), kind, cuit: cuit.trim(), description: description.trim(), address: address.trim(), city: city.trim() }),
       })
       if (!res.ok) { toast.error((await res.json()).error); return }
       await refresh()
@@ -198,6 +222,12 @@ export default function ProviderProfile() {
             <UAvatar name={me?.displayName || ''} url={me?.avatarUrl} size={64} />
             <div className="min-w-0 flex-1">
               <p className="font-extrabold text-lg text-[#0A2540] truncate">{me?.provider?.businessName || me?.displayName}</p>
+              {me?.provider?.kind && me.provider.kind !== 'multi' && (
+                <span className="homy-pill mt-1.5">
+                  <span className="homy-pill-dot bg-[#00C4FF]" aria-hidden />
+                  {PROVIDER_KINDS.find((k) => k.value === me.provider!.kind)?.label || me.provider.kind}
+                </span>
+              )}
               <p className="text-sm text-slate-500 truncate">{me?.email}</p>
               <div className="flex items-center gap-2.5 mt-2 flex-wrap">
                 <UStars rating={rating} size="text-xs" />
@@ -218,6 +248,14 @@ export default function ProviderProfile() {
             <h2 className="homy-section-title">Datos del negocio</h2>
           </div>
           <Field label="Nombre del negocio" value={businessName} onChange={setBusinessName} placeholder="Ej: Corralón Central" required />
+          <div>
+            <label htmlFor="pf-kind" className="text-[13px] font-bold text-[#0A2540]">Tipo de negocio</label>
+            <select id="pf-kind" value={kind} onChange={(e) => setKind(e.target.value)}
+              className="homy-glass-input mt-1.5 w-full rounded-xl px-4 py-3 min-h-[48px] text-sm font-semibold text-[#0A2540]">
+              {PROVIDER_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+            </select>
+            <p className="text-xs text-slate-400 mt-1.5">Definí tu rubro: así los clientes y profesionales te encuentran cuando buscan lo que vendés.</p>
+          </div>
           <Field label="CUIT" value={cuit} onChange={setCuit} placeholder="30-12345678-9" mono />
           <div>
             <label htmlFor="pf-desc" className="text-[13px] font-bold text-[#0A2540]">Descripción</label>

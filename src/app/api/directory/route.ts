@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { ok, parseJson } from '@/lib/api'
 import { db } from '@/lib/db'
+import { PROVIDER_KINDS } from '@/lib/search-match'
 
 // Directorio HomIA: todos los profesionales y proveedores registrados,
 // ordenables por reseñas/rating/trabajos y filtrables por rubro, rating
@@ -41,6 +42,7 @@ type ProvCard = {
   rating: number
   reviewsCount: number
   businessName: string
+  provKind: string
   description: string | null
   stockCount: number
   avgPrice: number | null
@@ -144,6 +146,7 @@ export async function GET(req: NextRequest) {
         rating: p.user.rating,
         reviewsCount: p.user.reviewsCount,
         businessName: p.businessName,
+        provKind: p.kind,
         description: p.description,
         stockCount: acc.n,
         avgPrice: acc.n ? Math.round(acc.sum / acc.n) : null,
@@ -155,7 +158,7 @@ export async function GET(req: NextRequest) {
     if (priceMin != null) provs = provs.filter((p) => p.avgPrice != null && p.avgPrice >= priceMin)
     if (priceMax != null) provs = provs.filter((p) => p.avgPrice != null && p.avgPrice <= priceMax)
     provs = provs.filter((p) =>
-      !q || `${p.name} ${p.businessName} ${p.description || ''} ${p.city || ''}`.toLowerCase().includes(q)
+      !q || `${p.name} ${p.businessName} ${PROVIDER_KINDS[p.provKind] || ''} ${p.description || ''} ${p.city || ''}`.toLowerCase().includes(q)
     )
   }
 

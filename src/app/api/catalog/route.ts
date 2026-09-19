@@ -2,7 +2,9 @@ import { ok } from '@/lib/api'
 import { db } from '@/lib/db'
 import { parseJson } from '@/lib/api'
 
-// Catálogo estándar de elementos (para formularios, stock y buscador)
+// Catálogo estándar de elementos (para formularios, stock, buscador y agente IA)
+// Devuelve también la descripción natural (qué es, para qué sirve) para que la
+// UI pueda explicar cada elemento y la IA pueda recomendarlo por necesidad.
 export async function GET() {
   const categories = await db.category.findMany({
     orderBy: { sortOrder: 'asc' },
@@ -18,6 +20,7 @@ export async function GET() {
         id: e.id,
         name: e.name,
         aliases: parseJson<string[]>(e.aliases, []),
+        description: e.description,
         unit: e.unit,
       })),
     })),

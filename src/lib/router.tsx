@@ -42,6 +42,18 @@ export function navigate(to: string, opts?: { replace?: boolean }) {
   } else {
     window.location.hash = target
   }
+  // App-shell: el panel scrollea dentro de #homy-app-main, no en la ventana.
+  // Toda navegación arranca desde arriba en ambos contenedores.
+  resetAppScroll()
+}
+
+// App-shell layout: la ventana queda enmarcada (topbar/sidebar/título fijos) y
+// solo el contenido interno scrollea. Al navegar se resetean AMBOS contenedores:
+// la ventana (páginas públicas) y el main del panel (#homy-app-main).
+export function resetAppScroll() {
+  window.scrollTo({ top: 0 })
+  const main = typeof document !== 'undefined' ? document.getElementById('homy-app-main') : null
+  if (main) main.scrollTop = 0
 }
 
 export function useRoute(): RouteState {
@@ -81,7 +93,7 @@ export function Link({
       className={className}
       onClick={(e) => {
         onClick?.()
-        window.scrollTo({ top: 0 })
+        resetAppScroll()
       }}
       {...rest}
     >
@@ -91,5 +103,5 @@ export function Link({
 }
 
 export function scrollTop() {
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+  resetAppScroll()
 }

@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
   let matched = stock
   if (q) {
     matched = stock.filter((s) => {
-      const hay = [s.element.name, ...parseJson<string[]>(s.element.aliases, []), s.brand || '', s.provider.businessName].join(' ').toLowerCase()
+      const hay = [s.element.name, ...parseJson<string[]>(s.element.aliases, []), s.element.description || '', s.brand || '', s.provider.businessName].join(' ').toLowerCase()
       return matchTerms(q, hay)
     })
   }
@@ -118,6 +118,7 @@ export async function GET(req: NextRequest) {
       type: 'material' as const,
       elementId: s.elementId,
       name: s.element.name,
+      description: s.element.description || null,
       category: s.element.category.name,
       categorySlug: s.element.category.slug,
       unit: s.element.unit,

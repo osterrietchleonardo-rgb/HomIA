@@ -23,11 +23,21 @@ type ProCard = {
 type ProvCard = {
   kind: 'proveedor'; id: string; userId: string; href: string; name: string
   avatarUrl: string | null; city: string | null; verified: boolean; verificationStatus: string; isPro: boolean
-  rating: number; reviewsCount: number; businessName: string; description: string | null
+  rating: number; reviewsCount: number; businessName: string; provKind?: string; description: string | null
   stockCount: number; avgPrice: number | null; categories: string[]; memberSince: string
 }
 type Card = ProCard | ProvCard
 type Category = { slug: string; name: string; icon: string }
+
+// Etiquetas legibles del tipo de negocio del proveedor (ProviderProfile.kind)
+const KIND_LABELS: Record<string, string> = {
+  corralon: 'Corralón', ferreteria: 'Ferretería', electricidad: 'Casa de electricidad',
+  pintura: 'Pinturería', sanitarios: 'Sanitarios', gas: 'Casa de gas',
+  maderera: 'Maderera', carpinteria: 'Carpintería', aberturas: 'Aberturas',
+  techos: 'Techos', jardin: 'Jardinería', limpieza: 'Limpieza',
+  climatizacion: 'Climatización', herramientas: 'Herramientas', muebles: 'Muebles',
+  pisos: 'Pisos', seguridad: 'Seguridad · Industrial', multi: 'Multiproducto',
+}
 
 const KINDS = [
   { v: 'all', label: 'Todos', icon: Users },
@@ -386,18 +396,25 @@ export default function DirectoryScreen({ embedded = false }: { embedded?: boole
                       </div>
                     </div>
 
-                    {/* chips de rubros */}
+                    {/* chips de rubros — los proveedores muestran su tipo de negocio primero */}
                     <div className="mt-3.5 flex flex-wrap gap-1.5">
                       {c.kind === 'profesional'
                         ? c.professions.slice(0, 3).map((p) => (
                             <span key={p} className="homy-glass-soft rounded-full px-2.5 py-1 text-[11px] font-bold text-[#1D63B8]">{cap(p)}</span>
                           ))
-                        : c.categories.slice(0, 3).map((p) => (
-                            <span key={p} className="homy-glass-soft rounded-full px-2.5 py-1 text-[11px] font-bold text-[#1D63B8]">{cap(p)}</span>
-                          ))}
-                      {(c.kind === 'profesional' ? c.professions.length : c.categories.length) > 3 && (
+                        : (
+                          <>
+                            {c.provKind && c.provKind !== 'multi' && KIND_LABELS[c.provKind] && (
+                              <span className="rounded-full bg-[#00C4FF]/12 px-2.5 py-1 text-[11px] font-extrabold text-[#0092c4] ring-1 ring-[#00C4FF]/30">{KIND_LABELS[c.provKind]}</span>
+                            )}
+                            {c.categories.slice(0, c.provKind && c.provKind !== 'multi' ? 2 : 3).map((p) => (
+                              <span key={p} className="homy-glass-soft rounded-full px-2.5 py-1 text-[11px] font-bold text-[#1D63B8]">{cap(p)}</span>
+                            ))}
+                          </>
+                        )}
+                      {(c.kind === 'profesional' ? c.professions.length : c.categories.length + (c.provKind && c.provKind !== 'multi' ? 1 : 0)) > 3 && (
                         <span className="homy-glass-soft rounded-full px-2.5 py-1 text-[11px] font-bold text-slate-400">
-                          +{(c.kind === 'profesional' ? c.professions.length : c.categories.length) - 3}
+                          +{(c.kind === 'profesional' ? c.professions.length : c.categories.length + (c.provKind && c.provKind !== 'multi' ? 1 : 0)) - 3}
                         </span>
                       )}
                     </div>

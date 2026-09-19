@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
       category: s.element.category.name,
       categorySlug: s.element.category.slug,
       aliases: parseJson<string[]>(s.element.aliases, []),
+      description: s.element.description || null,
       brand: s.brand,
       price: s.price,
       quantity: s.quantity,

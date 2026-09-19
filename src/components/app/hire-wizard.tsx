@@ -154,8 +154,8 @@ export default function HireWizard({
                 <div className="flex min-w-0 items-center gap-3">
                   <UAvatar name={target.displayName} url={target.avatarUrl} size={42} />
                   <div className="min-w-0">
-                    <p className="flex items-center gap-1.5 truncate text-[15px] font-extrabold text-white">
-                      {proName}
+                    <p className="flex min-w-0 items-center gap-1.5 text-[15px] font-extrabold text-white">
+                      <span className="min-w-0 truncate" title={proName}>{proName}</span>
                       {target.verificationStatus && <VerifyBadge status={target.verificationStatus} dark compact />}
                     </p>
                     <p className="truncate text-xs font-semibold text-[#66DFFF] capitalize">

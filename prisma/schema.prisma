@@ -112,6 +112,7 @@ model ProviderProfile {
   id           String   @id @default(cuid())
   userId       String   @unique
   businessName String
+  kind         String   @default("multi") // corralon|ferreteria|electricidad|pintura|sanitarios|gas|maderera|carpinteria|aberturas|techos|jardineria|limpieza|climatizacion|herramientas|muebles|pisos|seguridad|multi
   cuit         String?
   description  String?
   address      String?
@@ -147,16 +148,17 @@ model Category {
 }
 
 model CatalogElement {
-  id         String  @id @default(cuid())
-  categoryId String
-  name       String // nombre estándar normalizado
-  aliases    String  @default("[]") // JSON: nombres alternativos
-  unit       String  @default("unidad") // unidad|metro|kg|litro|caja|paquete
-  active     Boolean @default(true)
+  id          String  @id @default(cuid())
+  categoryId  String
+  name        String  // nombre estándar normalizado
+  aliases     String  @default("[]") // JSON: nombres alternativos (cómo lo llama la gente)
+  description String  @default("") // explicación natural: qué es, para qué sirve, dónde se usa
+  unit        String  @default("unidad") // unidad|metro|m2|m3|kg|litro|bolsa|paquete|caja|rollo|placa|par|juego|pack|tira|tambor|barra|bobina|millar|lata
+  active      Boolean @default(true)
 
-  category Category        @relation(fields: [categoryId], references: [id])
-  stock    ProviderStock[]
-  materials ProjectMaterial[]
+  category   Category          @relation(fields: [categoryId], references: [id])
+  stock      ProviderStock[]
+  materials  ProjectMaterial[]
 }
 
 model ProviderStock {

@@ -71,7 +71,7 @@ async function main() {
     createdAt: D(200), updatedAt: D(9),
   } })
   const prvP = await db.providerProfile.create({ data: {
-    userId: prv.id, businessName: 'Ferretería Ferrer Hnos.',
+    userId: prv.id, businessName: 'Ferretería Ferrer Hnos.', kind: 'ferreteria',
     cuit: '30-71234567-8',
     description: 'Corralón y ferretería con 25 años en San Cristóbal. Stock permanente de plomería, electricidad, albañilería y pintura. Precios de mayorista para profesionales vinculados, entrega en obra dentro de CABA y cuentas corrientes para clientes recurrentes.',
     address: 'Av. San Juan 2847', city: 'Buenos Aires',
@@ -363,6 +363,16 @@ async function part2({ cli, pro, prv, caro, jul, proP, prvP, projA, projB, mA1, 
     ['Cinta teflón para gas', 480, 70, 15, 'Dexel'],
     // limpieza
     ['Lavandina 5L', 1450, 44, 12, 'Química Andina'], ['Detergente 5L', 2400, 9, 10, 'Dolphin'],
+    // rubros nuevos del catálogo maestro (herramientas, techos, maderera, pisos, jardín, seguridad)
+    ['Taladro percutor 650W', 58900, 14, 4, 'Bosch'], ['Amoladora angular 4.5"', 42900, 9, 3, 'DeWalt'],
+    ['Nivel de aluminio 60cm', 7800, 22, 6, 'Akari'], ['Cinta métrica 5m', 3200, 35, 10, 'Stanley'],
+    ['Chapa sinusoidal 1.10x4m', 18900, 85, 20, 'Tecno'], ['Membrana líquida 20kg', 34500, 12, 4, 'Alba'],
+    ['Canaleta galvanizada 2m', 5400, 30, 8, 'Tecno'], ['Tornillo autoperforante techo', 890, 400, 80, 'Dexel'],
+    ['MDF 18mm 1.83x2.44', 38900, 18, 5, 'KelForm'], ['Pino cepillado 2x4 x3m', 7400, 60, 15, 'Pino Argentino'],
+    ['Deck madera 2.5x14', 9800, 120, 30, 'Incorsa'], ['Porcelanato m²', 15900, 240, 50, 'Ilva'],
+    ['Adhesivo cerámico 30kg', 8900, 45, 12, 'Falso Uno'], ['Tierra fértil 40kg', 2200, 90, 20, 'Naturverde'],
+    ['Manguera 15m', 8900, 25, 6, 'Bahía'], ['Guantes nylon con nitrilo', 1450, 60, 15, '3M'],
+    ['Extintor ABC 2.5kg', 32000, 8, 3, 'Fextex'], ['Casco de obra', 5600, 20, 6, 'Alba'],
   ]
   const stock = {}
   for (const [name, price, qty, min, brand] of stockItems) {

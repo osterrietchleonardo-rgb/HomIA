@@ -1,0 +1,620 @@
+     1→import 'server-only'
+     2→import ZAI from 'z-ai-web-dev-sdk'
+     3→import { db } from '@/lib/db'
+     4→import { parseJson } from '@/lib/api'
+     5→import { withinRadius } from '@/lib/geo'
+     6→import { matchTerms, canonicalCategoria } from '@/lib/search-match'
+     7→
+     8→// ─────────────────────────────────────────────────────────────
+     9→// SUPERAGENTE HOMY — loop de razonamiento + grafo de acciones + herramientas reales
+    10→// Capa de razonamiento: LLM emite {thought, action, args} en cada paso (ReAct)
+    11→// Grafo: interpretar → (buscar_* → observar)* → responder | preguntar_usuario
+    12→// Herramientas: consultas reales a la base de HomIA (sin datos inventados)
+    13→// ─────────────────────────────────────────────────────────────
+    14→
+    15→export type AgentMode = 'cliente' | 'profesional' | 'auto'
+    16→
+    17→/** Intención detectada por el superagente: define qué ve el usuario después. */
+    18→export type AgentIntent = 'contratar' | 'trabajar' | 'materiales' | 'ayuda'
+    19→
+    20→export type AgentMessage = { role: 'user' | 'homy'; content: string }
+    21→
+    22→export type AgentResults = {
+    23→  professionals?: ProfessionalResult[]
+    24→  jobs?: JobResult[]
+    25→  materials?: MaterialResult[]
+    26→  comparables?: MaterialResult[]
+    27→}
+    28→
+    29→export type ProfessionalResult = {
+    30→  id: string
+    31→  displayName: string
+    32→  professions: string[]
+    33→  personType: string
+    34→  companyName: string | null
+    35→  city: string | null
+    36→  rating: number
+    37→  reviewsCount: number
+    38→  worksCount: number
+    39→  verified: boolean
+    40→  distanceKm?: number
+    41→}
+    42→
+    43→export type JobResult = {
+    44→  id: string
+    45→  title: string
+    46→  description: string
+    47→  categorySlug: string
+    48→  urgency: string
+    49→  budgetMin: number | null
+    50→  budgetMax: number | null
+    51→  city: string | null
+    52→  clientName?: string
+    53→  bidsCount: number
+    54→  distanceKm?: number
+    55→}
+    56→
+    57→export type MaterialResult = {
+    58→  stockId: string
+    59→  elementId: string
+    60→  elementName: string
+    61→  categorySlug: string
+    62→  unit: string
+    63→  brand: string | null
+    64→  price: number
+    65→  quantity: number
+    66→  status: string
+    67→  providerId: string
+    68→  providerName: string
+    69→  providerCity: string | null
+    70→  providerRating: number
+    71→  distanceKm?: number
+    72→}
+    73→
+    74→const MAX_ITERATIONS = 6
+    75→
+    76→const TOOL_SCHEMAS = `
+    77→{
+    78→  "action": "buscar_profesionales", "args": { "q": string, "categoria": string (slug opcional), "radio_km": number }
+    79→  {"action": "buscar_trabajos", "args": { "q": string, "categoria": string, "urgencia": "baja"|"normal"|"alta"|"urgente", "radio_km": number }}
+    80→  {"action": "buscar_materiales", "args": { "q": string, "categoria": string, "radio_km": number }}
+    81→  {"action": "comparar_precios", "args": { "q": string (nombre del elemento estándar), "radio_km": number }}
+    82→  {"action": "preguntar_usuario", "args": { "pregunta": string, "opciones": [string] (2-4, opcional) }}
+    83→  {"action": "responder", "args": { "message": string, "suggestions": [string] (0-3) }}
+    84→}`
+    85→
+    86→function systemPrompt(mode: AgentMode, hasLocation: boolean): string {
+    87→  const quien = mode === 'profesional'
+    88→    ? `El usuario es un PROFESIONAL de la construcción/servicios. Busca: (1) TRABAJOS publicados para oferar ("¿qué hay para plomeros?"), (2) MATERIALES con precio y stock en proveedores, (3) comparar precios de materiales entre proveedores.`
+    89→    : mode === 'cliente'
+    90→      ? `El usuario es un CLIENTE particular del hogar. Busca: PROFESIONALES (plomero, electricista, etc.) o describe un problema de su casa que hay que interpretar y derivar a la categoría correcta.`
+    91→      : `MODO AUTO: todavía no sabés quién es. RAZONÁ la intención antes de buscar:
+    92→• Si describe un problema de su hogar o pide un profesional para SU casa ("necesito un plomero", "se me rompió X", "tengo una fuga") → es un CLIENTE que quiere CONTRATAR: usá buscar_profesionales.
+    93→• Si pregunta por trabajo u ofertas para su OFICIO ("¿qué hay para plomeros?", "busco trabajos de pintura", "hay licitaciones para gasistas") → es un PROFESIONAL que quiere TRABAJAR: usá buscar_trabajos.
+    94→• Si pregunta por materiales, precios o comprar insumos ("precio del cemento", "cuánto sale un termotanque", "dónde compro caños") → quiere MATERIALES: usá buscar_materiales o comparar_precios.
+    95→Elegí la herramienta que corresponda a esa interpretación: ahí se ve tu razonamiento.`
+    96→  return `Sos Homy, el superagente de búsqueda de HomIA (marketplace de servicios del hogar en Argentina). Razonás con un loop de acciones antes de responder.
+    97→
+    98→MODO: ${quien}
+    99→
+   100→UBICACIÓN: ${hasLocation ? 'El usuario compartió su ubicación: filtrá por cercanía cuando aporte.' : 'No hay ubicación conocida; si la cercanía importa, preguntala.'}
+   101→
+   102→CATÁLOGO de categorías (slugs): plomeria, gasistas, electricistas, albanileria, pintura, carpinteria, herreria, limpieza, jardineria, climatizacion, techos, cerramientos.
+   103→
+   104→En CADA paso devolvés EXACTAMENTE un JSON (sin markdown), una de estas formas:
+   105→${TOOL_SCHEMAS}
+   106→
+   107→REGLAS DEL LOOP:
+   108→1. Pensá "thought" corto (1 frase), elegí UNA acción.
+   109→2. Ejecutá 1-3 búsquedas si hace falta para tener datos reales. NUNCA inventes resultados, precios, nombres ni cantidades: si no hay datos, decilo honestamente.
+   110→3. Si el pedido es ambiguo (falta qué necesita, urgencia, ubicación, material exacto), usá "preguntar_usuario" con UNA pregunta clara y 2-4 opciones si aplican. No preguntes lo que ya sabés del historial.
+   111→4. NO sobre-filtres: si el usuario no mencionó urgencia, NO pases "urgencia" (el default "normal" descarta trabajos de otras urgencias). Igual con radio_km: si no hay ubicación conocida, no lo restrinjas.
+   112→5. Cuando tengas suficiente info, "responder": message en español rioplatense, cálido y directo, máximo 3 frases + hasta 3 suggestions (frases cortas que el usuario podría querer después). Si encontraste resultados, en el mensaje resumí lo más notable con datos reales (nombres, precios, cantidades).
+   113→6. Máximo ${MAX_ITERATIONS} pasos. Si agotás pasos, respondé con lo que tengas.
+   114→7. "categoria" acepta sinónimos: "plomero"→plomeria, "gasista"→gasistas, "electricista"→electricistas, "albañil"→albanileria, "pintor"→pintura, "carpintero"→carpinteria.
+   115→8. radio_km default 25; si te pasan ubicación implícita (barrio/ciudad), igual buscá sin radio y aclará en el mensaje.`
+   116→}
+   117→
+   118→// ── Herramientas reales ──────────────────────────────────────
+   119→
+   120→async function toolBuscarProfesionales(args: { q?: string; categoria?: string; radio_km?: number; lat?: number; lng?: number }) {
+   121→  const pros = await db.professionalProfile.findMany({
+   122→    include: { user: { select: { displayName: true, avatarUrl: true, rating: true, reviewsCount: true, city: true } } },
+   123→  })
+   124→  const q = (args.q || '').toLowerCase().trim()
+   125→  const catSlug = canonicalCategoria(args.categoria)
+   126→  const filtered = pros.filter((p) => {
+   127→    const professions = parseJson<string[]>(p.professions, [])
+   128→    const skills = parseJson<string[]>(p.skills, [])
+   129→    const hay = [...professions, ...skills, p.bio || '', p.user.displayName, p.companyName || '', p.city || ''].join(' ').toLowerCase()
+   130→    const catOk = catSlug
+   131→      ? professions.some((pf) => canonicalCategoria(pf) === catSlug || pf.toLowerCase().includes(catSlug))
+   132→      : true
+   133→    return catOk && (!q || matchTerms(q, hay) || professions.some((pf) => hay.includes(pf)))
+   134→  })
+   135→  const geo = withinRadius(
+   136→    filtered.map((p) => ({ ...p, lat: p.lat, lng: p.lng })),
+   137→    args.lat, args.lng, args.radio_km || 25
+   138→  )
+   139→  return geo.slice(0, 12).map((p) => ({
+   140→    id: p.id,
+   141→    displayName: p.companyName ? `${p.companyName} (${p.user.displayName})` : p.user.displayName,
+   142→    professions: parseJson<string[]>(p.professions, []),
+   143→    personType: p.personType,
+   144→    companyName: p.companyName,
+   145→    city: p.city || p.user.city,
+   146→    rating: p.rating || p.user.rating,
+   147→    reviewsCount: p.reviewsCount || p.user.reviewsCount,
+   148→    worksCount: p.worksCount,
+   149→    verified: p.verified,
+   150→    distanceKm: p.distanceKm,
+   151→  })) as ProfessionalResult[]
+   152→}
+   153→
+   154→async function toolBuscarTrabajos(args: { q?: string; categoria?: string; urgencia?: string; radio_km?: number; lat?: number; lng?: number }) {
+   155→  const catSlug = canonicalCategoria(args.categoria)
+   156→  const urg = args.urgencia?.toLowerCase().trim()
+   157→  const baseWhere = {
+   158→    status: 'abierto' as const,
+   159→    ...(catSlug ? { categorySlug: catSlug } : {}),
+   160→  }
+   161→  const include = {
+   162→    user: { select: { displayName: true, city: true } },
+   163→    bids: { select: { id: true } },
+   164→  }
+   165→  // Búsqueda relajada: si el filtro de urgencia/categoría deja 0 resultados,
+   166→  // reintenta sin él para no quedarse vacío por sobre-filtrado del LLM.
+   167→  let jobs = await db.jobPost.findMany({
+   168→    where: { ...baseWhere, ...(urg ? { urgency: urg } : {}) },
+   169→    include,
+   170→    orderBy: { createdAt: 'desc' },
+   171→    take: 50,
+   172→  })
+   173→  if (jobs.length === 0 && urg) {
+   174→    jobs = await db.jobPost.findMany({ where: baseWhere, include, orderBy: { createdAt: 'desc' }, take: 50 })
+   175→  }
+   176→  if (jobs.length === 0 && catSlug) {
+   177→    jobs = await db.jobPost.findMany({
+   178→      where: { status: 'abierto' },
+   179→      include,
+   180→      orderBy: { createdAt: 'desc' },
+   181→      take: 50,
+   182→    })
+   183→  }
+   184→  const q = (args.q || '').toLowerCase().trim()
+   185→  const filtered = jobs.filter((j) => !q || matchTerms(q, `${j.title} ${j.description} ${j.categorySlug}`.toLowerCase()))
+   186→  const geo = withinRadius(
+   187→    filtered.map((j) => ({ ...j, lat: j.lat, lng: j.lng })),
+   188→    args.lat, args.lng, args.radio_km || 25
+   189→  )
+   190→  return geo.slice(0, 12).map((j) => ({
+   191→    id: j.id,
+   192→    title: j.title,
+   193→    description: j.description.slice(0, 140),
+   194→    categorySlug: j.categorySlug,
+   195→    urgency: j.urgency,
+   196→    budgetMin: j.budgetMin,
+   197→    budgetMax: j.budgetMax,
+   198→    city: j.city || j.user.city,
+   199→    clientName: j.user.displayName,
+   200→    bidsCount: j.bids.length,
+   201→    distanceKm: j.distanceKm,
+   202→  })) as JobResult[]
+   203→}
+   204→
+   205→async function toolBuscarMateriales(args: { q?: string; categoria?: string; radio_km?: number; lat?: number; lng?: number }) {
+   206→  const stock = await db.providerStock.findMany({
+   207→    include: {
+   208→      element: { include: { category: true } },
+   209→      provider: { include: { user: { select: { city: true } } } },
+   210→    },
+   211→    orderBy: { price: 'asc' },
+   212→    take: 400,
+   213→  })
+   214→  const q = (args.q || '').toLowerCase().trim()
+   215→  let matched = stock
+   216→  if (q) {
+   217→    matched = stock.filter((s) => {
+   218→      const hay = [s.element.name, ...parseJson<string[]>(s.element.aliases, []), s.brand || '', s.provider.businessName].join(' ').toLowerCase()
+   219→      return matchTerms(q, hay)
+   220→    })
+   221→  }
+   222→  if (args.categoria) {
+   223→    const catSlug = canonicalCategoria(args.categoria)
+   224→    if (catSlug) matched = matched.filter((s) => s.element.category.slug === catSlug)
+   225→  }
+   226→  const geo = withinRadius(
+   227→    matched.map((s) => ({ ...s, lat: s.provider.lat, lng: s.provider.lng })),
+   228→    args.lat, args.lng, args.radio_km || 25
+   229→  )
+   230→  return geo.slice(0, 12).map((s) => ({
+   231→    stockId: s.id,
+   232→    elementId: s.elementId,
+   233→    elementName: s.element.name,
+   234→    categorySlug: s.element.category.slug,
+   235→    unit: s.element.unit,
+   236→    brand: s.brand,
+   237→    price: s.price,
+   238→    quantity: s.quantity,
+   239→    status: s.status,
+   240→    providerId: s.provider.id,
+   241→    providerName: s.provider.businessName,
+   242→    providerCity: s.provider.city || s.provider.user.city,
+   243→    providerRating: s.provider.rating,
+   244→    distanceKm: s.distanceKm,
+   245→  })) as MaterialResult[]
+   246→}
+   247→
+   248→async function toolCompararPrecios(args: { q: string; radio_km?: number; lat?: number; lng?: number }) {
+   249→  const all = await toolBuscarMateriales({ q: args.q, radio_km: args.radio_km, lat: args.lat, lng: args.lng })
+   250→  // agrupa por elemento y devuelve el más barato de cada uno + conteo
+   251→  const byElement = new Map<string, MaterialResult[]>()
+   252→  for (const m of all) {
+   253→    const arr = byElement.get(m.elementId) || []
+   254→    arr.push(m)
+   255→    byElement.set(m.elementId, arr)
+   256→  }
+   257→  const out: MaterialResult[] = []
+   258→  for (const [, arr] of byElement) {
+   259→    arr.sort((a, b) => a.price - b.price)
+   260→    out.push(...arr.slice(0, 3))
+   261→  }
+   262→  out.sort((a, b) => a.elementName.localeCompare(b.elementName) || a.price - b.price)
+   263→  return out.slice(0, 12)
+   264→}
+   265→
+   266→// ── El loop del superagente ──────────────────────────────────
+   267→
+   268→export async function runHomyAgent(input: {
+   269→  messages: AgentMessage[]
+   270→  mode: AgentMode
+   271→  lat?: number | null
+   272→  lng?: number | null
+   273→}): Promise<{
+   274→  message: string
+   275→  suggestions: string[]
+   276→  intent: AgentIntent
+   277→  question?: { pregunta: string; opciones: string[] }
+   278→  results: AgentResults
+   279→  steps: { thought: string; action: string; found: number }[]
+   280→}> {
+   281→  const results: AgentResults = {}
+   282→  const steps: { thought: string; action: string; found: number }[] = []
+   283→  let zai: Awaited<ReturnType<typeof ZAI.create>> | null = null
+   284→  try {
+   285→    zai = await ZAI.create()
+   286→  } catch {
+   287→    // sin motor IA: degradación honesta a búsqueda directa
+   288→  }
+   289→
+   290→  const convo = input.messages.slice(-8).map((m) => ({
+   291→    role: m.role === 'user' ? 'user' : 'assistant',
+   292→    content: m.content,
+   293→  }))
+   294→
+   295→  const lastUser = [...input.messages].reverse().find((m) => m.role === 'user')?.content || ''
+   296→
+   297→  const hasLocation = !!(input.lat && input.lng)
+   298→  const lat = input.lat ?? undefined
+   299→  const lng = input.lng ?? undefined
+   300→
+   301→  if (!zai) {
+   302→    // Degradación honesta: razonamiento por heurística + búsqueda directa por keywords
+   303→    const intent = detectIntent(lastUser)
+   304→    const cat = guessCategory(lastUser)
+   305→    if (intent === 'trabajar') {
+   306→      const jobs = await toolBuscarTrabajos({ q: stripIntentWords(lastUser), categoria: cat, lat, lng })
+   307→      if (jobs.length) results.jobs = jobs
+   308→      return {
+   309→        message: jobs.length
+   310→          ? `Interpreté que buscás trabajo de tu oficio: encontré ${jobs.length} trabajos publicados${cat ? ` de ${cat}` : ''} en la base. Tocá "Ver resultados" para abrirlos en el mapa y presupuestar.`
+   311→          : `Interpreté que buscás trabajo de tu oficio, pero ahora no hay publicaciones activas que coincidan${cat ? ` con ${cat}` : ''}. Tocá "Ver resultados" y activá el mapa para ver qué hay cerca.`,
+   312→        suggestions: [],
+   313→        intent,
+   314→        results,
+   315→        steps: [{ thought: 'fallback directo (sin motor IA)', action: 'buscar_trabajos', found: jobs.length }],
+   316→      }
+   317→    }
+   318→    if (intent === 'materiales') {
+   319→      const mats = await toolBuscarMateriales({ q: stripIntentWords(lastUser), categoria: cat, lat, lng })
+   320→      if (mats.length) results.materials = mats
+   321→      return {
+   322→        message: mats.length
+   323→          ? `Interpreté que buscás materiales: encontré ${mats.length} publicaciones con precio y stock reales. Tocá "Ver resultados" para comparar entre proveedores.`
+   324→          : `Interpreté que buscás materiales, pero no encontré stock publicado con esos términos. Tocá "Ver resultados" y probá el catálogo estándar.`,
+   325→        suggestions: [],
+   326→        intent,
+   327→        results,
+   328→        steps: [{ thought: 'fallback directo (sin motor IA)', action: 'buscar_materiales', found: mats.length }],
+   329→      }
+   330→    }
+   331→    if (intent === 'contratar') {
+   332→      const pros = await toolBuscarProfesionales({ q: stripIntentWords(lastUser), categoria: cat, lat, lng })
+   333→      if (pros.length) results.professionals = pros
+   334→      return {
+   335→        message: pros.length
+   336→          ? `Interpreté que necesitás un profesional para tu casa: encontré ${pros.length} perfiles verificados${cat ? ` de ${cat}` : ''}. Tocá "Ver resultados" para verlos en el mapa con distancia y reseñas.`
+   337→          : `Interpreté que necesitás un profesional para tu casa, pero no encontré perfiles que coincidan todavía. Tocá "Ver resultados" y publicá tu trabajo para recibir presupuestos.`,
+   338→        suggestions: [],
+   339→        intent,
+   340→        results,
+   341→        steps: [{ thought: 'fallback directo (sin motor IA)', action: 'buscar_profesionales', found: pros.length }],
+   342→      }
+   343→    }
+   344→    return {
+   345→      message: 'Contame qué necesitás para tu hogar o tu oficio y busco en la base real de HomIA: profesionales, trabajos publicados o materiales con precios.',
+   346→      suggestions: [],
+   347→      intent,
+   348→      results,
+   349→      steps: [],
+   350→    }
+   351→  }
+   352→
+   353→  const transcript: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+   354→    { role: 'system', content: systemPrompt(input.mode, hasLocation) },
+   355→    ...(convo.slice(0, -1).map((c) =>
+   356→      c.role === 'user'
+   357→        ? { role: 'user' as const, content: c.content }
+   358→        : { role: 'assistant' as const, content: c.content }
+   359→    )),
+   360→    { role: 'user', content: `${lastUser}${hasLocation ? `\n\n[Ubicación del usuario: lat ${input.lat}, lng ${input.lng}]` : ''}` },
+   361→  ]
+   362→
+   363→  let final: { message: string; suggestions: string[] } | null = null
+   364→  let question: { pregunta: string; opciones: string[] } | null = null
+   365→
+   366→  for (let i = 0; i < MAX_ITERATIONS; i++) {
+   367→    let raw = ''
+   368→    try {
+   369→      const completion = await zai.chat.completions.create({
+   370→        messages: transcript,
+   371→        // temperatura baja para decisiones consistentes
+   372→        temperature: 0.2,
+   373→      } as never)
+   374→      raw = completion.choices[0]?.message?.content ?? ''
+   375→    } catch {
+   376→      break
+   377→    }
+   378→    const json = extractJson(raw)
+   379→    if (!json || typeof json !== 'object') break
+   380→    const step = json as { thought?: string; action?: string; args?: Record<string, unknown> }
+   381→    const action = step.action || 'responder'
+   382→    const args = (step.args || {}) as Record<string, unknown>
+   383→
+   384→    if (action === 'responder') {
+   385→      final = {
+   386→        message: String(args.message || 'Listo, ¿qué otra cosa necesitas?'),
+   387→        suggestions: Array.isArray(args.suggestions) ? (args.suggestions as string[]).slice(0, 3) : [],
+   388→      }
+   389→      transcript.push({ role: 'assistant', content: raw })
+   390→      break
+   391→    }
+   392→
+   393→    if (action === 'preguntar_usuario') {
+   394→      question = {
+   395→        pregunta: String(args.pregunta || '¿Podés contarme un poco más?'),
+   396→        opciones: Array.isArray(args.opciones) ? (args.opciones as string[]).slice(0, 4) : [],
+   397→      }
+   398→      steps.push({ thought: String(step.thought || ''), action, found: 0 })
+   399→      transcript.push({ role: 'assistant', content: raw })
+   400→      break
+   401→    }
+   402→
+   403→    let found = 0
+   404→    try {
+   405→      if (action === 'buscar_profesionales') {
+   406→        const r = await toolBuscarProfesionales({
+   407→          q: asStr(args.q), categoria: asStr(args.categoria),
+   408→          radio_km: asNum(args.radio_km), lat, lng,
+   409→        })
+   410→        found = r.length
+   411→        if (r.length) results.professionals = mergeProfessionals(results.professionals, r)
+   412→      } else if (action === 'buscar_trabajos') {
+   413→        const r = await toolBuscarTrabajos({
+   414→          q: asStr(args.q), categoria: asStr(args.categoria), urgencia: asStr(args.urgencia),
+   415→          radio_km: asNum(args.radio_km), lat, lng,
+   416→        })
+   417→        found = r.length
+   418→        if (r.length) results.jobs = mergeJobs(results.jobs, r)
+   419→      } else if (action === 'buscar_materiales') {
+   420→        const r = await toolBuscarMateriales({
+   421→          q: asStr(args.q), categoria: asStr(args.categoria),
+   422→          radio_km: asNum(args.radio_km), lat, lng,
+   423→        })
+   424→        found = r.length
+   425→        if (r.length) results.materials = mergeMaterials(results.materials, r)
+   426→      } else if (action === 'comparar_precios') {
+   427→        const r = await toolCompararPrecios({
+   428→          q: asStr(args.q) || lastUser, radio_km: asNum(args.radio_km), lat, lng,
+   429→        })
+   430→        found = r.length
+   431→        if (r.length) results.comparables = mergeMaterials(results.comparables, r)
+   432→      } else {
+   433→        transcript.push({ role: 'assistant', content: JSON.stringify({ action: 'responder', args: { message: 'Disculpá, me hizo lío el pedido. ¿Lo repetís con otras palabras?' } }) })
+   434→        continue
+   435→      }
+   436→    } catch {
+   437→      found = -1
+   438→    }
+   439→
+   440→    steps.push({ thought: String(step.thought || ''), action, found })
+   441→    // Resumen compacto y REAL de lo encontrado para que el LLM cite datos exactos
+   442→    let summary = 'sin resultados'
+   443→    if (action === 'buscar_profesionales' && results.professionals?.length) {
+   444→      summary = JSON.stringify(results.professionals.slice(0, 5).map((p) => ({
+   445→        nombre: p.displayName, rubros: p.professions, ciudad: p.city,
+   446→        rating: p.rating, reseñas: p.reviewsCount, obras: p.worksCount, km: p.distanceKm,
+   447→      })))
+   448→    } else if (action === 'buscar_trabajos' && results.jobs?.length) {
+   449→      summary = JSON.stringify(results.jobs.slice(0, 5).map((j) => ({
+   450→        titulo: j.title, categoria: j.categorySlug, urgencia: j.urgency,
+   451→        presupuesto: [j.budgetMin, j.budgetMax], ciudad: j.city, presupuestos_recibidos: j.bidsCount, km: j.distanceKm,
+   452→      })))
+   453→    } else if ((action === 'buscar_materiales' || action === 'comparar_precios')) {
+   454→      const arr = action === 'comparar_precios' ? results.comparables : results.materials
+   455→      if (arr?.length) {
+   456→        summary = JSON.stringify(arr.slice(0, 5).map((m) => ({
+   457→          elemento: m.elementName, precio: m.price, unidad: m.unit, marca: m.brand,
+   458→          proveedor: m.providerName, stock: m.quantity, estado: m.status, km: m.distanceKm,
+   459→        })))
+   460→      }
+   461→    }
+   462→    transcript.push({ role: 'assistant', content: raw })
+   463→    transcript.push({
+   464→      role: 'user',
+   465→      content: `[Observación del sistema] La herramienta ${action} devolvió ${found} resultados. Datos REALES: ${summary}. ${
+   466→        found === 0 ? 'No hay datos con esos criterios: probá ampliar la búsqueda, cambiar categoría o preguntale al usuario. NO inventes resultados.' : 'Usá EXCLUSIVAMENTE estos datos en tu respuesta (nombres, precios, proveedores, ratings). No agregues nada que no esté acá.'
+   467→      } Continuá con el próximo paso.`,
+   468→    })
+   469→  }
+   470→
+   471→  if (!final && !question) {
+   472→    // agotó el loop sin responder: armar respuesta con lo recolectado
+   473→    const counts = [
+   474→      results.professionals?.length ? `${results.professionals.length} profesionales` : null,
+   475→      results.jobs?.length ? `${results.jobs.length} trabajos` : null,
+   476→      results.materials?.length ? `${results.materials.length} materiales` : null,
+   477→      results.comparables?.length ? `${results.comparables.length} comparables` : null,
+   478→    ].filter(Boolean)
+   479→    final = {
+   480→      message: counts.length
+   481→        ? `Encontré esto en la base: ${counts.join(', ')}. Mirá los resultados abajo.`
+   482→        : `No encontré resultados concretos para eso todavía. Probá con otra palabra (por ejemplo "plomero", "cemento" o "¿qué hay para electricistas?").`,
+   483→      suggestions: [],
+   484→    }
+   485→  }
+   486→
+   487→  return {
+   488→    message: final?.message ?? question?.pregunta ?? '¿Me contás un poco más de qué necesitás?',
+   489→    suggestions: final?.suggestions ?? [],
+   490→    intent: deriveIntentFromSteps(steps, lastUser),
+   491→    question: question || undefined,
+   492→    results,
+   493→    steps,
+   494→  }
+   495→}
+   496→
+   497→/**
+   498→ * matchTerms y canonicalCategoria viven en @/lib/search-match (compartidos
+   499→ * con /api/search): matcheo tolerante de acentos/plurales y canonización
+   500→ * de categorías ("plomeros" → plomeria).
+   501→ */
+   502→
+   503→function extractJson(raw: string): unknown {
+   504→  let cleaned = raw.trim()
+   505→  if (cleaned.includes('```')) {
+   506→    cleaned = cleaned.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim()
+   507→  }
+   508→  const start = cleaned.indexOf('{')
+   509→  const end = cleaned.lastIndexOf('}')
+   510→  if (start === -1 || end === -1 || end <= start) return null
+   511→  try {
+   512→    return JSON.parse(cleaned.slice(start, end + 1))
+   513→  } catch {
+   514→    return null
+   515→  }
+   516→}
+   517→
+   518→function asStr(v: unknown): string | undefined {
+   519→  return typeof v === 'string' && v.trim() && v.trim() !== 'null' ? v.trim() : undefined
+   520→}
+   521→function asNum(v: unknown): number | undefined {
+   522→  const n = typeof v === 'string' ? parseFloat(v) : typeof v === 'number' ? v : NaN
+   523→  return Number.isFinite(n) && n > 0 ? n : undefined
+   524→}
+   525→
+   526→function mergeProfessionals(a: ProfessionalResult[] | undefined, b: ProfessionalResult[]) {
+   527→  if (!a) return b
+   528→  const seen = new Set(a.map((x) => x.id))
+   529→  return [...a, ...b.filter((x) => !seen.has(x.id))]
+   530→}
+   531→function mergeJobs(a: JobResult[] | undefined, b: JobResult[]) {
+   532→  if (!a) return b
+   533→  const seen = new Set(a.map((x) => x.id))
+   534→  return [...a, ...b.filter((x) => !seen.has(x.id))]
+   535→}
+   536→function mergeMaterials(a: MaterialResult[] | undefined, b: MaterialResult[]) {
+   537→  if (!a) return b
+   538→  const seen = new Set(a.map((x) => x.stockId))
+   539→  return [...a, ...b.filter((x) => !seen.has(x.stockId))]
+   540→}
+   541→
+   542→// ── Capa de razonamiento de intención (usada en fallback y para derivar el CTA) ──
+   543→
+   544→/**
+   545→ * Distingue "buscar UN plomero" (contratar) de "buscar TRABAJO para plomeros"
+   546→ * (trabajar) y de "comprar materiales" (materiales). Heurística determinista
+   547→ * en español rioplatense, extensible a todos los oficios.
+   548→ */
+   549→export function detectIntent(text: string): AgentIntent {
+   550→  const t = text.toLowerCase().normalize('NFC')
+   551→  if (!t.trim()) return 'ayuda'
+   552→
+   553→  // 1) MATERIALES: precio/compra o sustantivos de insumo
+   554→  const priceIntent = /\b(precio|precios|cuanto (sale|cuesta)|cuánto (sale|cuesta)|cotizaci[oó]n de|comprar|venta de|me conviene|mas barato|más barato|comparar)\b/.test(t)
+   555→  const materialNouns = /\b(cemento|cal|ladrillo|ladrillos|arena|piedra|hierro|acero|cañ[oa]s?|canios|tubo|tubos|codo|llave de paso|termotanque|calefon|estufa|caloventor|latex|l[áa]tex|esmalte|sellador|masilla|membrana|chapa|chapones|yeso|enchastre|durlock|placa|bulon|bulón|tornillo|tornillos|clavo|clavos|silicona|cable|cables|termica|t[eé]rmica|disyuntor|foco|lampara|l[áa]mpara|pincel|rodillo|lijas?\b)/.test(t)
+   556→  if (priceIntent && materialNouns) return 'materiales'
+   557→  if (materialNouns && !/\b(urgente|fuga|se rompio|se rompió|arregl)/.test(t)) return 'materiales'
+   558→
+   559→  // 2) TRABAJAR (profesional busca trabajo): "¿qué hay para X?", "busco trabajo/changuas/licitaciones"
+   560→  const jobSeek = /(que hay para|qu[eé] hay para|hay para|hay de|busco (trabajo|trabajos|changua|changuas|licitacion|licitaciones|pedidos|laburo|laburos)|trabajo de|trabajos de|licitaciones? para|pedidos? para|ofertas? (de|para) trabajo|necesito (trabajo|laburo)|quiero (trabajar|ofertar|presupuestar)|encontrar (clientes|laburo)|consigo (trabajo|laburo))/.test(t)
+   561→  if (jobSeek) return 'trabajar'
+   562→
+   563→  // 3) CONTRATAR (cliente busca profesional): necesita a alguien / problema de su casa
+   564→  const hire = /(necesito|busco|quiero|llamar|contratar|recomend[áa]n?|me recomiendan|presupuesto para|arregl|instal|reparar|reparaci[oó]n|cambiar|colocar|pintar|destapar|emergencia|urgente|urgencia|fuga|se rompio|se rompió|no funciona|me llega|quiero hacer|tengo que hacer|mi casa|en mi casa|de mi casa)/.test(t)
+   565→  if (hire) return 'contratar'
+   566→
+   567→  // 4) si nombra un oficio sin verbo claro, asumimos que quiere contratar a ese oficio
+   568→  const oficios = /\b(plomero|gasista|electricista|alba[nñ]il|pintor|carpintero|herrero|jardinero|limpiadora|limpiador|tecnico|técnico|cerrajero)\b/
+   569→  if (oficios.test(t)) return 'contratar'
+   570→
+   571→  return 'ayuda'
+   572→}
+   573→
+   574→/** Saca las palabras de intención para que la búsqueda no filtre por "trabajo para". */
+   575→function stripIntentWords(text: string): string {
+   576→  return text
+   577→    .toLowerCase()
+   578→    .replace(/(que hay para|qu[eé] hay para|hay para|hay de|busco (trabajos?|changuas?|licitaciones?|pedidos?|laburos?)|trabajos? de|licitaciones? para|pedidos? para|necesito|quiero|precio de|precios de|cuanto (sale|cuesta)|cu[áa]nto (sale|cuesta)|comprar|para)/g, ' ')
+   579→    .replace(/\s+/g, ' ')
+   580→    .trim()
+   581→}
+   582→
+   583→/** La intención real es la de la ÚLTIMA herramienta de búsqueda que corrió en el loop. */
+   584→export function deriveIntentFromSteps(
+   585→  steps: { action: string }[],
+   586→  fallbackText: string
+   587→): AgentIntent {
+   588→  const searchActions = steps.map((s) => s.action).filter((a) =>
+   589→    ['buscar_profesionales', 'buscar_trabajos', 'buscar_materiales', 'comparar_precios'].includes(a)
+   590→  )
+   591→  const last = searchActions[searchActions.length - 1]
+   592→  if (last === 'buscar_profesionales') return 'contratar'
+   593→  if (last === 'buscar_trabajos') return 'trabajar'
+   594→  if (last === 'buscar_materiales' || last === 'comparar_precios') return 'materiales'
+   595→  // sin búsquedas (pregunta de aclaración o respuesta directa): heurística sobre el texto
+   596→  return detectIntent(fallbackText)
+   597→}
+   598→
+   599→function guessCategory(text: string): string | undefined {
+   600→  const map: [string, string[]][] = [
+   601→    ['plomeria', ['plomero', 'fuga', 'inodoro', 'canilla', 'griferia', 'tuberia', 'baño', 'desagüe', 'desague', 'agua']],
+   602→    ['gasistas', ['gas', 'gasista', 'calefon', 'estufa', 'horno']],
+   603→    ['electricistas', ['electricista', 'luz', 'cable', 'tablero', 'termica', 'toma', 'enchufe', 'cortocircuito']],
+   604→    ['albanileria', ['albañil', 'albanil', 'pared', 'muro', 'ladrillo', 'cemento', 'revoque']],
+   605→    ['pintura', ['pintor', 'pintura', 'latex', 'esmalte', 'pintar']],
+   606→    ['carpinteria', ['carpintero', 'mueble', 'madera', 'puerta', 'placard']],
+   607→    ['herreria', ['herrero', 'reja', 'metal', 'soldadura', 'porton']],
+   608→    ['limpieza', ['limpieza', 'limpieza fin de obra', 'limpiadora']],
+   609→    ['jardineria', ['jardin', 'jardinero', 'cesped', 'poda', 'pasto']],
+   610→    ['climatizacion', ['aire', 'split', 'climatizacion', 'ventilador']],
+   611→    ['techos', ['techo', 'chapa', 'membrana', 'gotera']],
+   612→    ['cerramientos', ['ventana', 'aluminio', 'vidrio', 'cerradura']],
+   613→  ]
+   614→  const t = text.toLowerCase()
+   615→  for (const [slug, words] of map) {
+   616→    if (words.some((w) => t.includes(w))) return slug
+   617→  }
+   618→  return undefined
+   619→}
+   620→

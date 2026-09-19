@@ -109,9 +109,13 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
         : 'Buscar profesionales…'
 
   return (
-    <div className="min-h-screen flex flex-col">
+    // APP-SHELL LAYOUT — pantalla anclada al viewport: la topbar, la sidebar y
+    // el título de página quedan enmarcados y SOLO el contenido interno scrollea
+    // (como Gmail/Slack/VS Code). El main (#homy-app-main) es el único contenedor
+    // con scroll; el router resetea su scrollTop en cada navegación.
+    <div className="homy-app-shell">
       {/* topbar — vidrio nocturno: la grilla global se adivina detrás */}
-      <header className="homy-glass-dark sticky top-0 z-40">
+      <header className="homy-glass-dark shrink-0 z-40">
         <div className="max-w-[88rem] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
           <Link to="/" className="flex items-center gap-2.5 shrink-0 group" aria-label="Ir a la home de HomIA">
             <span className="transition-transform duration-300 group-hover:scale-105 will-change-transform">
@@ -148,7 +152,7 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
               )}
             </button>
             {otherRoles.length > 0 && <RoleSwitcher roles={user!.roles} role={role} />}
-            <span className="hidden md:block text-sm font-semibold max-w-[140px] truncate text-white/90">{user?.displayName}</span>
+            <span className="hidden md:block text-sm font-semibold max-w-[220px] truncate text-white/90" title={user?.displayName}>{user?.displayName}</span>
             <button onClick={doLogout} className="rounded-full p-2.5 text-white hover:bg-white/10 transition" aria-label="Cerrar sesión" title="Cerrar sesión">
               <LogOut className="size-5" aria-hidden />
             </button>
@@ -156,22 +160,27 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
         </div>
       </header>
 
-      <div className="flex-1 flex">
-        {/* sidebar desktop — vidrio fuerte flotante con tarjeta de usuario */}
-        <aside className="hidden lg:block w-64 shrink-0">
-          <nav className="homy-glass-strong sticky top-[4.75rem] m-3 mr-4 rounded-3xl p-3 space-y-1" aria-label="Navegación del panel">
+      {/* cuerpo del shell: sidebar fija + contenido con scroll propio */}
+      <div className="homy-app-body">
+        {/* sidebar desktop — vidrio fuerte flotante con tarjeta de usuario; scrollea
+            de forma independiente si la lista de navegación no entra en pantalla */}
+        <aside className="hidden lg:block w-64 shrink-0 homy-app-aside">
+          <nav className="homy-glass-strong m-3 mr-4 rounded-3xl p-3 space-y-1" aria-label="Navegación del panel">
             {user && (
               <div className="relative mb-3 flex items-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-br from-[#0a2540] to-[#103455] px-3.5 py-3 shadow-[0_14px_30px_-16px_rgba(10,37,64,0.7)]">
                 <span aria-hidden className="pointer-events-none absolute -right-6 -top-8 size-20 rounded-full bg-[#00c4ff]/25 blur-2xl" />
                 <span className="relative grid size-10 shrink-0 place-items-center rounded-xl bg-white/10 ring-1 ring-white/20" aria-hidden>
                   <User className="size-5 text-white" />
                 </span>
-                <span className="relative min-w-0">
-                  <span className="flex items-center gap-1.5">
-                    <span className="truncate text-[13px] font-bold text-white">{user.displayName}</span>
-                    <VerifyBadge status={user.verificationStatus} dark />
+                <span className="relative min-w-0 flex-1">
+                  {/* Nombre en renglón propio (nunca lo aprieta el badge) + badge/rol abajo con wrap */}
+                  <span className="block truncate text-[13px] font-bold text-white" title={user.displayName}>
+                    {user.displayName}
                   </span>
-                  <span className="block text-[10.5px] font-extrabold uppercase tracking-[0.16em] text-[#66dfff]">{ROLE_LABEL[role] || role}</span>
+                  <span className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                    <VerifyBadge status={user.verificationStatus} dark />
+                    <span className="text-[10.5px] font-extrabold uppercase tracking-[0.16em] text-[#66dfff]">{ROLE_LABEL[role] || role}</span>
+                  </span>
                 </span>
               </div>
             )}
@@ -213,8 +222,8 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
           </nav>
         </aside>
 
-        {/* contenido */}
-        <main className="flex-1 min-w-0 px-4 py-6 sm:px-6 lg:px-8 lg:py-8 pb-28 lg:pb-10">{children}</main>
+        {/* contenido — ÚNICO contenedor que scrollea dentro del marco */}
+        <main id="homy-app-main" className="homy-app-main px-4 py-5 sm:px-6 lg:px-8 lg:pt-7 lg:pb-10 pb-28">{children}</main>
       </div>
 
       {/* bottom nav mobile — vidrio fuerte flotante */}

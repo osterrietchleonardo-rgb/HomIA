@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { ok, requireAuth, body } from '@/lib/api'
 import { db } from '@/lib/db'
+import { canonicalProviderKind } from '@/lib/search-match'
 
 export async function GET() {
   const auth = await requireAuth()
@@ -42,6 +43,7 @@ type PutBody = {
   employeesCount?: number
   serviceRadiusKm?: number
   businessName?: string
+  kind?: string
   cuit?: string
   description?: string
 }
@@ -95,6 +97,11 @@ export async function PUT(req: NextRequest) {
 
   const provData: Record<string, unknown> = {}
   if (d.businessName !== undefined) provData.businessName = d.businessName
+  if (d.kind !== undefined) {
+    // tipo de negocio (corralón, ferretería, electricidad…): se canoniza y si no
+    // matchea se guarda 'multi' para no dejar basura en los filtros
+    provData.kind = canonicalProviderKind(d.kind) || 'multi'
+  }
   if (d.cuit !== undefined) provData.cuit = d.cuit
   if (d.description !== undefined) provData.description = d.description
   if (d.address !== undefined) provData.address = d.address

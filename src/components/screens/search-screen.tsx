@@ -29,8 +29,12 @@ type JobResult = {
 }
 type MaterialResult = {
   stockId: string; elementId: string; elementName: string; categorySlug: string; unit: string
-  brand: string | null; price: number; quantity: number; status: string
+  description?: string | null; brand: string | null; price: number; quantity: number; status: string
   providerId: string; providerName: string; providerCity: string | null; providerRating: number; distanceKm?: number
+}
+type ElementResult = {
+  elementId: string; name: string; description: string; unit: string
+  categorySlug: string; categoryName: string
 }
 
 type AgentReply = {
@@ -38,7 +42,7 @@ type AgentReply = {
   message: string
   suggestions: string[]
   question?: { pregunta: string; opciones: string[] }
-  results?: { professionals?: ProResult[]; jobs?: JobResult[]; materials?: MaterialResult[]; comparables?: MaterialResult[] }
+  results?: { professionals?: ProResult[]; jobs?: JobResult[]; materials?: MaterialResult[]; comparables?: MaterialResult[]; elements?: ElementResult[] }
   steps?: { thought: string; action: string; found: number }[]
   error?: string
 }
@@ -46,11 +50,15 @@ type AgentReply = {
 const CATEGORY_TABS = [
   { slug: '', name: 'Todo' }, { slug: 'plomeria', name: 'Plomería' },
   { slug: 'gasistas', name: 'Gas' }, { slug: 'electricistas', name: 'Electricidad' },
-  { slug: 'albanileria', name: 'Albañilería' }, { slug: 'pintura', name: 'Pintura' },
-  { slug: 'carpinteria', name: 'Carpintería' }, { slug: 'herreria', name: 'Herrería' },
-  { slug: 'limpieza', name: 'Limpieza' }, { slug: 'jardineria', name: 'Jardinería' },
-  { slug: 'climatizacion', name: 'Climatización' }, { slug: 'techos', name: 'Techos' },
-  { slug: 'cerramientos', name: 'Cerramientos' },
+  { slug: 'albanileria', name: 'Albañilería' }, { slug: 'durlock', name: 'Durlock' },
+  { slug: 'pintura', name: 'Pintura' }, { slug: 'herreria', name: 'Ferretería' },
+  { slug: 'herramientas', name: 'Herramientas' }, { slug: 'maderera', name: 'Maderera' },
+  { slug: 'carpinteria', name: 'Carpintería' }, { slug: 'techos', name: 'Techos' },
+  { slug: 'cerramientos', name: 'Aberturas' }, { slug: 'pisos', name: 'Pisos' },
+  { slug: 'aislacion', name: 'Aislación' }, { slug: 'iluminacion', name: 'Iluminación' },
+  { slug: 'climatizacion', name: 'Clima' }, { slug: 'jardineria', name: 'Jardín' },
+  { slug: 'limpieza', name: 'Limpieza' }, { slug: 'muebles', name: 'Muebles' },
+  { slug: 'seguridad', name: 'Seguridad' },
 ]
 
 export default function SearchScreen({ embedded = false }: { embedded?: boolean }) {
@@ -66,6 +74,7 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
   const [jobs, setJobs] = useState<JobResult[]>([])
   const [materials, setMaterials] = useState<MaterialResult[]>([])
   const [comparables, setComparables] = useState<MaterialResult[]>([])
+  const [elements, setElements] = useState<ElementResult[]>([])
   const [loading, setLoading] = useState(true)
   const [aiBusy, setAiBusy] = useState(false)
   const [aiState, setAiState] = useState<'idle' | 'listening' | 'thinking' | 'happy'>('idle')
@@ -135,6 +144,7 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
         setJobs((prev) => data.results!.jobs?.length ? data.results!.jobs : prev)
         setMaterials((prev) => data.results!.materials?.length ? data.results!.materials : prev)
         setComparables(data.results.comparables || [])
+        setElements(data.results.elements || [])
       }
       convRef.current.push({ role: 'user', content: text }, { role: 'homy', content: data.message })
       setAiState('happy')
@@ -168,7 +178,7 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
     return [...pins, ...mapPins]
   }
 
-  const hasResults = pros.length + jobs.length + materials.length + comparables.length > 0
+  const hasResults = pros.length + jobs.length + materials.length + comparables.length + elements.length > 0
   // si el mensaje del agente ya ES la pregunta, no la repetimos en la tarjeta
   const questionDuplicatesMessage = !!question && !!aiMessage && question.pregunta.trim().toLowerCase() === aiMessage.trim().toLowerCase()
 
@@ -398,6 +408,24 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
               </Section>
             )}
 
+            {/* Recomendaciones del catálogo (agente IA interpreta la necesidad) */}
+            {elements.length > 0 && (
+              <Section title="Recomendaciones del catálogo" count={elements.length} icon={<Sparkles />} tone="homy-chip-ai">
+                <p className="homy-glass-soft rounded-2xl px-5 py-3.5 text-[13px] text-slate-600 leading-relaxed mb-4">
+                  Te interpretamos la necesidad y te recomendamos los elementos justos del catálogo estándar — cada uno con su explicación de qué es y para qué sirve. Tocá <strong>Ver precios</strong> para traer stock real de los proveedores.
+                </p>
+                <div className="homy-stagger grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {elements.map((el) => (
+                    <ElementCard
+                      key={el.elementId}
+                      el={el}
+                      onViewPrices={(name, slug) => { setQuery(name); setCat(slug); directSearch(name, slug) }}
+                    />
+                  ))}
+                </div>
+              </Section>
+            )}
+
             {/* Materiales */}
             {mode === 'profesional' && (
               <Section title="Materiales en proveedores" count={materials.length} icon={<Package />} tone="homy-chip-mint">
@@ -503,6 +531,33 @@ function ProCard({ pro, logged }: { pro: ProResult; logged: boolean }) {
   )
 }
 
+/* Recomendación del catálogo maestro: nombre correcto + explicación natural.
+   "Ver precios" busca stock real de proveedores para ese elemento. */
+function ElementCard({ el, onViewPrices }: { el: ElementResult; onViewPrices: (name: string, cat: string) => void }) {
+  return (
+    <div className="homy-glass homy-lift homy-card-glow rounded-2xl p-5 flex flex-col">
+      <div className="flex items-start justify-between gap-2">
+        <p className="font-bold text-[#0A2540] leading-snug">{el.name}</p>
+        <span className="homy-pill shrink-0">
+          <span className="homy-pill-dot bg-[#00C4FF]" aria-hidden />
+          {el.categoryName}
+        </span>
+      </div>
+      <p className="text-sm text-slate-500 mt-2 leading-relaxed flex-1">{el.description}</p>
+      <div className="mt-3.5 flex items-center justify-between gap-3 border-t border-[#0A2540]/8 pt-3.5">
+        <span className="text-xs font-semibold text-slate-400">se vende por {el.unit}</span>
+        <button
+          onClick={() => onViewPrices(el.name, el.categorySlug)}
+          className="homy-btn-primary homy-focus min-h-[40px] px-4 py-2 text-[13px]"
+          aria-label={`Ver precios de ${el.name} en proveedores`}
+        >
+          Ver precios <ArrowUpRight className="size-3.5" aria-hidden />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function MaterialCard({ m, logged, highlight }: { m: MaterialResult; logged: boolean; highlight?: boolean }) {
   return (
     <button
@@ -516,6 +571,9 @@ function MaterialCard({ m, logged, highlight }: { m: MaterialResult; logged: boo
         </div>
         <StatusBadge status={m.status} />
       </div>
+      {m.description && (
+        <p className="mt-2 text-xs text-slate-500 leading-relaxed line-clamp-2">{m.description}</p>
+      )}
       <p className="mt-3 text-2xl font-extrabold text-[#16A34A] tabular-nums">
         {formatARS(m.price)}<span className="text-xs font-semibold text-slate-400"> /{m.unit}</span>
       </p>

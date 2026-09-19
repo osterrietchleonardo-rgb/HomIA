@@ -54,6 +54,7 @@ export async function GET(
       displayName: prov.user.displayName,
       avatarUrl: prov.user.avatarUrl,
       businessName: prov.businessName,
+      kind: prov.kind,
       cuit: prov.cuit,
       description: prov.description,
       address: prov.address,

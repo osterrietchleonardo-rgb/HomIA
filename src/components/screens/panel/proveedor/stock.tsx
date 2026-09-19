@@ -16,13 +16,13 @@ import {
 
 type StockItem = {
   id: string; elementId: string; name: string; unit: string; category: string; categorySlug: string
-  aliases: string[]; brand: string | null; price: number; quantity: number; minStock: number
+  aliases: string[]; description: string | null; brand: string | null; price: number; quantity: number; minStock: number
   status: string; updatedAt: string
 }
 
 type CatalogCategory = {
   id: string; slug: string; name: string
-  elements: { id: string; name: string; unit: string; aliases: string[] }[]
+  elements: { id: string; name: string; unit: string; aliases: string[]; description?: string }[]
 }
 
 type Draft = { price?: string; qty?: string }
@@ -80,7 +80,10 @@ export default function ProviderStock() {
   const filtered = stock.filter((s) => {
     if (cat && s.categorySlug !== cat) return false
     if (statusF && s.status !== statusF) return false
-    if (q && !s.name.toLowerCase().includes(q.toLowerCase())) return false
+    if (q) {
+      const hay = [s.name, ...s.aliases, s.description || '', s.brand || '', s.category].join(' ').toLowerCase()
+      if (!hay.includes(q.toLowerCase())) return false
+    }
     return true
   })
 
@@ -352,12 +355,16 @@ export default function ProviderStock() {
               <select id="pub-elem" value={elementId} onChange={(e) => setElementId(e.target.value)} disabled={!dlgCat}
                 className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-3 min-h-[44px] text-sm disabled:text-slate-400">
                 <option value="">{dlgCat ? 'Elegí un elemento…' : 'Primero elegí una categoría'}</option>
-                {dlgElements.map((el) => <option key={el.id} value={el.id}>{el.name} ({el.unit})</option>)}
+                {dlgElements.map((el) => <option key={el.id} value={el.id}>{el.name} — por {el.unit}</option>)}
               </select>
               {chosenElement && (
-                <p className="text-xs text-slate-400 mt-1.5">
-                  Se vende por {chosenElement.unit}{chosenElement.aliases.length > 0 ? ` · también conocido como: ${chosenElement.aliases.slice(0, 3).join(', ')}` : ''}
-                </p>
+                <div className="text-xs text-slate-500 mt-1.5 space-y-0.5">
+                  <p>Se vende por <strong>{chosenElement.unit}</strong></p>
+                  {chosenElement.description && <p className="leading-relaxed">{chosenElement.description}</p>}
+                  {chosenElement.aliases.length > 0 && (
+                    <p className="text-slate-400">También conocido como: {chosenElement.aliases.slice(0, 4).join(', ')}</p>
+                  )}
+                </div>
               )}
             </div>
             <div className="grid grid-cols-2 gap-3">

@@ -3,7 +3,7 @@ import ZAI from 'z-ai-web-dev-sdk'
 import { db } from '@/lib/db'
 import { parseJson } from '@/lib/api'
 import { withinRadius } from '@/lib/geo'
-import { matchTerms, canonicalCategoria } from '@/lib/search-match'
+import { matchTerms, matchScore, expandNeedQuery, canonicalCategoria } from '@/lib/search-match'
 
 // ─────────────────────────────────────────────────────────────
 // SUPERAGENTE HOMY — loop de razonamiento + grafo de acciones + herramientas reales
@@ -24,6 +24,7 @@ export type AgentResults = {
   jobs?: JobResult[]
   materials?: MaterialResult[]
   comparables?: MaterialResult[]
+  elements?: CatalogElementResult[]
 }
 
 export type ProfessionalResult = {
@@ -60,6 +61,7 @@ export type MaterialResult = {
   elementName: string
   categorySlug: string
   unit: string
+  description?: string | null
   brand: string | null
   price: number
   quantity: number
@@ -71,6 +73,16 @@ export type MaterialResult = {
   distanceKm?: number
 }
 
+/** Recomendación del catálogo maestro: el elemento + su explicación natural. */
+export type CatalogElementResult = {
+  elementId: string
+  name: string
+  description: string
+  unit: string
+  categorySlug: string
+  categoryName: string
+}
+
 const MAX_ITERATIONS = 6
 
 const TOOL_SCHEMAS = `
@@ -79,6 +91,7 @@ const TOOL_SCHEMAS = `
   {"action": "buscar_trabajos", "args": { "q": string, "categoria": string, "urgencia": "baja"|"normal"|"alta"|"urgente", "radio_km": number }}
   {"action": "buscar_materiales", "args": { "q": string, "categoria": string, "radio_km": number }}
   {"action": "comparar_precios", "args": { "q": string (nombre del elemento estándar), "radio_km": number }}
+  {"action": "recomendar_elementos", "args": { "q": string (la necesidad en palabras simples), "categoria": string (opcional) }}
   {"action": "preguntar_usuario", "args": { "pregunta": string, "opciones": [string] (2-4, opcional) }}
   {"action": "responder", "args": { "message": string, "suggestions": [string] (0-3) }}
 }`
@@ -99,7 +112,9 @@ MODO: ${quien}
 
 UBICACIÓN: ${hasLocation ? 'El usuario compartió su ubicación: filtrá por cercanía cuando aporte.' : 'No hay ubicación conocida; si la cercanía importa, preguntala.'}
 
-CATÁLOGO de categorías (slugs): plomeria, gasistas, electricistas, albanileria, pintura, carpinteria, herreria, limpieza, jardineria, climatizacion, techos, cerramientos.
+CATÁLOGO de categorías (slugs): plomeria, gasistas, electricistas, albanileria, durlock, pintura, herreria, herramientas, maderera, carpinteria, techos, cerramientos, pisos, aislacion, iluminacion, climatizacion, jardineria, limpieza, muebles, seguridad.
+
+REGLA DE CATÁLOGO (importante): si el usuario describe una NECESIDAD sin saber cómo se llama el material ("no sé cómo se llama la pieza que une dos caños", "necesito algo para tapar la humedad", "quiero afirmar algo en la pared de durlock") → usá recomendar_elementos con lo que pidió en palabras simples. Te devuelve los elementos del catálogo con su explicación natural: presentás 2-3 en tu mensaje explicando PARA QUÉ sirve cada uno, y si el usuario ya eligió uno, llamá buscar_materiales con ese nombre para traer precios reales. Si el pedido es confuso, podés preguntar UNA aclaración (dónde, superficie, material) antes de recomendar.
 
 En CADA paso devolvés EXACTAMENTE un JSON (sin markdown), una de estas formas:
 ${TOOL_SCHEMAS}
@@ -215,7 +230,7 @@ async function toolBuscarMateriales(args: { q?: string; categoria?: string; radi
   let matched = stock
   if (q) {
     matched = stock.filter((s) => {
-      const hay = [s.element.name, ...parseJson<string[]>(s.element.aliases, []), s.brand || '', s.provider.businessName].join(' ').toLowerCase()
+      const hay = [s.element.name, ...parseJson<string[]>(s.element.aliases, []), s.element.description || '', s.brand || '', s.provider.businessName].join(' ').toLowerCase()
       return matchTerms(q, hay)
     })
   }
@@ -233,6 +248,7 @@ async function toolBuscarMateriales(args: { q?: string; categoria?: string; radi
     elementName: s.element.name,
     categorySlug: s.element.category.slug,
     unit: s.element.unit,
+    description: s.element.description || null,
     brand: s.brand,
     price: s.price,
     quantity: s.quantity,
@@ -243,6 +259,43 @@ async function toolBuscarMateriales(args: { q?: string; categoria?: string; radi
     providerRating: s.provider.rating,
     distanceKm: s.distanceKm,
   })) as MaterialResult[]
+}
+
+/** Recomendador del catálogo maestro: interpreta una necesidad en lenguaje
+ * natural ("no sé cómo se llama la pieza que une dos caños") y devuelve los
+ * elementos cuyos nombres, aliases o descripciones matchean. Rankea por:
+ * 1) matcheo de nombre/alias (el elemento JUSTO), 2) cantidad de tokens de la
+ * necesidad (expandida con sinónimos técnicos) que aparecen en el elemento. */
+async function toolRecomendarElementos(args: { q: string; categoria?: string }) {
+  const cats = await db.category.findMany({ orderBy: { sortOrder: 'asc' }, include: { elements: { where: { active: true } } } })
+  const raw = (args.q || '').toLowerCase().trim()
+  const q = expandNeedQuery(raw)
+  const catSlug = canonicalCategoria(args.categoria)
+  const out: Array<CatalogElementResult & { score: number }> = []
+  for (const c of cats) {
+    if (catSlug && c.slug !== catSlug) continue
+    for (const e of c.elements) {
+      const name = e.name.toLowerCase()
+      const aliases = parseJson<string[]>(e.aliases, [])
+      const desc = (e.description || '').toLowerCase()
+      let nameScore = 0
+      if (raw) {
+        const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        const nq = norm(raw)
+        if (norm(name).includes(nq) || nq.includes(norm(name))) nameScore = 3
+        else if (aliases.some((a) => norm(a).includes(nq) || nq.includes(norm(a)))) nameScore = 2
+      }
+      const tokens = matchScore(q, `${name} ${aliases.join(' ')} ${desc}`)
+      const score = nameScore * 10 + tokens
+      if (raw && score === 0) continue
+      out.push({
+        elementId: e.id, name: e.name, description: e.description, unit: e.unit,
+        categorySlug: c.slug, categoryName: c.name, score,
+      })
+    }
+  }
+  out.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+  return out.slice(0, 10).map(({ score: _s, ...rest }) => rest)
 }
 
 async function toolCompararPrecios(args: { q: string; radio_km?: number; lat?: number; lng?: number }) {
@@ -429,6 +482,10 @@ export async function runHomyAgent(input: {
         })
         found = r.length
         if (r.length) results.comparables = mergeMaterials(results.comparables, r)
+      } else if (action === 'recomendar_elementos') {
+        const r = await toolRecomendarElementos({ q: asStr(args.q) || lastUser, categoria: asStr(args.categoria) })
+        found = r.length
+        if (r.length) results.elements = mergeElements(results.elements, r)
       } else {
         transcript.push({ role: 'assistant', content: JSON.stringify({ action: 'responder', args: { message: 'Disculpá, me hizo lío el pedido. ¿Lo repetís con otras palabras?' } }) })
         continue
@@ -458,6 +515,10 @@ export async function runHomyAgent(input: {
           proveedor: m.providerName, stock: m.quantity, estado: m.status, km: m.distanceKm,
         })))
       }
+    } else if (action === 'recomendar_elementos' && results.elements?.length) {
+      summary = JSON.stringify(results.elements.slice(0, 6).map((e) => ({
+        elemento: e.name, para_que_sirve: e.description, se_vende_por: e.unit, rubro: e.categoryName,
+      })))
     }
     transcript.push({ role: 'assistant', content: raw })
     transcript.push({
@@ -475,6 +536,7 @@ export async function runHomyAgent(input: {
       results.jobs?.length ? `${results.jobs.length} trabajos` : null,
       results.materials?.length ? `${results.materials.length} materiales` : null,
       results.comparables?.length ? `${results.comparables.length} comparables` : null,
+      results.elements?.length ? `${results.elements.length} recomendaciones del catálogo` : null,
     ].filter(Boolean)
     final = {
       message: counts.length
@@ -538,6 +600,11 @@ function mergeMaterials(a: MaterialResult[] | undefined, b: MaterialResult[]) {
   const seen = new Set(a.map((x) => x.stockId))
   return [...a, ...b.filter((x) => !seen.has(x.stockId))]
 }
+function mergeElements(a: CatalogElementResult[] | undefined, b: CatalogElementResult[]) {
+  if (!a) return b
+  const seen = new Set(a.map((x) => x.elementId))
+  return [...a, ...b.filter((x) => !seen.has(x.elementId))]
+}
 
 // ── Capa de razonamiento de intención (usada en fallback y para derivar el CTA) ──
 
@@ -586,12 +653,12 @@ export function deriveIntentFromSteps(
   fallbackText: string
 ): AgentIntent {
   const searchActions = steps.map((s) => s.action).filter((a) =>
-    ['buscar_profesionales', 'buscar_trabajos', 'buscar_materiales', 'comparar_precios'].includes(a)
+    ['buscar_profesionales', 'buscar_trabajos', 'buscar_materiales', 'comparar_precios', 'recomendar_elementos'].includes(a)
   )
   const last = searchActions[searchActions.length - 1]
   if (last === 'buscar_profesionales') return 'contratar'
   if (last === 'buscar_trabajos') return 'trabajar'
-  if (last === 'buscar_materiales' || last === 'comparar_precios') return 'materiales'
+  if (last === 'buscar_materiales' || last === 'comparar_precios' || last === 'recomendar_elementos') return 'materiales'
   // sin búsquedas (pregunta de aclaración o respuesta directa): heurística sobre el texto
   return detectIntent(fallbackText)
 }
