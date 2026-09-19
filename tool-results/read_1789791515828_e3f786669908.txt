@@ -1,0 +1,601 @@
+     1→'use client'
+     2→// Detalle de proyecto (vista profesional): etapas, propuesta de materiales, alternativas, cuentas de retiro y facturación
+     3→import { useEffect, useState } from 'react'
+     4→import { navigate, Link } from '@/lib/router'
+     5→import { StatusBadge, Loading, UAvatar } from '@/components/app/ui-bits'
+     6→import { formatARS, formatDate } from '@/lib/format'
+     7→import { toast } from 'sonner'
+     8→import {
+     9→  ArrowRight, Receipt, Truck, Plus, RefreshCcw, Phone, Mail, ArrowLeft,
+    10→  FolderOpen, Package, ClipboardPen, CircleX, History, Check, FileText, CircleCheck,
+    11→} from 'lucide-react'
+    12→import ReviewForm from '../review-form'
+    13→
+    14→const STAGES = ['presupuesto', 'materiales', 'ejecucion', 'revision', 'finalizado']
+    15→const STAGE_LABEL: Record<string, string> = {
+    16→  presupuesto: 'Presupuesto',
+    17→  materiales: 'Materiales',
+    18→  ejecucion: 'Ejecución',
+    19→  revision: 'Revisión',
+    20→  finalizado: 'Finalizado',
+    21→}
+    22→
+    23→type Material = {
+    24→  id: string; name: string; elementId: string | null; elementName: string
+    25→  unit: string; quantity: number; unitPrice: number; subtotal: number
+    26→  status: string; note: string | null; providerId: string | null; providerName: string | null; createdAt: string
+    27→}
+    28→type Invoice = { id: string; number: string; total: number; status: string; issuedAt: string }
+    29→type RetiroLink = {
+    30→  id: string; accountLabel: string; notes: string | null; active: boolean
+    31→  provider: { id: string; businessName: string; city: string | null }
+    32→}
+    33→type Project = {
+    34→  id: string; title: string; description: string | null; stage: string; status: string
+    35→  laborCost: number; materialsCost: number; createdAt: string
+    36→  urgency?: string | null; address?: string | null; deadline?: string | null; photos?: string[]
+    37→  job: { id: string; title: string } | null
+    38→  client: { id: string; displayName: string; avatarUrl: string | null; phone: string | null; email: string | null }
+    39→  professional: { id: string; displayName: string; personType: string }
+    40→}
+    41→type CatalogElement = { id: string; name: string; unit: string }
+    42→type CatalogCategory = { slug: string; name: string; elements: CatalogElement[] }
+    43→type ComparableStock = {
+    44→  stockId: string; price: number; quantity: number; status: string
+    45→  providerId: string; providerName: string; providerCity: string | null
+    46→}
+    47→
+    48→export default function ProProjectDetail({ id }: { id: string }) {
+    49→  const [data, setData] = useState<{ project: Project; role: string; materials: Material[]; links: RetiroLink[]; invoices: Invoice[] } | null>(null)
+    50→  const [loading, setLoading] = useState(true)
+    51→  const [busy, setBusy] = useState(false)
+    52→  // reseña 360°: ¿ya califiqué al cliente en este proyecto?
+    53→  const [reviewedClient, setReviewedClient] = useState(false)
+    54→
+    55→  // formulario de material
+    56→  const [catalog, setCatalog] = useState<CatalogCategory[]>([])
+    57→  const [elementId, setElementId] = useState('')
+    58→  const [providerId, setProviderId] = useState('')
+    59→  const [quantity, setQuantity] = useState('1')
+    60→  const [unitPrice, setUnitPrice] = useState('')
+    61→  const [note, setNote] = useState('')
+    62→  const [stockOptions, setStockOptions] = useState<ComparableStock[]>([])
+    63→  const [loadingStock, setLoadingStock] = useState(false)
+    64→
+    65→  // alternativa para material rechazado
+    66→  const [altFor, setAltFor] = useState<string | null>(null)
+    67→  const [altName, setAltName] = useState('')
+    68→  const [altQty, setAltQty] = useState('1')
+    69→  const [altPrice, setAltPrice] = useState('')
+    70→
+    71→  async function load() {
+    72→    setLoading(true)
+    73→    try {
+    74→      const res = await fetch(`/api/projects/${id}`)
+    75→      const fresh = res.ok ? await res.json() : null
+    76→      if (fresh) setData(fresh)
+    77→      const resRev = await fetch(`/api/reviews?mine=1&projectId=${id}`)
+    78→      if (resRev.ok && fresh) {
+    79→        const d = await resRev.json()
+    80→        setReviewedClient((d.reviews || []).some((r: { targetUserId: string }) => r.targetUserId === fresh.project.client.id))
+    81→      }
+    82→    } finally { setLoading(false) }
+    83→  }
+    84→  useEffect(() => { load() }, [id])
+    85→
+    86→  useEffect(() => {
+    87→    (async () => {
+    88→      const res = await fetch('/api/catalog')
+    89→      if (res.ok) setCatalog((await res.json()).categories || [])
+    90→    })()
+    91→  }, [])
+    92→
+    93→  // al elegir elemento, traemos stock de proveedores para autocompletar el mejor precio
+    94→  useEffect(() => {
+    95→    setProviderId('')
+    96→    setStockOptions([])
+    97→    if (!elementId) return
+    98→    setLoadingStock(true)
+    99→    ;(async () => {
+   100→      try {
+   101→        const res = await fetch(`/api/comparables?elementId=${elementId}`)
+   102→        if (res.ok) {
+   103→          const d = await res.json()
+   104→          const results: ComparableStock[] = d.results || []
+   105→          setStockOptions(results)
+   106→          if (d.best) setUnitPrice(String(d.best.price))
+   107→        }
+   108→      } finally { setLoadingStock(false) }
+   109→    })()
+   110→  }, [elementId])
+   111→
+   112→  async function setStage(stage: string) {
+   113→    setBusy(true)
+   114→    try {
+   115→      const res = await fetch(`/api/projects/${id}`, {
+   116→        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stage }),
+   117→      })
+   118→      if (!res.ok) { toast.error((await res.json()).error); return }
+   119→      toast.success(stage === 'finalizado' ? '¡Obra finalizada!' : 'Etapa actualizada')
+   120→      load()
+   121→    } finally { setBusy(false) }
+   122→  }
+   123→
+   124→  async function proposeMaterial() {
+   125→    const qty = parseFloat(quantity)
+   126→    const price = parseFloat(unitPrice)
+   127→    if (!elementId) { toast.error('Elegí un material del catálogo'); return }
+   128→    if (!qty || qty <= 0) { toast.error('Indicá una cantidad válida'); return }
+   129→    if (!price || price <= 0) { toast.error('Indicá un precio unitario válido'); return }
+   130→    setBusy(true)
+   131→    try {
+   132→      const res = await fetch(`/api/projects/${id}/materials`, {
+   133→        method: 'POST', headers: { 'Content-Type': 'application/json' },
+   134→        body: JSON.stringify({ elementId, providerId: providerId || undefined, quantity: qty, unitPrice: price, note: note || undefined }),
+   135→      })
+   136→      const d = await res.json()
+   137→      if (!res.ok) { toast.error(d.error); return }
+   138→      toast.success('Material propuesto — el cliente lo va a aprobar')
+   139→      setElementId(''); setProviderId(''); setQuantity('1'); setUnitPrice(''); setNote(''); setStockOptions([])
+   140→      load()
+   141→    } finally { setBusy(false) }
+   142→  }
+   143→
+   144→  async function suggestAlternative(original: Material) {
+   145→    const qty = parseFloat(altQty)
+   146→    const price = parseFloat(altPrice)
+   147→    if (!altName.trim()) { toast.error('Indicá el nombre de la alternativa'); return }
+   148→    if (!qty || qty <= 0) { toast.error('Cantidad inválida'); return }
+   149→    if (!price || price <= 0) { toast.error('Precio inválido'); return }
+   150→    setBusy(true)
+   151→    try {
+   152→      const res = await fetch(`/api/projects/${id}/materials`, {
+   153→        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+   154→        body: JSON.stringify({
+   155→          materialId: original.id, action: 'reemplazar',
+   156→          replacement: { elementId: original.elementId || undefined, name: altName.trim(), quantity: qty, unitPrice: price },
+   157→        }),
+   158→      })
+   159→      const d = await res.json()
+   160→      if (!res.ok) { toast.error(d.error); return }
+   161→      toast.success('Alternativa enviada al cliente')
+   162→      setAltFor(null); setAltName(''); setAltQty('1'); setAltPrice('')
+   163→      load()
+   164→    } finally { setBusy(false) }
+   165→  }
+   166→
+   167→  async function issueInvoice() {
+   168→    setBusy(true)
+   169→    try {
+   170→      const res = await fetch(`/api/projects/${id}/invoice`, { method: 'POST' })
+   171→      const d = await res.json()
+   172→      if (!res.ok) { toast.error(d.error); return }
+   173→      toast.success(`Factura ${d.invoice.number} emitida`, { description: `Total: ${formatARS(d.invoice.total)} — el cliente la paga con Mercado Pago.` })
+   174→      load()
+   175→    } finally { setBusy(false) }
+   176→  }
+   177→
+   178→  if (loading) return <Loading />
+   179→  if (!data) return (
+   180→    <div className="homy-page">
+   181→      <div>
+   182→        <Empty
+   183→          icon={<FolderOpen className="size-7" />}
+   184→          title="Proyecto no encontrado"
+   185→          hint="Puede que el proyecto no exista o que no tengas acceso."
+   186→          action={<button onClick={() => navigate('/panel/profesional/proyectos')} className="homy-btn-primary min-h-[44px] px-5 py-2.5 text-sm">Volver a mis proyectos</button>}
+   187→        />
+   188→      </div>
+   189→    </div>
+   190→  )
+   191→
+   192→  const p = data.project
+   193→  const stageIdx = STAGES.indexOf(p.stage)
+   194→  const nextStage = stageIdx >= 0 && stageIdx < STAGES.length - 1 ? STAGES[stageIdx + 1] : null
+   195→  const proposed = data.materials.filter((m) => m.status === 'propuesto')
+   196→  const rejected = data.materials.filter((m) => m.status === 'rechazado')
+   197→  const others = data.materials.filter((m) => m.status === 'aprobado' || m.status === 'reemplazado')
+   198→  const selectedElement = catalog.flatMap((c) => c.elements).find((e) => e.id === elementId)
+   199→  const total = p.laborCost + p.materialsCost
+   200→  const progress = stageIdx > 0 ? Math.round((stageIdx / (STAGES.length - 1)) * 100) : 0
+   201→
+   202→  return (
+   203→    <div className="homy-page">
+   204→      <div>
+   205→        <Link to="/panel/profesional/proyectos"
+   206→          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-[#1D63B8] transition-colors mb-3">
+   207→          <ArrowLeft className="size-3.5" aria-hidden /> Volver a mis proyectos
+   208→        </Link>
+   209→
+   210→        {/* Encabezado */}
+   211→        <header className="homy-page-head">
+   212→          <div className="min-w-0">
+   213→            <span className="homy-eyebrow">Proyecto · {STAGE_LABEL[p.stage] || p.stage}</span>
+   214→            <h1 className="homy-page-title mt-1.5">{p.title}</h1>
+   215→            <p className="homy-page-sub">Para {p.client.displayName} · creado el {formatDate(p.createdAt)}</p>
+   216→          </div>
+   217→        </header>
+   218→
+   219→        {/* brief de la contratación (si vino del wizard del directorio) */}
+   220→        {(p.urgency || p.address || p.deadline || (p.photos && p.photos.length > 0)) && (
+   221→          <div className="homy-glass rounded-3xl p-4 sm:p-5 mb-5">
+   222→            <div className="flex flex-wrap items-center justify-between gap-2">
+   223→              <p className="flex items-center gap-2 text-sm font-extrabold text-[#0A2540]">
+   224→                <span className="homy-icon-chip homy-chip-blue size-8 shrink-0 [&_svg]:size-4" aria-hidden><FileText /></span>
+   225→                Brief del cliente
+   226→              </p>
+   227→              {p.urgency && (
+   228→                <span className="homy-pill">{({ ya: 'Lo antes posible', esta_semana: 'Próximas semanas', normal: 'Fecha flexible' } as Record<string, string>)[p.urgency] || p.urgency}</span>
+   229→              )}
+   230→            </div>
+   231→            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+   232→              {p.deadline && (
+   233→                <div className="homy-glass-soft rounded-xl px-4 py-3">
+   234→                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Fecha deseada</p>
+   235→                  <p className="mt-0.5 text-sm font-bold text-[#0A2540]">{formatDate(p.deadline)}</p>
+   236→                </div>
+   237→              )}
+   238→              {p.address && (
+   239→                <div className="homy-glass-soft rounded-xl px-4 py-3">
+   240→                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Dirección del trabajo</p>
+   241→                  <p className="mt-0.5 text-sm font-bold text-[#0A2540]">{p.address}</p>
+   242→                </div>
+   243→              )}
+   244→            </div>
+   245→            {p.photos && p.photos.length > 0 && (
+   246→              <div className="mt-3 flex flex-wrap gap-2">
+   247→                {p.photos.map((ph, i) => (
+   248→                  <img key={ph} src={ph} alt={`Foto ${i + 1} del brief del cliente`} className="h-20 w-20 rounded-xl object-cover ring-1 ring-[#0A2540]/10" />
+   249→                ))}
+   250→              </div>
+   251→            )}
+   252→          </div>
+   253→        )}
+   254→
+   255→        {/* etapas */}
+   256→        <div className="homy-glass rounded-3xl p-5 mb-5">
+   257→          <div className="homy-progress mb-4" role="img" aria-label={`Progreso del proyecto: etapa ${STAGE_LABEL[p.stage] || p.stage}`}>
+   258→            <i style={{ width: `${progress}%` }} />
+   259→          </div>
+   260→          <div className="flex items-center justify-between flex-wrap gap-3">
+   261→            <div className="flex gap-1.5 flex-wrap items-center">
+   262→              {STAGES.map((s, i) => (
+   263→                <div key={s} className="flex items-center gap-1.5">
+   264→                  <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold transition ${p.stage === s ? 'bg-gradient-to-br from-[#103455] to-[#0A2540] text-white shadow-lg shadow-[#0A2540]/25 ring-1 ring-[#00C4FF]/35' : stageIdx > i ? 'bg-emerald-100 text-emerald-700' : 'homy-glass-soft text-slate-400'}`}>
+   265→                    {stageIdx > i && <Check className="size-3" aria-hidden />}
+   266→                    {STAGE_LABEL[s]}
+   267→                  </span>
+   268→                  {i < STAGES.length - 1 && <ArrowRight className="size-3 text-slate-300 shrink-0" aria-hidden />}
+   269→                </div>
+   270→              ))}
+   271→            </div>
+   272→            {p.status !== 'finalizado' && (
+   273→              <div className="flex gap-2 flex-wrap">
+   274→                {nextStage && nextStage !== 'finalizado' && (
+   275→                  <button disabled={busy} onClick={() => setStage(nextStage)} className="homy-btn-primary min-h-[44px] px-4 py-2 text-sm disabled:opacity-50">
+   276→                    Avanzar a {STAGE_LABEL[nextStage]}
+   277→                  </button>
+   278→                )}
+   279→                {(p.stage === 'revision' || p.stage === 'ejecucion') && (
+   280→                  <button disabled={busy} onClick={() => setStage('finalizado')} className="homy-btn-dark min-h-[44px] px-4 py-2 text-sm disabled:opacity-50">
+   281→                    Finalizar obra
+   282→                  </button>
+   283→                )}
+   284→              </div>
+   285→            )}
+   286→          </div>
+   287→          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
+   288→            <MiniStat label="Mano de obra" value={formatARS(p.laborCost)} />
+   289→            <MiniStat label="Materiales aprobados" value={formatARS(p.materialsCost)} />
+   290→            <MiniStat label="Total del proyecto" value={formatARS(total)} accent />
+   291→          </div>
+   292→        </div>
+   293→
+   294→        {/* cliente + contacto */}
+   295→        <div className="homy-glass rounded-3xl p-4 sm:p-5 mb-5 flex items-center justify-between gap-3 flex-wrap">
+   296→          <div className="flex items-center gap-3 min-w-0">
+   297→            <UAvatar name={p.client.displayName} url={p.client.avatarUrl} size={46} />
+   298→            <div className="min-w-0">
+   299→              <p className="font-bold text-[#0A2540] line-clamp-1">{p.client.displayName}</p>
+   300→              <p className="text-xs text-slate-500">Tu cliente en este proyecto</p>
+   301→            </div>
+   302→          </div>
+   303→          <div className="flex items-center gap-2 flex-wrap">
+   304→            {p.client.phone && (
+   305→              <a href={`tel:${p.client.phone}`} className="homy-glass-soft rounded-full px-4 py-2.5 min-h-[44px] text-sm font-bold text-[#0A2540] transition hover:text-[#1D63B8] flex items-center gap-1.5">
+   306→                <Phone className="size-4" aria-hidden /> {p.client.phone}
+   307→              </a>
+   308→            )}
+   309→            {p.client.email && (
+   310→              <a href={`mailto:${p.client.email}`} className="homy-glass-soft rounded-full px-4 py-2.5 min-h-[44px] text-sm font-bold text-[#0A2540] transition hover:text-[#1D63B8] flex items-center gap-1.5">
+   311→                <Mail className="size-4" aria-hidden /> Email
+   312→              </a>
+   313→            )}
+   314→          </div>
+   315→        </div>
+   316→
+   317→        {/* formulario de materiales */}
+   318→        {p.status !== 'finalizado' && (
+   319→          <div className="homy-glass rounded-3xl p-5 mb-5">
+   320→            <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-1">
+   321→              <span className="homy-icon-chip homy-chip-orange size-8 [&_svg]:size-4" aria-hidden><Plus /></span>
+   322→              Proponer material al cliente
+   323→            </h2>
+   324→            <p className="text-sm text-slate-500 mb-4">Elegí del catálogo estándar; si un proveedor lo tiene en stock, te autocompletamos el mejor precio.</p>
+   325→            <div className="grid gap-3 sm:grid-cols-2">
+   326→              <label className="block">
+   327→                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Material (catálogo estándar)</span>
+   328→                <select value={elementId} onChange={(e) => setElementId(e.target.value)}
+   329→                  className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm cursor-pointer">
+   330→                  <option value="">Elegí un material…</option>
+   331→                  {catalog.map((c) => (
+   332→                    <optgroup key={c.slug} label={c.name}>
+   333→                      {c.elements.map((el) => <option key={el.id} value={el.id}>{el.name}</option>)}
+   334→                    </optgroup>
+   335→                  ))}
+   336→                </select>
+   337→              </label>
+   338→              <label className="block">
+   339→                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+   340→                  Proveedor {loadingStock && <RefreshCcw className="inline size-3 animate-spin text-[#00C4FF]" aria-hidden />}
+   341→                </span>
+   342→                <select value={providerId} onChange={(e) => {
+   343→                  setProviderId(e.target.value)
+   344→                  const stock = stockOptions.find((s) => s.providerId === e.target.value)
+   345→                  if (stock) setUnitPrice(String(stock.price))
+   346→                }} disabled={!elementId || stockOptions.length === 0}
+   347→                  className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm cursor-pointer disabled:text-slate-400">
+   348→                  <option value="">Sin proveedor (compro por mi cuenta)</option>
+   349→                  {stockOptions.map((s) => (
+   350→                    <option key={s.stockId} value={s.providerId}>
+   351→                      {s.providerName} — {formatARS(s.price)}/{selectedElement?.unit || 'u'} (stock {s.quantity})
+   352→                    </option>
+   353→                  ))}
+   354→                </select>
+   355→              </label>
+   356→              <label className="block">
+   357→                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Cantidad {selectedElement ? `(${selectedElement.unit})` : ''}</span>
+   358→                <input type="number" min="0" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)}
+   359→                  className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm tabular-nums" />
+   360→              </label>
+   361→              <label className="block">
+   362→                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Precio unitario (ARS)</span>
+   363→                <input type="number" min="0" step="any" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)}
+   364→                  className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm tabular-nums" />
+   365→              </label>
+   366→              <label className="block sm:col-span-2">
+   367→                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Nota para el cliente (opcional)</span>
+   368→                <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej: marca recomendada, alternativa más duradera…"
+   369→                  className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm" />
+   370→              </label>
+   371→            </div>
+   372→            <div className="flex items-center justify-between mt-4 flex-wrap gap-2">
+   373→              <p className="text-sm font-bold text-[#0A2540] tabular-nums">
+   374→                Subtotal: {formatARS((parseFloat(quantity) || 0) * (parseFloat(unitPrice) || 0))}
+   375→              </p>
+   376→              <button disabled={busy} onClick={proposeMaterial} className="homy-btn-primary min-h-[44px] px-5 py-2.5 text-sm disabled:opacity-50">
+   377→                Proponer al cliente
+   378→              </button>
+   379→            </div>
+   380→          </div>
+   381→        )}
+   382→
+   383→        {/* propuestos (esperando cliente) */}
+   384→        {proposed.length > 0 && (
+   385→          <div className="homy-glass homy-glass-featured rounded-3xl p-5 mb-5">
+   386→            <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-3">
+   387→              <span className="homy-icon-chip homy-chip-gold size-8 [&_svg]:size-4" aria-hidden><ClipboardPen /></span>
+   388→              Esperando aprobación del cliente ({proposed.length})
+   389→            </h2>
+   390→            <div className="space-y-2">
+   391→              {proposed.map((m) => (
+   392→                <div key={m.id} className="rounded-2xl homy-glass p-4 flex flex-wrap items-start justify-between gap-2">
+   393→                  <div className="min-w-0">
+   394→                    <p className="font-bold text-[#0A2540]">{m.name}</p>
+   395→                    <p className="text-sm text-slate-500 tabular-nums">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}{m.providerName ? ` · ${m.providerName}` : ' · sin proveedor'}</p>
+   396→                    {m.note && <p className="text-xs text-slate-400 mt-1">{m.note}</p>}
+   397→                  </div>
+   398→                  <div className="text-right shrink-0">
+   399→                    <p className="text-lg font-extrabold text-[#0A2540] tabular-nums">{formatARS(m.subtotal)}</p>
+   400→                    <div className="mt-1"><StatusBadge status={m.status} /></div>
+   401→                  </div>
+   402→                </div>
+   403→              ))}
+   404→            </div>
+   405→          </div>
+   406→        )}
+   407→
+   408→        {/* rechazados → sugerir alternativa */}
+   409→        {rejected.length > 0 && (
+   410→          <div className="rounded-3xl border border-red-100 bg-red-50 p-5 mb-5">
+   411→            <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-3">
+   412→              <span className="homy-icon-chip homy-chip-orange size-8 [&_svg]:size-4" aria-hidden><CircleX /></span>
+   413→              Rechazados por el cliente ({rejected.length})
+   414→            </h2>
+   415→            <div className="space-y-3">
+   416→              {rejected.map((m) => (
+   417→                <div key={m.id} className="rounded-2xl border border-red-100 bg-white p-4">
+   418→                  <div className="flex flex-wrap items-start justify-between gap-2">
+   419→                    <div>
+   420→                      <p className="font-bold text-[#0A2540]">{m.name}</p>
+   421→                      <p className="text-sm text-slate-500 tabular-nums">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}</p>
+   422→                    </div>
+   423→                    <div className="flex items-center gap-2 flex-wrap">
+   424→                      <StatusBadge status={m.status} />
+   425→                      {altFor !== m.id && (
+   426→                        <button onClick={() => { setAltFor(m.id); setAltName(m.name); setAltQty(String(m.quantity)); setAltPrice('') }}
+   427→                          className="rounded-full border-2 border-[#1D63B8] text-[#1D63B8] hover:bg-[#1D63B8] hover:text-white text-sm font-bold px-4 py-2 min-h-[44px] transition">
+   428→                          Sugerir alternativa más barata
+   429→                        </button>
+   430→                      )}
+   431→                    </div>
+   432→                  </div>
+   433→                  {altFor === m.id && (
+   434→                    <div className="mt-3 rounded-2xl homy-glass p-4 grid gap-3 sm:grid-cols-3">
+   435→                      <label className="block sm:col-span-3">
+   436→                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Alternativa</span>
+   437→                        <input value={altName} onChange={(e) => setAltName(e.target.value)} placeholder="Nombre del material alternativo"
+   438→                          className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm" />
+   439→                      </label>
+   440→                      <label className="block">
+   441→                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Cantidad ({m.unit})</span>
+   442→                        <input type="number" min="0" step="any" value={altQty} onChange={(e) => setAltQty(e.target.value)}
+   443→                          className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm tabular-nums" />
+   444→                      </label>
+   445→                      <label className="block">
+   446→                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Precio unitario</span>
+   447→                        <input type="number" min="0" step="any" value={altPrice} onChange={(e) => setAltPrice(e.target.value)} placeholder={`antes ${m.unitPrice}`}
+   448→                          className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm tabular-nums" />
+   449→                      </label>
+   450→                      <div className="flex items-end gap-2 flex-wrap">
+   451→                        <button disabled={busy} onClick={() => suggestAlternative(m)} className="homy-btn-dark min-h-[44px] px-4 py-2.5 text-sm disabled:opacity-50">
+   452→                          Enviar alternativa
+   453→                        </button>
+   454→                        <button onClick={() => setAltFor(null)} className="homy-glass-soft rounded-full min-h-[44px] text-slate-500 text-sm font-bold px-4 py-2.5 hover:text-red-500 transition">
+   455→                          Cancelar
+   456→                        </button>
+   457→                      </div>
+   458→                    </div>
+   459→                  )}
+   460→                </div>
+   461→              ))}
+   462→            </div>
+   463→          </div>
+   464→        )}
+   465→
+   466→        {/* aprobados / reemplazados */}
+   467→        {others.length > 0 && (
+   468→          <div className="homy-glass rounded-3xl p-5 mb-5">
+   469→            <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-3">
+   470→              <span className="homy-icon-chip homy-chip-blue size-8 [&_svg]:size-4" aria-hidden><History /></span>
+   471→              Historial de materiales
+   472→            </h2>
+   473→            <div className="divide-y divide-[#0A2540]/6">
+   474→              {others.map((m) => (
+   475→                <div key={m.id} className="py-2.5 flex items-center justify-between gap-2">
+   476→                  <div className="min-w-0">
+   477→                    <p className="text-sm font-semibold text-[#0A2540] line-clamp-1">{m.name}</p>
+   478→                    <p className="text-xs text-slate-400 tabular-nums">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}{m.providerName ? ` · ${m.providerName}` : ''}</p>
+   479→                  </div>
+   480→                  <div className="flex items-center gap-2 shrink-0">
+   481→                    <StatusBadge status={m.status} />
+   482→                    <p className="text-sm font-bold tabular-nums">{formatARS(m.subtotal)}</p>
+   483→                  </div>
+   484→                </div>
+   485→              ))}
+   486→            </div>
+   487→          </div>
+   488→        )}
+   489→
+   490→        {/* cuentas de retiro vinculadas */}
+   491→        <div className="homy-glass rounded-3xl p-5 mb-5">
+   492→          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-1">
+   493→            <span className="homy-icon-chip homy-chip-ai size-8 [&_svg]:size-4" aria-hidden><Truck /></span>
+   494→            Cuentas de retiro vinculadas
+   495→          </h2>
+   496→          <p className="text-sm text-slate-500 mb-3">Con estas cuentas podés retirar materiales en los proveedores y se facturan a este proyecto.</p>
+   497→          {data.links.length === 0 ? (
+   498→            <p className="text-sm text-slate-500">
+   499→              Todavía no tenés cuentas de retiro activas con los proveedores de este proyecto.{' '}
+   500→              <Link to="/panel/profesional/vinculaciones" className="text-[#1D63B8] font-bold hover:underline">Vinculame acá</Link>.
+   501→            </p>
+   502→          ) : (
+   503→            <div className="space-y-2">
+   504→              {data.links.map((l) => (
+   505→                <div key={l.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl homy-glass-soft p-3.5">
+   506→                  <div className="min-w-0">
+   507→                    <p className="font-bold text-[#0A2540] font-mono text-sm line-clamp-1">{l.accountLabel}</p>
+   508→                    <p className="text-xs text-slate-400 line-clamp-1">Proveedor: {l.provider.businessName}{l.provider.city ? ` · ${l.provider.city}` : ''}</p>
+   509→                  </div>
+   510→                  <StatusBadge status={l.active ? 'activo' : 'cerrado'} label={l.active ? 'activa' : 'inactiva'} />
+   511→                </div>
+   512→              ))}
+   513→            </div>
+   514→          )}
+   515→        </div>
+   516→
+   517→        {/* facturación */}
+   518→        <div className="homy-glass rounded-3xl p-5">
+   519→          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+   520→            <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight">
+   521→              <span className="homy-icon-chip homy-chip-navy size-8 [&_svg]:size-4" aria-hidden><Receipt /></span>
+   522→              Facturas ({data.invoices.length})
+   523→            </h2>
+   524→            {p.status !== 'finalizado' && (
+   525→              <button disabled={busy} onClick={issueInvoice} className="homy-btn-dark min-h-[44px] px-4 py-2.5 text-sm disabled:opacity-50">
+   526→                Emitir factura
+   527→              </button>
+   528→            )}
+   529→          </div>
+   530→          <p className="text-xs text-slate-400 mb-3">La factura incluye los materiales aprobados + mano de obra. El cliente la paga con Mercado Pago desde su panel.</p>
+   531→          {data.invoices.length === 0 ? (
+   532→            <div className="homy-glass-soft rounded-xl p-4 flex items-center gap-2 text-sm text-slate-500">
+   533→              <Package className="size-4 shrink-0 text-slate-400" aria-hidden />
+   534→              Todavía no emitiste facturas para este proyecto.
+   535→            </div>
+   536→          ) : (
+   537→            <div className="space-y-2">
+   538→              {data.invoices.map((inv) => (
+   539→                <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl homy-glass-soft p-3.5">
+   540→                  <div>
+   541→                    <p className="font-bold text-[#0A2540] font-mono text-sm">{inv.number}</p>
+   542→                    <p className="text-xs text-slate-400">{formatDate(inv.issuedAt)}</p>
+   543→                  </div>
+   544→                  <div className="flex items-center gap-3">
+   545→                    <p className="font-extrabold tabular-nums">{formatARS(inv.total)}</p>
+   546→                    <StatusBadge status={inv.status} />
+   547→                  </div>
+   548→                </div>
+   549→              ))}
+   550→            </div>
+   551→          )}
+   552→        </div>
+   553→      </div>
+   554→
+   555→      {/* reseña 360°: el profesional califica al cliente cuando la obra termina */}
+   556→      {p.stage === 'finalizado' && (
+   557→        reviewedClient ? (
+   558→          <section className="homy-glass mt-5 flex flex-wrap items-center gap-3 rounded-3xl p-5">
+   559→            <span className="homy-icon-chip homy-chip-mint size-10 shrink-0 [&_svg]:size-5" aria-hidden><CircleCheck /></span>
+   560→            <div className="min-w-0 flex-1">
+   561→              <h2 className="text-base font-extrabold tracking-tight text-[#0A2540]">Ya calificaste a {p.client.displayName}</h2>
+   562→              <p className="text-sm text-slate-500">Gracias por dejar tu reseña: así la comunidad conoce cómo fue trabajar con este cliente.</p>
+   563→            </div>
+   564→          </section>
+   565→        ) : (
+   566→          <div className="mt-5">
+   567→            <ReviewForm
+   568→              targetUserId={p.client.id}
+   569→              targetName={p.client.displayName}
+   570→              targetLabel="al cliente"
+   571→              projectId={id}
+   572→              onDone={load}
+   573→            />
+   574→          </div>
+   575→        )
+   576→      )}
+   577→    </div>
+   578→  )
+   579→}
+   580→
+   581→function MiniStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+   582→  return (
+   583→    <div className="rounded-2xl homy-glass-soft px-4 py-3">
+   584→      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.12em]">{label}</p>
+   585→      <p className={`text-lg font-extrabold tabular-nums ${accent ? 'text-[#FF5A1F]' : 'text-[#0A2540]'}`}>{value}</p>
+   586→    </div>
+   587→  )
+   588→}
+   589→
+   590→/* Estado vacío diseñado: icono flotante + copy + acción */
+   591→function Empty({ icon, title, hint, action }: { icon: React.ReactNode; title: string; hint: string; action?: React.ReactNode }) {
+   592→  return (
+   593→    <div className="homy-empty homy-glass-soft border border-dashed border-[#0A2540]/12">
+   594→      <span className="homy-empty-icon homy-chip-blue" aria-hidden>{icon}</span>
+   595→      <h3 className="font-bold text-[#0A2540] text-lg tracking-tight">{title}</h3>
+   596→      <p className="text-sm text-slate-500 mt-1.5 max-w-md leading-relaxed">{hint}</p>
+   597→      {action && <div className="mt-5">{action}</div>}
+   598→    </div>
+   599→  )
+   600→}
+   601→

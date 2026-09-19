@@ -40,6 +40,15 @@ export async function POST(
   if (invoice.clientId !== user.id) return fail('Solo el cliente paga la factura', 403)
   if (invoice.status === 'pagada') return fail('La factura ya está pagada')
 
+  // si el cliente había acordado pagar en efectivo y ahora elige Mercado Pago,
+  // el acuerdo de efectivo se cancela (solo puede liquidarse por un método)
+  const acuerdoEfectivo = await db.payment.findFirst({
+    where: { invoiceId: invoice.id, method: 'efectivo', status: 'acordado' },
+  })
+  if (acuerdoEfectivo) {
+    await db.payment.delete({ where: { id: acuerdoEfectivo.id } })
+  }
+
   if (!mpConfigured()) {
     return fail('Mercado Pago no está configurado. Agregá MP_ACCESS_TOKEN en el archivo .env del servidor.', 503, { needsConfig: true })
   }
@@ -55,6 +64,6 @@ export async function POST(
     baseUrl,
   })
 
-  await db.invoice.update({ where: { id }, data: { mpPreferenceId: preference.id } })
+  await db.invoice.update({ where: { id }, data: { mpPreferenceId: preference.id, paymentMethod: 'mercadopago' } })
   return ok({ initPoint: preference.initPoint, preferenceId: preference.id })
 }

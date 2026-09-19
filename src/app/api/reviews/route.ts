@@ -2,7 +2,9 @@ import { NextRequest } from 'next/server'
 import { ok, fail, body } from '@/lib/api'
 import { db } from '@/lib/db'
 
-// POST: dejar reseña 360° (cliente→profesional, profesional→cliente, etc.)
+// POST: dejar reseña 360° (cliente→profesional, profesional→cliente, cliente→proveedor).
+// REGLA DE CONFIANZA: solo pueden reseñarse participantes reales de una obra,
+// y recién cuando la obra finalizó. Toda reseña exige un proyecto real.
 export async function POST(req: NextRequest) {
   const { getSessionUser } = await import('@/lib/auth')
   const user = await getSessionUser()
@@ -13,7 +15,7 @@ export async function POST(req: NextRequest) {
     rating: number
     comment: string
     photos?: string[] // URLs de /api/uploads que avalan la reseña
-    context?: string // proyecto|obra|perfil
+    context?: string // proyecto|obra
     projectId?: string
     workId?: string
   }>(req)
@@ -22,6 +24,42 @@ export async function POST(req: NextRequest) {
   }
   if (d.rating < 1 || d.rating > 5) return fail('El puntaje va de 1 a 5')
   if (d.targetUserId === user.id) return fail('No podés reseñarte a vos mismo')
+
+  // ── Regla 1: toda reseña nace de un proyecto real ──
+  if (!d.projectId) {
+    return fail('Las reseñas se dejan desde un proyecto real: entrá al proyecto finalizado y dejala desde ahí', 403)
+  }
+  const project = await db.project.findUnique({
+    where: { id: d.projectId },
+    include: {
+      pro: { select: { id: true, userId: true } },
+      materials: { where: { status: 'aprobado' }, select: { provider: { select: { userId: true } } } },
+    },
+  })
+  if (!project) return fail('Proyecto no encontrado', 404)
+
+  // ── Regla 2: solo participantes de ESA obra ──
+  const providerUserIds = [...new Set(project.materials.map((m) => m.provider?.userId).filter(Boolean))] as string[]
+  const isClientOfProject = project.clientId === user.id
+  const isProOfProject = project.pro.userId === user.id
+  const allowedTargets: string[] = []
+  if (isClientOfProject) {
+    // el cliente reseña al profesional de la obra y a cada proveedor con materiales aprobados
+    allowedTargets.push(project.pro.userId, ...providerUserIds)
+  }
+  if (isProOfProject) {
+    // el profesional reseña al cliente de la obra
+    allowedTargets.push(project.clientId)
+  }
+  if (!allowedTargets.includes(d.targetUserId)) {
+    return fail('Solo podés reseñar a quienes participaron de esta obra: tu profesional, tus proveedores o tu cliente', 403)
+  }
+
+  // ── Regla 3: el momento es el final de la obra ──
+  if (project.stage !== 'finalizado' && project.status !== 'finalizado') {
+    return fail('La reseña se habilita cuando la obra termina: finalicen el proyecto y después calificá', 403)
+  }
+
   // fotos: máx 4, solo rutas de subida reales de HomIA
   const photos = Array.isArray(d.photos)
     ? d.photos.filter((p) => typeof p === 'string' && /^\/uploads\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_/-]+\.(jpg|jpeg|png|webp)$/i.test(p)).slice(0, 4)

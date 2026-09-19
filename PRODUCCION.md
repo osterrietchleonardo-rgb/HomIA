@@ -16,9 +16,20 @@
 
 ```bash
 npm install          # instala dependencias (incluye pdf-lib)
-npm run build        # compila y arma .next/standalone (copia static/ y public/)
+npm run build        # compila con webpack y arma .next/standalone (re-copia static/ y public/ limpio)
 npm start            # arranca el servidor standalone en el puerto 3000
 ```
+
+> ⚠️ **Importante (lecciones del deploy):**
+> - El build de producción se hace con `next build --webpack` (fijado en package.json).
+>   El build con Turbopack no emite `main-app-*.js` y la app NO hidrata en producción
+>   (se ve el HTML del servidor pero nada responde: 0 hidratación).
+> - El script de build borra y re-copia `static/` y `public/` dentro del standalone:
+>   no lo hagas a mano con `cp -r` sobre un standalone existente (crea `static/static/`
+>   anidado y el server termina respondiendo HTML del catch-all por cada chunk JS).
+> - Antes de redeployar, matá SIEMPRE el proceso viejo del puerto (`fuser -k 3000/tcp`
+>   o `kill -9 <pid>` de `ss -tlnp`). Un `next-server` viejo que siga escuchando el
+>   puerto sirve código stale y es indetectable con `pgrep` en algunos sandboxes.
 
 `npm start` ejecuta `NODE_ENV=production bun .next/standalone/server.js`. También vale:
 

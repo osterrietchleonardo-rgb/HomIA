@@ -1,11 +1,11 @@
 'use client'
-// Facturas del cliente + pago Mercado Pago
+// Facturas del cliente + elección de método de pago: Mercado Pago (respaldado) o efectivo (lo confirma el profesional)
 import { useEffect, useState } from 'react'
 import { navigate } from '@/lib/router'
 import { StatusBadge, Loading } from '@/components/app/ui-bits'
 import { formatARS, formatDate } from '@/lib/format'
 import { toast } from 'sonner'
-import { Wallet, ReceiptText, CircleCheck, ArrowLeft, FileDown } from 'lucide-react'
+import { Wallet, ReceiptText, CircleCheck, ArrowLeft, FileDown, Banknote, Undo2, Hourglass } from 'lucide-react'
 
 function verPdf(id: string, number_: string) {
   // abre el PDF real generado por el servidor (cookies httpOnly viajan solas)
@@ -21,7 +21,7 @@ function verPdf(id: string, number_: string) {
   }
 }
 
-type Invoice = { id: string; number: string; total: number; status: string; issuedAt: string; laborCost: number; materialsCost: number }
+type Invoice = { id: string; number: string; total: number; status: string; issuedAt: string; laborCost: number; materialsCost: number; paymentMethod?: string | null }
 type Project = { id: string; title: string }
 
 export default function ClientInvoices() {
@@ -29,22 +29,23 @@ export default function ClientInvoices() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
 
+  async function load() {
+    // facturas de todos mis proyectos como cliente
+    const resP = await fetch('/api/projects?role=cliente')
+    if (resP.ok) {
+      const projects = (await resP.json()).asClient as { id: string; invoices: Invoice[] }[]
+      const all = projects.flatMap((p) => p.invoices.map((inv) => ({ ...inv, projectId: p.id })))
+      setInvoices(all.map((i) => ({ ...i, project: { id: i.projectId, title: '' } })))
+    }
+  }
+
   useEffect(() => {
     (async () => {
-      try {
-        // facturas de todos mis proyectos como cliente
-        const resP = await fetch('/api/projects?role=cliente')
-        if (resP.ok) {
-          const projects = (await resP.json()).asClient as { id: string; invoices: Invoice[] }[]
-          const all = projects.flatMap((p) => p.invoices.map((inv) => ({ ...inv, projectId: p.id })))
-          // detalle por factura (para número de proyecto)
-          setInvoices(all.map((i) => ({ ...i, project: { id: i.projectId, title: '' } })))
-        }
-      } finally { setLoading(false) }
+      try { await load() } finally { setLoading(false) }
     })()
   }, [])
 
-  async function pay(inv: Invoice) {
+  async function payMP(inv: Invoice) {
     setBusy(true)
     try {
       const res = await fetch(`/api/invoices/${inv.id}`, { method: 'POST' })
@@ -61,6 +62,24 @@ export default function ClientInvoices() {
     } finally { setBusy(false) }
   }
 
+  async function cashAction(inv: Invoice, action: 'acordar' | 'cancelar') {
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/invoices/${inv.id}/cash`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error); return }
+      if (action === 'acordar') {
+        toast.success('Efectivo acordado', { description: 'El profesional ve el acuerdo y confirma cuando recibe el dinero.' })
+      } else {
+        toast.info('Acuerdo cancelado — podés elegir otro método de pago')
+      }
+      load()
+    } finally { setBusy(false) }
+  }
+
   if (loading) return <Loading />
   const pendientes = invoices.filter((i) => i.status === 'pendiente')
   const pagadas = invoices.filter((i) => i.status === 'pagada')
@@ -72,7 +91,7 @@ export default function ClientInvoices() {
         <div className="min-w-0">
           <span className="homy-eyebrow">Pagos</span>
           <h1 className="homy-page-title mt-1.5">Facturas</h1>
-          <p className="homy-page-sub">Todo lo que tenés que pagar y lo ya pagado</p>
+          <p className="homy-page-sub">Todo lo que tenés que pagar y lo ya pagado — pagás con Mercado Pago o en efectivo</p>
         </div>
       </header>
 
@@ -138,12 +157,38 @@ export default function ClientInvoices() {
                       >
                         <FileDown className="size-4" aria-hidden /> PDF
                       </button>
-                      <button disabled={busy} onClick={() => pay(inv)} className="homy-btn-primary px-4 py-3 text-sm sm:py-2.5">
-                        <Wallet className="size-4" aria-hidden /> Pagar con Mercado Pago
-                      </button>
+                      {inv.paymentMethod === 'efectivo' ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1D63B8]/10 px-3.5 py-2 text-xs font-extrabold text-[#1D63B8]">
+                            <Hourglass className="size-3.5" aria-hidden /> Efectivo acordado — esperando confirmación del profesional
+                          </span>
+                          <button disabled={busy} onClick={() => cashAction(inv, 'cancelar')} className="homy-focus inline-flex min-h-[44px] items-center gap-1.5 rounded-xl homy-glass-soft px-4 py-3 text-sm font-bold text-slate-500 transition hover:text-red-500 sm:py-2.5">
+                            <Undo2 className="size-4" aria-hidden /> Cancelar acuerdo
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button disabled={busy} onClick={() => payMP(inv)} className="homy-btn-primary px-4 py-3 text-sm sm:py-2.5">
+                            <Wallet className="size-4" aria-hidden /> Pagar con Mercado Pago
+                          </button>
+                          <button
+                            disabled={busy}
+                            onClick={() => cashAction(inv, 'acordar')}
+                            title="Acordás pagar en efectivo y el profesional confirma cuando cobra"
+                            className="homy-focus inline-flex min-h-[44px] items-center gap-1.5 rounded-xl homy-glass-soft px-4 py-3 text-sm font-bold text-[#0A2540] transition hover:bg-[#0A2540]/10 sm:py-2.5"
+                          >
+                            <Banknote className="size-4" aria-hidden /> Efectivo
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
+                {pendientes.length > 0 && (
+                  <p className="homy-glass-soft rounded-xl px-4 py-3 text-xs leading-relaxed text-slate-500">
+                    ¿Cómo pagás? <span className="font-bold text-[#0A2540]">Mercado Pago</span> queda respaldado por la plataforma. Con <span className="font-bold text-[#0A2540]">Efectivo</span>, el profesional confirma en su panel cuando recibe el dinero y la factura queda pagada.
+                  </p>
+                )}
               </div>
             </section>
           )}

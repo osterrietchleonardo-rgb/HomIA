@@ -20,7 +20,12 @@ export async function POST(
   if (project.escrowStatus !== 'none') return fail('El pago de este proyecto ya tiene un estado de garantía')
   if (project.status !== 'activo') return fail('El proyecto no está activo')
 
-  const total = Math.round((project.laborCost + project.materialsCost) * 100) / 100
+  // En modo "cliente_paga_proveedor" los materiales los paga el cliente directo
+  // al proveedor: la garantía cubre solo la mano de obra del profesional.
+  const garantia = project.materialsPaymentMode === 'cliente_paga_proveedor'
+    ? project.laborCost
+    : project.laborCost + project.materialsCost
+  const total = Math.round(garantia * 100) / 100
   if (total <= 0) return fail('El proyecto todavía no tiene un presupuesto para retener')
 
   if (!mpConfigured()) {

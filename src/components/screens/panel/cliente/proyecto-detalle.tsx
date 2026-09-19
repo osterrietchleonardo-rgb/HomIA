@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import {
   Check, ArrowRight, Star, FolderKanban, Phone, Mail, Package, ReceiptText,
   Wallet, Flag, ListChecks, History, Info, ShieldCheck, FileDown, FileText, CircleCheck,
+  Banknote, Undo2, Hourglass, Store, HandCoins,
 } from 'lucide-react'
 import ReviewForm from '../review-form'
 
@@ -24,11 +25,12 @@ function verPdf(id: string, number_: string) {
 }
 
 type Material = { id: string; name: string; unit: string; quantity: number; unitPrice: number; subtotal: number; status: string; note: string | null; providerName: string | null; providerUserId: string | null; createdAt: string }
-type Invoice = { id: string; number: string; total: number; status: string; issuedAt: string }
+type Invoice = { id: string; number: string; total: number; status: string; issuedAt: string; paymentMethod?: string | null }
+type Charge = { id: string; number: string; description: string; amount: number; status: string; method: string | null; createdAt: string; providerName: string | null }
 type Brief = { urgency?: string | null; address?: string | null; deadline?: string | null; photos?: string[] }
 type Project = {
   id: string; title: string; description: string | null; stage: string; status: string
-  laborCost: number; materialsCost: number
+  laborCost: number; materialsCost: number; materialsPaymentMode: string
   escrowStatus: string; escrowAmount: number
   urgency?: string | null; address?: string | null; deadline?: string | null; photos?: string[]
   professional: { id: string; userId: string; displayName: string; avatarUrl: string | null; personType: string; companyName: string | null; phone: string | null; email: string | null }
@@ -36,7 +38,7 @@ type Project = {
 const STAGES = ['presupuesto', 'materiales', 'ejecucion', 'revision', 'finalizado']
 
 export default function ClientProjectDetail({ id }: { id: string }) {
-  const [data, setData] = useState<{ project: Project; materials: Material[]; invoices: Invoice[]; role: string } | null>(null)
+  const [data, setData] = useState<{ project: Project; materials: Material[]; invoices: Invoice[]; charges: Charge[]; role: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   // targets ya reseñados en este proyecto (userId → reseña publicada)
@@ -94,6 +96,47 @@ export default function ClientProjectDetail({ id }: { id: string }) {
     } finally { setBusy(false) }
   }
 
+  async function invoiceCash(invoiceId: string, action: 'acordar' | 'cancelar') {
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/cash`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      })
+      const d = await res.json()
+      if (!res.ok) { toast.error(d.error); return }
+      toast.success(action === 'acordar'
+        ? 'Efectivo acordado: el profesional confirma cuando recibe el dinero'
+        : 'Acuerdo cancelado: elegí otro método de pago')
+      load()
+    } finally { setBusy(false) }
+  }
+
+  async function payCharge(chargeId: string, method: 'mercadopago' | 'efectivo') {
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/charges/${chargeId}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method }),
+      })
+      const d = await res.json()
+      if (!res.ok) {
+        if (d.needsConfig) {
+          toast.error('Mercado Pago no configurado en el servidor')
+        } else {
+          toast.error(d.error)
+        }
+        return
+      }
+      if (method === 'mercadopago') {
+        window.location.href = d.initPoint
+        return
+      }
+      toast.success('Efectivo acordado con el proveedor: confirma cuando lo cobre')
+      load()
+    } finally { setBusy(false) }
+  }
+
   async function startEscrow() {
     setBusy(true)
     try {
@@ -141,6 +184,9 @@ export default function ClientProjectDetail({ id }: { id: string }) {
   const progress = p.stage === 'finalizado' ? 100 : ((stageNum + 1) / STAGES.length) * 100
   const pending = data.materials.filter((m) => m.status === 'propuesto')
   const decided = data.materials.filter((m) => m.status !== 'propuesto')
+  const clientePagaMateriales = p.materialsPaymentMode === 'cliente_paga_proveedor'
+  // en modo cliente_paga_proveedor la garantía cubre solo mano de obra
+  const garantiaTotal = clientePagaMateriales ? p.laborCost : p.laborCost + p.materialsCost
   const brief: Brief | null = (p.urgency || p.address || p.deadline || (p.photos && p.photos.length > 0))
     ? { urgency: p.urgency, address: p.address, deadline: p.deadline, photos: p.photos || [] }
     : null
@@ -231,6 +277,36 @@ export default function ClientProjectDetail({ id }: { id: string }) {
         </div>
       </section>
 
+      {/* quién paga los materiales: banner siempre visible para los 3 roles implicados */}
+      <section className="homy-glass mb-5 rounded-3xl p-5" aria-label="Modo de pago de materiales">
+        <div className="homy-section-head">
+          <h2 className="homy-section-title">
+            <span className="homy-icon-chip homy-chip-ai size-8 shrink-0 [&_svg]:size-4" aria-hidden><Store /></span>
+            ¿Quién paga los materiales?
+          </h2>
+          <span className="homy-pill">Acordado con tu profesional</span>
+        </div>
+        {clientePagaMateriales ? (
+          <div className="grid gap-2.5 text-sm sm:grid-cols-2">
+            <p className="homy-glass-soft rounded-xl p-3.5 leading-relaxed text-slate-600">
+              <span className="font-extrabold text-[#0A2540]">Materiales:</span> los pagás <span className="font-bold text-[#1D63B8]">directamente al proveedor</span> cuando te los cobre (Mercado Pago o efectivo, abajo en “Pagos a proveedores”).
+            </p>
+            <p className="homy-glass-soft rounded-xl p-3.5 leading-relaxed text-slate-600">
+              <span className="font-extrabold text-[#0A2540]">Mano de obra:</span> la pagás a {p.professional.companyName || p.professional.displayName} en su factura al finalizar.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-2.5 text-sm sm:grid-cols-2">
+            <p className="homy-glass-soft rounded-xl p-3.5 leading-relaxed text-slate-600">
+              <span className="font-extrabold text-[#0A2540]">Materiales:</span> los adelanta tu profesional y los ves detallados en <span className="font-bold">su factura</span> (más mano de obra).
+            </p>
+            <p className="homy-glass-soft rounded-xl p-3.5 leading-relaxed text-slate-600">
+              <span className="font-extrabold text-[#0A2540]">Mano de obra:</span> incluida en la misma factura del profesional.
+            </p>
+          </div>
+        )}
+      </section>
+
       {/* pago protegido (escrow Mercado Pago) */}
       <section className="homy-glass mb-5 rounded-3xl p-5">
         <div className="homy-section-head">
@@ -245,7 +321,9 @@ export default function ClientProjectDetail({ id }: { id: string }) {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="homy-glass-soft flex max-w-xl items-start gap-2.5 rounded-xl p-3.5 text-sm text-slate-500">
               <Info className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden />
-              Retenés {formatARS(p.laborCost + p.materialsCost)} con Mercado Pago. El profesional trabaja sabiendo que el pago está asegurado y vos lo liberás cuando la obra quede bien.
+              {clientePagaMateriales
+                ? <>Retenés {formatARS(garantiaTotal)} con Mercado Pago (solo mano de obra: los materiales los pagás directamente al proveedor). El profesional trabaja sabiendo que su pago está asegurado y vos lo liberás cuando la obra quede bien.</>
+                : <>Retenés {formatARS(garantiaTotal)} con Mercado Pago. El profesional trabaja sabiendo que el pago está asegurado y vos lo liberás cuando la obra quede bien.</>}
             </p>
             <button disabled={busy || p.status !== 'activo'} onClick={startEscrow} className="homy-btn-primary px-5 py-3 text-sm">
               <ShieldCheck className="size-4" aria-hidden /> Retener pago en garantía
@@ -321,6 +399,11 @@ export default function ClientProjectDetail({ id }: { id: string }) {
                     <p className="font-bold text-[#0A2540]">{m.name}</p>
                     <p className="text-sm text-slate-500">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}{m.providerName ? ` · ${m.providerName}` : ''}</p>
                     {m.note && <p className="mt-1 text-xs text-slate-400">{m.note}</p>}
+                    {clientePagaMateriales && m.providerName && (
+                      <p className="mt-1 flex items-center gap-1 text-xs font-bold text-[#1D63B8]">
+                        <HandCoins className="size-3.5" aria-hidden /> Si lo aprobás, te lo cobra {m.providerName} directamente (no va en la factura del profesional)
+                      </p>
+                    )}
                   </div>
                   <p className="text-lg font-extrabold text-[#0A2540] tabular-nums">{formatARS(m.subtotal)}</p>
                 </div>
@@ -362,6 +445,55 @@ export default function ClientProjectDetail({ id }: { id: string }) {
         </section>
       )}
 
+      {/* pagos a proveedores (materiales en modo cliente_paga_proveedor) */}
+      {(data.charges.length > 0 || (clientePagaMateriales && data.materials.some((m) => m.status === 'aprobado' && m.providerName))) && (
+        <section className="homy-glass mb-5 rounded-3xl p-5">
+          <div className="homy-section-head">
+            <h2 className="homy-section-title">
+              <span className="homy-icon-chip homy-chip-ai size-9 shrink-0 [&_svg]:size-4" aria-hidden><Store /></span>
+              Pagos a proveedores (materiales)
+            </h2>
+            <span className="homy-pill">{data.charges.length}</span>
+          </div>
+          {data.charges.length === 0 ? (
+            <p className="homy-glass-soft flex items-start gap-2.5 rounded-xl p-3.5 text-sm text-slate-500">
+              <Info className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden />
+              Los materiales aprobados te los va a cobrar cada proveedor directamente (aparecen acá cuando te emitan el cobro). La factura del profesional cubre solo la mano de obra.
+            </p>
+          ) : (
+            <div className="space-y-2.5 homy-stagger">
+              {data.charges.map((ch) => (
+                <div key={ch.id} className="homy-row flex flex-wrap items-center justify-between gap-2 p-3.5">
+                  <div className="min-w-0">
+                    <p className="font-bold text-[#0A2540]">{ch.number} · {ch.providerName || 'Proveedor'}</p>
+                    <p className="text-xs text-slate-400 line-clamp-1">{ch.description}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <p className="font-extrabold tabular-nums">{formatARS(ch.amount)}</p>
+                    {ch.status === 'pendiente' && (
+                      <div className="flex items-center gap-2">
+                        <button disabled={busy} onClick={() => payCharge(ch.id, 'mercadopago')} className="homy-btn-primary px-4 py-2 text-sm">
+                          <Wallet className="size-4" aria-hidden /> Mercado Pago
+                        </button>
+                        <button disabled={busy} onClick={() => payCharge(ch.id, 'efectivo')} className="homy-glass-soft homy-focus rounded-xl px-4 py-2 text-sm font-bold text-[#0A2540] transition hover:bg-[#0A2540]/10">
+                          <Banknote className="mr-1 inline size-4" aria-hidden /> Efectivo
+                        </button>
+                      </div>
+                    )}
+                    {ch.status === 'acordada_efectivo' && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1D63B8]/10 px-3.5 py-2 text-xs font-extrabold text-[#1D63B8]">
+                        <Hourglass className="size-3.5" aria-hidden /> Efectivo acordado — esperando confirmación del proveedor
+                      </span>
+                    )}
+                    {ch.status === 'pagada' && <StatusBadge status="pagada" />}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* facturas */}
       <section className="homy-glass mb-5 rounded-3xl p-5">
         <div className="homy-section-head">
@@ -395,11 +527,25 @@ export default function ClientProjectDetail({ id }: { id: string }) {
                     <FileDown className="size-4" aria-hidden /> PDF
                   </button>
                   <StatusBadge status={inv.status} />
-                  {inv.status === 'pendiente' && (
-                    <button disabled={busy} onClick={() => payInvoice(inv.id)} className="homy-btn-primary px-4 py-2 text-sm">
-                      <Wallet className="size-4" aria-hidden /> Pagar con Mercado Pago
-                    </button>
-                  )}
+                  {inv.status === 'pendiente' && (inv.paymentMethod === 'efectivo' ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1D63B8]/10 px-3.5 py-2 text-xs font-extrabold text-[#1D63B8]">
+                        <Hourglass className="size-3.5" aria-hidden /> Efectivo acordado — esperando confirmación
+                      </span>
+                      <button disabled={busy} onClick={() => invoiceCash(inv.id, 'cancelar')} className="homy-focus inline-flex min-h-[40px] items-center gap-1.5 rounded-xl homy-glass-soft px-3.5 py-2 text-xs font-bold text-slate-500 transition hover:text-red-500">
+                        <Undo2 className="size-3.5" aria-hidden /> Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button disabled={busy} onClick={() => payInvoice(inv.id)} className="homy-btn-primary px-4 py-2 text-sm">
+                        <Wallet className="size-4" aria-hidden /> Mercado Pago
+                      </button>
+                      <button disabled={busy} onClick={() => invoiceCash(inv.id, 'acordar')} className="homy-glass-soft homy-focus rounded-xl px-4 py-2 text-sm font-bold text-[#0A2540] transition hover:bg-[#0A2540]/10">
+                        <Banknote className="mr-1 inline size-4" aria-hidden /> Efectivo
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}
@@ -407,8 +553,26 @@ export default function ClientProjectDetail({ id }: { id: string }) {
         )}
       </section>
 
-      {/* reseñas 360° al finalizar: profesional + proveedores con materiales */}
-      {p.stage === 'finalizado' && (() => {
+      {/* reseñas 360°: quién, cuándo y dónde — siempre visible para que el cliente sepa dónde reseñar */}
+      {(() => {
+        const finalized = p.stage === 'finalizado' || p.status === 'finalizado'
+        if (!finalized) {
+          return (
+            <section className="homy-glass mb-5 rounded-3xl p-5" aria-label="Reseñas bloqueadas hasta finalizar la obra">
+              <div className="homy-section-head">
+                <h2 className="homy-section-title">
+                  <span className="homy-icon-chip homy-chip-gold size-8 shrink-0 [&_svg]:size-4" aria-hidden><Star /></span>
+                  Reseñas
+                </h2>
+                <span className="homy-pill">Se activan al finalizar</span>
+              </div>
+              <p className="homy-glass-soft flex items-start gap-2.5 rounded-xl p-3.5 text-sm text-slate-500">
+                <Info className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden />
+                Las reseñas las escriben solo quienes participaron de la obra, y recién cuando termina. Al finalizar este proyecto vas a poder calificar acá a tu profesional y a cada proveedor que vendió materiales, con texto y fotos.
+              </p>
+            </section>
+          )
+        }
         const providers = data.materials
           .filter((m) => m.providerUserId && m.providerUserId !== p.professional.userId)
           .filter((m, i, arr) => arr.findIndex((x) => x.providerUserId === m.providerUserId) === i)
@@ -417,6 +581,9 @@ export default function ClientProjectDetail({ id }: { id: string }) {
         const allReviewed = proReviewed && pendingProviders.length === 0
         return (
           <>
+            <div className="mb-2 rounded-2xl homy-glass-soft px-4 py-3 text-sm font-semibold text-slate-600">
+              <span className="font-extrabold text-[#0A2540]">¿Quién califica a quién?</span> Vos calificás a tu profesional y a cada proveedor que te vendió materiales; tu profesional te califica a vos. Una vez por persona, con texto y fotos que avalen.
+            </div>
             {allReviewed ? (
               <section className="homy-glass flex flex-wrap items-center gap-3 rounded-3xl p-5">
                 <span className="homy-icon-chip homy-chip-mint size-10 shrink-0 [&_svg]:size-5" aria-hidden><CircleCheck /></span>
@@ -428,7 +595,7 @@ export default function ClientProjectDetail({ id }: { id: string }) {
               </section>
             ) : (
               <div className="mb-2 rounded-2xl homy-glass-soft px-4 py-3 text-sm font-semibold text-slate-600">
-                Se abre la reseña al finalizar la obra: calificá a cada participante por separado.
+                La obra terminó: dejá tu reseña a cada participante desde acá abajo.
               </div>
             )}
             {!proReviewed && (

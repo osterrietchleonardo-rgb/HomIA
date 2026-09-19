@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { ok, requireAuth, body, parseJson } from '@/lib/api'
+import { ok, requireAuth, body } from '@/lib/api'
 import { db } from '@/lib/db'
 
 export async function GET() {
@@ -113,9 +113,4 @@ export async function PUT(req: NextRequest) {
   }
 
   return ok({ success: true })
-}
-
-// helper exportado para otros módulos
-export function safeParse<T>(s: string | null | undefined, fb: T): T {
-  return parseJson<T>(s, fb)
 }

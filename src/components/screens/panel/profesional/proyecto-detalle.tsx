@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import {
   ArrowRight, Receipt, Truck, Plus, RefreshCcw, Phone, Mail, ArrowLeft,
   FolderOpen, Package, ClipboardPen, CircleX, History, Check, FileText, CircleCheck,
+  Store, Banknote, Hourglass,
 } from 'lucide-react'
 import ReviewForm from '../review-form'
 
@@ -25,14 +26,14 @@ type Material = {
   unit: string; quantity: number; unitPrice: number; subtotal: number
   status: string; note: string | null; providerId: string | null; providerName: string | null; createdAt: string
 }
-type Invoice = { id: string; number: string; total: number; status: string; issuedAt: string }
+type Invoice = { id: string; number: string; total: number; status: string; issuedAt: string; paymentMethod: string | null }
 type RetiroLink = {
   id: string; accountLabel: string; notes: string | null; active: boolean
   provider: { id: string; businessName: string; city: string | null }
 }
 type Project = {
   id: string; title: string; description: string | null; stage: string; status: string
-  laborCost: number; materialsCost: number; createdAt: string
+  laborCost: number; materialsCost: number; materialsPaymentMode: string; createdAt: string
   urgency?: string | null; address?: string | null; deadline?: string | null; photos?: string[]
   job: { id: string; title: string } | null
   client: { id: string; displayName: string; avatarUrl: string | null; phone: string | null; email: string | null }
@@ -170,7 +171,35 @@ export default function ProProjectDetail({ id }: { id: string }) {
       const res = await fetch(`/api/projects/${id}/invoice`, { method: 'POST' })
       const d = await res.json()
       if (!res.ok) { toast.error(d.error); return }
-      toast.success(`Factura ${d.invoice.number} emitida`, { description: `Total: ${formatARS(d.invoice.total)} — el cliente la paga con Mercado Pago.` })
+      toast.success(`Factura ${d.invoice.number} emitida`, { description: `Total: ${formatARS(d.invoice.total)} — el cliente la paga con Mercado Pago o en efectivo.` })
+      load()
+    } finally { setBusy(false) }
+  }
+
+  async function setMaterialsMode(mode: 'pro_adelanta' | 'cliente_paga_proveedor') {
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/projects/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ materialsPaymentMode: mode }),
+      })
+      const d = await res.json()
+      if (!res.ok) { toast.error(d.error); return }
+      toast.success('Modo actualizado — el cliente lo ve en su panel')
+      load()
+    } finally { setBusy(false) }
+  }
+
+  async function confirmCash(inv: Invoice) {
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/invoices/${inv.id}/cash`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'confirmar' }),
+      })
+      const d = await res.json()
+      if (!res.ok) { toast.error(d.error); return }
+      toast.success(`Cobro de ${inv.number} confirmado — factura pagada`)
       load()
     } finally { setBusy(false) }
   }
@@ -311,6 +340,41 @@ export default function ProProjectDetail({ id }: { id: string }) {
                 <Mail className="size-4" aria-hidden /> Email
               </a>
             )}
+          </div>
+        </div>
+
+        {/* quién paga los materiales: modo elegido por el profesional, visible para el cliente */}
+        <div className="homy-glass rounded-3xl p-5 mb-5" aria-label="Modo de pago de materiales">
+          <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-1">
+            <span className="homy-icon-chip homy-chip-ai size-8 [&_svg]:size-4" aria-hidden><Store /></span>
+            ¿Quién paga los materiales?
+          </h2>
+          <p className="text-xs text-slate-400 mb-3">Elegí cómo van a circular los materiales: el cliente ve esta configuración en su panel.</p>
+          <div className="grid gap-2.5 sm:grid-cols-2">
+            <button
+              onClick={() => p.materialsPaymentMode !== 'pro_adelanta' && setMaterialsMode('pro_adelanta')}
+              disabled={busy || p.status !== 'activo'}
+              aria-pressed={p.materialsPaymentMode === 'pro_adelanta'}
+              className={`homy-focus rounded-2xl p-4 text-left transition ${p.materialsPaymentMode === 'pro_adelanta' ? 'bg-gradient-to-br from-[#1D63B8]/15 to-[#00C4FF]/10 ring-2 ring-[#1D63B8]/50' : 'homy-glass-soft hover:ring-1 hover:ring-[#1D63B8]/30 disabled:opacity-60'}`}
+            >
+              <p className="flex items-center gap-1.5 text-sm font-extrabold text-[#0A2540]">
+                {p.materialsPaymentMode === 'pro_adelanta' && <Check className="size-4 text-[#1D63B8]" aria-hidden />}
+                Los adelanto yo y los cobro en la factura
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">Vos comprás los materiales, se los llevás y los cobrás junto con tu mano de obra al finalizar.</p>
+            </button>
+            <button
+              onClick={() => p.materialsPaymentMode !== 'cliente_paga_proveedor' && setMaterialsMode('cliente_paga_proveedor')}
+              disabled={busy || p.status !== 'activo'}
+              aria-pressed={p.materialsPaymentMode === 'cliente_paga_proveedor'}
+              className={`homy-focus rounded-2xl p-4 text-left transition ${p.materialsPaymentMode === 'cliente_paga_proveedor' ? 'bg-gradient-to-br from-[#1D63B8]/15 to-[#00C4FF]/10 ring-2 ring-[#1D63B8]/50' : 'homy-glass-soft hover:ring-1 hover:ring-[#1D63B8]/30 disabled:opacity-60'}`}
+            >
+              <p className="flex items-center gap-1.5 text-sm font-extrabold text-[#0A2540]">
+                {p.materialsPaymentMode === 'cliente_paga_proveedor' && <Check className="size-4 text-[#1D63B8]" aria-hidden />}
+                El cliente paga los materiales al proveedor
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">Vos gestionás los materiales con el proveedor y el cliente se los paga directamente. Tu factura cubre solo mano de obra.</p>
+            </button>
           </div>
         </div>
 
@@ -527,7 +591,12 @@ export default function ProProjectDetail({ id }: { id: string }) {
               </button>
             )}
           </div>
-          <p className="text-xs text-slate-400 mb-3">La factura incluye los materiales aprobados + mano de obra. El cliente la paga con Mercado Pago desde su panel.</p>
+          <p className="text-xs text-slate-400 mb-3">
+            {p.materialsPaymentMode === 'cliente_paga_proveedor'
+              ? 'Facturás solo tu mano de obra: los materiales los paga el cliente directamente a cada proveedor (cobros aparte).'
+              : 'La factura incluye los materiales aprobados + mano de obra.'}{' '}
+            El cliente elige pagar con Mercado Pago (respaldado) o en efectivo (vos confirmás cuando lo cobrás).
+          </p>
           {data.invoices.length === 0 ? (
             <div className="homy-glass-soft rounded-xl p-4 flex items-center gap-2 text-sm text-slate-500">
               <Package className="size-4 shrink-0 text-slate-400" aria-hidden />
@@ -541,9 +610,20 @@ export default function ProProjectDetail({ id }: { id: string }) {
                     <p className="font-bold text-[#0A2540] font-mono text-sm">{inv.number}</p>
                     <p className="text-xs text-slate-400">{formatDate(inv.issuedAt)}</p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <p className="font-extrabold tabular-nums">{formatARS(inv.total)}</p>
-                    <StatusBadge status={inv.status} />
+                    {inv.status === 'pendiente' && inv.paymentMethod === 'efectivo' && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1D63B8]/10 px-3 py-1.5 text-[11px] font-extrabold text-[#1D63B8]">
+                        <Hourglass className="size-3" aria-hidden /> Efectivo acordado
+                      </span>
+                    )}
+                    {inv.status === 'pendiente' && inv.paymentMethod === 'efectivo' ? (
+                      <button disabled={busy} onClick={() => confirmCash(inv)} className="homy-btn-primary min-h-[40px] px-3.5 py-2 text-xs">
+                        <Banknote className="mr-1 inline size-4" aria-hidden /> Confirmar cobro en efectivo
+                      </button>
+                    ) : (
+                      <StatusBadge status={inv.status} />
+                    )}
                   </div>
                 </div>
               ))}

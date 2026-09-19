@@ -25,6 +25,7 @@ export async function GET(
         orderBy: { createdAt: 'asc' },
       },
       invoices: { orderBy: { issuedAt: 'desc' } },
+      charges: { orderBy: { createdAt: 'desc' } },
       job: { select: { id: true, title: true } },
     },
   })
@@ -52,6 +53,7 @@ export async function GET(
       stage: project.stage,
       laborCost: project.laborCost,
       materialsCost: project.materialsCost,
+      materialsPaymentMode: project.materialsPaymentMode,
       escrowStatus: project.escrowStatus,
       escrowAmount: project.escrowAmount,
       createdAt: project.createdAt,
@@ -92,6 +94,16 @@ export async function GET(
     })),
     links,
     invoices: project.invoices,
+    charges: project.charges.map((c) => ({
+      id: c.id,
+      number: c.number,
+      description: c.description,
+      amount: c.amount,
+      status: c.status,
+      method: c.method,
+      createdAt: c.createdAt,
+      providerName: project.materials.find((m) => m.providerId === c.providerId)?.provider?.businessName || null,
+    })),
   })
 }
 
@@ -112,7 +124,7 @@ export async function PATCH(
   const isPro = pro && project.professionalId === pro.id
   if (!isClient && !isPro) return fail('Sin permiso', 403)
 
-  const d = await body<{ stage?: string; status?: string }>(req)
+  const d = await body<{ stage?: string; status?: string; materialsPaymentMode?: string }>(req)
   const data: Record<string, unknown> = {}
   if (d.stage) {
     if (!['presupuesto', 'materiales', 'ejecucion', 'revision', 'finalizado'].includes(d.stage)) {
@@ -122,12 +134,33 @@ export async function PATCH(
     if (d.stage === 'finalizado') data.status = 'finalizado'
   }
   if (d.status) data.status = d.status
+  if (d.materialsPaymentMode) {
+    if (!['pro_adelanta', 'cliente_paga_proveedor'].includes(d.materialsPaymentMode)) {
+      return fail('Modo de pago de materiales inválido')
+    }
+    if (project.status !== 'activo') return fail('El proyecto ya no está activo: no se puede cambiar el modo de pago')
+    data.materialsPaymentMode = d.materialsPaymentMode
+  }
 
   await db.project.update({ where: { id }, data })
 
-  // Notificar a la contraparte
+  // Notificar cambio de modo de materiales (quién paga qué queda explícito para ambos)
   const proProfile = await db.professionalProfile.findUnique({ where: { id: project.professionalId }, select: { userId: true } })
   const notifyUserId = isClient ? proProfile?.userId : project.clientId
+  if (d.materialsPaymentMode && notifyUserId) {
+    const modoLabel = d.materialsPaymentMode === 'pro_adelanta'
+      ? 'El profesional adelanta los materiales y los cobra en la factura'
+      : 'El cliente paga los materiales directamente al proveedor'
+    await db.notification.create({
+      data: {
+        userId: notifyUserId,
+        type: 'modo_materiales',
+        title: 'Modo de pago de materiales actualizado',
+        body: `"${project.title}": ${modoLabel}.`,
+        link: `#/panel/${isClient ? 'profesional' : 'cliente'}/proyectos/${id}`,
+      },
+    })
+  }
   if (notifyUserId && d.stage === 'finalizado') {
     await db.notification.create({
       data: {

@@ -49,6 +49,7 @@ const ProProfileEdit = dynamic(() => import('@/components/screens/panel/profesio
 // Panel proveedor
 const ProviderDashboard = dynamic(() => import('@/components/screens/panel/proveedor/dashboard'), { ssr: false, loading: () => <Loading /> })
 const ProviderStock = dynamic(() => import('@/components/screens/panel/proveedor/stock'), { ssr: false, loading: () => <Loading /> })
+const ProviderCharges = dynamic(() => import('@/components/screens/panel/proveedor/cobros'), { ssr: false, loading: () => <Loading /> })
 const ProviderCRM = dynamic(() => import('@/components/screens/panel/proveedor/crm'), { ssr: false, loading: () => <Loading /> })
 const ProviderLinks = dynamic(() => import('@/components/screens/panel/proveedor/vinculaciones'), { ssr: false, loading: () => <Loading /> })
 const ProviderProfileEdit = dynamic(() => import('@/components/screens/panel/proveedor/perfil'), { ssr: false, loading: () => <Loading /> })
@@ -176,6 +177,7 @@ function panelScreen(route: ReturnType<typeof useRoute>) {
   if (role === 'proveedor') {
     if (page === '') return <ProviderDashboard />
     if (page === 'stock') return <ProviderStock />
+    if (page === 'cobros') return <ProviderCharges />
     if (page === 'crm') return <ProviderCRM />
     if (page === 'vinculaciones') return <ProviderLinks />
     if (page === 'perfil') return <ProviderProfileEdit />

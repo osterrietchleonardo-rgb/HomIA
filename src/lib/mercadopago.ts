@@ -71,6 +71,48 @@ export async function getPayment(paymentId: string) {
   }
 }
 
+// ── COBRO DE MATERIALES PROVEEDOR → CLIENTE ──
+// En proyectos con modo "cliente_paga_proveedor", el proveedor emite el cobro
+// por los materiales aprobados y el cliente lo paga (MP o efectivo).
+// external_reference = "charge:<chargeId>" — el webhook lo distingue de facturas/escrow.
+export async function createChargePreference(input: {
+  chargeId: string
+  chargeNumber: string
+  title: string
+  total: number
+  payerEmail: string
+  baseUrl: string
+}): Promise<PreferenceResult> {
+  const mp = new Preference(client())
+  const res = await mp.create({
+    body: {
+      items: [
+        {
+          id: input.chargeId,
+          title: input.title.slice(0, 250),
+          description: `Cobro de materiales ${input.chargeNumber} — HomIA`,
+          quantity: 1,
+          currency_id: 'ARS',
+          unit_price: input.total,
+        },
+      ],
+      payer: { email: input.payerEmail },
+      external_reference: `charge:${input.chargeId}`,
+      back_urls: {
+        success: `${input.baseUrl}/#/panel/cliente/proyectos?cobro=pagado`,
+        pending: `${input.baseUrl}/#/panel/cliente/proyectos?cobro=pendiente`,
+        failure: `${input.baseUrl}/#/panel/cliente/proyectos?cobro=fallo`,
+      },
+      notification_url: `${input.baseUrl}/api/payments/webhook`,
+      statement_descriptor: 'HOMIA',
+    },
+  })
+  return {
+    id: res.id || '',
+    initPoint: (res.init_point || res.sandbox_init_point || '') as string,
+  }
+}
+
 // ─────────────────────────── ESCROW ───────────────────────────
 // El cliente deposita el total del proyecto en garantía. Los fondos
 // los recibe la plataforma (collector) y se "liberan" al profesional

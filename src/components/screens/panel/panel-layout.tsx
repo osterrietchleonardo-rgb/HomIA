@@ -11,7 +11,7 @@ import { toast } from 'sonner'
 import {
   LayoutDashboard, Briefcase, FolderKanban, FileText, User, Bell, LogOut,
   Search, Boxes, Users, Link2, HardHat, ClipboardList, Home, Sparkles,
-  Compass, MessageCircle, ShieldCheck, LifeBuoy,
+  Compass, MessageCircle, ShieldCheck, LifeBuoy, HandCoins,
 } from 'lucide-react'
 
 type NavItem = { to: string; label: string; icon: React.ComponentType<{ className?: string }>; m?: boolean }
@@ -47,8 +47,9 @@ const NAV: Record<string, NavItem[]> = {
   proveedor: [
     { to: '/panel/proveedor', label: 'Inicio', icon: LayoutDashboard, m: true },
     { to: '/panel/proveedor/stock', label: 'Stock', icon: Boxes, m: true },
-    { to: '/panel/proveedor/crm', label: 'CRM', icon: Users, m: true },
-    { to: '/panel/proveedor/vinculaciones', label: 'Vinculaciones', icon: Link2, m: true },
+    { to: '/panel/proveedor/cobros', label: 'Cobros', icon: HandCoins, m: true },
+    { to: '/panel/proveedor/crm', label: 'CRM', icon: Users },
+    { to: '/panel/proveedor/vinculaciones', label: 'Vinculaciones', icon: Link2 },
     { to: '/panel/proveedor/directorio', label: 'Directorio', icon: Compass },
     { to: '/panel/proveedor/mensajes', label: 'Mensajes', icon: MessageCircle, m: true },
     { to: '/panel/proveedor/verificacion', label: 'Verificación', icon: ShieldCheck },

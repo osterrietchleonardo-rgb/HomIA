@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     include: {
       pro: { include: { user: { select: { id: true, displayName: true, avatarUrl: true } } } },
       materials: { select: { id: true, status: true, provider: { select: { user: { select: { id: true } } } } } },
-      invoices: { select: { id: true, number: true, total: true, status: true } },
+      invoices: { select: { id: true, number: true, total: true, status: true, paymentMethod: true } },
       job: { select: { id: true } },
     },
     orderBy: { updatedAt: 'desc' },
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
         include: {
           client: { select: { id: true, displayName: true, avatarUrl: true } },
           materials: { select: { id: true, status: true, provider: { select: { user: { select: { id: true } } } } } },
-          invoices: { select: { id: true, number: true, total: true, status: true } },
+          invoices: { select: { id: true, number: true, total: true, status: true, paymentMethod: true } },
           job: { select: { id: true } },
         },
         orderBy: { updatedAt: 'desc' },
@@ -83,7 +83,7 @@ function serializeProject(p: {
   id: string; title: string; description: string | null; status: string; stage: string
   laborCost: number; materialsCost: number; createdAt: Date; updatedAt: Date; jobId: string | null
   materials: { id: string; status: string }[]
-  invoices: { id: string; number: string; total: number; status: string }[]
+  invoices: { id: string; number: string; total: number; status: string; paymentMethod: string | null }[]
   job: { id: string } | null
 }, _r: string) {
   return {

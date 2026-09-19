@@ -84,6 +84,40 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true })
     }
 
+    // Cobro de materiales proveedor → cliente: external_reference = "charge:<chargeId>"
+    if (payment.externalReference.startsWith('charge:')) {
+      const chargeId = payment.externalReference.slice('charge:'.length)
+      const charge = await db.providerCharge.findUnique({
+        where: { id: chargeId },
+        include: { provider: { select: { userId: true } } },
+      })
+      if (charge && payment.status === 'approved' && charge.status !== 'pagada') {
+        await db.providerCharge.update({
+          where: { id: charge.id },
+          data: { status: 'pagada', method: 'mercadopago', mpPaymentId: payment.id, paidAt: new Date() },
+        })
+        await db.notification.createMany({
+          data: [
+            {
+              userId: charge.provider.userId,
+              type: 'cobro_pagado',
+              title: 'Cobro de materiales pagado',
+              body: `El cliente pagó tu cobro ${charge.number} con Mercado Pago.`,
+              link: '#/panel/proveedor/cobros',
+            },
+            {
+              userId: charge.clientId,
+              type: 'cobro_pagado',
+              title: 'Pago del cobro acreditado',
+              body: `Tu pago de ${charge.number} quedó acreditado para el proveedor.`,
+              link: `#/panel/cliente/proyectos/${charge.projectId}`,
+            },
+          ],
+        })
+      }
+      return NextResponse.json({ received: true })
+    }
+
     // Factura normal
     const invoice = await db.invoice.findUnique({
       where: { id: payment.externalReference },
@@ -93,6 +127,7 @@ export async function POST(req: NextRequest) {
     await db.payment.create({
       data: {
         invoiceId: invoice.id,
+        method: 'mercadopago',
         mpPaymentId: payment.id,
         status: payment.status,
         amount: payment.transactionAmount || invoice.total,

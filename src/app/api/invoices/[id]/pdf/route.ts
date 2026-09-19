@@ -30,7 +30,7 @@ export async function GET(
 
   const invoice = await db.invoice.findUnique({
     where: { id },
-    include: { items: true, project: { select: { id: true, title: true, stage: true } }, payments: true },
+    include: { items: true, project: { select: { id: true, title: true, stage: true, materialsPaymentMode: true } }, payments: true },
   })
   if (!invoice) return fail('Factura no encontrada', 404)
 
@@ -72,12 +72,18 @@ export async function GET(
   page.drawText('Tu hogar, en orden.', { x: M, y: y - 62, size: 9.5, font, color: rgb(0.4, 0.87, 1) })
   page.drawText('Comprobante de obra y servicios', { x: M, y: y - 84, size: 9, font, color: rgb(0.72, 0.8, 0.88) })
 
-  page.drawText(winansi(`Factura ${invoice.number}`), { x: W - M - 210, y: y - 44, size: 17, font: bold, color: rgb(1, 1, 1), maxWidth: 210 })
-  page.drawText(`Emitida: ${fecha(invoice.issuedAt)}`, { x: W - M - 210, y: y - 62, size: 9, font, color: rgb(0.72, 0.8, 0.88) })
+  // columna derecha del header: eyebrow + número + fecha + badge, cada uno en su
+  // propia línea (sin maxWidth para que pdf-lib no envuelva el texto y pise la fecha)
+  page.drawText('FACTURA', { x: W - M - 210, y: y - 34, size: 9, font: bold, color: rgb(0.4, 0.87, 1) })
+  // el número se encoge si no entra en los 210pt de la columna
+  let numSize = 18
+  while (bold.widthOfTextAtSize(invoice.number, numSize) > 210 && numSize > 10) numSize -= 0.5
+  page.drawText(invoice.number, { x: W - M - 210, y: y - 58, size: numSize, font: bold, color: rgb(1, 1, 1) })
+  page.drawText(`Emitida: ${fecha(invoice.issuedAt)}`, { x: W - M - 210, y: y - 78, size: 9, font, color: rgb(0.72, 0.8, 0.88) })
   const statusLabel = invoice.status === 'pagada' ? 'PAGADA' : invoice.status === 'vencida' ? 'VENCIDA' : 'PENDIENTE DE PAGO'
   const statusColor = invoice.status === 'pagada' ? rgb(0.06, 0.62, 0.43) : invoice.status === 'vencida' ? ORANGE : GOLD
-  page.drawRectangle({ x: W - M - 210, y: y - 92, width: bold.widthOfTextAtSize(statusLabel, 8.5) + 16, height: 17, color: statusColor, opacity: 0.95 })
-  page.drawText(statusLabel, { x: W - M - 202, y: y - 87, size: 8.5, font: bold, color: NAVY })
+  page.drawRectangle({ x: W - M - 210, y: y - 104, width: bold.widthOfTextAtSize(statusLabel, 8.5) + 16, height: 17, color: statusColor, opacity: 0.95 })
+  page.drawText(statusLabel, { x: W - M - 202, y: y - 99, size: 8.5, font: bold, color: NAVY })
   y -= bandH + 26
 
   const two = (leftTitle: string, leftLines: string[], rightTitle: string, rightLines: string[]) => {
@@ -158,21 +164,40 @@ export async function GET(
   page.drawText(total, { x: W - M - 14 - bold.widthOfTextAtSize(total, 12), y: y - 21.5, size: 12, font: bold, color: GOLD })
   y -= 44
 
+  // modo de pago de materiales (contexto para el cliente)
+  if (invoice.project.materialsPaymentMode === 'cliente_paga_proveedor' && invoice.materialsCost === 0) {
+    page.drawRectangle({ x: M, y: y - 30, width: W - M * 2, height: 30, color: rgb(0.9, 0.96, 1) })
+    page.drawRectangle({ x: M, y: y - 30, width: 3, height: 30, color: BLUE })
+    page.drawText('MATERIALES POR FUERA DE ESTA FACTURA', { x: M + 14, y: y - 13, size: 8.5, font: bold, color: BLUE })
+    page.drawText(winansi('Los materiales se abonan directamente al proveedor (cobro aparte). Esta factura cubre solo mano de obra.'), {
+      x: M + 14, y: y - 25, size: 8.5, font, color: INK, maxWidth: W - M * 2 - 26,
+    })
+    y -= 44
+  }
+
   // pagos / estado
+  const METHOD_LABEL: Record<string, string> = { mercadopago: 'Mercado Pago', efectivo: 'Efectivo' }
   if (invoice.payments.length > 0) {
     page.drawText('PAGOS REGISTRADOS', { x: M, y: y - 10, size: 9, font: bold, color: NAVY })
     y -= 24
     invoice.payments.forEach((p) => {
-      const ln = `${fecha(p.createdAt)} - Mercado Pago (${p.mpPaymentId}) - ${p.status} - ${ars(p.amount)}`
-      page.drawText(winansi(ln), { x: M + 4, y, size: 9, font, color: INK })
+      const metodo = METHOD_LABEL[p.method] || p.method
+      const detalle = p.method === 'efectivo'
+        ? (p.confirmedAt ? 'cobro confirmado por el profesional' : 'acordado - esperando confirmacion del profesional')
+        : `(${p.mpPaymentId})`
+      const ln = `${fecha(p.createdAt)} - ${metodo} - ${detalle} - ${p.status} - ${ars(p.amount)}`
+      page.drawText(winansi(ln), { x: M + 4, y, size: 9, font, color: INK, maxWidth: W - M * 2 - 8 })
       y -= 14
     })
     y -= 8
   } else if (invoice.status !== 'pagada') {
-    page.drawRectangle({ x: M, y: y - 40, width: W - M * 2, height: 40, color: rgb(1, 0.93, 0.88) })
-    page.drawRectangle({ x: M, y: y - 40, width: 3, height: 40, color: ORANGE })
-    page.drawText('PAGO PENDIENTE', { x: M + 14, y: y - 16, size: 8.5, font: bold, color: ORANGE })
-    page.drawText('El cliente paga esta factura desde HomIA con Mercado Pago. El dinero queda en garantia (escrow) hasta la conformidad.', {
+    const efectivoAcordado = invoice.paymentMethod === 'efectivo'
+    page.drawRectangle({ x: M, y: y - 40, width: W - M * 2, height: 40, color: efectivoAcordado ? rgb(0.93, 0.97, 1) : rgb(1, 0.93, 0.88) })
+    page.drawRectangle({ x: M, y: y - 40, width: 3, height: 40, color: efectivoAcordado ? BLUE : ORANGE })
+    page.drawText(efectivoAcordado ? 'PAGO EN EFECTIVO ACORDADO' : 'PAGO PENDIENTE', { x: M + 14, y: y - 16, size: 8.5, font: bold, color: efectivoAcordado ? BLUE : ORANGE })
+    page.drawText(winansi(efectivoAcordado
+      ? 'El cliente acordó pagar en efectivo. Queda saldada cuando el profesional confirma el cobro desde su panel.'
+      : 'El cliente elige cómo pagar: Mercado Pago (respaldado por HomIA) o efectivo (el profesional confirma el cobro).'), {
       x: M + 14, y: y - 31, size: 8.5, font, color: INK, maxWidth: W - M * 2 - 26,
     })
     y -= 54
@@ -181,7 +206,7 @@ export async function GET(
   // footer
   page.drawLine({ start: { x: M, y: 64 }, end: { x: W - M, y: 64 }, thickness: 1, color: LINE })
   page.drawText(winansi('Documento generado electrónicamente por HomIA - comprobante interno de la plataforma.'), { x: M, y: 48, size: 8, font, color: MUTED })
-  page.drawText(winansi('Pago protegido con escrow de Mercado Pago: se libera cuando el cliente da conformidad del trabajo.'), { x: M, y: 36, size: 8, font, color: MUTED })
+  page.drawText(winansi('Métodos de pago: Mercado Pago (con respaldo) o efectivo (el profesional confirma el cobro recibido).'), { x: M, y: 36, size: 8, font, color: MUTED })
   page.drawText('homia.app', { x: W - M - bold.widthOfTextAtSize('homia.app', 8.5), y: 48, size: 8.5, font: bold, color: BLUE })
 
   const bytes = await pdf.save()
