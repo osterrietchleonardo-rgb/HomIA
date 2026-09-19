@@ -41,7 +41,7 @@ export default function OnboardingCard({ role, tasks }: { role: string; tasks: O
   return (
     <section className="homy-glass relative overflow-hidden rounded-3xl p-5 sm:p-6" aria-label="Primeros pasos en HomIA">
       <span aria-hidden className="pointer-events-none absolute -right-14 -top-16 size-48 rounded-full bg-[#00C4FF]/14 blur-3xl" />
-      <div className="relative flex flex-wrap items-center gap-3">
+      <div className="relative flex items-center gap-3">
         <span className="homy-icon-chip homy-chip-blue size-10 shrink-0 [&_svg]:size-5" aria-hidden><Compass /></span>
         <div className="min-w-0 flex-1">
           <h2 className="text-base font-extrabold tracking-tight text-[#0A2540] sm:text-lg">
@@ -51,15 +51,8 @@ export default function OnboardingCard({ role, tasks }: { role: string; tasks: O
             {doneCount} de {tasks.length} completados — así sacás el máximo a la plataforma
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => startTour({ role: role as TourRole })} title="Recorrido guiado: cada sección explicada"
-            className="homy-focus inline-flex min-h-[38px] items-center gap-1.5 rounded-full bg-[#1D63B8] px-3.5 py-2 text-xs font-bold text-white shadow-[0_10px_22px_-10px_rgba(29,99,184,0.8)] transition hover:brightness-110">
-            <Play className="size-4" aria-hidden /> Tour
-          </button>
-          <button type="button" onClick={() => navigate('/ayuda')} title="Centro de ayuda: dónde se hace cada cosa"
-            className="homy-focus inline-flex min-h-[38px] items-center gap-1.5 rounded-full homy-glass-soft px-3.5 py-2 text-xs font-bold text-[#1D63B8] transition hover:bg-[#1D63B8]/10">
-            <LifeBuoy className="size-4" aria-hidden /> Guía
-          </button>
+        {/* controles compactos siempre visibles: colapsar y cerrar */}
+        <div className="flex shrink-0 items-center gap-1.5">
           <button type="button" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}
             className="homy-focus grid size-9 place-items-center rounded-full homy-glass-soft text-slate-500 transition hover:text-[#0A2540]"
             title={expanded ? 'Colapsar' : 'Expandir'}>
@@ -71,6 +64,19 @@ export default function OnboardingCard({ role, tasks }: { role: string; tasks: O
             <X className="size-4" aria-hidden />
           </button>
         </div>
+      </div>
+
+      {/* Tour y Guía en su propia fila: en el celu nunca aprietan el título
+          y quedan a la altura del pulgar (fix de texto amontonado en móvil) */}
+      <div className="relative mt-3 flex gap-2">
+        <button type="button" onClick={() => startTour({ role: role as TourRole })}
+          className="homy-focus inline-flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-full bg-[#1D63B8] px-3.5 py-2 text-xs font-bold text-white shadow-[0_10px_22px_-10px_rgba(29,99,184,0.8)] transition hover:brightness-110">
+          <Play className="size-4" aria-hidden /> Ver tour guiado
+        </button>
+        <button type="button" onClick={() => navigate('/ayuda')}
+          className="homy-focus inline-flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-full homy-glass-soft px-3.5 py-2 text-xs font-bold text-[#1D63B8] transition hover:bg-[#1D63B8]/10">
+          <LifeBuoy className="size-4" aria-hidden /> Abrir la guía
+        </button>
       </div>
 
       {/* barra de progreso */}

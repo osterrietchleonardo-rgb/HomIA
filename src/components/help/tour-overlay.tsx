@@ -228,14 +228,16 @@ export default function TourOverlay() {
         }
         style={cardStyle}
       >
-        <div className="homy-glass-strong max-h-[86vh] overflow-y-auto rounded-3xl p-5 shadow-[0_30px_80px_-24px_rgba(10,37,64,0.55)]">
+        <div className="homy-glass-strong max-h-[86vh] w-full overflow-y-auto rounded-3xl p-5 shadow-[0_30px_80px_-24px_rgba(10,37,64,0.55)]">
           <div className="flex items-center gap-2.5">
             <span className="homy-icon-chip homy-chip-blue size-9 shrink-0 [&_svg]:size-4.5" aria-hidden><Icon /></span>
             <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-1 text-[10.5px] font-extrabold uppercase tracking-[0.14em] text-[#1D63B8]">
-                <Compass className="size-3" aria-hidden /> Recorrido {meta.label} · paso {run.index + 1} de {total}
+              {/* flex-wrap: en el celu el "paso N de M" baja a su propia línea
+                  en vez de desbordar la tarjeta */}
+              <p className="flex flex-wrap items-center gap-x-1 text-[10.5px] font-extrabold uppercase tracking-[0.14em] text-[#1D63B8]">
+                <Compass className="size-3 shrink-0" aria-hidden /> Recorrido {meta.label} <span className="text-[#0A2540]/35">· paso {run.index + 1} de {total}</span>
               </p>
-              <h3 className="truncate text-[15px] font-extrabold tracking-tight text-[#0A2540]">{step.title}</h3>
+              <h3 className="mt-0.5 line-clamp-2 text-[15px] font-extrabold leading-snug tracking-tight text-[#0A2540]">{step.title}</h3>
             </div>
             <button onClick={() => end(true)} aria-label="Salir del tour"
               className="homy-focus grid size-8 shrink-0 place-items-center rounded-full homy-glass-soft text-slate-400 transition hover:text-[#0A2540]">
@@ -246,9 +248,9 @@ export default function TourOverlay() {
           <p className="mt-3 text-[13.5px] leading-relaxed text-slate-600">{step.body}</p>
 
           {step.tip && (
-            <p className="mt-3 flex items-start gap-2 rounded-2xl bg-[#00C4FF]/10 px-3 py-2.5 text-xs font-semibold leading-relaxed text-[#0A2540]">
+            <p className="mt-3 flex items-start gap-2 rounded-2xl bg-[#00C4FF]/10 px-3 py-2.5 text-xs font-semibold leading-relaxed text-[#0A2540] [overflow-wrap:anywhere]">
               <Lightbulb className="mt-0.5 size-4 shrink-0 text-[#0092c4]" aria-hidden />
-              {step.tip}
+              <span className="min-w-0">{step.tip}</span>
             </p>
           )}
 

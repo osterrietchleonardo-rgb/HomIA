@@ -122,9 +122,12 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
           </div>
           <div className="flex flex-wrap items-start gap-4 sm:gap-5">
             <UAvatar name={p.businessName} url={p.avatarUrl} size={84} />
-            <div className="flex-1 min-w-[240px]">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-2xl sm:text-[1.7rem] font-extrabold text-white tracking-tight leading-tight">{p.businessName}</h1>
+            {/* fila propia en el celu: ni el KPI ni el avatar pueden aplastar el nombre */}
+            <div className="w-full min-w-0 sm:w-auto sm:flex-1">
+              {/* El nombre SIEMPRE entero: en móvil ocupa la fila completa y el
+                  badge de verificación baja debajo (nunca aprieta ni corta) */}
+              <h1 className="min-w-0 break-words text-2xl font-extrabold leading-tight tracking-tight text-white sm:w-auto sm:text-[1.7rem]">{p.businessName}</h1>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
                 <VerifyBadge status={p.verificationStatus} dark compact={false} />
                 {p.subscription === 'pro' && (
                   <span
@@ -255,8 +258,8 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
                     <div className="flex items-center gap-2.5 min-w-0">
                       <UAvatar name={r.author.displayName} size={36} />
                       <div className="min-w-0">
-                        <p className="flex items-center gap-1.5 text-sm font-bold text-[#0A2540] truncate">
-                          {r.author.displayName}
+                        <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm font-bold leading-snug text-[#0A2540]">
+                          <span className="min-w-0 break-words">{r.author.displayName}</span>
                           {r.author.verificationStatus && r.author.verificationStatus !== 'none' && <VerifyBadge status={r.author.verificationStatus} />}
                         </p>
                         <UStars rating={r.rating} size="text-xs" />

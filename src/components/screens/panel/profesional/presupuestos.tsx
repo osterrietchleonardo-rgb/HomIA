@@ -2,7 +2,7 @@
 // Mis presupuestos (profesional): proyectos en etapa de presupuesto + activos con su monto
 import { useEffect, useState } from 'react'
 import { navigate } from '@/lib/router'
-import { StatusBadge, Loading } from '@/components/app/ui-bits'
+import { StatusBadge, Loading, AutoFitValue } from '@/components/app/ui-bits'
 import { formatARS, timeAgo } from '@/lib/format'
 import { ArrowRight, Search, ClipboardPen, Wallet, Handshake, Banknote, FileText, FolderKanban, Archive } from 'lucide-react'
 
@@ -177,10 +177,11 @@ function Kpi({ label, value, hint, glow, valueColor, chip, icon, compact }: {
         <p className="homy-kpi-label">{label}</p>
         <span className={`homy-icon-chip size-8 shrink-0 [&_svg]:size-4 ${chip}`} aria-hidden>{icon}</span>
       </div>
-      <p className="homy-kpi-value mt-2 break-words"
-        style={{ ...(valueColor ? { color: valueColor } : {}), ...(compact ? { fontSize: 'clamp(1.15rem, 1rem + 0.9vw, 1.55rem)' } : {}) }}>
-        {value}
-      </p>
+      <AutoFitValue
+        className="homy-kpi-value mt-2"
+        style={{ ...(valueColor ? { color: valueColor } : {}), ...(compact ? { fontSize: 'clamp(1.15rem, 1rem + 0.9vw, 1.55rem)' } : {}) }}
+        value={value}
+      />
       {hint && <p className="text-xs text-slate-400 mt-1.5 leading-snug line-clamp-1">{hint}</p>}
     </div>
   )

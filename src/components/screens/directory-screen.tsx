@@ -367,8 +367,9 @@ export default function DirectoryScreen({ embedded = false }: { embedded?: boole
                     <div className="flex items-start gap-3.5">
                       <UAvatar name={c.name} url={c.avatarUrl} size={56} />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 flex-wrap pr-9">
-                          <p className="truncate font-extrabold text-[#0A2540] leading-snug">{c.name}</p>
+                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 pr-9">
+                          {/* el nombre envuelve (nunca truncate): el badge baja debajo si no entra */}
+                          <p className="min-w-0 break-words font-extrabold text-[#0A2540] leading-snug">{c.name}</p>
                           <VerifyBadge status={c.verificationStatus} />
                           {c.isPro && (
                             <span className="rounded-full bg-[#FFC700]/15 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-[#B98A00] ring-1 ring-[#FFC700]/40">PRO</span>

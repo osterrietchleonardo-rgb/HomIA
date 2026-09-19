@@ -369,6 +369,11 @@ export function HeroSearch() {
 
   const busy = phase === "thinking";
 
+  // En móvil la barra ocupa casi todo el ancho: no hay lugar para los chips
+  // laterales → la demo ambiental pasa a un slot centrado debajo de la barra.
+  const compact = geo.vw < 640;
+  const mobileDemo = compact ? demo : null;
+
   return (
     <MotionConfig reducedMotion="user">
     <div className="mx-auto w-full max-w-6xl">
@@ -390,13 +395,13 @@ export function HeroSearch() {
           aria-hidden
           className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] flex h-14 items-center sm:h-16"
         >
-          {/* CONSULTA: anclada por su borde DERECHO al borde izquierdo de la
+          {/* CONSULTA (desktop): anclada por su borde DERECHO al borde izquierdo de la
               barra (right-full). Vuela legible desde la izquierda, se frena al
               llegar al vidrio y se disuelve EN el borde: su punta apenas se
               asoma detrás del vidrio (≤6px) — NUNCA entra a la barra ni pisa
               al placeholder, que escribe siempre por dentro (son dos cosas
               distintas que conviven sin tocarse). */}
-          {demo?.kind === "q" &&
+          {!compact && demo?.kind === "q" &&
             (() => {
               const gapPx = Math.max(0, (geo.vw - geo.barW) / 2);
               const startX = -Math.min(120, Math.max(34, gapPx - 12));
@@ -424,10 +429,10 @@ export function HeroSearch() {
               );
             })()}
 
-          {/* RESPUESTA: arranca escondida detrás del vidrio (x:-44), surge
+          {/* RESPUESTA (desktop): arranca escondida detrás del vidrio (x:-44), surge
               afuera de la barra, se deja leer y deriva hasta desvanecerse
               contra el borde real de la página (medido en vivo) */}
-          {demo?.kind === "a" &&
+          {!compact && demo?.kind === "a" &&
             (() => {
               const gapPx = Math.max(0, (geo.vw - geo.barW) / 2);
               const flotante = gapPx < 130; // poco lugar: flota sobre el borde derecho de la barra
@@ -559,6 +564,49 @@ export function HeroSearch() {
         )}
 
         </form>
+
+        {/* Slot de la demo ambiental en MÓVIL: centrado debajo de la barra,
+            siempre visible (nunca sale del viewport ni pisa el placeholder).
+            La consulta aparece, se deja leer y se desvanece; luego la respuesta.
+            La altura queda reservada (h-9) para que nada salte. */}
+        {compact && (
+          <div aria-hidden className="pointer-events-none relative z-[6] mt-2 flex h-9 items-start justify-center">
+            {mobileDemo && (mobileDemo.kind === "q" ? (
+              <motion.span
+                key={`mq-${mobileDemo.q}`}
+                initial={{ opacity: 0, y: 12, scale: 0.95 }}
+                animate={{ opacity: [0, 1, 1, 0], y: [12, 0, 0, -6], scale: [0.95, 1, 1, 0.97] }}
+                transition={{ duration: DEMO_T.qFly / 1000, times: [0, 0.25, 0.8, 1], ease: "easeInOut" }}
+                className="homy-flight-chip max-w-[min(92vw,360px)] px-3.5 py-1.5"
+              >
+                <Sparkles className="size-3.5 shrink-0 text-tech" aria-hidden />
+                <span className="min-w-0 truncate text-[12.5px] font-bold text-navy">{mobileDemo.q}</span>
+              </motion.span>
+            ) : (
+              <motion.span
+                ref={respChipRef}
+                key={`ma-${mobileDemo.a}`}
+                initial={{ opacity: 0, y: 12, scale: 0.95 }}
+                animate={
+                  mobileDemo.stage === "in" || mobileDemo.stage === "hold"
+                    ? { opacity: 1, y: 0, scale: mobileDemo.stage === "hold" ? [1, 1.015, 1] : 1 }
+                    : { opacity: 0, y: -6, scale: 0.97 }
+                }
+                transition={
+                  mobileDemo.stage === "in"
+                    ? { duration: DEMO_T.aIn / 1000, ease: [0.22, 1, 0.36, 1] }
+                    : mobileDemo.stage === "hold"
+                      ? { scale: { duration: DEMO_T.aHold / 1000, ease: "easeInOut" }, default: { duration: 0.3 } }
+                      : { duration: DEMO_T.aOut / 1000, ease: [0.6, 0.05, 0.9, 0.4] }
+                }
+                className="homy-flight-chip homy-flight-chip--ai max-w-[min(92vw,360px)] px-3.5 py-1.5"
+              >
+                <BadgeCheck className="size-3.5 shrink-0 text-tech" aria-hidden />
+                <span className="min-w-0 truncate text-[12.5px] font-bold text-navy/85">{mobileDemo.a}</span>
+              </motion.span>
+            ))}
+          </div>
+        )}
 
         {/* Anillo de actividad IA */}
         {busy && (

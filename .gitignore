@@ -52,3 +52,5 @@ prompt
 server.log
 # Skills directory
 /skills/
+# intermediarios de generación de videos (wav/png/segmentos)
+scripts/videos-work/

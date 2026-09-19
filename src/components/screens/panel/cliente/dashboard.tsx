@@ -2,7 +2,7 @@
 // Dashboard Cliente HomIA — vista general: KPIs, publicaciones y proyectos
 import { useEffect, useState } from 'react'
 import { navigate } from '@/lib/router'
-import { StatusBadge, UrgencyBadge, Loading } from '@/components/app/ui-bits'
+import { StatusBadge, UrgencyBadge, Loading, AutoFitValue } from '@/components/app/ui-bits'
 import { formatARS } from '@/lib/format'
 import { Plus, ArrowRight, Wrench, Megaphone, FileText, FolderKanban, CircleCheck } from 'lucide-react'
 import { VerificationPrompt } from '../verificacion'
@@ -207,7 +207,7 @@ function Kpi({ label, value, hint, chip, glow, icon, onClick }: {
         <span className={`homy-icon-chip ${chip} size-9 shrink-0 [&_svg]:size-4`} aria-hidden>{icon}</span>
         <ArrowRight className="size-4 text-[#0A2540]/20 transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-[#1D63B8]" aria-hidden />
       </span>
-      <span className="homy-kpi-value mt-3 block">{value}</span>
+      <AutoFitValue className="homy-kpi-value mt-3" value={String(value)} />
       <span className="homy-kpi-label block">{label}</span>
       <span className="mt-1 block text-xs font-medium leading-snug text-slate-400">{hint}</span>
     </button>

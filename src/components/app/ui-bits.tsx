@@ -1,10 +1,68 @@
 'use client'
 // Componentes compartidos HomIA — nivel Signature
 // (usados por los 3 paneles: al elevar acá, se eleva todo el sistema)
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { Avatar as ShadAvatar } from '@/components/ui/avatar'
 import { Loader2, BadgeCheck, ShieldAlert, ShieldQuestion, ShieldX } from 'lucide-react'
 import { initials, stars, URGENCY_COLOR, URGENCY_LABEL } from '@/lib/format'
 import { cn } from '@/lib/utils'
+
+/* Valor numérico que NUNCA se parte en dos líneas ni se desborda: mide el
+   texto real y baja la fuente hasta que entra en el ancho de la tarjeta.
+   La tarjeta se adapta al número — no al revés (pedido explícito).
+   Trabajo 100% por refs/DOM: cero re-renders. */
+export function AutoFitValue({
+  value,
+  className,
+  style,
+  minPx = 13,
+}: {
+  value: string
+  className?: string
+  style?: React.CSSProperties
+  minPx?: number
+}) {
+  const wrapRef = useRef<HTMLSpanElement>(null)
+  const textRef = useRef<HTMLSpanElement>(null)
+
+  const fit = useCallback(() => {
+    const wrap = wrapRef.current
+    const text = textRef.current
+    if (!wrap || !text) return
+    text.style.fontSize = '' // medir siempre al tamaño base (CSS clamp)
+    const avail = wrap.clientWidth
+    if (avail <= 0) return
+    const natural = text.scrollWidth
+    if (natural <= avail + 1) return
+    const base = parseFloat(getComputedStyle(text).fontSize)
+    let target = Math.max(minPx, Math.floor((base * avail) / natural) - 1)
+    text.style.fontSize = `${target}px`
+    if (text.scrollWidth > avail + 1 && target > minPx) {
+      // número extremo: un paso extra de precisión
+      target = Math.max(minPx, Math.floor((target * avail) / text.scrollWidth) - 1)
+      text.style.fontSize = `${target}px`
+    }
+  }, [minPx])
+
+  useLayoutEffect(() => { fit() }, [value, fit])
+  useEffect(() => {
+    const ro = new ResizeObserver(() => fit())
+    if (wrapRef.current) ro.observe(wrapRef.current)
+    window.addEventListener('resize', fit)
+    return () => { ro.disconnect(); window.removeEventListener('resize', fit) }
+  }, [fit])
+
+  return (
+    <span ref={wrapRef} className={cn('block min-w-0 max-w-full', className)} style={style}>
+      <span
+        ref={textRef}
+        className="block overflow-hidden whitespace-nowrap text-ellipsis"
+      >
+        {value}
+      </span>
+    </span>
+  )
+}
 
 /* Avatar con anillo de gradiente sutil */
 export function UAvatar({ name, url, size = 40 }: { name: string; url?: string | null; size?: number }) {

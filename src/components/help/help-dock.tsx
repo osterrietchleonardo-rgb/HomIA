@@ -10,10 +10,12 @@ import { useRoute, navigate, Link } from '@/lib/router'
 import { useSession } from '@/lib/store'
 import { TOURS, ROLE_TOUR_META, type TourRole } from '@/lib/tour-content'
 import { HOWTOS, TROUBLES } from '@/lib/howto-content'
+import { videosForRole, type VideoRole } from '@/lib/videos-content'
+import { openVideo } from '@/components/help/video-modal'
 import { startTour } from '@/components/help/tour-overlay'
 import {
   LifeBuoy, X, Play, ListChecks, Wrench, ChevronDown, ChevronRight,
-  Compass, User, HardHat, Boxes, ArrowRight,
+  Compass, User, HardHat, Boxes, ArrowRight, Clapperboard,
 } from 'lucide-react'
 
 const STATE_EVENT = 'homy:tour-state'
@@ -25,7 +27,7 @@ export default function HelpDock() {
   const route = useRoute()
   const { user } = useSession()
   const [open, setOpen] = useState(false)
-  const [tab, setTab] = useState<'tour' | 'como' | 'trabe'>('tour')
+  const [tab, setTab] = useState<'tour' | 'como' | 'trabe' | 'videos'>('tour')
   const [tourActive, setTourActive] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [hint, setHint] = useState(false)
@@ -119,14 +121,15 @@ export default function HelpDock() {
             <>
               {/* tabs */}
               <div className="px-4 pb-1 pt-3">
-                <div className="grid grid-cols-3 gap-1 rounded-2xl bg-[#0A2540]/5 p-1" role="tablist" aria-label="Secciones de ayuda">
+                <div className="grid grid-cols-4 gap-1 rounded-2xl bg-[#0A2540]/5 p-1" role="tablist" aria-label="Secciones de ayuda">
                   {([
                     { id: 'tour', label: 'Tour', icon: Play },
                     { id: 'como', label: '¿Cómo hago?', icon: ListChecks },
                     { id: 'trabe', label: 'Me trabé', icon: Wrench },
+                    { id: 'videos', label: 'Videos', icon: Clapperboard },
                   ] as const).map((t) => (
                     <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => { setTab(t.id); setExpanded(null) }}
-                      className={`homy-focus inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-extrabold transition ${
+                      className={`homy-focus inline-flex min-h-[38px] items-center justify-center gap-1 rounded-xl px-1.5 text-[11px] font-extrabold transition sm:text-xs ${
                         tab === t.id ? 'bg-white text-[#0A2540] shadow-sm' : 'text-slate-500 hover:text-[#0A2540]'
                       }`}>
                       <t.icon className="size-3.5" aria-hidden /> {t.label}
@@ -192,6 +195,31 @@ export default function HelpDock() {
                           </div>
                         )}
                       </div>
+                    ))}
+                  </div>
+                )}
+
+                {tab === 'videos' && (
+                  <div className="space-y-2">
+                    <p className="px-1 pb-1 text-[12.5px] leading-relaxed text-slate-500">
+                      Videitos cortos con voz: cada sección y cada acción del rol, explicada para mirar donde estés.
+                    </p>
+                    {videosForRole(role as VideoRole).map((v) => (
+                      <button key={v.id} onClick={() => openVideo(v)}
+                        className="homy-focus group flex w-full items-center gap-3 rounded-2xl homy-glass-soft p-2 text-left transition hover:bg-white">
+                        <span className="relative block w-24 shrink-0 overflow-hidden rounded-xl" aria-hidden>
+                          <img src={`/videos/${v.id}.jpg`} alt="" className="aspect-video w-full object-cover" loading="lazy" />
+                          <span className="absolute inset-0 grid place-items-center bg-[#0A2540]/25 transition group-hover:bg-[#1D63B8]/40">
+                            <span className="grid size-7 place-items-center rounded-full bg-white/90 text-[#1D63B8] shadow">
+                              <Play className="size-3.5 fill-current" aria-hidden />
+                            </span>
+                          </span>
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[13px] font-bold leading-snug text-[#0A2540]">{v.title}</span>
+                          <span className="mt-0.5 block text-[11.5px] font-semibold leading-snug text-slate-500">{v.desc}</span>
+                        </span>
+                      </button>
                     ))}
                   </div>
                 )}

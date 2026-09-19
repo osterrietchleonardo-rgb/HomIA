@@ -2,7 +2,7 @@
 // Dashboard Proveedor HomIA — resumen de stock, alertas de reposición, vinculaciones y acceso al CRM
 import { useEffect, useState } from 'react'
 import { navigate } from '@/lib/router'
-import { StatusBadge, Loading, UAvatar } from '@/components/app/ui-bits'
+import { StatusBadge, Loading, UAvatar, AutoFitValue } from '@/components/app/ui-bits'
 import { formatARS } from '@/lib/format'
 import {
   Boxes, AlertTriangle, PackageX, PackageOpen, Link2, Users, ArrowRight, CheckCircle2, Plus, Wallet, Zap,
@@ -276,7 +276,7 @@ function Kpi({ label, value, hint, glow, valueColor, chip, chipStyle, icon }: {
       <span aria-hidden className={`homy-icon-chip size-11 shrink-0 [&_svg]:size-5 ${chip}`} style={chipStyle}>{icon}</span>
       <div className="min-w-0">
         <p className="homy-kpi-label">{label}</p>
-        <p className="homy-kpi-value mt-1 [overflow-wrap:anywhere]" style={valueColor ? { color: valueColor } : undefined}>{value}</p>
+        <AutoFitValue className="homy-kpi-value mt-1" style={valueColor ? { color: valueColor } : undefined} value={value} />
         {hint && <p className="text-xs text-slate-400 mt-1 leading-snug line-clamp-1">{hint}</p>}
       </div>
     </div>

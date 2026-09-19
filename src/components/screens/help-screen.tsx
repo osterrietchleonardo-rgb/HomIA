@@ -5,11 +5,13 @@ import { useState } from 'react'
 import { navigate, Link } from '@/lib/router'
 import { useSession } from '@/lib/store'
 import { startTour } from '@/components/help/tour-overlay'
+import { openVideo } from '@/components/help/video-modal'
+import { videosForRole } from '@/lib/videos-content'
 import { type TourRole } from '@/lib/tour-content'
 import {
   LifeBuoy, User, HardHat, Boxes, ShieldCheck, Star, MessageCircle, Wallet,
   Compass, FolderKanban, Megaphone, ClipboardList, FileText, Search, Package,
-  ArrowRight, ChevronDown, ChevronUp, BadgeCheck, Lock, Handshake, Play,
+  ArrowRight, ChevronDown, ChevronUp, BadgeCheck, Lock, Handshake, Play, Clapperboard,
 } from 'lucide-react'
 
 type Row = { what: string; where: string; href?: string; hrefLabel?: string }
@@ -213,6 +215,41 @@ export default function HelpScreen({ embedded = false }: { embedded?: boolean })
           </button>
         ))}
       </div>
+
+      {/* videoteca: videitos cortos con locución, por rol */}
+      <section className="homy-glass mb-5 rounded-3xl p-5 sm:p-6" aria-label="Videoteca HomIA">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="homy-icon-chip homy-chip-ai size-10 shrink-0 [&_svg]:size-5" aria-hidden><Clapperboard /></span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base font-extrabold tracking-tight text-[#0A2540] sm:text-lg">Videoteca {guide.label}</h2>
+            <p className="text-xs font-semibold text-slate-500 sm:text-[13px]">
+              Videitos cortos con voz: miralos cuando no sepas cómo hacer algo o antes de arrancar.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {videosForRole(tab).map((v) => (
+            <button key={v.id} onClick={() => openVideo(v)}
+              className="homy-focus group flex w-full items-center gap-3.5 rounded-2xl homy-glass-soft p-2.5 text-left transition hover:bg-white">
+              <span className="relative block w-32 shrink-0 overflow-hidden rounded-xl sm:w-40" aria-hidden>
+                <img src={`/videos/${v.id}.jpg`} alt="" className="aspect-video w-full object-cover" loading="lazy" />
+                <span className="absolute inset-0 grid place-items-center bg-[#0A2540]/25 transition group-hover:bg-[#1D63B8]/40">
+                  <span className="grid size-9 place-items-center rounded-full bg-white/90 text-[#1D63B8] shadow transition group-hover:scale-110">
+                    <Play className="size-4 fill-current" aria-hidden />
+                  </span>
+                </span>
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold leading-snug text-[#0A2540]">{v.title}</span>
+                <span className="mt-1 block text-xs font-semibold leading-relaxed text-slate-500">{v.desc}</span>
+                <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-[#1D63B8]/10 px-2.5 py-1 text-[11px] font-extrabold text-[#1D63B8] transition group-hover:bg-[#1D63B8] group-hover:text-white">
+                  <Play className="size-3 fill-current" aria-hidden /> Reproducir
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
 
       {/* intro + tabla dónde hago cada cosa */}
       <section className="homy-glass rounded-3xl p-5 sm:p-6" aria-label={`Guía ${guide.label}`}>

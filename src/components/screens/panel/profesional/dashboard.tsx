@@ -2,7 +2,7 @@
 // Dashboard Profesional HomIA — resumen de actividad, próximas acciones y accesos rápidos
 import { useEffect, useState } from 'react'
 import { navigate } from '@/lib/router'
-import { StatusBadge, Loading } from '@/components/app/ui-bits'
+import { StatusBadge, Loading, AutoFitValue } from '@/components/app/ui-bits'
 import { formatARS, timeAgo } from '@/lib/format'
 import {
   Search, Boxes, Users, ArrowRight, BriefcaseBusiness, ClipboardPen,
@@ -244,7 +244,7 @@ function Kpi({ label, value, hint, glow, valueColor, chip, icon }: {
         <p className="homy-kpi-label">{label}</p>
         <span className={`homy-icon-chip size-8 shrink-0 [&_svg]:size-4 ${chip}`} aria-hidden>{icon}</span>
       </div>
-      <p className="homy-kpi-value mt-2" style={valueColor ? { color: valueColor } : undefined}>{value}</p>
+      <AutoFitValue className="homy-kpi-value mt-2" style={valueColor ? { color: valueColor } : undefined} value={value} />
       {hint && <p className="text-xs text-slate-400 mt-1.5 leading-snug line-clamp-1">{hint}</p>}
     </div>
   )

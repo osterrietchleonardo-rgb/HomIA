@@ -9,6 +9,7 @@ import { BackdropFX } from '@/components/app/backdrop-fx'
 import { Toaster } from '@/components/ui/sonner'
 import TourOverlay from '@/components/help/tour-overlay'
 import HelpDock from '@/components/help/help-dock'
+import VideoModal from '@/components/help/video-modal'
 import {
   ArrowLeft, ArrowRight, BadgeCheck, Boxes, Compass, CornerDownRight,
   HardHat, ShieldCheck, Sparkles, User,
@@ -136,9 +137,10 @@ export default function AppRoot() {
       {/* Z-order sagrado: ambiente z-0 → app z-10 → modales/paneles z-50 */}
       <BackdropFX />
       <div className="homy-screen relative z-10">{screen}</div>
-      {/* tutorial guiado por rol + ayuda flotante siempre visible */}
+      {/* tutorial guiado por rol + ayuda flotante siempre visible + videoteca */}
       <TourOverlay />
       <HelpDock />
+      <VideoModal />
       <Toaster position="top-center" richColors />
     </>
   )
