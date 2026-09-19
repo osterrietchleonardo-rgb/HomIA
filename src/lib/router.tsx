@@ -62,18 +62,19 @@ export function useNavigate() {
   return useCallback((to: string, opts?: { replace?: boolean }) => navigate(to, opts), [])
 }
 
-// Link con scroll-to-top automático
+// Link con scroll-to-top automático; acepta props de <a> (data-*, aria-*, id…)
 export function Link({
   to,
   children,
   className,
   onClick,
+  ...rest
 }: {
   to: string
   children: React.ReactNode
   className?: string
   onClick?: () => void
-}) {
+} & Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'onClick'>) {
   return (
     <a
       href={`#${to.startsWith('/') ? to : `/${to}`}`}
@@ -82,6 +83,7 @@ export function Link({
         onClick?.()
         window.scrollTo({ top: 0 })
       }}
+      {...rest}
     >
       {children}
     </a>

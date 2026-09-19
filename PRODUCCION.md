@@ -66,3 +66,7 @@ pasan a `Secure` automáticamente cuando el request llega con `X-Forwarded-Proto
 
 `cliente@homia.test` · `profesional@homia.test` · `proveedor@homia.test` — password `Homy2026!`
 (ver `CREDENCIALES-DEMO.txt`). **Eliminá o cambiá estas cuentas antes de lanzar a usuarios reales.**
+
+## Lección ops (T30): el server que no muere
+- El proceso standalone se renombra a `next-server (v1)`: `pkill -f "standalone/server.js"` NO lo encuentra. Un server viejo sigue en el puerto sirviendo HTML que referencia chunks de un build anterior (500 en los chunks → "Application error" o "Cargando…" eterno). Parece bug de la app y no lo es.
+- Regla: para reiniciar, matar SIEMPRE por puerto (`ss -tlnp | grep :3100` → `kill -9 <pid>`) y verificar que el chunk referenciado por el HTML exista en disco antes de considerar el deploy sano.

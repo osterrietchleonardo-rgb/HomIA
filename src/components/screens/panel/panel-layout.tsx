@@ -136,6 +136,7 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
           <div className="flex items-center gap-1">
             <button
               onClick={() => navigate('/notificaciones')}
+              data-tour="top-notificaciones"
               className="relative rounded-full p-2.5 text-white hover:bg-white/10 transition"
               aria-label={`Notificaciones${unread ? `, ${unread} sin leer` : ''}`}
             >
@@ -177,10 +178,14 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
             {items.map((item) => {
               const active = currentPath === item.to
               const Icon = item.icon
+              // data-tour: ancla estable para el tour guiado (nav-inicio, nav-publicar…)
+              const parts = item.to.split('/').filter(Boolean)
+              const tourKey = parts[0] === 'panel' ? (parts[2] || 'inicio') : parts[0]
               return (
                 <Link
                   key={item.to}
                   to={item.to}
+                  data-tour={`nav-${tourKey}`}
                   aria-current={active ? 'page' : undefined}
                   className={`group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-all duration-300 will-change-transform ${
                     active
@@ -218,8 +223,11 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
           {(items.some((i) => i.m) ? items.filter((i) => i.m) : items).slice(0, 5).map((item) => {
             const active = currentPath === item.to
             const Icon = item.icon
+            // ancla para el tour guiado en móvil (la sidebar está oculta acá)
+            const bparts = item.to.split('/').filter(Boolean)
+            const btourKey = bparts[0] === 'panel' ? (bparts[2] || 'inicio') : bparts[0]
             return (
-              <Link key={item.to} to={item.to} aria-current={active ? 'page' : undefined} className="relative flex flex-col items-center justify-center rounded-2xl px-2 py-1.5 text-[10px] font-bold min-w-[54px] transition-all duration-300 will-change-transform">
+              <Link key={item.to} to={item.to} data-tour-m={`nav-${btourKey}`} aria-current={active ? 'page' : undefined} className="relative flex flex-col items-center justify-center rounded-2xl px-2 py-1.5 text-[10px] font-bold min-w-[54px] transition-all duration-300 will-change-transform">
                 <span
                   aria-hidden
                   className={`pointer-events-none absolute inset-x-1 inset-y-0.5 rounded-2xl transition-all duration-300 ${

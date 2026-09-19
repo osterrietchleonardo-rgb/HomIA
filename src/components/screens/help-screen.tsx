@@ -3,10 +3,13 @@
 // Pública (desde home/footer) y embebida en el panel de los 3 roles.
 import { useState } from 'react'
 import { navigate, Link } from '@/lib/router'
+import { useSession } from '@/lib/store'
+import { startTour } from '@/components/help/tour-overlay'
+import { type TourRole } from '@/lib/tour-content'
 import {
   LifeBuoy, User, HardHat, Boxes, ShieldCheck, Star, MessageCircle, Wallet,
   Compass, FolderKanban, Megaphone, ClipboardList, FileText, Search, Package,
-  ArrowRight, ChevronDown, ChevronUp, BadgeCheck, Lock, Handshake,
+  ArrowRight, ChevronDown, ChevronUp, BadgeCheck, Lock, Handshake, Play,
 } from 'lucide-react'
 
 type Row = { what: string; where: string; href?: string; hrefLabel?: string }
@@ -136,9 +139,16 @@ const FAQ = [
   },
 ]
 
+const TOUR_ROLES: { id: TourRole; label: string; icon: React.ComponentType<{ className?: string }>; tone: string }[] = [
+  { id: 'cliente', label: 'Cliente', icon: User, tone: 'homy-chip-blue' },
+  { id: 'profesional', label: 'Profesional', icon: HardHat, tone: 'homy-chip-orange' },
+  { id: 'proveedor', label: 'Proveedor', icon: Boxes, tone: 'homy-chip-ai' },
+]
+
 export default function HelpScreen({ embedded = false }: { embedded?: boolean }) {
   const [tab, setTab] = useState('cliente')
   const [openFaq, setOpenFaq] = useState<number | null>(0)
+  const { user } = useSession()
   const guide = GUIDES.find((g) => g.id === tab) || GUIDES[0]
 
   return (
@@ -153,6 +163,43 @@ export default function HelpScreen({ embedded = false }: { embedded?: boolean })
         </div>
         <span className="homy-icon-chip homy-chip-blue size-14 shrink-0 [&_svg]:size-7" aria-hidden><LifeBuoy /></span>
       </header>
+
+      {/* recorrido guiado por rol — el tutorial completo en la app */}
+      <section className="homy-glass-dark relative mb-5 overflow-hidden rounded-3xl p-5 sm:p-6" aria-label="Recorrido guiado por rol">
+        <span aria-hidden className="pointer-events-none absolute -right-16 -top-20 size-56 rounded-full bg-[#00C4FF]/18 blur-3xl" />
+        <span aria-hidden className="pointer-events-none absolute -bottom-24 left-[-10%] size-56 rounded-full bg-[#FF5A1F]/12 blur-3xl" />
+        <div className="relative flex flex-wrap items-center gap-3">
+          <span className="homy-icon-chip homy-chip-ai size-11 shrink-0 [&_svg]:size-5.5" aria-hidden><Compass /></span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base font-extrabold tracking-tight text-white sm:text-lg">Recorrido guiado por rol</h2>
+            <p className="mt-0.5 text-[13px] font-medium leading-relaxed text-slate-300">
+              Un tutorial interactivo te lleva sección por sección: qué es, qué podés hacer ahí y cómo no trabarte. Se arranca solo en tu primer ingreso y lo repetís cuando quieras desde el botón de ayuda (abajo a la derecha).
+            </p>
+          </div>
+        </div>
+        <div className="relative mt-4 flex flex-wrap gap-2">
+          {TOUR_ROLES.map((r) => {
+            const available = !!user?.roles?.includes(r.id)
+            return (
+              <button key={r.id} disabled={!available} onClick={() => startTour({ role: r.id })}
+                title={available ? `Empezar el recorrido ${r.label}` : 'Disponible al activar ese rol en tu cuenta'}
+                className={`homy-focus inline-flex min-h-[44px] items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-extrabold transition ${
+                  available
+                    ? 'bg-white text-[#0A2540] shadow-lg hover:bg-slate-100'
+                    : 'cursor-not-allowed bg-white/10 text-slate-400'
+                }`}>
+                <Play className={`size-4 ${available ? 'text-[#1D63B8]' : ''}`} aria-hidden />
+                Tour {r.label}
+              </button>
+            )
+          })}
+          {!user && (
+            <button onClick={() => navigate('/registrarse')} className="homy-focus inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-white px-4 py-2.5 text-sm font-extrabold text-[#0A2540] shadow-lg transition hover:bg-slate-100">
+              Crear cuenta para empezar <ArrowRight className="size-4 text-[#1D63B8]" aria-hidden />
+            </button>
+          )}
+        </div>
+      </section>
 
       {/* tabs por rol */}
       <div className="mb-5 flex flex-wrap gap-2" role="tablist" aria-label="Elegí tu rol">

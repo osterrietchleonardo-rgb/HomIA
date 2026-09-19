@@ -4,7 +4,9 @@
 // directo a donde se hace. Descartable; el descarte persiste por usuario+rol.
 import { useState } from 'react'
 import { navigate } from '@/lib/router'
-import { CircleCheck, Circle, ChevronDown, ChevronUp, X, Compass, LifeBuoy } from 'lucide-react'
+import { startTour } from '@/components/help/tour-overlay'
+import { type TourRole } from '@/lib/tour-content'
+import { CircleCheck, Circle, ChevronDown, ChevronUp, X, Compass, LifeBuoy, Play } from 'lucide-react'
 
 export type OnboardingTask = {
   id: string
@@ -50,6 +52,10 @@ export default function OnboardingCard({ role, tasks }: { role: string; tasks: O
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button type="button" onClick={() => startTour({ role: role as TourRole })} title="Recorrido guiado: cada sección explicada"
+            className="homy-focus inline-flex min-h-[38px] items-center gap-1.5 rounded-full bg-[#1D63B8] px-3.5 py-2 text-xs font-bold text-white shadow-[0_10px_22px_-10px_rgba(29,99,184,0.8)] transition hover:brightness-110">
+            <Play className="size-4" aria-hidden /> Tour
+          </button>
           <button type="button" onClick={() => navigate('/ayuda')} title="Centro de ayuda: dónde se hace cada cosa"
             className="homy-focus inline-flex min-h-[38px] items-center gap-1.5 rounded-full homy-glass-soft px-3.5 py-2 text-xs font-bold text-[#1D63B8] transition hover:bg-[#1D63B8]/10">
             <LifeBuoy className="size-4" aria-hidden /> Guía

@@ -1,0 +1,570 @@
+// Catálogo "¿Cómo hago…?" (guías paso a paso de cada acción) y "Me trabé"
+// (soluciones a los atascos típicos) — por rol. Lo consume el botón de ayuda
+// flotante y el centro de ayuda. Todo con lenguaje de la plataforma y rutas reales.
+import type { TourRole } from '@/lib/tour-content'
+
+export type HowTo = {
+  id: string
+  title: string
+  time: string
+  steps: string[]
+  href?: string
+  cta?: string
+}
+
+export type Trouble = {
+  id: string
+  q: string
+  /** por qué pasa */
+  why: string
+  /** qué hacer */
+  fix: string
+  href?: string
+  hrefLabel?: string
+}
+
+export const HOWTOS: Record<TourRole, HowTo[]> = {
+  cliente: [
+    {
+      id: 'publicar',
+      title: 'Publicar un trabajo para recibir presupuestos',
+      time: '3 min',
+      steps: [
+        'Entrá a Panel → Publicar trabajo.',
+        'Escribí qué necesitás (cuanto más claro, mejores presupuestos) y sumá fotos del lugar o del problema.',
+        'Elegí tu zona y un presupuesto estimado: es una referencia, no un precio final.',
+        'Revisá el resumen y publicá. Tu publicación sale gratis a la bolsa de trabajos.',
+        'Esperá los presupuestos: te llega una notificación por cada uno.',
+      ],
+      href: '/panel/cliente/publicar',
+      cta: 'Ir a publicar',
+    },
+    {
+      id: 'comparar',
+      title: 'Comparar presupuestos y elegir profesional',
+      time: '2 min',
+      steps: [
+        'Entrá a Panel → Mis trabajos y abrí tu publicación.',
+        'Mirá cada presupuesto: precio, plazo y el mensaje del profesional.',
+        'Si tenés dudas, tocá su nombre: ves sus reseñas, obras y si está verificado. Podés chatear sin compromiso.',
+        'Cuando decidas, aceptá el presupuesto: se crea el proyecto y el profesional recibe tu brief.',
+      ],
+      href: '/panel/cliente/trabajos',
+      cta: 'Ver mis trabajos',
+    },
+    {
+      id: 'contratar-directorio',
+      title: 'Contratar directo desde el directorio',
+      time: '4 min',
+      steps: [
+        'Entrá al Directorio: está ordenado de mejor a peor reputación, con filtros por rubro y precio.',
+        'Abrí la tarjeta del profesional que te guste: reseñas con fotos, obras hechas y verificación.',
+        'Tocá Contratar: un asistente de 4 pasos te pide qué necesitás (con fotos), cuándo y dónde, y presupuesto estimado.',
+        'Confirmá: se crea el proyecto y el profesional recibe todo el brief al instante.',
+      ],
+      href: '/panel/cliente/directorio',
+      cta: 'Abrir directorio',
+    },
+    {
+      id: 'seguir-obra',
+      title: 'Seguir la obra: etapas, materiales y acuerdo',
+      time: '1 min',
+      steps: [
+        'Entrá a Panel → Proyectos y abrí tu proyecto.',
+        'Seguí las etapas que marca tu profesional y mirá los materiales que propone, con precios reales de proveedores.',
+        'Aprobá o rechazá cada material propuesto: solo los aprobados se compran.',
+        'La tarjeta "¿Quién paga los materiales?" muestra el acuerdo siempre: si los adelanta el profesional, van en su factura; si no, pagás al proveedor directo.',
+      ],
+      href: '/panel/cliente/proyectos',
+      cta: 'Ver mis proyectos',
+    },
+    {
+      id: 'pagar-factura',
+      title: 'Pagar una factura (Mercado Pago o efectivo)',
+      time: '2 min',
+      steps: [
+        'Entrá a Panel → Facturas (o al detalle del proyecto) y abrí la factura pendiente.',
+        'Elegí el método: Pagar con Mercado Pago (respaldado, con escrow) o Efectivo.',
+        'Con efectivo: el acuerdo queda registrado y tu profesional lo confirma cuando recibe el dinero. Podés cancelar el acuerdo antes y cambiar de método.',
+        'Descargá el comprobante con el botón PDF cuando quieras.',
+      ],
+      href: '/panel/cliente/facturas',
+      cta: 'Ver facturas',
+    },
+    {
+      id: 'pagar-proveedor',
+      title: 'Pagar los materiales al proveedor',
+      time: '2 min',
+      steps: [
+        'Si el proyecto usa el modo "el cliente paga al proveedor", tus materiales se cobran por separado de la factura del profesional.',
+        'En el detalle del proyecto, buscá la sección Pagos a proveedores.',
+        'Cada proveedor emite su cobro por los materiales aprobados: lo pagás con Mercado Pago o acordás efectivo.',
+        'El proveedor confirma el efectivo al recibirlo y todo queda registrado.',
+      ],
+      href: '/panel/cliente/proyectos',
+      cta: 'Ir a proyectos',
+    },
+    {
+      id: 'resena',
+      title: 'Dejar una reseña (a quién, dónde y cuándo)',
+      time: '2 min',
+      steps: [
+        'Las reseñas se activan recién cuando el proyecto finaliza: es la garantía de que son de obras reales.',
+        'Entrá al detalle del proyecto finalizado: la sección Reseñas aparece activa.',
+        'Calificá a tu profesional (estrellas, comentario y hasta 4 fotos) y a cada proveedor que te vendió materiales.',
+        'Tu reseña se publica con tu nombre y recalcula la reputación del destinatario al instante.',
+      ],
+      href: '/panel/cliente/proyectos',
+      cta: 'Ir a mis proyectos',
+    },
+    {
+      id: 'chatear',
+      title: 'Chatear con profesional o proveedor',
+      time: '1 min',
+      steps: [
+        'Entrá a Panel → Mensajes: tu bandeja estilo chat.',
+        'Para empezar una conversación nueva, tocá un profesional o proveedor desde el directorio o su perfil y usá el botón de contacto.',
+        'Por tu seguridad, ellos nunca pueden escribirte primero: solo responden.',
+        'Toda la conversación queda registrada en la plataforma.',
+      ],
+      href: '/panel/cliente/mensajes',
+      cta: 'Abrir mensajes',
+    },
+    {
+      id: 'verificar',
+      title: 'Verificar tu identidad con el DNI',
+      time: '3 min',
+      steps: [
+        'Entrá a Panel → Verificación.',
+        'Subí una foto clara del FRENTE y otra del DORSO de tu DNI.',
+        'La IA analiza que el documento sea real y legible: en minutos ves el resultado.',
+        'Cuando aprobás, tu perfil muestra el check "Verificado" para todos.',
+      ],
+      href: '/panel/cliente/verificacion',
+      cta: 'Verificar ahora',
+    },
+    {
+      id: 'pdf',
+      title: 'Descargar una factura en PDF',
+      time: '10 seg',
+      steps: [
+        'Entrá a Panel → Facturas, o al detalle del proyecto que la generó.',
+        'Tocá el botón PDF de la factura: se descarga al instante con formato profesional.',
+        'Las facturas pagadas y pendientes se pueden descargar igual.',
+      ],
+      href: '/panel/cliente/facturas',
+      cta: 'Ver facturas',
+    },
+  ],
+
+  profesional: [
+    {
+      id: 'presupuestar',
+      title: 'Enviar un presupuesto a un trabajo publicado',
+      time: '4 min',
+      steps: [
+        'Entrá a Panel → Bolsa de trabajos y filtrá por tu rubro y zona.',
+        'Abrí el trabajo: leé el brief con fotos y mirá si hay preguntas por chat.',
+        'Tocá Enviar presupuesto: precio, plazo y un mensaje que explique cómo lo vas a resolver.',
+        'Seguí su estado en Mis presupuestos. Si te lo aceptan, el proyecto se crea solo.',
+      ],
+      href: '/panel/profesional/bolsa',
+      cta: 'Ir a la bolsa',
+    },
+    {
+      id: 'gestionar-proyecto',
+      title: 'Gestionar la obra por etapas',
+      time: '2 min',
+      steps: [
+        'Entrá a Panel → Proyectos y abrí tu obra.',
+        'Marcá el avance de cada etapa: el cliente lo ve en tiempo real.',
+        'Cargá las fotos del avance: documentar la obra evita malentendidos.',
+        'Al finalizar, marcá la obra como terminada: eso activa las reseñas y el cierre del pago.',
+      ],
+      href: '/panel/profesional/proyectos',
+      cta: 'Ver proyectos',
+    },
+    {
+      id: 'materiales-comparar',
+      title: 'Proponer materiales comparando precios',
+      time: '3 min',
+      steps: [
+        'En el detalle del proyecto, entrá a la sección Materiales.',
+        'Compará el mismo material entre proveedores: precio, stock y distancia.',
+        'Elegí el mejor y proponelo: el cliente aprueba o rechaza cada propuesta.',
+        'Solo los materiales aprobados se compran; nunca compres sin aprobación.',
+      ],
+      href: '/panel/profesional/proyectos',
+      cta: 'Ir a proyectos',
+    },
+    {
+      id: 'quien-paga',
+      title: 'Definir quién paga los materiales',
+      time: '1 min',
+      steps: [
+        'En el detalle del proyecto está la tarjeta "¿Quién paga los materiales?".',
+        'Modo 1 — los adelantás vos: los comprás y los cobrás junto con la mano de obra en tu factura.',
+        'Modo 2 — el cliente paga al proveedor: cada proveedor emite su cobro directo; tu factura va solo con mano de obra.',
+        'El cambio queda notificado a la contraparte y lo ven los dos siempre.',
+      ],
+      href: '/panel/profesional/proyectos',
+      cta: 'Ir a proyectos',
+    },
+    {
+      id: 'facturar-cobrar',
+      title: 'Emitir factura y cobrar protegido',
+      time: '3 min',
+      steps: [
+        'En el detalle del proyecto, tocá Emitir factura con los montos correspondientes.',
+        'Si el cliente paga con Mercado Pago, el dinero queda en escrow y se libera cuando aprueba la obra.',
+        'Si el cliente elige efectivo, vas a ver el acuerdo registrado: al recibir el dinero, tocá Confirmar cobro en efectivo.',
+        'Todo queda documentado: facturas descargables en PDF para vos y para el cliente.',
+      ],
+      href: '/panel/profesional/proyectos',
+      cta: 'Ir a proyectos',
+    },
+    {
+      id: 'obras',
+      title: 'Cargar tus obras para vender más',
+      time: '3 min',
+      steps: [
+        'Entrá a Panel → Mis obras.',
+        'Sumá cada trabajo terminado con fotos reales: antes y después suma mucho.',
+        'Tus obras alimentan tu tarjeta del directorio, donde los clientes te eligen.',
+        'Una vitrina completa vale más que cualquier promoción.',
+      ],
+      href: '/panel/profesional/obras',
+      cta: 'Cargar obras',
+    },
+    {
+      id: 'crm',
+      title: 'Usar el CRM para cuidar tus clientes',
+      time: '2 min',
+      steps: [
+        'Entrá a Panel → CRM clientes.',
+        'Cada cliente tiene su historial: proyectos, facturas y notas.',
+        'Dejá notas útiles (preferencias, horarios, pendientes) para cuando vuelva a contactarte.',
+        'Un cliente atendido con contexto vuelve a contratar y te recomienda.',
+      ],
+      href: '/panel/profesional/crm',
+      cta: 'Abrir CRM',
+    },
+    {
+      id: 'chats',
+      title: 'Responder chats (y la regla del primero)',
+      time: '1 min',
+      steps: [
+        'Entrá a Panel → Mensajes: toda tu bandeja con los no leídos marcados.',
+        'Podés responder todas las conversaciones que quieras.',
+        'La conversación nueva siempre la inicia el cliente: es la regla de confianza de HomIA.',
+        'Respondé dentro del día: el cliente está comparando en ese momento.',
+      ],
+      href: '/panel/profesional/mensajes',
+      cta: 'Abrir mensajes',
+    },
+    {
+      id: 'verificar',
+      title: 'Verificarte con el DNI (y el plan PRO)',
+      time: '3 min',
+      steps: [
+        'Entrá a Panel → Verificación.',
+        'Subí foto clara del FRENTE y del DORSO de tu DNI.',
+        'La IA valida el documento y tu perfil muestra el check "Verificado".',
+        'Si querés más alcance, en la misma sección está el plan PRO con sus beneficios.',
+      ],
+      href: '/panel/profesional/verificacion',
+      cta: 'Verificar ahora',
+    },
+    {
+      id: 'retiro',
+      title: 'Configurar tu cuenta de retiro',
+      time: '2 min',
+      steps: [
+        'Entrá a Panel → Cuentas de retiro.',
+        'Cargá la cuenta donde querés recibir tus cobros.',
+        'Sin cuenta configurada, tus cobros no pueden liquidarse a tu nombre.',
+        'Hacelo hoy: la vas a necesitar en tu primer pago.',
+      ],
+      href: '/panel/profesional/vinculaciones',
+      cta: 'Configurar',
+    },
+  ],
+
+  proveedor: [
+    {
+      id: 'cargar-stock',
+      title: 'Publicar materiales en tu catálogo',
+      time: '4 min',
+      steps: [
+        'Entrá a Panel → Stock.',
+        'Agregá cada material con precio, cantidad disponible y fotos claras.',
+        'Tu catálogo aparece en el comparador que los profesionales usan antes de comprar.',
+        'Cuidá los nombres: el profesional busca por lo que se llama el material.',
+      ],
+      href: '/panel/proveedor/stock',
+      cta: 'Ir al stock',
+    },
+    {
+      id: 'actualizar-stock',
+      title: 'Actualizar precios y stock (tu vidriera)',
+      time: '2 min',
+      steps: [
+        'Entrá a Panel → Stock y revisá los alertados "por agotar" y "agotados" del Inicio.',
+        'Actualizá precio y cantidad: el stock viejo aleja a los compradores.',
+        'El Inicio te avisa solo cuando algo está por agotarse.',
+        'Stock actualizado = aparecer arriba en las comparaciones = vender más.',
+      ],
+      href: '/panel/proveedor/stock',
+      cta: 'Actualizar stock',
+    },
+    {
+      id: 'emitir-cobro',
+      title: 'Emitir el cobro de tus materiales',
+      time: '2 min',
+      steps: [
+        'Entrá a Panel → Cobros: ves los materiales aprobados listos para cobrar.',
+        'Elegí el proyecto y emití el cobro agrupado por esos materiales.',
+        'El cliente lo paga con Mercado Pago o acuerda efectivo.',
+        'Emití apenas se aprueban los materiales: cuanto antes cobrás, mejor.',
+      ],
+      href: '/panel/proveedor/cobros',
+      cta: 'Ir a cobros',
+    },
+    {
+      id: 'confirmar-efectivo',
+      title: 'Confirmar un cobro en efectivo',
+      time: '30 seg',
+      steps: [
+        'En Panel → Cobros, buscá el cobro "esperando pago en efectivo".',
+        'Cuando el cliente te entrega el dinero, tocá Confirmar cobro.',
+        'El sistema registra el pago y cierra el circuito para los dos.',
+        'Nunca confirmes antes de recibir: el registro es la prueba del pago.',
+      ],
+      href: '/panel/proveedor/cobros',
+      cta: 'Ir a cobros',
+    },
+    {
+      id: 'vinculaciones',
+      title: 'Configurar tu cuenta de retiro',
+      time: '2 min',
+      steps: [
+        'Entrá a Panel → Vinculaciones.',
+        'Creá o conectá la cuenta donde querés recibir el dinero de tus ventas.',
+        'Sin cuenta configurada, tus cobros no pueden liquidarse a tu nombre.',
+        'Hacelo una sola vez y quedá listo para siempre.',
+      ],
+      href: '/panel/proveedor/vinculaciones',
+      cta: 'Configurar',
+    },
+    {
+      id: 'chats',
+      title: 'Responder chats de clientes y profesionales',
+      time: '1 min',
+      steps: [
+        'Entrá a Panel → Mensajes: tu bandeja con los no leídos marcados.',
+        'La conversación nueva siempre la inicia el cliente; vos respondés todo lo que llega.',
+        'Respondé rápido: el profesional suele estar comparando proveedores en ese momento.',
+        'Los precios acordados por chat quedan registrados en la plataforma.',
+      ],
+      href: '/panel/proveedor/mensajes',
+      cta: 'Abrir mensajes',
+    },
+    {
+      id: 'verificar',
+      title: 'Verificarte con el DNI',
+      time: '3 min',
+      steps: [
+        'Entrá a Panel → Verificación.',
+        'Subí foto clara del FRENTE y del DORSO de tu DNI.',
+        'La IA valida el documento y tu perfil muestra el check "Verificado".',
+        'Entre proveedores con precio parecido, el cliente elige al verificado.',
+      ],
+      href: '/panel/proveedor/verificacion',
+      cta: 'Verificar ahora',
+    },
+    {
+      id: 'reputacion',
+      title: 'Construir reputación que vende',
+      time: 'en el día a día',
+      steps: [
+        'Entregá a tiempo y en completo: los clientes reseñan con fotos la entrega real.',
+        'Cuidá el orden del directorio: se ordena por reseñas positivas.',
+        'Respondé los chats rápido y por escrito: todo queda registrado.',
+        'Sin DNI verificado figurás como "No verificado": verificá tu identidad.',
+      ],
+      href: '/panel/proveedor/directorio',
+      cta: 'Ver mi tarjeta',
+    },
+  ],
+}
+
+export const TROUBLES: Record<TourRole, Trouble[]> = {
+  cliente: [
+    {
+      id: 'sin-presupuestos',
+      q: 'No me llegan presupuestos',
+      why: 'Lo más común: publicación sin fotos, sin presupuesto estimado o con muy poco detalle. Los profesionales presupuestan mejor (y más rápido) cuanto más les mostrás.',
+      fix: 'Editá tu publicación sumando fotos, zona y un presupuesto estimado realista. Además, podés ir al Directorio, elegir profesionales con buena reputación y contactarlos directo con tu publicación como referencia.',
+      href: '/panel/cliente/trabajos',
+      hrefLabel: 'Editar mi publicación',
+    },
+    {
+      id: 'pro-no-responde',
+      q: 'El profesional no me responde',
+      why: 'Le llega una notificación por cada mensaje, pero nadie puede obligarlo a contestar. Por eso HomIA te da siempre varias opciones con reputación a la vista.',
+      fix: 'Revisá en Mensajes que tu mensaje se haya enviado. Si no responde en el día, volvé al Directorio y contactá otros profesionales bien calificados: comparar 2-3 opciones sube mucho la respuesta.',
+      href: '/panel/cliente/directorio',
+      hrefLabel: 'Ver otros profesionales',
+    },
+    {
+      id: 'no-puedo-resenar',
+      q: 'No encuentro dónde dejar la reseña',
+      why: 'La sección Reseñas se activa recién cuando el proyecto finaliza, y solo para quienes participaron de esa obra. Es la garantía de que las reseñas son de trabajos reales.',
+      fix: 'Entrá al detalle del proyecto: si sigue activa, verás la sección bloqueada con la explicación. Pedile a tu profesional que marque la obra como terminada; al finalizar, la reseña se activa sola (estrellas, comentario y fotos) para tu profesional y cada proveedor.',
+      href: '/panel/cliente/proyectos',
+      hrefLabel: 'Ver mis proyectos',
+    },
+    {
+      id: 'pago-no-acredita',
+      q: 'El pago no se acredita',
+      why: 'Con Mercado Pago, la acreditación puede demorar unos minutos y se refleja sola en Facturas. Con efectivo, la factura queda pagada recién cuando el profesional confirma que lo recibió.',
+      fix: 'Si pagaste con Mercado Pago, esperá unos minutos y recargá: el estado se actualiza solo. Si acordaste efectivo, avisale a tu profesional (por chat, queda registrado) y él confirma el cobro desde su panel. Podés cancelar el acuerdo de efectivo y pagar con Mercado Pago si preferís el respaldo.',
+      href: '/panel/cliente/facturas',
+      hrefLabel: 'Ver mis facturas',
+    },
+    {
+      id: 'me-equivoque',
+      q: 'Me equivoqué en lo que publiqué',
+      why: 'A veces el detalle cambia después de publicar (medidas, fechas, alcance del trabajo).',
+      fix: 'Entrá a Mis trabajos, abrí la publicación y editala o cerrala si ya no corresponde. Los profesionales que la miraron quedan avisados con el cambio.',
+      href: '/panel/cliente/trabajos',
+      hrefLabel: 'Ir a mis trabajos',
+    },
+    {
+      id: 'cobro-proveedor',
+      q: 'Me llegó un cobro de un proveedor y no lo esperaba',
+      why: 'Si el proyecto usa el modo "el cliente paga al proveedor", los materiales se cobran aparte de la factura del profesional: es el acuerdo visible en la tarjeta "¿Quién paga los materiales?".',
+      fix: 'En el detalle del proyecto, revisá la tarjeta del acuerdo y los materiales que aprobaste: el cobro corresponde exactamente a esos materiales. Si algo no coincide, chateá con el profesional antes de pagar: todo queda registrado.',
+      href: '/panel/cliente/proyectos',
+      hrefLabel: 'Revisar el proyecto',
+    },
+    {
+      id: 'no-aparece-directorio',
+      q: 'No encuentro a alguien en el directorio',
+      why: 'El directorio ordena por reputación y muestra perfiles con datos completos. Un profesional sin verificación, sin obras o sin reseñas queda más abajo o puede ser difícil de hallar.',
+      fix: 'Usá los filtros por rubro y precio, y probá buscar por parte del nombre. Si igual no aparece, es probable que su perfil esté incompleto: elegí alternativas mejor documentadas.',
+      href: '/panel/cliente/directorio',
+      hrefLabel: 'Abrir directorio',
+    },
+  ],
+
+  profesional: [
+    {
+      id: 'sin-trabajos',
+      q: 'No recibo invitaciones ni aceptan mis presupuestos',
+      why: 'Los clientes comparan tres cosas a simple vista: reputación (reseñas), verificación (check verde) y velocidad de respuesta. Un perfil sin obras ni DNI compite con una mano atada.',
+      fix: 'Verificá tu identidad con el DNI, cargá tus obras con fotos y respondé presupuestos el mismo día. Mirá los presupuestos aceptados de otros: ajustá precio y presentación al contexto real del cliente.',
+      href: '/panel/profesional/verificacion',
+      hrefLabel: 'Verificar mi identidad',
+    },
+    {
+      id: 'cliente-no-responde',
+      q: 'El cliente no me responde',
+      why: 'Los clientes suelen comparar varios presupuestos antes de decidir. Además, la conversación nueva siempre la inicia el cliente: es la regla de confianza de HomIA.',
+      fix: 'Hacé un seguimiento amable por chat (queda registrado). Si no responde, retomalo desde el CRM con notas del caso y foco en los trabajos con señales claras: mensajes leídos y preguntas son buena señal de compra.',
+      href: '/panel/profesional/crm',
+      hrefLabel: 'Registrar seguimiento',
+    },
+    {
+      id: 'no-puedo-cobrar',
+      q: 'No sé cómo cobrar mi trabajo',
+      why: 'El cobro depende del método que eligió el cliente: Mercado Pago (escrow: se libera cuando aprueba la obra) o efectivo (vos confirmás al recibirlo).',
+      fix: 'En el detalle del proyecto tocá Emitir factura si aún no lo hiciste. Si el cliente eligió efectivo, vas a ver el acuerdo: al recibir el dinero, tocá Confirmar cobro en efectivo. Si el cliente pagó con Mercado Pago, el escrow se libera cuando la obra se aprueba.',
+      href: '/panel/profesional/proyectos',
+      hrefLabel: 'Ver mis proyectos',
+    },
+    {
+      id: 'materiales-confuso',
+      q: 'Me confundo con quién paga los materiales',
+      why: 'Hay dos modos válidos y el proyecto usa uno solo, acordado con el cliente: (1) vos adelantás los materiales y los cobrás en tu factura, o (2) el cliente le paga directo al proveedor.',
+      fix: 'Mirá la tarjeta "¿Quién paga los materiales?" del proyecto: está siempre visible para los dos. En el modo 2, tu factura va solo con mano de obra y cada proveedor emite su cobro directo al cliente. Cualquier cambio queda notificado.',
+      href: '/panel/profesional/proyectos',
+      hrefLabel: 'Ver el acuerdo',
+    },
+    {
+      id: 'no-aparezco',
+      q: 'No aparezco bien en el directorio',
+      why: 'El orden es por reputación: reseñas positivas primero. Los perfiles sin verificación, sin obras ni reseñas quedan al fondo, aunque sean muy buenos.',
+      fix: 'Verificá tu DNI, cargá tus mejores obras con fotos y pedile a tus clientes que dejen su reseña al finalizar cada obra (se activa sola al finalizar el proyecto).',
+      href: '/panel/profesional/perfil',
+      hrefLabel: 'Completar mi perfil',
+    },
+    {
+      id: 'no-puedo-resenar',
+      q: 'No encuentro dónde calificar a un cliente',
+      why: 'Las reseñas entre participantes se activan cuando la obra finaliza: es lo que las mantiene reales.',
+      fix: 'Marcá el proyecto como terminado desde el detalle; la reseña al cliente se activa en ese momento (estrellas + comentario).',
+      href: '/panel/profesional/proyectos',
+      hrefLabel: 'Ir a proyectos',
+    },
+    {
+      id: 'presupuesto-rechazado',
+      q: 'Me rechazaron un presupuesto',
+      why: 'Suele ser por precio fuera del contexto del cliente, plazo poco claro o una presentación genérica sin detalle de cómo se resuelve el trabajo.',
+      fix: 'Mirá qué eligió el cliente (queda en Mis presupuestos) y ajustá el próximo: detallá materiales, etapas y plazos. Un mensaje que explica el cómo vale más que un precio recortado.',
+      href: '/panel/profesional/presupuestos',
+      hrefLabel: 'Ver mis presupuestos',
+    },
+  ],
+
+  proveedor: [
+    {
+      id: 'no-vendo',
+      q: 'No me compran nada',
+      why: 'Los profesionales comparan precio, stock y distancia en un solo lugar. Catálogo incompleto, precios fuera de mercado o stock en cero te sacan de la comparación.',
+      fix: 'Actualizá precios y cantidades en Stock, sumá fotos claras y verificá tu identidad con el DNI. Revisá tu tarjeta del directorio como si fueras el comprador: ¿te comprarías a vos mismo hoy?',
+      href: '/panel/proveedor/stock',
+      hrefLabel: 'Actualizar mi stock',
+    },
+    {
+      id: 'cobro-pendiente',
+      q: 'El cliente no me paga los materiales',
+      why: 'En el modo "el cliente paga al proveedor", el pago depende de que el cobro esté emitido y de que el cliente elija método (Mercado Pago o efectivo).',
+      fix: 'En Cobros, verificá que el cobro esté emitido (no solo pendiente de emitir). Si está esperando pago en efectivo, el cliente acordó eso: tocá Confirmar cobro cuando lo recibas. Si demora, chateá con el profesional del proyecto (queda registrado).',
+      href: '/panel/proveedor/cobros',
+      hrefLabel: 'Ver mis cobros',
+    },
+    {
+      id: 'material-no-aprobado',
+      q: 'El profesional no aprueba mis materiales',
+      why: 'Cada material propuesto necesita la aprobación del cliente: es la protección para que nadie compre de más.',
+      fix: 'Chateá con el profesional para entender qué falta (precio, equivalencia o plazo) y ajustá tu propuesta. Un precio claro y stock real aprobada rápido.',
+      href: '/panel/proveedor/mensajes',
+      hrefLabel: 'Abrir mensajes',
+    },
+    {
+      id: 'puedo-resenar',
+      q: '¿Puedo dejar reseñas yo también?',
+      why: 'Hoy las reseñas las dejan los clientes (a profesionales y proveedores) y los profesionales (a clientes): son las que construyen tu reputación con evidencia real.',
+      fix: 'Tu mejor estrategia es que cada entrega merezca 5 estrellas y foto: entregá a tiempo, completo y con comprobante. Las reseñas con fotos son tu marketing gratuito.',
+      href: '/panel/proveedor/directorio',
+      hrefLabel: 'Ver mi reputación',
+    },
+    {
+      id: 'stock-agotado',
+      q: 'Se me agotó un material y perdí ventas',
+      why: 'El profesional compra donde hay stock: un catálogo con agotados empuja la venta al competidor.',
+      fix: 'Usá las alertas del Inicio ("por agotar" y "agotados") para reponer antes de llegar a cero, y actualizá cantidades en Stock apenas cambien.',
+      href: '/panel/proveedor',
+      hrefLabel: 'Ver alertas del Inicio',
+    },
+    {
+      id: 'no-aparezco',
+      q: 'No aparezco en el directorio',
+      why: 'El directorio ordena por reputación y muestra perfiles con catálogo activo. Sin stock cargado o sin verificación, tu tarjeta queda invisible o al fondo.',
+      fix: 'Cargá tu catálogo en Stock y verificá tu DNI: tu perfil público se arma solo con esos datos y tus reseñas.',
+      href: '/panel/proveedor/verificacion',
+      hrefLabel: 'Verificar mi identidad',
+    },
+  ],
+}
