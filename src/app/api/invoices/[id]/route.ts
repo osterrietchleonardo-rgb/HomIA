@@ -22,6 +22,10 @@ export async function GET(
     where: { id: invoice.professionalId },
     include: { user: { select: { displayName: true, email: true } } },
   })
+  // permiso: solo las partes de la factura (cliente o profesional)
+  const isClient = user.id === invoice.clientId
+  const isPro = pro ? user.id === pro.userId : false
+  if (!isClient && !isPro) return fail('No tenés acceso a esta factura', 403)
   return ok({ invoice, client, professional: pro ? { displayName: pro.user.displayName, companyName: pro.companyName, email: pro.user.email } : null })
 }
 

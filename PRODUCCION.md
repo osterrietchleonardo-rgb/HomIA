@@ -51,9 +51,21 @@ pasan a `Secure` automáticamente cuando el request llega con `X-Forwarded-Proto
 
 - El webhook llega a `https://TU-DOMINIO/api/payments/webhook` — configurá esa URL en el panel de MP (o dejá que MP la descubra: el preference/preapproval ya la declara con el dominio del request).
 - Probá con credenciales de TEST antes de pasar a producción.
-- La suscripción PRO funciona para **proveedores y profesionales** (misma lógica, `external_reference = pro:<rol>:<id>`; el webhook activa el plan y notifica).
+- Las suscripciones (Plan Básico US$50/mes con 14 días de prueba + Plan PRO US$100/mes) son **solo para proveedores**. El webhook mantiene compatibilidad con referencias legacy de profesionales, pero el alta nueva es de proveedor.
 
-## 5. Checklist previo al lanzamiento
+## 5. Seguridad (auditoría integral pre-producción)
+
+Implementado y verificado con pruebas en vivo (`bash scripts/sec-audit.sh` — 29/29):
+
+- **Sesiones**: bcrypt + JWT httpOnly con `SameSite=Lax`; cookie `Secure` automática si el request llega por HTTPS. Fail-fast si falta `AUTH_SECRET` en producción.
+- **Rate limiting** (`src/lib/rate-limit.ts`): solo cuenta intentos FALLIDOS — 10 fallos por email+IP y 30 por IP cada 15 min en login (respuesta 429); registro limitado a 8 cuentas por IP por hora.
+- **IDOR**: todas las lecturas de recursos por id (facturas JSON y PDF, cobros, proyectos, compras, conversaciones) verifican que el usuario sea parte del recurso → 403.
+- **Uploads**: carpeta sanitizada contra path traversal (solo `[a-zA-Z0-9_-]`), MIME whitelist (JPG/PNG/WEBP/PDF), tope 8MB; las URLs de fotos en reseñas/obras/DNI se validan contra el patrón `/uploads/...`.
+- **Cabeceras**: `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy` en todas las respuestas; `CSP: default-src 'none'; sandbox` en `/uploads/*` (los archivos subidos nunca se ejecutan como documento activo). Para el dominio final, agregá `X-Frame-Options: SAMEORIGIN` en el reverse proxy si no vas a embeber la app.
+- **Política de contraseñas**: mínimo 8 caracteres combinando letras y números (validado en UI y API).
+- **Recomendado a futuro**: rotar `AUTH_SECRET` si alguna vez se filtró, y mover el rate limit a Redis si escalás a múltiples instancias.
+
+## 6. Checklist previo al lanzamiento
 
 - [ ] `.env` con `AUTH_SECRET`, `DATABASE_URL` absoluta y `MP_ACCESS_TOKEN`
 - [ ] `npm run build` sin errores + `npm start` y probar login con una cuenta real

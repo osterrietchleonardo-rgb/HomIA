@@ -156,6 +156,10 @@ export default function RegisterScreen() {
       toast.error('Completá nombre, email y contraseña')
       return
     }
+    if (password.length < 8 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+      toast.error('La contraseña necesita al menos 8 caracteres, con letras y números')
+      return
+    }
     if (role === 'profesional' && professions.length === 0) {
       toast.error('Elegí al menos una profesión')
       return
@@ -303,7 +307,7 @@ export default function RegisterScreen() {
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <Field label="Nombre y apellido (o negocio)" required value={displayName} onChange={setDisplayName} placeholder="Juan Pérez" />
             <Field label="Email" required type="email" value={email} onChange={setEmail} placeholder="tu@email.com" />
-            <Field label="Contraseña" required type="password" value={password} onChange={setPassword} placeholder="Mínimo 6 caracteres" />
+            <Field label="Contraseña" required type="password" value={password} onChange={setPassword} placeholder="Mínimo 8 caracteres, con letras y números" />
             <Field label="Celular" value={phone} onChange={setPhone} placeholder="+54 9 11 …" />
             <Field label="Fecha de nacimiento" type="date" value={birthday} onChange={setBirthday} />
             <Field label="Dirección" value={address} onChange={setAddress} placeholder="Calle y número" />

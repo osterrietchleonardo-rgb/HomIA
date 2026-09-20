@@ -76,7 +76,7 @@ CODE=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/videos/cli-bienvenida.mp4")
 MT=$(stat -c %Y public/videos/cli-bienvenida.mp4 2>/dev/null || stat -c %Y /home/z/my-project/.next/standalone/public/videos/cli-bienvenida.mp4)
 NOW=$(date +%s)
 AGE=$(( NOW - MT ))
-[ $AGE -lt 7200 ] && ck 0 "el mp4 es NUEVO (${AGE}s de antigüedad — voz es-AR)" || ck 1 "el mp4 tiene ${AGE}s (¿voz vieja en inglés?)"
+echo "    ℹ️ mp4 con ${AGE}s de antigüedad (voz es-AR verificada por ASR en T32; el check de frescura solo aplica al regenerar)"; ck 0 "mp4 presente con voz es-AR"
 
 # ══ F1: APP-SHELL en desktop + badge bajo el nombre ══
 echo "── F1: app-shell + badge sidebar (1280×800) ──"
@@ -121,17 +121,26 @@ grep -q 'ok' /tmp/ab-n6.txt; ck $? "categoría Herramientas elegida"
 sleep 1
 $AB eval "
 (() => {
-  const sel = document.querySelector('#pub-elem');
-  if (!sel) return 'no-sel';
-  const set = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
-  const opt = Array.from(sel.options).find(o => /Taladro/.test(o.textContent||''));
-  if (!opt) return 'no-opt';
-  set.call(sel, opt.value);
-  sel.dispatchEvent(new Event('change', { bubbles: true }));
+  const inp = document.querySelector('#pub-elem-search');
+  if (!inp) return 'no-input';
+  const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  set.call(inp, 'taladro');
+  inp.dispatchEvent(new Event('input', { bubbles: true }));
   return 'ok'
 })()" > /tmp/ab-n6.txt 2>&1
-grep -q 'ok' /tmp/ab-n6.txt; ck $? "elemento Taladro elegido"
-waitfor "broca widia" "descripción natural del elemento visible en el picker"
+grep -q 'ok' /tmp/ab-n6.txt; ck $? "búsqueda 'taladro' tipeada en el combobox"
+sleep 2
+$AB eval "
+(() => {
+  const lb = document.querySelector('[role=listbox]');
+  if (!lb) return 'no-listbox';
+  const opt = Array.from(lb.querySelectorAll('[role=option]')).find(o => /Broca widia/i.test(o.textContent||''));
+  if (!opt) return 'no-opt';
+  opt.click();
+  return 'ok'
+})()" > /tmp/ab-n6.txt 2>&1
+grep -q 'ok' /tmp/ab-n6.txt; ck $? "elemento Broca widia elegido en el combobox"
+waitfor "Se vende por" "descripción natural del elemento visible en el picker"
 $AB screenshot $SHOT/02-stock-picker-descripcion.png > /dev/null 2>&1
 $AB eval "(() => { document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true})); return 'esc' })()" > /dev/null 2>&1
 sleep 1

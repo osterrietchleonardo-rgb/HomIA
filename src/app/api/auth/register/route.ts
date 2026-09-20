@@ -3,6 +3,7 @@ import { ok, fail, body } from '@/lib/api'
 import { hashPassword, createSession, parseRoles } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { ensureDefaultPipelines } from '@/lib/pipelines'
+import { rateLimit, ipRateKey } from '@/lib/rate-limit'
 
 type RegisterBody = {
   email: string
@@ -33,17 +34,36 @@ type RegisterBody = {
 }
 
 export async function POST(req: NextRequest) {
+  // tope anti-abuso: 8 cuentas por IP por hora
+  const rl = rateLimit(ipRateKey(req, 'register'), 8, 60 * 60 * 1000)
+  if (!rl.allowed) {
+    return fail('Demasiadas cuentas creadas desde tu conexión. Probá de nuevo en un rato.', 429)
+  }
   const data = await body<RegisterBody>(req)
-  if (!data.email || !data.password || !data.displayName) {
+  if (typeof data.email !== 'string' || typeof data.password !== 'string' || typeof data.displayName !== 'string' || !data.email || !data.password || !data.displayName) {
     return fail('Email, contraseña y nombre son obligatorios')
   }
-  if (data.password.length < 6) return fail('La contraseña debe tener al menos 6 caracteres')
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email.trim())) {
+    return fail('El email no parece válido')
+  }
+  if (data.password.length < 8) {
+    return fail('La contraseña debe tener al menos 8 caracteres')
+  }
+  if (!/[a-zA-Z]/.test(data.password) || !/[0-9]/.test(data.password)) {
+    return fail('La contraseña debe combinar letras y números para proteger tu cuenta')
+  }
+  if (data.displayName.trim().length < 2 || data.displayName.trim().length > 60) {
+    return fail('El nombre debe tener entre 2 y 60 caracteres')
+  }
+  if (data.email.length > 200 || data.password.length > 200) {
+    return fail('Email o contraseña demasiado largos')
+  }
   const email = data.email.trim().toLowerCase()
   const exists = await db.user.findUnique({ where: { email } })
   if (exists) return fail('Ya existe una cuenta con ese email', 409)
 
-  const roles = (data.roles || ['cliente']).filter((r) =>
-    ['cliente', 'profesional', 'proveedor'].includes(r)
+  const roles = (Array.isArray(data.roles) ? data.roles : ['cliente']).filter(
+    (r: unknown) => typeof r === 'string' && ['cliente', 'profesional', 'proveedor'].includes(r)
   )
   if (roles.length === 0) return fail('Rol inválido')
 

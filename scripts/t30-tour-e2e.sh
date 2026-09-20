@@ -128,7 +128,7 @@ echo "── F6: checklist con botón Tour ──"
 $AB navigate "$BASE/panel/cliente?cb=$CB" > /dev/null 2>&1; sleep 3
 $AB eval "
 (() => {
-  const b = Array.from(document.querySelectorAll('button')).find(x => (x.getAttribute('title')||'').includes('Recorrido guiado'));
+  const b = Array.from(document.querySelectorAll('button')).find(x => /Ver tour guiado/i.test(x.textContent||''));
   return b ? 'tour-btn' : 'none'
 })()" > /tmp/ab-t30.txt 2>&1
 grep -q tour-btn /tmp/ab-t30.txt; ck $? "checklist de primeros pasos con botón Tour"

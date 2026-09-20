@@ -16,7 +16,10 @@ export async function POST(req: NextRequest) {
 
   const form = await req.formData()
   const file = form.get('file') as File | null
-  const folder = (form.get('folder') as string) || 'general'
+  const rawFolder = ((form.get('folder') as string) || 'general').trim()
+  // sanitización estricta del folder: solo letras, números, guiones y guiones bajos
+  // (evita path traversal tipo "../../etc" escribiendo fuera de /uploads)
+  const folder = /^[a-zA-Z0-9_-]{1,40}$/.test(rawFolder) ? rawFolder : 'general'
   if (!file) return fail('No se recibió ningún archivo')
   if (!ALLOWED.includes(file.type)) return fail('Formato no permitido (usá JPG, PNG, WEBP o PDF)')
   if (file.size > MAX_SIZE) return fail('El archivo supera los 8MB')

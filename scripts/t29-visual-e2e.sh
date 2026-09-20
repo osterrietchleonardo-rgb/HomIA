@@ -78,8 +78,8 @@ $AB eval "
 })()
 " > /dev/null 2>&1
 $AB open "$BASE/panel/proveedor/cobros" > /dev/null 2>&1; sleep 3
-waitfor "Cobros de materiales" "pantalla Cobros renderiza"
-$AB snapshot 2>/dev/null | grep -qE "Sin cobros por ahora|Materiales por cobrar"; ck $? "estado vacío o materiales por cobrar"
+waitfor "Cobros y ventas" "pantalla Cobros renderiza (título actual)"
+$AB snapshot 2>/dev/null | grep -qE "Sin cobros por ahora|Materiales por cobrar|PRV-|pendiente|pagada"; ck $? "cobros listados o estado vacío"
 $AB screenshot "$SHOT/04-proveedor-cobros.png" > /dev/null 2>&1
 
 echo "── F6: ayuda actualizada ──"
