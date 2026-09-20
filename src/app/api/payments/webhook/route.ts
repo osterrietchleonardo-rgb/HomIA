@@ -96,6 +96,10 @@ export async function POST(req: NextRequest) {
           where: { id: charge.id },
           data: { status: 'pagada', method: 'mercadopago', mpPaymentId: payment.id, paidAt: new Date() },
         })
+        // si el cobro nació de una compra directa, la compra queda pagada → habilita reseña
+        if (charge.projectId == null) {
+          await db.purchase.updateMany({ where: { chargeId: charge.id }, data: { status: 'pagado' } })
+        }
         await db.notification.createMany({
           data: [
             {
@@ -110,7 +114,7 @@ export async function POST(req: NextRequest) {
               type: 'cobro_pagado',
               title: 'Pago del cobro acreditado',
               body: `Tu pago de ${charge.number} quedó acreditado para el proveedor.`,
-              link: `#/panel/cliente/proyectos/${charge.projectId}`,
+              link: charge.projectId ? `#/panel/cliente/proyectos/${charge.projectId}` : '#/panel/cliente/materiales?tab=compras',
             },
           ],
         })
@@ -175,8 +179,51 @@ function parseProReference(ref: string): { kind: 'provider' | 'professional'; pr
   return null
 }
 
+// Planes de proveedor: "plan:provider:<profileId>:<plan>" (basic|pro)
+function parsePlanReference(ref: string): { profileId: string; plan: 'basic' | 'pro' } | null {
+  const m = /^plan:provider:(.+):(basic|pro)$/.exec(ref)
+  if (m) return { profileId: m[1], plan: m[2] as 'basic' | 'pro' }
+  return null
+}
+
 async function handlePreapproval(preapprovalId: string) {
   const pre = await getPreapproval(preapprovalId)
+
+  // ── Planes de proveedor (basic | pro) — el único rol con suscripción ──
+  const planRef = parsePlanReference(pre.externalReference || '')
+  if (planRef) {
+    const prov = await db.providerProfile.findUnique({
+      where: { id: planRef.profileId },
+      select: { id: true, userId: true },
+    })
+    if (!prov) return
+    if (pre.status === 'authorized') {
+      await db.providerProfile.update({
+        where: { id: prov.id },
+        data: { subscription: planRef.plan, proSince: new Date(), mpPreapprovalId: pre.id },
+      })
+      await db.notification.create({
+        data: {
+          userId: prov.userId,
+          type: 'pro_activa',
+          title: planRef.plan === 'pro' ? 'Plan PRO activo' : 'Plan Básico activo',
+          body:
+            planRef.plan === 'pro'
+              ? 'Tu Plan PRO está activo: analítica del negocio, tarjeta Recomendado y sponsor en la home.'
+              : 'Tu Plan Básico está activo: usá la plataforma sin límites.',
+          link: '#/panel/proveedor/plan',
+        },
+      })
+    } else if (pre.status === 'cancelled' || pre.status === 'paused') {
+      // Sin plan de pago vuelve al estado de prueba (ya consumida) → se le pide elegir plan
+      await db.providerProfile.update({
+        where: { id: prov.id },
+        data: { subscription: 'trial', trialEndsAt: new Date(0) },
+      })
+    }
+    return
+  }
+
   const parsed = parseProReference(pre.externalReference || '')
   if (!parsed) return
 
@@ -204,7 +251,7 @@ async function handlePreapproval(preapprovalId: string) {
     } else if (pre.status === 'cancelled' || pre.status === 'paused') {
       await db.providerProfile.update({
         where: { id: prov.id },
-        data: { subscription: 'free' },
+        data: { subscription: 'trial', trialEndsAt: new Date(0) },
       })
     }
     return

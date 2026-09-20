@@ -76,7 +76,7 @@ async function main() {
     description: 'Corralón y ferretería con 25 años en San Cristóbal. Stock permanente de plomería, electricidad, albañilería y pintura. Precios de mayorista para profesionales vinculados, entrega en obra dentro de CABA y cuentas corrientes para clientes recurrentes.',
     address: 'Av. San Juan 2847', city: 'Buenos Aires',
     lat: -34.6245, lng: -58.4058, verified: true,
-    subscription: 'pro', proSince: D(80),
+    subscription: 'pro', proSince: D(80), trialEndsAt: D(286),
     createdAt: D(300), updatedAt: D(7),
   } })
 
@@ -400,6 +400,51 @@ async function part2({ cli, pro, prv, caro, jul, proP, prvP, projA, projB, mA1, 
   await db.stockReservation.create({ data: { stockId: stock['Caño termofusión 25mm'].id, projectId: projA.id, userId: pro.id, quantity: 12, status: 'activa', createdAt: D(8) } })
   await db.stockReservation.create({ data: { stockId: stock['Inodoro blanco completo'].id, projectId: projB.id, userId: pro.id, quantity: 1, status: 'consumida', createdAt: D(36) } })
   await db.stockReservation.create({ data: { stockId: stock['Látex interior 20L blanco'].id, userId: cli.id, quantity: 2, status: 'liberada', createdAt: D(20) } })
+
+  // ── COMPRAS DIRECTAS DEMO (marketplace cliente → proveedor, sin proyecto) ──
+  // Una pagada (habilita reseña por compra) y una solicitada (flujo visible en Cobros → Ventas).
+  const comprasDemo = [
+    { stock: stock['Cemento Portland 50kg'], qty: 10, note: 'Si puede ser entrega mañana por la mañana en Villa Crespo.', status: 'pagado', days: 12 },
+    { stock: stock['Rodillo lana 22cm'], qty: 3, note: 'Para pintar el living, 60m2.', status: 'solicitado', days: 0.2 },
+  ]
+  for (const c of comprasDemo) {
+    const total = Math.round(c.stock.price * c.qty * 100) / 100
+    let chargeId = null
+    if (c.status === 'pagado') {
+      const year = new Date().getFullYear()
+      const n = await db.providerCharge.count()
+      const ch = await db.providerCharge.create({ data: {
+        projectId: null, providerId: prvP.id, clientId: cli.id,
+        number: `PRV-${year}-${String(n + 1).padStart(6, '0')}`,
+        description: `${c.stock.elementId ? '' : ''}Compra directa — marketplace HomIA`,
+        materialIds: '[]', amount: total, status: 'pagada', method: 'mercadopago', paidAt: D(c.days - 0.5),
+        createdAt: D(c.days),
+      } })
+      chargeId = ch.id
+    }
+    await db.purchase.create({ data: {
+      clientId: cli.id, providerId: prvP.id, stockId: c.stock.id, elementId: c.stock.elementId,
+      elementName: Object.keys(stock).find((k) => stock[k].id === c.stock.id) || 'Elemento',
+      quantity: c.qty, unit: 'unidad', unitPrice: c.stock.price, total, note: c.note,
+      status: c.status, chargeId, createdAt: D(c.days),
+    } })
+  }
+
+  // ── SEARCH EVENTS DEMO (alimentan la analítica PRO: consultas del rubro + te encontraron) ──
+  const queriesDemo = [
+    ['cemento 50kg paraologistar', 26], ['cemento loma negra', 22], ['cal hidratada', 18],
+    ['membrana para humedad terraza', 14], ['latex interior blanco 20 litros', 12],
+    ['caños termofusion 25', 9], ['taladro percutor', 8], ['cable unipolar 2.5', 7],
+    ['inodoro blanco ferrum', 6], ['rodillo para pintura', 5],
+  ]
+  for (const [query, days] of queriesDemo) {
+    await db.searchEvent.create({ data: {
+      userId: null, mode: 'materiales', query,
+      intent: JSON.stringify({ cat: '', radius: 25 }),
+      results: JSON.stringify({ count: 3, providerIds: [prvP.id] }),
+      createdAt: D(Math.max(0.3, days * (0.6 + Math.random() * 0.8))),
+    } })
+  }
 
   // ───────────── VÍNCULOS PROVEEDOR ↔ PROFESIONAL ─────────────
   await db.providerLink.create({ data: { providerId: prvP.id, professionalId: proP.id, accountLabel: 'Cuenta principal — Matías Ferrer', notes: 'Retira en local de Av. San Juan 2847. Cuenta corriente a 30 días, precios de mayorista.', active: true, createdAt: D(85) } })

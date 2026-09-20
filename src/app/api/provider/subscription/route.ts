@@ -1,19 +1,26 @@
 import { NextRequest } from 'next/server'
-import { ok, fail } from '@/lib/api'
+import { ok, fail, body } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
-import { createProPreapproval, mpConfigured, MP_PRO_PRICE_ARS } from '@/lib/mercadopago'
+import { createProviderPlanPreapproval, mpConfigured } from '@/lib/mercadopago'
+import { MP_PLAN_PRICE_ARS } from '@/lib/plans'
 
-// POST: el proveedor inicia la suscripción al plan PRO → preapproval de Mercado Pago.
-// El plan se activa cuando el webhook recibe el preapproval autorizado
-// (external_reference = pro:provider:<providerProfileId>).
+// LEGADO → reemplazado por /api/provider/plan (planes basic | pro).
+// Se mantiene por compatibilidad: sin body asume PRO; con { plan } delega.
 export async function POST(req: NextRequest) {
   const user = await getSessionUser()
   if (!user) return fail('Necesitás iniciar sesión', 401)
 
   const prov = await db.providerProfile.findUnique({ where: { userId: user.id } })
-  if (!prov) return fail('Solo los proveedores pueden suscribirse al plan PRO', 403)
+  if (!prov) return fail('Solo los proveedores tienen suscripción de pago', 403)
   if (prov.subscription === 'pro') return fail('Tu plan PRO ya está activo')
+
+  let plan: 'basic' | 'pro' = 'pro'
+  try {
+    const d = await body<{ plan?: 'basic' | 'pro' }>(req)
+    if (d.plan === 'basic' || d.plan === 'pro') plan = d.plan
+  } catch { /* sin body → pro */ }
+  if (prov.subscription === plan) return fail('Ya estás en ese plan')
 
   if (!mpConfigured()) {
     return fail('Mercado Pago no está configurado. Agregá MP_ACCESS_TOKEN en el archivo .env del servidor.', 503, { needsConfig: true })
@@ -21,9 +28,9 @@ export async function POST(req: NextRequest) {
 
   const url = new URL(req.url)
   const baseUrl = `${url.protocol}//${url.host}`
-  const pre = await createProPreapproval({
-    kind: 'provider',
+  const pre = await createProviderPlanPreapproval({
     profileId: prov.id,
+    plan,
     payerEmail: user.email,
     baseUrl,
   })
@@ -33,5 +40,5 @@ export async function POST(req: NextRequest) {
     data: { mpPreapprovalId: pre.id },
   })
 
-  return ok({ initPoint: pre.initPoint, preapprovalId: pre.id, price: MP_PRO_PRICE_ARS })
+  return ok({ initPoint: pre.initPoint, preapprovalId: pre.id, price: MP_PLAN_PRICE_ARS[plan], plan })
 }

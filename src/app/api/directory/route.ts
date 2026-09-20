@@ -174,7 +174,13 @@ export async function GET(req: NextRequest) {
       : sort === 'recent' ? new Date(c.memberSince).getTime() / 1e10
         : sort === 'works' ? (c.kind === 'profesional' ? c.worksCount * 100 + c.reviewsCount : c.stockCount * 100 + c.reviewsCount)
           : c.reviewsCount * 1000 + c.rating * 10 // reviews (default)
-  const all: (ProCard | ProvCard)[] = [...pros, ...provs].sort((a, b) => sortKey(b) - sortKey(a))
+  const all: (ProCard | ProvCard)[] = [...pros, ...provs].sort((a, b) => {
+    // Proveedores con Plan PRO ("Recomendados") encabezan siempre la lista
+    const featA = a.kind === 'proveedor' && a.isPro ? 1 : 0
+    const featB = b.kind === 'proveedor' && b.isPro ? 1 : 0
+    if (featA !== featB) return featB - featA
+    return sortKey(b) - sortKey(a)
+  })
 
   const categories = await db.category.findMany({ orderBy: { sortOrder: 'asc' }, select: { slug: true, name: true, icon: true } })
 

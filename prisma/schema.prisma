@@ -55,6 +55,7 @@ model User {
   conversationsA  Conversation[] @relation("ConversationA")
   conversationsB  Conversation[] @relation("ConversationB")
   messagesSent    Message[]      @relation("MessageSender")
+  purchases       Purchase[]     @relation("PurchaseClient")
 }
 
 model IdentityDocument {
@@ -122,10 +123,12 @@ model ProviderProfile {
   verified     Boolean  @default(false)
   rating       Float    @default(0)
   reviewsCount Int      @default(0)
-  // Plan PRO del proveedor (suscripción Mercado Pago — primera etapa del monetización)
-  subscription  String   @default("free") // free|pro
-  mpPreapprovalId String?  // id de preapproval de Mercado Pago (suscripción PRO)
-  proSince      DateTime? // desde cuándo está activo el plan PRO
+  // Planes del proveedor (único rol con suscripción de pago):
+  // trial (14 días gratis desde el alta) | basic (US$50/mes, usar la plataforma) | pro (US$100/mes, analítica + destacado + sponsor)
+  subscription  String   @default("trial")
+  trialEndsAt   DateTime? // fin de la prueba gratis de 14 días (null → se calcula desde createdAt)
+  mpPreapprovalId String?  // id de preapproval de Mercado Pago (plan basic o pro)
+  proSince      DateTime? // desde cuándo está activo el plan de pago
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -134,6 +137,7 @@ model ProviderProfile {
   links  ProviderLink[]
   stockMaterials ProjectMaterial[]
   charges ProviderCharge[]
+  purchases Purchase[]
 }
 
 // ─────────────────────────── CATÁLOGO + STOCK ───────────────────────────
@@ -357,7 +361,7 @@ model Payment {
 // cliente lo paga con Mercado Pago o acuerda efectivo (el proveedor confirma).
 model ProviderCharge {
   id             String   @id @default(cuid())
-  projectId      String
+  projectId      String?  // null → cobro de venta directa (compra sin proyecto)
   providerId     String
   clientId       String
   number         String   @unique
@@ -372,7 +376,7 @@ model ProviderCharge {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  project  Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project  Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
   client   User            @relation("ChargeClient", fields: [clientId], references: [id], onDelete: Cascade)
 }
@@ -415,9 +419,10 @@ model Review {
   id           String   @id @default(cuid())
   authorId     String
   targetUserId String
-  context      String   @default("proyecto") // proyecto|obra|perfil
+  context      String   @default("proyecto") // proyecto|obra|perfil|compra
   projectId    String?
   workId       String?
+  purchaseId   String?  // reseña de una compra directa de insumos
   rating       Int
   comment      String
   photos       String   @default("[]") // JSON: URLs de fotos que avalan la reseña
@@ -427,6 +432,31 @@ model Review {
 
   author  User @relation("ReviewAuthor", fields: [authorId], references: [id], onDelete: Cascade)
   target  User @relation("ReviewTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+}
+
+// ── COMPRAS DIRECTAS DE INSUMOS (cliente compra a proveedor sin proyecto) ──
+// El cliente pide un producto desde el marketplace (panel Materiales), el
+// proveedor lo acepta/entrega y el pago corre por los mismos rieles que los
+// cobros de materiales (Mercado Pago o efectivo). Habilita reseña context=compra.
+model Purchase {
+  id          String   @id @default(cuid())
+  clientId    String
+  providerId  String
+  stockId     String?
+  elementId   String
+  elementName String
+  quantity    Float
+  unit        String   @default("unidad")
+  unitPrice   Float
+  total       Float
+  note        String?  // aclaración del cliente (medida, color, cuándo lo necesita)
+  status      String   @default("solicitado") // solicitado|aceptado|entregado|pagado|cancelado
+  chargeId    String?  // ProviderCharge emitido por la entrega (pago MP/efectivo)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  client   User            @relation("PurchaseClient", fields: [clientId], references: [id], onDelete: Cascade)
+  provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
 }
 
 // ─────────────────────────── CRM ───────────────────────────

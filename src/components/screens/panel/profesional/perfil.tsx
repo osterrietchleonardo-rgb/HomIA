@@ -50,9 +50,6 @@ export default function ProProfile() {
   const [verified, setVerified] = useState(false)
 
   // plan PRO (suscripción Mercado Pago)
-  const [subscription, setSubscription] = useState<'free' | 'pro'>('free')
-  const [proSince, setProSince] = useState<string | null>(null)
-  const [subscribing, setSubscribing] = useState(false)
 
   // documentos
   const [documents, setDocuments] = useState<Doc[]>([])
@@ -88,8 +85,6 @@ export default function ProProfile() {
               setEmployeesCount(String(pro.employeesCount ?? 1))
               setServiceRadiusKm(pro.serviceRadiusKm ?? 15)
               setVerified(!!pro.verified)
-              setSubscription(pro.subscription === 'pro' ? 'pro' : 'free')
-              setProSince(pro.proSince || null)
             }
           }
         }
@@ -129,23 +124,6 @@ export default function ProProfile() {
       await refresh()
       toast.success('Perfil actualizado')
     } finally { setBusy(false) }
-  }
-
-  async function subscribePro() {
-    setSubscribing(true)
-    try {
-      const res = await fetch('/api/pro/subscription', { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) {
-        if (data.needsConfig) {
-          toast.error('Mercado Pago no configurado en el servidor', { description: 'Agregá MP_ACCESS_TOKEN al archivo .env para suscribirte.' })
-        } else {
-          toast.error(data.error)
-        }
-        return
-      }
-      window.location.href = data.initPoint
-    } finally { setSubscribing(false) }
   }
 
   async function submitDocument() {
@@ -197,33 +175,13 @@ export default function ProProfile() {
         </header>
 
         <div className="homy-stagger space-y-5">
-          {/* plan PRO (suscripción Mercado Pago) */}
-          <section className="homy-glass-dark relative overflow-hidden rounded-3xl p-5 text-white sm:p-6">
-            <span aria-hidden className="pointer-events-none absolute -right-14 -top-16 size-52 rounded-full bg-[#FFC700]/15 blur-3xl" />
-            <div className="relative flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <span className="homy-icon-chip homy-chip-gold size-10 shrink-0 [&_svg]:size-5" aria-hidden><Crown /></span>
-                <div>
-                  <h2 className="flex items-center gap-2 text-lg font-extrabold tracking-tight">
-                    Plan PRO
-                    {subscription === 'pro' && (
-                      <span className="rounded-full bg-[#FFC700]/20 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-widest text-[#FFC700]">Activo</span>
-                    )}
-                  </h2>
-                  <p className="text-sm text-slate-300">
-                    {subscription === 'pro'
-                      ? `Tu perfil muestra el badge PRO${proSince ? ` desde ${new Date(proSince).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}` : ''}.`
-                      : 'Destacá tu perfil con el badge PRO y prioridad en el motor IA. Suscripción mensual por Mercado Pago.'}
-                  </p>
-                </div>
-              </div>
-              {subscription === 'free' && (
-                <button onClick={subscribePro} disabled={subscribing} className="homy-btn-primary shrink-0 px-5 py-3 text-sm">
-                  {subscribing ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Crown className="size-4" aria-hidden />}
-                  Suscribirme al plan PRO
-                </button>
-              )}
-            </div>
+          {/* HomIA es gratis para clientes y profesionales: los planes de pago son solo para proveedores */}
+          <section className="homy-glass-soft rounded-2xl p-4 flex items-start gap-3">
+            <span className="homy-icon-chip homy-chip-mint size-9 shrink-0 [&_svg]:size-4" aria-hidden><BadgeCheck /></span>
+            <p className="text-[13px] leading-relaxed text-slate-600">
+              <b>Usar HomIA es gratis para clientes y profesionales.</b> Las suscripciones de pago son solo para proveedores
+              (Básico US$50/mes o PRO US$100/mes): es lo que financia la plataforma, la IA y las búsquedas que te traen trabajos.
+            </p>
           </section>
 
           {/* identidad */}

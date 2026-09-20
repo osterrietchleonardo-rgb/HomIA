@@ -15,9 +15,10 @@ export async function POST(req: NextRequest) {
     rating: number
     comment: string
     photos?: string[] // URLs de /api/uploads que avalan la reseña
-    context?: string // proyecto|obra
+    context?: string // proyecto|obra|compra
     projectId?: string
     workId?: string
+    purchaseId?: string // reseña de una compra directa de insumos
   }>(req)
   if (!d.targetUserId || !d.rating || !d.comment) {
     return fail('Faltan puntaje o comentario')
@@ -25,7 +26,71 @@ export async function POST(req: NextRequest) {
   if (d.rating < 1 || d.rating > 5) return fail('El puntaje va de 1 a 5')
   if (d.targetUserId === user.id) return fail('No podés reseñarte a vos mismo')
 
-  // ── Regla 1: toda reseña nace de un proyecto real ──
+  // ── Regla 0: reseña por compra directa de insumos ──
+  // El cliente que le compró a un proveedor (pedido entregado/pagado, con o sin
+  // proyecto) puede calificar esa compra. Es la vía cuando NO hubo obra.
+  if (d.context === 'compra' || (!d.projectId && d.purchaseId)) {
+    if (!d.purchaseId) {
+      return fail('Esta reseña califica una compra: indicá qué compra querés calificar', 403)
+    }
+    const purchase = await db.purchase.findUnique({
+      where: { id: d.purchaseId },
+      include: { provider: { select: { userId: true, businessName: true } } },
+    })
+    if (!purchase) return fail('Compra no encontrada', 404)
+    if (purchase.clientId !== user.id) {
+      return fail('Solo quien hizo la compra puede dejar la reseña', 403)
+    }
+    if (purchase.provider.userId !== d.targetUserId) {
+      return fail('Solo podés calificar al proveedor de esa compra', 403)
+    }
+    if (!['entregado', 'pagado'].includes(purchase.status)) {
+      return fail('La reseña se habilita cuando el proveedor entrega tu pedido', 403)
+    }
+    const dup = await db.review.findFirst({ where: { authorId: user.id, purchaseId: purchase.id } })
+    if (dup) return fail('Ya dejaste una reseña por esta compra', 409)
+
+    const photos = Array.isArray(d.photos)
+      ? d.photos.filter((p) => typeof p === 'string' && /^\/uploads\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_/-]+\.(jpg|jpeg|png|webp)$/i.test(p)).slice(0, 4)
+      : []
+
+    const review = await db.review.create({
+      data: {
+        authorId: user.id,
+        targetUserId: d.targetUserId,
+        rating: d.rating,
+        comment: d.comment,
+        photos: JSON.stringify(photos),
+        context: 'compra',
+        purchaseId: purchase.id,
+      },
+    })
+    const agg = await db.review.aggregate({
+      where: { targetUserId: d.targetUserId },
+      _avg: { rating: true },
+      _count: { rating: true },
+    })
+    await db.user.update({
+      where: { id: d.targetUserId },
+      data: { rating: Math.round((agg._avg.rating || 0) * 10) / 10, reviewsCount: agg._count.rating || 0 },
+    })
+    await db.providerProfile.updateMany({
+      where: { userId: d.targetUserId },
+      data: { rating: Math.round((agg._avg.rating || 0) * 10) / 10, reviewsCount: agg._count.rating || 0 },
+    })
+    await db.notification.create({
+      data: {
+        userId: d.targetUserId,
+        type: 'nueva_reseña',
+        title: 'Nueva reseña de una compra',
+        body: `${user.displayName} calificó su compra de ${purchase.elementName} con ${d.rating}★`,
+        link: '#/panel/proveedor/crm',
+      },
+    })
+    return ok({ review }, 201)
+  }
+
+  // ── Regla 1: el resto de las reseñas nace de un proyecto real ──
   if (!d.projectId) {
     return fail('Las reseñas se dejan desde un proyecto real: entrá al proyecto finalizado y dejala desde ahí', 403)
   }
@@ -125,10 +190,11 @@ export async function GET(req: NextRequest) {
   const targetUserId = req.nextUrl.searchParams.get('targetUserId')
   const mine = req.nextUrl.searchParams.get('mine') === '1'
   const projectId = req.nextUrl.searchParams.get('projectId')
+  const purchaseId = req.nextUrl.searchParams.get('purchaseId')
   const { getSessionUser } = await import('@/lib/auth')
   const user = await getSessionUser()
 
-  const where: { targetUserId?: string; authorId?: string; projectId?: string } = {}
+  const where: { targetUserId?: string; authorId?: string; projectId?: string; purchaseId?: string } = {}
   if (mine) {
     if (!user) return ok({ reviews: [] })
     where.authorId = user.id
@@ -138,13 +204,14 @@ export async function GET(req: NextRequest) {
     where.targetUserId = target
   }
   if (projectId) where.projectId = projectId
+  if (purchaseId) where.purchaseId = purchaseId
 
   const reviews = await db.review.findMany({
     where,
     orderBy: { createdAt: 'desc' },
     select: {
       id: true, rating: true, comment: true, photos: true, context: true,
-      projectId: true, workId: true, targetUserId: true, createdAt: true,
+      projectId: true, workId: true, purchaseId: true, targetUserId: true, createdAt: true,
       author: { select: { id: true, displayName: true, avatarUrl: true } },
     },
   })

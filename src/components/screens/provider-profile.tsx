@@ -146,10 +146,10 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
                 )}
                 {p.subscription === 'pro' && (
                   <span
-                    className="inline-flex items-center gap-1 rounded-full border border-[#FFC700]/40 bg-[#FFC700]/15 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-widest text-[#FFC700]"
-                    title="Negocio suscripto al plan PRO de HomIA"
+                    className="inline-flex items-center gap-1 rounded-full border border-[#FFC700]/40 bg-gradient-to-r from-[#FFC700]/25 to-[#ffd84d]/15 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-widest text-[#FFC700]"
+                    title="Proveedor sponsor de confianza: destacado Recomendado en directorio y materiales"
                   >
-                    <Crown aria-hidden className="size-3" /> PRO
+                    <Crown aria-hidden className="size-3" /> ★ Recomendado
                   </span>
                 )}
               </div>

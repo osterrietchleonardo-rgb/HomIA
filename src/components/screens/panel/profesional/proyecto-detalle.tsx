@@ -11,6 +11,7 @@ import {
   Store, Banknote, Hourglass,
 } from 'lucide-react'
 import ReviewForm from '../review-form'
+import { ClientSummaryButton } from '@/components/app/client-summary'
 
 const STAGES = ['presupuesto', 'materiales', 'ejecucion', 'revision', 'finalizado']
 const STAGE_LABEL: Record<string, string> = {
@@ -320,7 +321,7 @@ export default function ProProjectDetail({ id }: { id: string }) {
           </div>
         </div>
 
-        {/* cliente + contacto */}
+        {/* cliente + contacto + reputación del cliente (reseñas que recibió de otros pros) */}
         <div className="homy-glass rounded-3xl p-4 sm:p-5 mb-5 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
             <UAvatar name={p.client.displayName} url={p.client.avatarUrl} size={46} />
@@ -330,6 +331,7 @@ export default function ProProjectDetail({ id }: { id: string }) {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <ClientSummaryButton userId={p.client.id} label="Ver reputación" />
             {p.client.phone && (
               <a href={`tel:${p.client.phone}`} className="homy-glass-soft rounded-full px-4 py-2.5 min-h-[44px] text-sm font-bold text-[#0A2540] transition hover:text-[#1D63B8] flex items-center gap-1.5">
                 <Phone className="size-4" aria-hidden /> {p.client.phone}

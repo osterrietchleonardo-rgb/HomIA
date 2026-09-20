@@ -1,20 +1,39 @@
 'use client'
-// Dashboard Proveedor HomIA — resumen de stock, alertas de reposición, vinculaciones y acceso al CRM
+// Dashboard Proveedor HomIA — resumen de stock, alertas de reposición, vinculaciones,
+// plan de suscripción (trial/basic/pro) y analítica del negocio (exclusiva PRO)
 import { useEffect, useState } from 'react'
 import { navigate } from '@/lib/router'
 import { StatusBadge, Loading, UAvatar, AutoFitValue } from '@/components/app/ui-bits'
 import { formatARS } from '@/lib/format'
 import {
   Boxes, AlertTriangle, PackageX, PackageOpen, Link2, Users, ArrowRight, CheckCircle2, Plus, Wallet, Zap,
+  Crown, TrendingUp, Search, ShoppingBag, Sparkles, Lock, BarChart3,
 } from 'lucide-react'
 import { VerificationPrompt } from '../verificacion'
 import OnboardingCard, { type OnboardingTask } from '../onboarding-card'
+import { TrialExpiredBanner } from './plan'
 import { useSession } from '@/lib/store'
 
 type StockItem = {
   id: string; elementId: string; name: string; unit: string; category: string; categorySlug: string
   aliases: string[]; brand: string | null; price: number; quantity: number; minStock: number
   status: string; updatedAt: string
+}
+
+type PlanState = {
+  plan: 'trial' | 'basic' | 'pro'
+  activo: boolean
+  trialDaysLeft: number | null
+  trialEndsAt: string | null
+  esPro: boolean
+  etiqueta: string
+}
+
+type Analytics = {
+  topElementos: { name: string; pedidos: number; cantidad: number; ventas: number }[]
+  consultasRubro: { total: number; topQueries: { query: string; veces: number }[] }
+  teEncontraron: { total: number; topQueries: { query: string; veces: number }[] }
+  ventas: { pedidos: number; total: number; pendientes: number; stockCount: number }
 }
 
 type ProviderLink = {
@@ -27,17 +46,19 @@ export default function ProviderDashboard() {
   const [stock, setStock] = useState<StockItem[]>([])
   const [links, setLinks] = useState<ProviderLink[]>([])
   const [profileBio, setProfileBio] = useState<string | null>(null)
+  const [plan, setPlan] = useState<PlanState | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     (async () => {
       try {
-        const [resS, resL, resMe] = await Promise.all([
-          fetch('/api/provider/stock'), fetch('/api/provider/links'), fetch('/api/profiles/me'),
+        const [resS, resL, resMe, resPlan] = await Promise.all([
+          fetch('/api/provider/stock'), fetch('/api/provider/links'), fetch('/api/profiles/me'), fetch('/api/provider/plan'),
         ])
         if (resS.ok) setStock((await resS.json()).stock || [])
         if (resL.ok) setLinks((await resL.json()).asProvider || [])
         if (resMe.ok) setProfileBio((await resMe.json()).user?.provider?.bio || null)
+        if (resPlan.ok) setPlan((await resPlan.json()).plan)
       } finally { setLoading(false) }
     })()
   }, [])
@@ -77,6 +98,8 @@ export default function ProviderDashboard() {
   return (
     <div className="homy-page">
       <VerificationPrompt role="proveedor" />
+      {/* estado del plan: cuenta regresiva de la prueba o aviso de vencimiento */}
+      {plan && plan.plan === 'trial' && <TrialExpiredBanner daysLeft={plan.trialDaysLeft} />}
       <OnboardingCard role="proveedor" tasks={onboardingTasks} />
       {/* Encabezado */}
       <header className="homy-page-head">
@@ -184,6 +207,9 @@ export default function ProviderDashboard() {
         </section>
       )}
 
+      {/* ANALÍTICA PRO / teaser */}
+      <AnalyticsSection plan={plan} />
+
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Vinculaciones activas */}
         <section>
@@ -255,6 +281,11 @@ export default function ProviderDashboard() {
               onClick={() => navigate('/panel/proveedor/crm')}
             />
             <QuickLink
+              icon={Crown} chip="homy-chip-gold" title="Mi plan de suscripción"
+              desc="Prueba gratis, Básico US$50/mes o PRO US$100/mes con analítica y destacado."
+              onClick={() => navigate('/panel/proveedor/plan')}
+            />
+            <QuickLink
               icon={Link2} chip="homy-chip-orange" title="Vinculaciones"
               desc="Gestioná qué profesionales pueden retirar material por tu negocio."
               onClick={() => navigate('/panel/proveedor/vinculaciones')}
@@ -312,5 +343,130 @@ function Empty({ icon, title, hint, action }: { icon: React.ReactNode; title: st
       <p className="text-sm text-slate-500 mt-1.5 max-w-md leading-relaxed">{hint}</p>
       {action && <div className="mt-5">{action}</div>}
     </div>
+  )
+}
+
+/* ── Analítica del negocio (Plan PRO) o teaser de mejora ── */
+function AnalyticsSection({ plan }: { plan: PlanState | null }) {
+  const [data, setData] = useState<Analytics | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [blocked, setBlocked] = useState(false)
+
+  useEffect(() => {
+    if (!plan?.activo || !plan.esPro) return
+    let alive = true
+    async function run() {
+      setLoading(true)
+      try {
+        const r = await fetch('/api/provider/analytics?days=30')
+        if (!alive) return
+        if (r.ok) setData(await r.json())
+        else setBlocked(true)
+      } catch {
+        if (alive) setBlocked(true)
+      } finally {
+        if (alive) setLoading(false)
+      }
+    }
+    void run()
+    return () => { alive = false }
+  }, [plan?.activo, plan?.esPro])
+
+  if (!plan) return null
+
+  // PRO activo con datos
+  if (plan.esPro && plan.activo) {
+    return (
+      <section className="homy-glass rounded-3xl p-5 sm:p-6 mb-7">
+        <div className="homy-section-head">
+          <h2 className="homy-section-title">
+            <span aria-hidden className="homy-icon-chip homy-chip-gold size-8 shrink-0 [&_svg]:size-4"><BarChart3 /></span>
+            Analítica del negocio · últimos 30 días
+          </h2>
+          <span className="homy-pill hidden sm:inline-flex"><span aria-hidden className="homy-pill-dot bg-amber-500" />Plan PRO</span>
+        </div>
+        {loading ? (
+          <Loading text="Calculando tu demanda…" />
+        ) : blocked || !data ? (
+          <p className="text-sm text-slate-500">No pudimos cargar la analítica ahora. Probá de nuevo en un rato.</p>
+        ) : (
+          <div className="mt-4 grid gap-4 lg:grid-cols-3">
+            {/* elementos más pedidos */}
+            <div className="rounded-2xl bg-[#0A2540]/3 p-4 lg:col-span-1">
+              <p className="flex items-center gap-2 text-sm font-extrabold text-[#0A2540]">
+                <ShoppingBag className="size-4 text-[#FF5A1F]" aria-hidden /> Elementos más pedidos
+              </p>
+              {data.topElementos.length === 0 ? (
+                <p className="mt-2 text-[12.5px] leading-relaxed text-slate-500">
+                  Todavía no hay pedidos en los últimos 30 días. Cuando entren, acá vas a ver qué se pide más para decidir qué reponer.
+                </p>
+              ) : (
+                <ul className="mt-3 space-y-2">
+                  {data.topElementos.map((e, i) => (
+                    <li key={e.name} className="flex items-center gap-2.5">
+                      <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#FFC700]/20 text-[11px] font-extrabold text-[#B98A00]">{i + 1}</span>
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#0A2540]" title={e.name}>{e.name}</span>
+                      <span className="shrink-0 text-[11px] font-bold text-slate-500 tabular-nums">{e.pedidos} pedido{e.pedidos === 1 ? '' : 's'}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {/* consultas del rubro */}
+            <div className="rounded-2xl bg-[#0A2540]/3 p-4">
+              <p className="flex items-center gap-2 text-sm font-extrabold text-[#0A2540]">
+                <Search className="size-4 text-[#1D63B8]" aria-hidden /> Consultas de tu rubro
+              </p>
+              <p className="mt-2 text-3xl font-extrabold text-[#0A2540] tabular-nums">{data.consultasRubro.total}</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">búsquedas relacionadas con tus elementos</p>
+              {data.consultasRubro.topQueries.length > 0 && (
+                <ul className="mt-2.5 space-y-1">
+                  {data.consultasRubro.topQueries.slice(0, 4).map((q) => (
+                    <li key={q.query} className="truncate text-[12px] text-slate-500" title={q.query}>“{q.query}” · {q.veces}×</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {/* te encontraron */}
+            <div className="rounded-2xl bg-[#0A2540]/3 p-4">
+              <p className="flex items-center gap-2 text-sm font-extrabold text-[#0A2540]">
+                <TrendingUp className="size-4 text-[#0e9f6e]" aria-hidden /> Te encontraron en
+              </p>
+              <p className="mt-2 text-3xl font-extrabold text-[#0A2540] tabular-nums">{data.teEncontraron.total}</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">búsquedas donde apareció tu negocio</p>
+              {data.teEncontraron.topQueries.length > 0 && (
+                <ul className="mt-2.5 space-y-1">
+                  {data.teEncontraron.topQueries.slice(0, 4).map((q) => (
+                    <li key={q.query} className="truncate text-[12px] text-slate-500" title={q.query}>“{q.query}” · {q.veces}×</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+    )
+  }
+
+  // trial / basic → teaser del PRO
+  return (
+    <section className="homy-glass rounded-3xl p-5 sm:p-6 mb-7 ring-1 ring-[#FFC700]/35 relative overflow-hidden">
+      <span aria-hidden className="pointer-events-none absolute -top-16 right-[-8%] size-48 rounded-full bg-[#FFC700]/15 blur-3xl" />
+      <div className="relative flex flex-wrap items-center gap-3">
+        <span aria-hidden className="homy-icon-chip homy-chip-gold size-11 shrink-0 [&_svg]:size-5"><Lock /></span>
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-2 text-[15px] font-extrabold text-[#0A2540]">
+            Analítica del negocio <span className="rounded-full bg-gradient-to-r from-[#FFC700] to-[#ffd84d] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-[#6b4d00]">Plan PRO</span>
+          </p>
+          <p className="mt-0.5 text-[13px] leading-relaxed text-slate-500">
+            Enterate qué elementos se están pidiendo más, cuántas consultas hubo sobre tu rubro y qué búsquedas te encontraron.
+            Con el plan PRO además salís primero: tarjeta “Recomendado” en directorio y materiales + tu logo como sponsor en la home.
+          </p>
+        </div>
+        <button onClick={() => navigate('/panel/proveedor/plan')} className="homy-btn-primary min-h-[44px] shrink-0 px-5 py-2.5 text-sm">
+          <Sparkles className="size-4" aria-hidden /> Ver el plan PRO
+        </button>
+      </div>
+    </section>
   )
 }

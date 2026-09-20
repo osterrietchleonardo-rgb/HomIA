@@ -1,10 +1,12 @@
 // Mercado Pago HomIA — pagos reales de facturas, escrow y suscripción PRO (sin Stripe)
 // Configurar MP_ACCESS_TOKEN en .env (credenciales de test o producción de mercadopago.com)
 import { MercadoPagoConfig, Preference, Payment, PreApproval } from 'mercadopago'
+import { MP_PLAN_PRICE_ARS } from '@/lib/plans'
 
 const MP_TOKEN = process.env.MP_ACCESS_TOKEN || ''
 
-// Precio mensual del plan PRO en ARS (configurable por env)
+// Precio mensual del plan PRO de profesional — LEGADO (ya no se vende: solo los
+// proveedores tienen suscripción de pago). Se mantiene por preapprovals existentes.
 export const MP_PRO_PRICE_ARS = Number(process.env.MP_PRO_PRICE_ARS || 4999)
 
 export function mpConfigured(): boolean {
@@ -184,6 +186,38 @@ export async function createProPreapproval(input: {
     id: res.id || '',
     initPoint: (res.init_point || '') as string,
   }
+}
+
+// ── PLANES DE PROVEEDOR (basic | pro) ──
+// Único rol con suscripción de pago. external_reference =
+// "plan:provider:<profileId>:<plan>" — el webhook activa el plan elegido.
+// (Legado: "pro:provider:<id>" y "provider_pro:<id>" siguen activando PRO.)
+export async function createProviderPlanPreapproval(input: {
+  profileId: string
+  plan: 'basic' | 'pro'
+  payerEmail: string
+  baseUrl: string
+}): Promise<{ id: string; initPoint: string; priceArs: number }> {
+  const priceArs = MP_PLAN_PRICE_ARS[input.plan]
+  const mp = new PreApproval(client())
+  const res = await mp.create({
+    body: {
+      reason:
+        input.plan === 'pro'
+          ? 'Plan PRO HomIA — analítica del negocio, tarjeta Recomendado y sponsor en la home'
+          : 'Plan Básico HomIA — uso completo de la plataforma para tu negocio',
+      auto_recurring: {
+        frequency: 1,
+        frequency_type: 'months',
+        transaction_amount: priceArs,
+        currency_id: 'ARS',
+      },
+      payer_email: input.payerEmail,
+      external_reference: `plan:provider:${input.profileId}:${input.plan}`,
+      back_url: `${input.baseUrl}/#/panel/proveedor/plan`,
+    },
+  })
+  return { id: res.id || '', initPoint: (res.init_point || '') as string, priceArs }
 }
 
 export async function getPreapproval(preapprovalId: string) {

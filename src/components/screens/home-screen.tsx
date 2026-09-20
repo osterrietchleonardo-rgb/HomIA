@@ -6,6 +6,7 @@ import { HowItWorks } from '@/components/home/how-it-works'
 import { AiBand } from '@/components/home/ai-band'
 import { Features } from '@/components/home/features'
 import { Profiles } from '@/components/home/profiles'
+import { Sponsors } from '@/components/home/sponsors'
 import { CtaFinal } from '@/components/home/cta-final'
 import { SiteFooter } from '@/components/home/site-footer'
 import { HomyWidget } from '@/components/home/homy-widget'
@@ -20,6 +21,7 @@ export default function HomeScreen() {
         <AiBand />
         <Features />
         <Profiles />
+        <Sponsors />
         <CtaFinal />
       </main>
       <SiteFooter />

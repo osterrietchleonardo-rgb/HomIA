@@ -113,7 +113,14 @@ export async function GET(req: NextRequest) {
   }
 
   const materialResults = withinRadius(
-    matched.map((s) => ({
+    matched
+      .sort((a, b) => {
+        const pa = a.provider.subscription === 'pro' ? 1 : 0
+        const pb = b.provider.subscription === 'pro' ? 1 : 0
+        if (pa !== pb) return pb - pa // proveedores Recomendados primero
+        return a.price - b.price
+      })
+      .map((s) => ({
       id: s.id,
       type: 'material' as const,
       elementId: s.elementId,

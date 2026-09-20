@@ -28,6 +28,7 @@ export async function GET(
   return ok({
     charge: {
       ...charge,
+      project: charge.project || null, // null → venta directa (compra sin proyecto)
       provider: {
         id: charge.provider.id,
         businessName: charge.provider.businessName,
@@ -61,6 +62,7 @@ export async function POST(
   if (!charge) return fail('Cobro no encontrado', 404)
   if (charge.clientId !== user.id) return fail('Solo el cliente paga este cobro', 403)
   if (charge.status !== 'pendiente') return fail('Este cobro ya no está pendiente')
+  const titulo = charge.project ? `Materiales — ${charge.project.title}` : 'Compra de materiales — HomIA'
 
   const d = await body<{ method?: 'mercadopago' | 'efectivo' }>(req)
   if (!d.method) return fail('Elegí el método de pago: mercadopago o efectivo')
@@ -91,7 +93,7 @@ export async function POST(
   const preference = await createChargePreference({
     chargeId: charge.id,
     chargeNumber: charge.number,
-    title: `Materiales — ${charge.project.title}`,
+    title: titulo,
     total: charge.amount,
     payerEmail: user.email,
     baseUrl,
@@ -128,13 +130,17 @@ export async function PATCH(
     where: { id: charge.id },
     data: { status: 'pagada', method: 'efectivo', paidAt: new Date() },
   })
+  // si el cobro nació de una compra directa, la compra queda pagada → habilita reseña
+  if (charge.projectId == null) {
+    await db.purchase.updateMany({ where: { chargeId: charge.id }, data: { status: 'pagado' } })
+  }
   await db.notification.create({
     data: {
       userId: charge.clientId,
       type: 'cobro_efectivo_confirmado',
       title: 'Cobro en efectivo confirmado',
       body: `El proveedor confirmó que cobró ${charge.number} en efectivo. Quedó registrado como pagado.`,
-      link: `#/panel/cliente/proyectos/${charge.projectId}`,
+      link: charge.projectId ? `#/panel/cliente/proyectos/${charge.projectId}` : '#/panel/cliente/materiales?tab=compras',
     },
   })
   return ok({ success: true, status: 'pagada' })

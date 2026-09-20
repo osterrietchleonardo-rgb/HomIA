@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { ok, fail, body } from '@/lib/api'
 import { db } from '@/lib/db'
+import { planState } from '@/lib/plans'
 
 // ── Cobros de materiales del proveedor al cliente ──
 // Válidos solo en proyectos con materialsPaymentMode = "cliente_paga_proveedor".
@@ -85,6 +86,10 @@ export async function POST(req: NextRequest) {
   if (!user) return fail('Necesitás iniciar sesión', 401)
   const provider = await db.providerProfile.findUnique({ where: { userId: user.id } })
   if (!provider) return fail('Solo los proveedores pueden emitir cobros de materiales', 403)
+  const st = planState(provider)
+  if (!st.activo) {
+    return fail('Tu prueba gratis terminó: elegí un plan (Básico US$50/mes o PRO US$100/mes) para seguir emitiendo cobros', 403, { needsPlan: true })
+  }
 
   const d = await body<{ projectId?: string }>(req)
   if (!d.projectId) return fail('Falta el proyecto')

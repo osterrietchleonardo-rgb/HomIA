@@ -3,9 +3,11 @@
 // separadores por día) con la gramática glass del sistema. Entre CUALQUIER
 // par de roles: cliente↔profesional↔proveedor↔cliente.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { navigate, useRoute } from '@/lib/router'
 import { useSession } from '@/lib/store'
 import { Loading, EmptyState, UAvatar, VerifyBadge } from '@/components/app/ui-bits'
+import { ClientSummaryButton } from '@/components/app/client-summary'
 import { MessagesSquare, SendHorizonal, ArrowLeft, UserRound, Compass, CheckCheck } from 'lucide-react'
 
 type Conv = {
@@ -76,11 +78,32 @@ export default function MessagesScreen({ embedded = false }: { embedded?: boolea
     } finally { setLoadingThread(false) }
   }, [])
 
-  // carga inicial + apertura por deep-link ?c=
+  // carga inicial + apertura por deep-link ?c= (id de conversación o "nuevo:<userId>" para
+  // empezar un chat con alguien nuevo — ej. "Preguntarle" desde el marketplace)
   useEffect(() => {
     loadConvs()
     const c = route.query.c
-    if (c) openConv(c)
+    if (c && c.startsWith('nuevo:')) {
+      const targetUserId = c.slice('nuevo:'.length)
+      ;(async () => {
+        try {
+          const res = await fetch('/api/messages/conversations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targetUserId }),
+          })
+          const d = await res.json()
+          if (res.ok && d.conversation?.id) {
+            navigate(`/mensajes?c=${d.conversation.id}`, { replace: true })
+            openConv(d.conversation.id)
+          } else {
+            toast.error(d.error || 'No se pudo abrir la conversación')
+          }
+        } catch { toast.error('No se pudo abrir la conversación') }
+      })()
+    } else if (c) {
+      openConv(c)
+    }
      
   }, [route.query.c])
 
@@ -240,6 +263,13 @@ export default function MessagesScreen({ embedded = false }: { embedded?: boolea
                     Ver perfil
                   </button>
                 )}
+                {/* sin perfil público (clientes) → reputación del cliente: reseñas,
+                    obras y compras con las que decido si trabajar con esa persona */}
+                {!thread.conv.otherProfileHref &&
+                  thread.conv.otherRoles.includes('cliente') &&
+                  (user?.roles?.includes('profesional') || user?.roles?.includes('proveedor')) && (
+                    <ClientSummaryButton userId={thread.conv.otherUserId} />
+                  )}
               </header>
 
               {/* hilo */}

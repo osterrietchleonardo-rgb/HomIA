@@ -11,7 +11,7 @@ import { toast } from 'sonner'
 import {
   LayoutDashboard, Briefcase, FolderKanban, FileText, User, Bell, LogOut,
   Search, Boxes, Users, Link2, HardHat, ClipboardList, Home, Sparkles,
-  Compass, MessageCircle, ShieldCheck, LifeBuoy, HandCoins,
+  Compass, MessageCircle, ShieldCheck, LifeBuoy, HandCoins, Package, Crown,
 } from 'lucide-react'
 
 type NavItem = { to: string; label: string; icon: React.ComponentType<{ className?: string }>; m?: boolean }
@@ -21,6 +21,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/panel/cliente', label: 'Inicio', icon: LayoutDashboard, m: true },
     { to: '/panel/cliente/publicar', label: 'Publicar trabajo', icon: Briefcase, m: true },
     { to: '/panel/cliente/trabajos', label: 'Mis trabajos', icon: ClipboardList, m: true },
+    { to: '/panel/cliente/materiales', label: 'Materiales', icon: Package, m: true },
     { to: '/panel/cliente/proyectos', label: 'Proyectos', icon: FolderKanban, m: true },
     { to: '/panel/cliente/facturas', label: 'Facturas', icon: FileText },
     { to: '/panel/cliente/directorio', label: 'Directorio', icon: Compass },
@@ -48,6 +49,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/panel/proveedor', label: 'Inicio', icon: LayoutDashboard, m: true },
     { to: '/panel/proveedor/stock', label: 'Stock', icon: Boxes, m: true },
     { to: '/panel/proveedor/cobros', label: 'Cobros', icon: HandCoins, m: true },
+    { to: '/panel/proveedor/plan', label: 'Mi plan', icon: Crown },
     { to: '/panel/proveedor/crm', label: 'CRM', icon: Users },
     { to: '/panel/proveedor/vinculaciones', label: 'Vinculaciones', icon: Link2 },
     { to: '/panel/proveedor/directorio', label: 'Directorio', icon: Compass },

@@ -263,12 +263,11 @@ export function HeroSearch() {
     setValue(next);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (next.trim().length >= 8) {
-      // Auto-envío con pausa LARGA (3s sin teclear): hay gente que escribe
-      // despacio y con 1.4s le llegaba a mandar la consulta cortada a la
-      // mitad — estresante. Enter sigue enviando al instante.
+      // Auto-envío con pausa MUY larga (20s sin teclear, pedido del usuario):
+      // el tiempo sobra para releer y corregir; Enter sigue enviando al instante.
       debounceRef.current = setTimeout(
         () => void askHomy(next, location.lat, location.lng),
-        3000
+        20000
       );
     }
   };

@@ -371,7 +371,7 @@ export default function DirectoryScreen({ embedded = false }: { embedded?: boole
                   )}
                   <button
                     onClick={() => navigate(c.href)}
-                    className="homy-glass homy-lift homy-card-glow homy-focus group flex w-full flex-col rounded-3xl p-5 text-left"
+                    className={`homy-glass homy-lift homy-card-glow homy-focus group flex w-full flex-col rounded-3xl p-5 text-left ${c.kind === 'proveedor' && c.isPro ? 'ring-2 ring-[#FFC700]/65 bg-[#FFC700]/6' : ''}`}
                     aria-label={`Abrir tarjeta de ${c.name}`}
                   >
                     <div className="flex items-start gap-3.5">
@@ -381,7 +381,10 @@ export default function DirectoryScreen({ embedded = false }: { embedded?: boole
                           {/* el nombre envuelve (nunca truncate): el badge baja debajo si no entra */}
                           <p className="min-w-0 break-words font-extrabold text-[#0A2540] leading-snug">{c.name}</p>
                           <VerifyBadge status={c.verificationStatus} />
-                          {c.isPro && (
+                          {c.isPro && c.kind === 'proveedor' && (
+                            <span className="rounded-full bg-gradient-to-r from-[#FFC700] to-[#ffd84d] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-[#6b4d00] shadow-sm">★ Recomendado</span>
+                          )}
+                          {c.isPro && c.kind === 'profesional' && (
                             <span className="rounded-full bg-[#FFC700]/15 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-[#B98A00] ring-1 ring-[#FFC700]/40">PRO</span>
                           )}
                         </div>

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { ok, fail, body, parseJson } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
+import { planState } from '@/lib/plans'
 
 async function deriveStatus(stockId: string) {
   const s = await db.providerStock.findUnique({ where: { id: stockId } })
@@ -66,6 +67,10 @@ export async function POST(req: NextRequest) {
   if (!user) return fail('Necesitás iniciar sesión', 401)
   const prov = await db.providerProfile.findUnique({ where: { userId: user.id } })
   if (!prov) return fail('Solo proveedores gestionan stock', 403)
+  const st = planState(prov)
+  if (!st.activo) {
+    return fail('Tu prueba gratis terminó: elegí un plan (Básico US$50/mes o PRO US$100/mes) para seguir gestionando tu stock', 403, { needsPlan: true })
+  }
 
   const d = await body<{ elementId: string; price: number; quantity: number; minStock?: number; brand?: string }>(req)
   if (!d.elementId || d.price === undefined) return fail('Elemento y precio son obligatorios')
@@ -101,6 +106,10 @@ export async function PATCH(req: NextRequest) {
   if (!user) return fail('Necesitás iniciar sesión', 401)
   const prov = await db.providerProfile.findUnique({ where: { userId: user.id } })
   if (!prov) return fail('Solo proveedores gestionan stock', 403)
+  const st = planState(prov)
+  if (!st.activo) {
+    return fail('Tu prueba gratis terminó: elegí un plan (Básico US$50/mes o PRO US$100/mes) para seguir gestionando tu stock', 403, { needsPlan: true })
+  }
 
   const d = await body<{
     id: string
@@ -143,6 +152,10 @@ export async function DELETE(req: NextRequest) {
   if (!user) return fail('Necesitás iniciar sesión', 401)
   const prov = await db.providerProfile.findUnique({ where: { userId: user.id } })
   if (!prov) return fail('Solo proveedores gestionan stock', 403)
+  const st = planState(prov)
+  if (!st.activo) {
+    return fail('Tu prueba gratis terminó: elegí un plan (Básico US$50/mes o PRO US$100/mes) para seguir gestionando tu stock', 403, { needsPlan: true })
+  }
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return fail('Falta el id')
   const stock = await db.providerStock.findUnique({ where: { id } })

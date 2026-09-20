@@ -35,6 +35,7 @@ const MyJobs = dynamic(() => import('@/components/screens/panel/cliente/trabajos
 const ClientProjects = dynamic(() => import('@/components/screens/panel/cliente/proyectos'), { ssr: false, loading: () => <Loading /> })
 const ClientProjectDetail = dynamic(() => import('@/components/screens/panel/cliente/proyecto-detalle'), { ssr: false, loading: () => <Loading /> })
 const ClientInvoices = dynamic(() => import('@/components/screens/panel/cliente/facturas'), { ssr: false, loading: () => <Loading /> })
+const ClientMaterials = dynamic(() => import('@/components/screens/panel/cliente/materiales'), { ssr: false, loading: () => <Loading /> })
 const ClientProfile = dynamic(() => import('@/components/screens/panel/cliente/perfil'), { ssr: false, loading: () => <Loading /> })
 
 // Panel profesional
@@ -55,6 +56,7 @@ const ProviderStock = dynamic(() => import('@/components/screens/panel/proveedor
 const ProviderCharges = dynamic(() => import('@/components/screens/panel/proveedor/cobros'), { ssr: false, loading: () => <Loading /> })
 const ProviderCRM = dynamic(() => import('@/components/screens/panel/proveedor/crm'), { ssr: false, loading: () => <Loading /> })
 const ProviderLinks = dynamic(() => import('@/components/screens/panel/proveedor/vinculaciones'), { ssr: false, loading: () => <Loading /> })
+const ProviderPlan = dynamic(() => import('@/components/screens/panel/proveedor/plan'), { ssr: false, loading: () => <Loading /> })
 const ProviderProfileEdit = dynamic(() => import('@/components/screens/panel/proveedor/perfil'), { ssr: false, loading: () => <Loading /> })
 
 // Común a los 3 roles: verificación de identidad por DNI + IA
@@ -162,6 +164,7 @@ function panelScreen(route: ReturnType<typeof useRoute>) {
     if (page === '' ) return <ClientDashboard />
     if (page === 'publicar') return <PublishJob />
     if (page === 'trabajos') return <MyJobs />
+    if (page === 'materiales') return <ClientMaterials />
     if (page === 'proyectos' && sub) return <ClientProjectDetail id={sub} />
     if (page === 'proyectos') return <ClientProjects />
     if (page === 'facturas') return <ClientInvoices />
@@ -185,6 +188,7 @@ function panelScreen(route: ReturnType<typeof useRoute>) {
     if (page === '') return <ProviderDashboard />
     if (page === 'stock') return <ProviderStock />
     if (page === 'cobros') return <ProviderCharges />
+    if (page === 'plan') return <ProviderPlan />
     if (page === 'crm') return <ProviderCRM />
     if (page === 'vinculaciones') return <ProviderLinks />
     if (page === 'perfil') return <ProviderProfileEdit />
