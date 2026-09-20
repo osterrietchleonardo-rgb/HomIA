@@ -13,10 +13,12 @@ type Props = {
   targetLabel?: string
   projectId?: string
   workId?: string
+  /** reseña de una compra directa de insumos (habilita contexto "compra") */
+  purchaseId?: string
   onDone?: () => void
 }
 
-export default function ReviewForm({ targetUserId, targetName, targetLabel = '', projectId, workId, onDone }: Props) {
+export default function ReviewForm({ targetUserId, targetName, targetLabel = '', projectId, workId, purchaseId, onDone }: Props) {
   const [rating, setRating] = useState(5)
   const [comment, setComment] = useState('')
   const [photos, setPhotos] = useState<string[]>([])
@@ -43,7 +45,8 @@ export default function ReviewForm({ targetUserId, targetName, targetLabel = '',
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           targetUserId, rating, comment: comment.trim(),
-          photos, context: workId ? 'obra' : 'proyecto', projectId, workId,
+          photos, context: purchaseId ? 'compra' : workId ? 'obra' : 'proyecto',
+          projectId, workId, purchaseId,
         }),
       })
       const d = await res.json()
@@ -58,10 +61,12 @@ export default function ReviewForm({ targetUserId, targetName, targetLabel = '',
       <span aria-hidden className="pointer-events-none absolute -right-16 -top-20 size-56 rounded-full bg-[#00C4FF]/20 blur-3xl" />
       <h2 className="relative flex items-center gap-2.5 text-lg font-extrabold">
         <span className="homy-icon-chip homy-chip-gold size-9 shrink-0 [&_svg]:size-4" aria-hidden><Star /></span>
-        ¿Cómo fue trabajar {targetLabel ? `${targetLabel} ` : ''}{targetName}?
+        {purchaseId
+          ? <>¿Cómo fue tu compra en {targetName}?</>
+          : <>¿Cómo fue trabajar {targetLabel ? `${targetLabel} ` : ''}{targetName}?</>}
       </h2>
       <p className="relative mt-2 text-sm text-slate-300">
-        Tu reseña ayuda a otros usuarios a decidir con confianza: contá cómo fue la experiencia y sumá fotos del resultado — las reseñas con fotos son más fiables para la comunidad.
+        Tu reseña ayuda a otros usuarios a decidir con confianza: calificá con estrellas, contá cómo fue la experiencia y sumá fotos — las reseñas con fotos son más fiables para la comunidad.
       </p>
 
       <div className="relative mt-4 flex gap-1.5" role="radiogroup" aria-label="Puntaje de 1 a 5 estrellas">
@@ -75,7 +80,7 @@ export default function ReviewForm({ targetUserId, targetName, targetLabel = '',
       </div>
 
       <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3}
-        placeholder="Contá cómo fue: calidad, puntualidad, comunicación…"
+        placeholder={purchaseId ? '¿Cómo te atendieron? ¿El producto estaba bien? Tu opinión guía a los demás.' : 'Contá cómo fue: calidad, puntualidad, comunicación…'}
         className="relative mt-4 w-full resize-none rounded-xl bg-white/10 border border-white/15 px-4 py-3 text-white placeholder:text-slate-400 outline-none focus:border-[#00C4FF]" />
 
       {/* fotos que avalan la reseña */}

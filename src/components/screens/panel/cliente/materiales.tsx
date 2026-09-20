@@ -9,6 +9,7 @@ import { useLocation } from '@/lib/store'
 import { Loading, EmptyState, UAvatar, UStars, VerifyBadge } from '@/components/app/ui-bits'
 import { formatARS } from '@/lib/format'
 import { formatDistance } from '@/lib/geo'
+import ReviewForm from '../review-form'
 import { toast } from 'sonner'
 import {
   Search, Package, ShoppingBag, Store, MapPin, X, Star, Send, MessageCircle,
@@ -74,10 +75,8 @@ export default function ClientMaterials() {
   const [dlgQty, setDlgQty] = useState('1')
   const [dlgNote, setDlgNote] = useState('')
   const [busy, setBusy] = useState(false)
-  // diálogo de reseña
+  // diálogo de reseña (comparte el formulario 360° con estrellas + comentario + fotos)
   const [rv, setRv] = useState<Purchase | null>(null)
-  const [rvRating, setRvRating] = useState(0)
-  const [rvComment, setRvComment] = useState('')
 
   const loadPurchases = useCallback(async () => {
     try {
@@ -178,33 +177,6 @@ export default function ClientMaterials() {
     }
   }
 
-  async function dejarReseña(e: React.FormEvent) {
-    e.preventDefault()
-    if (!rv || !rvRating) { toast.error('Elegí un puntaje de 1 a 5 estrellas'); return }
-    if (rvComment.trim().length < 10) { toast.error('Contanos un poco más (mínimo 10 caracteres)'); return }
-    setBusy(true)
-    try {
-      const res = await fetch('/api/reviews', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          targetUserId: rv.provider?.userId,
-          rating: rvRating,
-          comment: rvComment.trim(),
-          context: 'compra',
-          purchaseId: rv.id,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) { toast.error(data.error); return }
-      toast.success('¡Gracias! Tu reseña ayuda a toda la comunidad')
-      setRv(null); setRvRating(0); setRvComment('')
-      void loadPurchases()
-    } finally {
-      setBusy(false)
-    }
-  }
-
   const hasReseña = async (p: Purchase) => {
     const res = await fetch(`/api/reviews?purchaseId=${p.id}`)
     if (!res.ok) return false
@@ -279,8 +251,10 @@ export default function ClientMaterials() {
               hint={searched ? 'Probá con otra palabra (ej: “cemento” en vez de “Loma Negra 50kg”) o mirá por categoría.' : 'Escribí el insumo que necesitás y te mostramos todas las ofertas de los proveedores de la comunidad.'}
             />
           ) : (
-            <div className="space-y-4">
-              {results?.map((r) => (
+            <>
+              {/* Ofertas con stock publicado: tarjetas completas con proveedores */}
+              <div className="space-y-4">
+                {results?.filter((r) => r.offersCount > 0).map((r) => (
                 <article key={r.elementId} className="homy-glass homy-lift rounded-3xl p-4 sm:p-5">
                   {/* elemento + explicación */}
                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -296,12 +270,8 @@ export default function ClientMaterials() {
                   </div>
                   {r.description && <p className="mt-1.5 text-[13.5px] leading-relaxed text-slate-500">{r.description}</p>}
 
-                  {/* ofertas por proveedor */}
-                  {r.offers.length === 0 ? (
-                    <p className="mt-3 rounded-2xl bg-[#0A2540]/4 px-4 py-3 text-[13px] text-slate-500">
-                      Ahora no hay stock publicado de este elemento — volvé a probar más tarde o mirá elementos similares.
-                    </p>
-                  ) : (
+                  {/* ofertas por proveedor (siempre hay: esta lista solo muestra con stock) */}
+                  {r.offers.length === 0 ? null : (
                     <ul className="mt-3 space-y-2.5">
                       {r.offers.map((o) => (
                         <li key={o.stockId} className={`rounded-2xl p-3.5 ring-1 transition ${o.planPro ? 'bg-[#FFC700]/8 ring-[#FFC700]/45' : 'bg-[#0A2540]/3 ring-[#0A2540]/8'}`}>
@@ -351,7 +321,30 @@ export default function ClientMaterials() {
                   )}
                 </article>
               ))}
-            </div>
+              </div>
+
+              {/* Elementos que concuerdan pero hoy no tienen stock publicado:
+                  quedan a un clic, sin diluir las ofertas reales */}
+              {results && results.some((r) => r.offersCount === 0) && (
+                <details className="homy-glass-soft group rounded-2xl px-4 py-3.5">
+                  <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-bold text-slate-600 transition hover:text-[#1D63B8]">
+                    <Package className="size-4 shrink-0 text-slate-400" aria-hidden />
+                    Ver {results.filter((r) => r.offersCount === 0).length} elemento{results.filter((r) => r.offersCount === 0).length === 1 ? '' : 's'} similar{results.filter((r) => r.offersCount === 0).length === 1 ? '' : 'es'} sin stock publicado ahora
+                    <span aria-hidden className="ml-auto text-xs text-slate-400 transition group-open:rotate-180">▾</span>
+                  </summary>
+                  <ul className="mt-3 space-y-1.5 border-t border-[#0A2540]/8 pt-3">
+                    {results.filter((r) => r.offersCount === 0).map((r) => (
+                      <li key={r.elementId} className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
+                        <span className="font-bold text-[#0A2540]">{r.name}</span>
+                        <span className="text-slate-400">· {r.categoryName}</span>
+                        <span className="text-[12px] text-slate-400 min-w-0 flex-1 basis-full sm:basis-0">{r.description ? r.description.slice(0, 110) + (r.description.length > 110 ? '…' : '') : ''}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-3 text-[12px] text-slate-400">Cuando un proveedor publique stock de estos elementos, van a aparecer arriba con su precio.</p>
+                </details>
+              )}
+            </>
           )}
         </>
       ) : (
@@ -374,7 +367,7 @@ export default function ClientMaterials() {
                 busy={busy}
                 onCancel={() => cancelar(p)}
                 onPay={(m) => pagarCharge(p, m)}
-                onReview={() => { setRv(p); setRvRating(0); setRvComment('') }}
+                onReview={() => setRv(p)}
                 hasReview={hasReseña}
               />
             ))}
@@ -430,43 +423,26 @@ export default function ClientMaterials() {
         </div>
       )}
 
-      {/* ── diálogo: reseña de compra ── */}
-      {rv && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#0A2540]/45 p-0 backdrop-blur-sm sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="Calificar compra">
-          <form onSubmit={dejarReseña} className="homy-glass-strong w-full max-w-md rounded-t-3xl p-5 sm:rounded-3xl sm:p-6">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="homy-eyebrow">Calificar compra</p>
-                <h3 className="mt-0.5 text-lg font-extrabold text-[#0A2540]">{rv.elementName}</h3>
-                <p className="text-[13px] text-slate-500">{rv.provider?.businessName}</p>
-              </div>
-              <button type="button" onClick={() => setRv(null)} aria-label="Cerrar" className="grid size-9 place-items-center rounded-full text-slate-400 hover:bg-white/70 hover:text-[#0A2540] transition">
-                <X className="size-4" aria-hidden />
-              </button>
-            </div>
-            <div className="mt-4 flex justify-center gap-1.5" role="radiogroup" aria-label="Puntaje">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <button
-                  key={n} type="button" role="radio" aria-checked={rvRating === n} aria-label={`${n} estrellas`}
-                  onClick={() => setRvRating(n)}
-                  className="homy-focus rounded-full p-1 transition-transform hover:scale-110"
-                >
-                  <Star className={`size-8 ${n <= rvRating ? 'fill-[#FFC700] text-[#FFC700]' : 'text-slate-300'}`} aria-hidden />
-                </button>
-              ))}
-            </div>
-            <textarea
-              value={rvComment}
-              onChange={(e) => setRvComment(e.target.value)}
-              rows={3}
-              maxLength={800}
-              placeholder="¿Cómo te atendieron? ¿El producto estaba bien? Tu opinión guía a los demás."
-              className="homy-glass-input mt-4 w-full rounded-2xl px-4 py-3 text-sm"
-            />
-            <button type="submit" disabled={busy} className="homy-btn-primary mt-4 w-full px-6 py-3.5 text-[15px] disabled:opacity-50">
-              <Star className="size-4" aria-hidden /> Publicar reseña
+      {/* ── diálogo: reseña de compra (estrellas + comentario + fotos que avalan) ── */}
+      {rv && rv.provider && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#0A2540]/60 p-0 backdrop-blur-sm sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="Calificar compra">
+          <div className="relative w-full max-w-md max-h-[92dvh] overflow-y-auto rounded-t-3xl sm:rounded-3xl">
+            <button
+              type="button"
+              onClick={() => setRv(null)}
+              aria-label="Cerrar"
+              className="absolute right-3 top-3 z-10 grid size-9 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20 transition"
+            >
+              <X className="size-4" aria-hidden />
             </button>
-          </form>
+            <ReviewForm
+              targetUserId={rv.provider.userId}
+              targetName={rv.provider.businessName}
+              targetLabel="al proveedor"
+              purchaseId={rv.id}
+              onDone={() => { setRv(null); void loadPurchases() }}
+            />
+          </div>
         </div>
       )}
     </div>

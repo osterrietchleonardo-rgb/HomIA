@@ -24,10 +24,18 @@ export async function GET(req: NextRequest) {
   const user = await getSessionUser().catch(() => null)
 
   // ── 1. Elementos del catálogo que concuerdan (búsqueda difusa) ──
+  // Sin tope artificial: se listan TODOS los elementos que concuerden con la
+  // búsqueda (nombre, alias, descripción, MARCA o nombre del proveedor) para
+  // que el usuario vea todo lo que cada proveedor tiene disponible.
   const catSlug = canonicalCategoria(cat)
   const elements = await db.catalogElement.findMany({
     where: { active: true, ...(catSlug ? { category: { slug: catSlug } } : {}) },
-    include: { category: true, stock: { select: { quantity: true, status: true } } },
+    include: {
+      category: true,
+      stock: {
+        select: { quantity: true, status: true, brand: true, provider: { select: { businessName: true } } },
+      },
+    },
   })
 
   const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -37,21 +45,32 @@ export async function GET(req: NextRequest) {
       const aliases = parseJson<string[]>(e.aliases, [])
       const hayName = norm(e.name)
       const hayAll = norm([e.name, ...aliases, e.description || ''].join(' · '))
+      // marcas y nombres de proveedores que publican este elemento
+      const brandsProvs = norm(e.stock.map((s) => `${s.brand || ''} ${s.provider.businessName}`).join(' · '))
+      const hasStock = e.stock.some((s) => s.quantity > 0 && s.status === 'disponible')
       let score = 0
-      if (!qn) score = e.stock.length > 0 ? 2 : 1
-      else {
+      if (!qn) {
+        // navegación sin búsqueda: todos los elementos con stock disponible
+        score = hasStock ? 2 : 1
+      } else {
         if (hayName.includes(qn)) score = 100
+        else if (brandsProvs.includes(qn)) score = 40 // matchea la marca o el proveedor
         else {
           score = matchScore(q, `${e.name} ${aliases.join(' ')} ${e.description || ''}`) * 10
+          if (score === 0 && brandsProvs && matchScore(q, brandsProvs) > 0) score = 40
           if (score === 0 && matchTerms(q, hayAll)) score = 5
         }
-        if (score > 0 && e.stock.some((s) => s.quantity > 0 && s.status === 'disponible')) score += 3
+        if (score > 0 && hasStock) score += 3
       }
-      return { e, score }
+      return { e, score, hasStock }
     })
     .filter((x) => x.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 14)
+    .sort((a, b) => {
+      if (a.score !== b.score) return b.score - a.score
+      if (a.hasStock !== b.hasStock) return a.hasStock ? -1 : 1
+      return a.e.name.localeCompare(b.e.name, 'es')
+    })
+    .slice(0, 120)
 
   const elementIds = scored.map((x) => x.e.id)
 

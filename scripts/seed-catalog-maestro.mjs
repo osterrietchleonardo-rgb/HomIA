@@ -5,6 +5,10 @@
 import { PrismaClient } from '@prisma/client'
 import { CATALOG_MAESTRO } from './catalog-maestro.mjs'
 import { CATALOG_EXPANSION } from './catalog-expansion.mjs'
+import { CATALOG_EXP2_A } from './catalog-exp2-a.mjs'
+import { CATALOG_EXP2_B } from './catalog-exp2-b.mjs'
+import { CATALOG_EXP2_C } from './catalog-exp2-c.mjs'
+import { CATALOG_EXP2_D } from './catalog-exp2-d.mjs'
 
 const db = new PrismaClient()
 
@@ -14,9 +18,11 @@ async function main() {
   let created = 0
   let updated = 0
 
-  // Normaliza ambas fuentes a la misma forma: [{slug, name, icon, items}]
+  // Normaliza todas las fuentes a la misma forma: [{slug, name, icon, items}]
   const expansion = Object.entries(CATALOG_EXPANSION).map(([slug, items]) => ({ slug, items }))
-  const sources = [...CATALOG_MAESTRO, ...expansion]
+  const exp2 = [CATALOG_EXP2_A, CATALOG_EXP2_B, CATALOG_EXP2_C, CATALOG_EXP2_D]
+    .flatMap((m) => Object.entries(m).map(([slug, items]) => ({ slug, items })))
+  const sources = [...CATALOG_MAESTRO, ...expansion, ...exp2]
 
   for (const cat of sources) {
     // La expansión refuerza categorías ya creadas por el maestro: si no existe

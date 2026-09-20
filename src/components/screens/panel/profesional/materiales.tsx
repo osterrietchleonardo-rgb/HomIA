@@ -9,18 +9,27 @@ import { useLocation } from '@/lib/store'
 import { MapPin, Compass, Trophy, ExternalLink, Package, Scale, Store, Search, TrendingDown } from 'lucide-react'
 
 const CATEGORIES = [
+  { slug: '', name: 'Todas las categorías' },
   { slug: 'plomeria', name: 'Plomería' },
-  { slug: 'gasistas', name: 'Gasistas' },
-  { slug: 'electricistas', name: 'Electricistas' },
+  { slug: 'gasistas', name: 'Gas' },
+  { slug: 'electricistas', name: 'Electricidad' },
   { slug: 'albanileria', name: 'Albañilería' },
+  { slug: 'durlock', name: 'Durlock' },
   { slug: 'pintura', name: 'Pintura' },
+  { slug: 'herreria', name: 'Ferretería' },
+  { slug: 'herramientas', name: 'Herramientas' },
+  { slug: 'maderera', name: 'Maderera' },
   { slug: 'carpinteria', name: 'Carpintería' },
-  { slug: 'herreria', name: 'Herrería' },
-  { slug: 'limpieza', name: 'Limpieza' },
-  { slug: 'jardineria', name: 'Jardinería' },
-  { slug: 'climatizacion', name: 'Climatización' },
   { slug: 'techos', name: 'Techos' },
-  { slug: 'cerramientos', name: 'Cerramientos' },
+  { slug: 'cerramientos', name: 'Aberturas' },
+  { slug: 'pisos', name: 'Pisos' },
+  { slug: 'aislacion', name: 'Aislación' },
+  { slug: 'iluminacion', name: 'Iluminación' },
+  { slug: 'climatizacion', name: 'Climatización' },
+  { slug: 'jardineria', name: 'Jardín' },
+  { slug: 'limpieza', name: 'Limpieza' },
+  { slug: 'muebles', name: 'Muebles' },
+  { slug: 'seguridad', name: 'Seguridad' },
 ]
 
 type SearchMaterial = {

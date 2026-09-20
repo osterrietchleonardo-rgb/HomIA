@@ -6,8 +6,9 @@ import { withinRadius, type WithGeo } from '@/lib/geo'
 import { matchTerms, canonicalCategoria } from '@/lib/search-match'
 
 // Búsqueda dual HomIA
-// mode=cliente    → profesionales (por profesión/habilidades) + trabajos abiertos de la categoría
-// mode=profesional→ stock de materiales en proveedores + bolsa de trabajos ("¿qué hay para plomeros?")
+// mode=cliente    → profesionales + trabajos abiertos + MATERIALES en proveedores
+//                   (el cliente también compra insumos sin contratar a nadie)
+// mode=profesional→ stock de materiales + bolsa de trabajos ("¿qué hay para plomeros?")
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams
   const mode = sp.get('mode') || 'cliente'
@@ -17,6 +18,63 @@ export async function GET(req: NextRequest) {
   const lng = sp.get('lng') ? parseFloat(sp.get('lng')!) : null
   const radius = sp.get('radius') ? parseFloat(sp.get('radius')!) : 25
   const urgency = sp.get('urgency') || ''
+
+  // ── Materiales en proveedores (para AMBOS modos) ──
+  // Matchea por nombre del elemento, ALIASES ("caño" encuentra "Caño PVC desagüe",
+  // "corrugado" encuentra el caño de luz), descripción, marca y nombre del proveedor.
+  const stock = await db.providerStock.findMany({
+    include: {
+      element: { include: { category: true } },
+      provider: {
+        include: {
+          user: { select: { displayName: true, avatarUrl: true, city: true } },
+        },
+      },
+    },
+  })
+
+  let matched = stock
+  if (q) {
+    matched = stock.filter((s) => {
+      const hay = [s.element.name, ...parseJson<string[]>(s.element.aliases, []), s.element.description || '', s.brand || '', s.provider.businessName].join(' ').toLowerCase()
+      return matchTerms(q, hay)
+    })
+  }
+  if (cat) {
+    const catSlug = canonicalCategoria(cat)
+    if (catSlug) matched = matched.filter((s) => s.element.category.slug === catSlug)
+  }
+
+  const materialResults = withinRadius(
+    matched
+      .sort((a, b) => {
+        const pa = a.provider.subscription === 'pro' ? 1 : 0
+        const pb = b.provider.subscription === 'pro' ? 1 : 0
+        if (pa !== pb) return pb - pa // proveedores Recomendados primero
+        return a.price - b.price
+      })
+      .map((s) => ({
+      id: s.id,
+      type: 'material' as const,
+      elementId: s.elementId,
+      name: s.element.name,
+      description: s.element.description || null,
+      category: s.element.category.name,
+      categorySlug: s.element.category.slug,
+      unit: s.element.unit,
+      brand: s.brand,
+      price: s.price,
+      quantity: s.quantity,
+      status: s.status,
+      providerId: s.provider.id,
+      providerName: s.provider.businessName,
+      providerCity: s.provider.city || s.provider.user.city,
+      providerRating: s.provider.rating,
+      lat: s.provider.lat,
+      lng: s.provider.lng,
+    })),
+    lat, lng, radius
+  )
 
   if (mode === 'cliente') {
     // ── Profesionales ──
@@ -85,65 +143,10 @@ export async function GET(req: NextRequest) {
       lat, lng, radius
     )
 
-    return ok({ professionals: proResults, jobs: jobResults, mode })
+    return ok({ professionals: proResults, jobs: jobResults, materials: materialResults, mode })
   }
 
-  // ── mode=profesional: materiales en proveedores ──
-  const stock = await db.providerStock.findMany({
-    include: {
-      element: { include: { category: true } },
-      provider: {
-        include: {
-          user: { select: { displayName: true, avatarUrl: true, city: true } },
-        },
-      },
-    },
-  })
-
-  let matched = stock
-  if (q) {
-    matched = stock.filter((s) => {
-      const hay = [s.element.name, ...parseJson<string[]>(s.element.aliases, []), s.element.description || '', s.brand || '', s.provider.businessName].join(' ').toLowerCase()
-      return matchTerms(q, hay)
-    })
-  }
-  if (cat) {
-    const catSlug = canonicalCategoria(cat)
-    if (catSlug) matched = matched.filter((s) => s.element.category.slug === catSlug)
-  }
-
-  const materialResults = withinRadius(
-    matched
-      .sort((a, b) => {
-        const pa = a.provider.subscription === 'pro' ? 1 : 0
-        const pb = b.provider.subscription === 'pro' ? 1 : 0
-        if (pa !== pb) return pb - pa // proveedores Recomendados primero
-        return a.price - b.price
-      })
-      .map((s) => ({
-      id: s.id,
-      type: 'material' as const,
-      elementId: s.elementId,
-      name: s.element.name,
-      description: s.element.description || null,
-      category: s.element.category.name,
-      categorySlug: s.element.category.slug,
-      unit: s.element.unit,
-      brand: s.brand,
-      price: s.price,
-      quantity: s.quantity,
-      status: s.status,
-      providerId: s.provider.id,
-      providerName: s.provider.businessName,
-      providerCity: s.provider.city || s.provider.user.city,
-      providerRating: s.provider.rating,
-      lat: s.provider.lat,
-      lng: s.provider.lng,
-    })),
-    lat, lng, radius
-  )
-
-  // ── Bolsa de trabajos abiertos ──
+  // ── Bolsa de trabajos abiertos (modo profesional) ──
   const catFilter = canonicalCategoria(cat)
   const openJobs = await db.jobPost.findMany({
     where: {

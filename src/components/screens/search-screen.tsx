@@ -62,6 +62,10 @@ const CATEGORY_TABS = [
 ]
 
 export default function SearchScreen({ embedded = false }: { embedded?: boolean }) {
+  // `embedded` se conserva por compatibilidad de ruteo (panel vs público); el
+  // sticky del header usa top-0 en ambos casos: en el app-shell el topbar ya
+  // está fuera del scroller y en público no hay topbar fijo.
+  void embedded
   // pantalla de búsqueda dual con superagente (re-render intencional)
   const route = useRoute()
   const { user, refresh } = useSession()
@@ -184,14 +188,17 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
 
   return (
     <div className="min-h-screen">
-      {/* Header de búsqueda — vidrio nocturno */}
-      <header className={`homy-glass-dark sticky z-40 overflow-hidden ${embedded ? 'top-16' : 'top-0'}`}>
+      {/* Header de búsqueda — vidrio nocturno (fondo reforzado para que el
+          contenido que scrollea por detrás no se meta con la lectura).
+          En el app-shell el topbar vive FUERA del scroller: top-0 ancla el
+          header al borde visible del marco, igual que .homy-page-head. */}
+      <header className="homy-glass-dark sticky top-0 z-40 overflow-hidden">
         <span
           aria-hidden
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              'radial-gradient(70% 130% at 88% -30%, rgba(0,196,255,0.16) 0%, transparent 58%), radial-gradient(42% 90% at -5% 130%, rgba(255,90,31,0.12) 0%, transparent 55%)',
+              'radial-gradient(70% 130% at 88% -30%, rgba(0,196,255,0.16) 0%, transparent 58%), radial-gradient(42% 90% at -5% 130%, rgba(255,90,31,0.12) 0%, transparent 55%), linear-gradient(to bottom, rgba(10,37,64,0.55) 0%, rgba(10,37,64,0.8) 100%)',
           }}
         />
         <div className="relative max-w-7xl mx-auto px-3 sm:px-4 pt-3 pb-2 flex items-center gap-2 sm:gap-3">
@@ -263,6 +270,35 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
             <div aria-hidden className="pointer-events-none hidden sm:block absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-[#0A2540]/85 to-transparent" />
           </div>
         </div>
+        {/* Ubicación + radio SIEMPRE visibles dentro del header: antes quedaban
+            en el contenido y el header sticky los tapaba al scrollear. */}
+        <div className="relative max-w-7xl mx-auto px-3 sm:px-4 pb-3 flex flex-wrap items-center gap-2">
+          {location.shared ? (
+            <span className="min-w-0 flex-1 sm:flex-none inline-flex items-center gap-2 rounded-full bg-white/[0.07] ring-1 ring-white/10 px-3.5 py-2 text-[12.5px] text-slate-300">
+              <MapPinIcon className="size-3.5 shrink-0 text-[#FF5A1F]" aria-hidden />
+              <span className="truncate">A <b className="text-white">{location.radiusKm} km</b> de tu ubicación</span>
+            </span>
+          ) : (
+            <button
+              onClick={() => location.request().then((ok) => { if (ok && user) syncLocationToServer(location.lat!, location.lng!, location.radiusKm) })}
+              className="min-w-0 flex-1 sm:flex-none inline-flex items-center gap-2 rounded-full bg-white/[0.07] ring-1 ring-white/10 px-3.5 py-2 text-[12.5px] font-bold text-[#66DFFF] hover:bg-white/[0.12] transition text-left"
+            >
+              <MapPinIcon className="size-3.5 shrink-0 text-[#FF5A1F]" aria-hidden />
+              <span className="truncate">Compartir ubicación para pines cercanos</span>
+            </button>
+          )}
+          <div className="ml-auto inline-flex shrink-0 items-center gap-2.5 rounded-full bg-white/[0.07] ring-1 ring-white/10 px-3.5 py-2">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Radio</span>
+            <span className="text-xs font-extrabold text-white tabular-nums min-w-[42px]">{location.radiusKm} km</span>
+            <input
+              type="range" min={1} max={100} value={location.radiusKm}
+              onChange={(e) => location.setRadius(parseInt(e.target.value))}
+              className="homy-range w-28 sm:w-44"
+              style={{ ['--range-progress' as string]: `${location.radiusKm}%` }}
+              aria-label="Radio de alcance de los resultados"
+            />
+          </div>
+        </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-6 sm:py-8">
@@ -324,34 +360,6 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
             </div>
           </div>
         )}
-
-        {/* Ubicación + radio */}
-        <div className="mb-5 sm:mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div className="homy-glass-soft flex items-center gap-2 rounded-full px-4 py-2.5 text-sm text-slate-500 min-w-0">
-            <MapPinIcon className="size-4 shrink-0 text-[#FF5A1F]" aria-hidden />
-            {location.shared ? (
-              <span className="min-w-0">Mostrando resultados a <b className="text-[#0A2540]">{location.radiusKm} km</b> de tu ubicación</span>
-            ) : (
-              <button
-                onClick={() => location.request().then((ok) => { if (ok && user) syncLocationToServer(location.lat!, location.lng!, location.radiusKm) })}
-                className="homy-focus rounded-lg text-[#1D63B8] font-bold hover:underline underline-offset-2 text-left"
-              >
-                Compartir ubicación para ver pines cercanos
-              </button>
-            )}
-          </div>
-          <div className="homy-glass-soft flex items-center gap-3 rounded-full px-4 py-2.5">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Radio</span>
-            <span className="text-xs font-extrabold text-[#0A2540] tabular-nums min-w-[46px]">{location.radiusKm} km</span>
-            <input
-              type="range" min={1} max={100} value={location.radiusKm}
-              onChange={(e) => location.setRadius(parseInt(e.target.value))}
-              className="homy-range w-28 sm:w-44"
-              style={{ ['--range-progress' as string]: `${location.radiusKm}%` }}
-              aria-label="Diámetro de alcance"
-            />
-          </div>
-        </div>
 
         {/* Mapa */}
         <div className="mb-8 sm:mb-10">
@@ -426,18 +434,35 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
               </Section>
             )}
 
-            {/* Materiales */}
-            {mode === 'profesional' && (
-              <Section title="Materiales en proveedores" count={materials.length} icon={<Package />} tone="homy-chip-mint">
-                {materials.length === 0 ? (
-                  <p className="homy-glass-soft rounded-2xl px-5 py-4 text-sm text-slate-500">Ningún proveedor publica ese elemento todavía.</p>
-                ) : (
-                  <div className="homy-stagger grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {materials.map((m) => <MaterialCard key={m.stockId} m={m} logged={!!user} />)}
-                  </div>
-                )}
-              </Section>
-            )}
+            {/* Materiales — visible para ambos modos: el cliente también compra
+                insumos sin contratar a nadie (compra directa al proveedor) */}
+            <Section
+              title={mode === 'profesional' ? 'Materiales en proveedores' : 'Materiales para comprar directo'}
+              count={materials.length}
+              icon={<Package />}
+              tone="homy-chip-mint"
+            >
+              {mode === 'cliente' && user && materials.length > 0 && (
+                <p className="homy-glass-soft rounded-2xl px-5 py-3.5 text-[13px] text-slate-600 leading-relaxed mb-4">
+                  Podés comprar estos insumos sin contratar a nadie: tocá la tarjeta para ver el proveedor, o abrí{' '}
+                  <button onClick={() => navigate(`/panel/cliente/materiales${query ? `?q=${encodeURIComponent(query)}` : ''}`)} className="font-extrabold text-[#1D63B8] hover:underline underline-offset-2">
+                    Materiales → Buscar materiales
+                  </button>{' '}
+                  para pedir el producto y pagar por Mercado Pago o efectivo.
+                </p>
+              )}
+              {materials.length === 0 ? (
+                <p className="homy-glass-soft rounded-2xl px-5 py-4 text-sm text-slate-500">
+                  {mode === 'profesional'
+                    ? 'Ningún proveedor publica ese elemento todavía.'
+                    : 'Ningún proveedor publica ese producto todavía. Probá con otra palabra (ej: “caño” o “cemento”) o mirá por categoría.'}
+                </p>
+              ) : (
+                <div className="homy-stagger grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {materials.map((m) => <MaterialCard key={m.stockId} m={m} logged={!!user} />)}
+                </div>
+              )}
+            </Section>
 
             {/* Comparables */}
             {comparables.length > 0 && (
