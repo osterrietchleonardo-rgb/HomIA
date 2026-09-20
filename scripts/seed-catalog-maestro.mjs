@@ -4,6 +4,7 @@
 //   aliases/description/unit de los existentes (NO rompe ProviderStock) y crea los nuevos
 import { PrismaClient } from '@prisma/client'
 import { CATALOG_MAESTRO } from './catalog-maestro.mjs'
+import { CATALOG_EXPANSION } from './catalog-expansion.mjs'
 
 const db = new PrismaClient()
 
@@ -13,14 +14,20 @@ async function main() {
   let created = 0
   let updated = 0
 
-  for (const cat of CATALOG_MAESTRO) {
+  // Normaliza ambas fuentes a la misma forma: [{slug, name, icon, items}]
+  const expansion = Object.entries(CATALOG_EXPANSION).map(([slug, items]) => ({ slug, items }))
+  const sources = [...CATALOG_MAESTRO, ...expansion]
+
+  for (const cat of sources) {
+    // La expansión refuerza categorías ya creadas por el maestro: si no existe
+    // aún (orden distinto), la crea con datos genéricos sin pisar nada.
     const category = await db.category.upsert({
       where: { slug: cat.slug },
-      update: { name: cat.name, icon: cat.icon },
+      update: cat.name ? { name: cat.name, icon: cat.icon } : {},
       create: {
         slug: cat.slug,
-        name: cat.name,
-        icon: cat.icon,
+        name: cat.name || cat.slug,
+        icon: cat.icon || 'wrench',
         sortOrder: order++,
       },
     })

@@ -1,8 +1,12 @@
 'use client'
 // Gestión de stock del proveedor — el corazón del panel: precios, cantidades, mínimos y estado derivado
+// El picker de elementos es un combobox con búsqueda difusa (sin acentos ni
+// mayúsculas, por aliases y descripción) y permite AGREGAR AL CATÁLOGO el
+// elemento faltante con explicación generada por IA (N7.1.1 + N7.1.2).
 import { useEffect, useState } from 'react'
 import { StatusBadge, Loading } from '@/components/app/ui-bits'
 import { toast } from 'sonner'
+import { matchTerms, matchScore } from '@/lib/search-match'
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -11,7 +15,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
-  Plus, Search, Minus, Check, Trash2, Info, Package, PackageOpen,
+  Plus, Search, Minus, Check, Trash2, Info, Package, PackageOpen, Sparkles,
 } from 'lucide-react'
 
 type StockItem = {
@@ -24,6 +28,8 @@ type CatalogCategory = {
   id: string; slug: string; name: string
   elements: { id: string; name: string; unit: string; aliases: string[]; description?: string }[]
 }
+
+const UNIT_OPTIONS = ['unidad', 'metro', 'm2', 'm3', 'kg', 'litro', 'bolsa', 'paquete', 'caja', 'rollo', 'placa', 'par', 'juego', 'pack', 'tira', 'tambor', 'barra', 'bobina', 'millar', 'lata']
 
 type Draft = { price?: string; qty?: string }
 
@@ -53,6 +59,14 @@ export default function ProviderStock() {
   const [brand, setBrand] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // combobox del picker + alta de elemento faltante con IA
+  const [elemQuery, setElemQuery] = useState('')
+  const [addingEl, setAddingEl] = useState(false)
+  const [newElName, setNewElName] = useState('')
+  const [newElCat, setNewElCat] = useState('')
+  const [newElUnit, setNewElUnit] = useState('unidad')
+  const [aiBusy, setAiBusy] = useState(false)
+
   // edición inline + borrado
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
@@ -80,10 +94,7 @@ export default function ProviderStock() {
   const filtered = stock.filter((s) => {
     if (cat && s.categorySlug !== cat) return false
     if (statusF && s.status !== statusF) return false
-    if (q) {
-      const hay = [s.name, ...s.aliases, s.description || '', s.brand || '', s.category].join(' ').toLowerCase()
-      if (!hay.includes(q.toLowerCase())) return false
-    }
+    if (q && !matchTerms(q, [s.name, ...s.aliases, s.description || '', s.brand || '', s.category].join(' '))) return false
     return true
   })
 
@@ -146,6 +157,7 @@ export default function ProviderStock() {
 
   function resetForm() {
     setDlgCat(''); setElementId(''); setPrice(''); setQty(''); setMinStock('5'); setBrand('')
+    setElemQuery(''); setAddingEl(false); setNewElName(''); setNewElCat(''); setNewElUnit('unidad')
   }
 
   async function publish() {
@@ -178,8 +190,50 @@ export default function ProviderStock() {
     load()
   }
 
-  const dlgElements = catalog.find((c) => c.slug === dlgCat)?.elements || []
-  const chosenElement = dlgElements.find((e) => e.id === elementId)
+  async function reloadCatalog() {
+    const res = await fetch('/api/catalog')
+    if (res.ok) setCatalog((await res.json()).categories || [])
+  }
+
+  // N7.1.2 — alta de elemento faltante con explicación generada por IA
+  async function createMissingElement() {
+    const name = newElName.trim()
+    if (name.length < 3) { toast.error('Escribí el nombre técnico del elemento'); return }
+    if (!newElCat) { toast.error('Elegí la categoría del elemento'); return }
+    setAiBusy(true)
+    try {
+      const cat = catalog.find((c) => c.id === newElCat)
+      const res = await fetch('/api/catalog', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, categoryId: newElCat, unit: newElUnit }),
+      })
+      const d = await res.json()
+      if (!res.ok) { toast.error(d.error || 'No pudimos agregar el elemento'); return }
+      await reloadCatalog()
+      setElementId(d.element.id)
+      setElemQuery(d.element.name)
+      setAddingEl(false)
+      toast.success(d.message || (d.existing ? 'Ya existía: te lo seleccionamos' : 'Elemento agregado al catálogo con explicación de la IA'), {
+        description: cat ? `Categoría: ${cat.name}` : undefined,
+      })
+    } finally { setAiBusy(false) }
+  }
+
+  // Pool del combobox: si hay categoría elegida → solo esa; si no, TODO el catálogo.
+  // Ranking por matchScore (tokens sin acentos ni mayúsculas sobre nombre + aliases + descripción).
+  const pool = (dlgCat ? catalog.filter((c) => c.slug === dlgCat) : catalog).flatMap((c) =>
+    c.elements.map((e) => ({ ...e, categoryName: c.name, categoryId: c.id }))
+  )
+  const nq = elemQuery.trim()
+  const ranked = nq.length >= 2
+    ? pool
+        .map((e) => ({ e, s: matchScore(nq, [e.name, ...e.aliases, e.description || ''].join(' ')) }))
+        .filter((x) => x.s > 0)
+        .sort((a, b) => b.s - a.s || a.e.name.localeCompare(b.e.name))
+        .slice(0, 12)
+        .map((x) => x.e)
+    : []
+  const chosenElement = pool.find((e) => e.id === elementId)
 
   if (loading) return <Loading />
 
@@ -343,22 +397,58 @@ export default function ProviderStock() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label htmlFor="pub-cat" className="text-[13px] font-bold text-[#0A2540]">Categoría</label>
-              <select id="pub-cat" value={dlgCat} onChange={(e) => { setDlgCat(e.target.value); setElementId('') }}
+              <label htmlFor="pub-cat" className="text-[13px] font-bold text-[#0A2540]">Categoría <span className="text-slate-400 font-semibold">(opcional, para acotar)</span></label>
+              <select id="pub-cat" value={dlgCat} onChange={(e) => setDlgCat(e.target.value)}
                 className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-3 min-h-[44px] text-sm">
-                <option value="">Elegí una categoría…</option>
+                <option value="">Todas las categorías</option>
                 {catalog.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
               </select>
             </div>
             <div>
-              <label htmlFor="pub-elem" className="text-[13px] font-bold text-[#0A2540]">Elemento</label>
-              <select id="pub-elem" value={elementId} onChange={(e) => setElementId(e.target.value)} disabled={!dlgCat}
-                className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-3 min-h-[44px] text-sm disabled:text-slate-400">
-                <option value="">{dlgCat ? 'Elegí un elemento…' : 'Primero elegí una categoría'}</option>
-                {dlgElements.map((el) => <option key={el.id} value={el.id}>{el.name} — por {el.unit}</option>)}
-              </select>
-              {chosenElement && (
+              <label htmlFor="pub-elem-search" className="text-[13px] font-bold text-[#0A2540]">Elemento</label>
+              <div className="relative mt-1.5">
+                <Search aria-hidden className="size-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input id="pub-elem-search" value={elemQuery}
+                  onChange={(e) => { setElemQuery(e.target.value); setElementId('') }}
+                  placeholder="Escribí: tornillo, membrana, cable…"
+                  className="homy-glass-input w-full rounded-xl pl-10 pr-4 py-3 min-h-[44px] text-sm"
+                  autoComplete="off" />
+              </div>
+              {/* Resultados difusos: sin mayúsculas, sin acentos, por aliases y descripción */}
+              {!elementId && nq.length >= 2 && ranked.length > 0 && (
+                <ul role="listbox" aria-label="Resultados del catálogo" className="mt-2 max-h-56 overflow-y-auto rounded-xl border border-[#0A2540]/10 divide-y divide-[#0A2540]/6 bg-white/70">
+                  {ranked.map((el) => (
+                    <li key={el.id}>
+                      <button type="button" role="option" aria-selected={elementId === el.id}
+                        onClick={() => setElementId(el.id)}
+                        className="w-full text-left px-3.5 py-2.5 hover:bg-[#1D63B8]/6 transition">
+                        <span className="block text-sm font-bold text-[#0A2540]">{el.name}</span>
+                        <span className="block text-[11px] text-slate-500 mt-0.5">{el.categoryName} · se vende por {el.unit}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {/* Ofrecer el alta con IA SIEMPRE que haya una búsqueda (los resultados
+                  difusos pueden no ser exactamente lo que el proveedor vende) */}
+              {!elementId && nq.length >= 3 && (
+                <button type="button"
+                  onClick={() => {
+                    setAddingEl(true)
+                    setNewElName(nq.charAt(0).toUpperCase() + nq.slice(1))
+                    setNewElCat(dlgCat ? (catalog.find((c) => c.slug === dlgCat)?.id || '') : '')
+                  }}
+                  className="mt-2 w-full rounded-xl border-2 border-dashed border-[#1D63B8]/30 bg-[#1D63B8]/4 px-3.5 py-2.5 text-left text-[13px] font-bold text-[#1D63B8] hover:bg-[#1D63B8]/8 transition flex items-center gap-2">
+                  <Sparkles className="size-4 shrink-0" aria-hidden />
+                  {ranked.length > 0 ? `¿No es lo que buscás? Agregar “${nq}” al catálogo con IA` : `No encontramos “${nq}”: agregarlo al catálogo con IA`}
+                </button>
+              )}
+              {!elementId && nq.length < 2 && (
+                <p className="text-xs text-slate-500 mt-1.5">Escribí dos letras o más para buscar entre {pool.length} elementos del catálogo.</p>
+              )}
+              {elementId && chosenElement && (
                 <div className="text-xs text-slate-500 mt-1.5 space-y-0.5">
+                  <p><strong className="text-[#0A2540]">{chosenElement.name}</strong> · {chosenElement.categoryName}</p>
                   <p>Se vende por <strong>{chosenElement.unit}</strong></p>
                   {chosenElement.description && <p className="leading-relaxed">{chosenElement.description}</p>}
                   {chosenElement.aliases.length > 0 && (
@@ -367,6 +457,48 @@ export default function ProviderStock() {
                 </div>
               )}
             </div>
+            {/* Alta de elemento faltante con IA */}
+            {addingEl && (
+              <div className="rounded-xl border border-[#1D63B8]/25 bg-[#1D63B8]/5 p-4 space-y-3">
+                <p className="text-[13px] font-bold text-[#0A2540] flex items-center gap-1.5">
+                  <Sparkles className="size-4 text-[#0092c4]" aria-hidden /> Nuevo elemento del catálogo
+                </p>
+                <div>
+                  <label htmlFor="new-el-name" className="text-[13px] font-bold text-[#0A2540]">Nombre técnico</label>
+                  <input id="new-el-name" value={newElName} onChange={(e) => setNewElName(e.target.value)}
+                    placeholder="Ej: Tarugo Fischer 8mm"
+                    className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-3 min-h-[44px] text-sm" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="new-el-cat" className="text-[13px] font-bold text-[#0A2540]">Categoría</label>
+                    <select id="new-el-cat" value={newElCat} onChange={(e) => setNewElCat(e.target.value)}
+                      className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-3 min-h-[44px] text-sm">
+                      <option value="">Elegí…</option>
+                      {catalog.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="new-el-unit" className="text-[13px] font-bold text-[#0A2540]">Unidad de venta</label>
+                    <select id="new-el-unit" value={newElUnit} onChange={(e) => setNewElUnit(e.target.value)}
+                      className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-3 min-h-[44px] text-sm">
+                      {UNIT_OPTIONS.map((u) => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">La IA genera la descripción natural y los aliases para que clientes, profesionales y otros proveedores lo encuentren aunque lo busquen con otro nombre.</p>
+                <div className="flex gap-2">
+                  <button type="button" onClick={createMissingElement} disabled={aiBusy}
+                    className="homy-btn-primary homy-focus flex-1 min-h-[44px] text-[13px] disabled:opacity-60">
+                    {aiBusy ? 'Generando con IA…' : 'Agregar al catálogo'}
+                  </button>
+                  <button type="button" onClick={() => setAddingEl(false)} disabled={aiBusy}
+                    className="homy-glass-soft homy-focus rounded-xl min-h-[44px] px-4 text-sm font-bold text-slate-500">
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label htmlFor="pub-price" className="text-[13px] font-bold text-[#0A2540]">Precio (ARS)</label>
