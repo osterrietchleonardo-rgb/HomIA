@@ -858,3 +858,21 @@ Work Log:
 
 Stage Summary:
 - HomIA audita y cierra el ciclo de confianza de SEGURIDAD: IDOR de facturas cerrado, path traversal bloqueado, fuerza bruta con límite, uploads saneados, cabeceras de seguridad activas, contraseñas con política real — todo verificado con pruebas en vivo y regresión completa (11 suites, 334 checks en verde). El sistema queda en estado de producción: funcional 100%, seguro en lo verificable, móvil pulido, con runbook actualizado.
+
+---
+Task ID: handoff-vercel
+Agent: Super Z (principal)
+Task: Preparar paquete de traspaso del código para GitHub → Antigravity/Claude → Vercel (pregunta del usuario: "qué les doy para que lo creen tal cual / descargo el código").
+
+Work Log:
+- Inventario verificado: 58 endpoints API, 31 modelos Prisma, 18 migraciones Supabase de referencia, git con commits hasta N9 (catálogo 1247, radio mapa, reseñas compra).
+- Detectados 4 bloqueantes de portabilidad a Vercel: (1) SQLite efímero en serverless → migrar a Postgres (Supabase; esquema 100% válido: String/Float/JSON-as-string); (2) `z-ai-web-dev-sdk` no autentica fuera del sandbox (4 call-sites) → shim portable; (3) FS read-only en Vercel → uploads en 4 routes a public/uploads → Vercel Blob; (4) build script del sandbox (standalone/bun/webpack hacks) rompería en Vercel.
+- Creado `src/lib/ai.ts`: shim 1:1 de z-ai-web-dev-sdk (create/chat.completions.create/createVision), OpenAI-compatible por env (AI_BASE_URL/AI_API_KEY/AI_MODEL/AI_VISION_MODEL; modelo SIEMPRE por env — dni-ai tiene 'glm-4.5v' hardcodeado). Additivo, no se aplica a los call-sites aquí para no romper el sandbox.
+- Creados: `.env.example` (todas las vars documentadas), `AGENTS.md` (contexto maestro: producto, stack, modelo de datos, mapa API, convenciones UI, flujos críticos, reglas para IA, estado actual, §12 con las 6 tareas de migración exactas), `CLAUDE.md` (@AGENTS.md), `DEPLOY-VERCEL.md` (guía completa GitHub→Supabase→Vercel con troubleshooting), `PROMPT-INICIO.md` (prompt listo para pegar), `README.md` (no existía).
+- .gitignore ampliado (db/, shots/, tool-results/, agent-ctx/, download/, upload/).
+- Zip limpio `download/homia-src.zip` (23MB, 533 archivos): incluye src/, prisma/, supabase/, scripts/ (seeds), public/ (videos+uploads demo), configs, docs nuevos. Sin node_modules/.git/.env/db/shots (verificado sin fugas). Docs copiados también sueltos en download/.
+
+Stage Summary:
+- Estrategia recomendada al usuario: NO recrear el sistema por prompt (imposible "tal cual"); descargar el código real y abrirlo en Antigravity/Claude Code (auto-leen AGENTS.md/CLAUDE.md), aplicar las 5 adaptaciones Vercel documentadas, push a GitHub, deploy en Vercel + Supabase.
+- Entregables: download/homia-src.zip + download/{AGENTS,DEPLOY-VERCEL,PROMPT-INICIO}.md
+- La auditoría end-to-end previa queda documentada en commits N9; este traspaso no modifica código runtime del sandbox.

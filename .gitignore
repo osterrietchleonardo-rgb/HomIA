@@ -54,3 +54,11 @@ server.log
 /skills/
 # intermediarios de generación de videos (wav/png/segmentos)
 scripts/videos-work/
+
+# artefactos locales del entorno de desarrollo HomIA
+/db/
+/shots/
+/tool-results/
+/agent-ctx/
+/download/
+/upload/
