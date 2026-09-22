@@ -148,13 +148,22 @@ const TOUR_ROLES: { id: TourRole; label: string; icon: React.ComponentType<{ cla
 ]
 
 export default function HelpScreen({ embedded = false }: { embedded?: boolean }) {
-  const [tab, setTab] = useState('cliente')
-  const [openFaq, setOpenFaq] = useState<number | null>(0)
   const { user } = useSession()
-  const guide = GUIDES.find((g) => g.id === tab) || GUIDES[0]
+  // Si está logueado, solo mostrar los roles que tiene; si no, mostrar todos
+  const userRoles = user?.roles ?? []
+  const visibleGuides = userRoles.length > 0
+    ? GUIDES.filter((g) => userRoles.includes(g.id))
+    : GUIDES
+  const visibleTourRoles = userRoles.length > 0
+    ? TOUR_ROLES.filter((r) => userRoles.includes(r.id))
+    : TOUR_ROLES
+  const defaultTab = visibleGuides[0]?.id ?? 'cliente'
+  const [tab, setTab] = useState(defaultTab)
+  const [openFaq, setOpenFaq] = useState<number | null>(0)
+  const guide = visibleGuides.find((g) => g.id === tab) || visibleGuides[0] || GUIDES[0]
 
   return (
-    <div className={embedded ? 'homy-page' : 'mx-auto w-full max-w-5xl px-4 py-10 sm:py-14'}>
+    <div className={embedded ? 'homy-page' : 'mx-auto w-full max-w-5xl px-4 pt-24 pb-10 sm:pb-14'}>
       <header className="homy-page-head">
         <div className="min-w-0">
           <span className="homy-eyebrow">Centro de ayuda</span>
@@ -166,7 +175,7 @@ export default function HelpScreen({ embedded = false }: { embedded?: boolean })
         <span className="homy-icon-chip homy-chip-blue size-14 shrink-0 [&_svg]:size-7" aria-hidden><LifeBuoy /></span>
       </header>
 
-      {/* recorrido guiado por rol — el tutorial completo en la app */}
+      {/* recorrido guiado por rol — solo los del usuario logueado */}
       <section className="homy-glass-dark relative mb-5 overflow-hidden rounded-3xl p-5 sm:p-6" aria-label="Recorrido guiado por rol">
         <span aria-hidden className="pointer-events-none absolute -right-16 -top-20 size-56 rounded-full bg-[#00C4FF]/18 blur-3xl" />
         <span aria-hidden className="pointer-events-none absolute -bottom-24 left-[-10%] size-56 rounded-full bg-[#FF5A1F]/12 blur-3xl" />
@@ -180,21 +189,14 @@ export default function HelpScreen({ embedded = false }: { embedded?: boolean })
           </div>
         </div>
         <div className="relative mt-4 flex flex-wrap gap-2">
-          {TOUR_ROLES.map((r) => {
-            const available = !!user?.roles?.includes(r.id)
-            return (
-              <button key={r.id} disabled={!available} onClick={() => startTour({ role: r.id })}
-                title={available ? `Empezar el recorrido ${r.label}` : 'Disponible al activar ese rol en tu cuenta'}
-                className={`homy-focus inline-flex min-h-[44px] items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-extrabold transition ${
-                  available
-                    ? 'bg-white text-[#0A2540] shadow-lg hover:bg-slate-100'
-                    : 'cursor-not-allowed bg-white/10 text-slate-400'
-                }`}>
-                <Play className={`size-4 ${available ? 'text-[#1D63B8]' : ''}`} aria-hidden />
-                Tour {r.label}
-              </button>
-            )
-          })}
+          {visibleTourRoles.map((r) => (
+            <button key={r.id} onClick={() => startTour({ role: r.id })}
+              title={`Empezar el recorrido ${r.label}`}
+              className="homy-focus inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-white px-4 py-2.5 text-sm font-extrabold text-[#0A2540] shadow-lg transition hover:bg-slate-100">
+              <Play className="size-4 text-[#1D63B8]" aria-hidden />
+              Tour {r.label}
+            </button>
+          ))}
           {!user && (
             <button onClick={() => navigate('/registrarse')} className="homy-focus inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-white px-4 py-2.5 text-sm font-extrabold text-[#0A2540] shadow-lg transition hover:bg-slate-100">
               Crear cuenta para empezar <ArrowRight className="size-4 text-[#1D63B8]" aria-hidden />
@@ -203,18 +205,20 @@ export default function HelpScreen({ embedded = false }: { embedded?: boolean })
         </div>
       </section>
 
-      {/* tabs por rol */}
-      <div className="mb-5 flex flex-wrap gap-2" role="tablist" aria-label="Elegí tu rol">
-        {GUIDES.map((g) => (
-          <button key={g.id} role="tab" aria-selected={tab === g.id} onClick={() => setTab(g.id)}
-            className={`homy-focus inline-flex min-h-[44px] items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-extrabold transition ${
-              tab === g.id ? 'bg-[#0A2540] text-white shadow-lg shadow-[#0A2540]/25' : 'homy-glass-soft text-slate-500 hover:text-[#0A2540]'
-            }`}>
-            <g.icon className="size-4" aria-hidden />
-            {g.label}
-          </button>
-        ))}
-      </div>
+      {/* tabs por rol — solo los roles del usuario */}
+      {visibleGuides.length > 1 && (
+        <div className="mb-5 flex flex-wrap gap-2" role="tablist" aria-label="Elegí tu rol">
+          {visibleGuides.map((g) => (
+            <button key={g.id} role="tab" aria-selected={tab === g.id} onClick={() => setTab(g.id)}
+              className={`homy-focus inline-flex min-h-[44px] items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-extrabold transition ${
+                tab === g.id ? 'bg-[#0A2540] text-white shadow-lg shadow-[#0A2540]/25' : 'homy-glass-soft text-slate-500 hover:text-[#0A2540]'
+              }`}>
+              <g.icon className="size-4" aria-hidden />
+              {g.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* videoteca: videitos cortos con locución, por rol */}
       <section className="homy-glass mb-5 rounded-3xl p-5 sm:p-6" aria-label="Videoteca HomIA">

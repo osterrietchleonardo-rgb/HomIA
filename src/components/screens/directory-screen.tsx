@@ -189,27 +189,14 @@ export default function DirectoryScreen({ embedded = false }: { embedded?: boole
   return (
     <div className={embedded ? 'homy-page' : 'min-h-screen'}>
       {/* banda de encabezado */}
-      <div className={embedded ? '' : 'relative overflow-hidden bg-gradient-to-br from-[#0A2540] via-[#0D3050] to-[#14406B]'}>
-        {embedded ? (
-          <div className="mb-6">
-            <p className="homy-eyebrow">Directorio HomIA</p>
-            <h1 className="homy-page-title mt-1">Toda la comunidad, en un solo lugar</h1>
-            <p className="mt-1.5 max-w-2xl text-[15px] leading-relaxed text-slate-500">
-              Profesionales y proveedores verificados de la app, ordenados por sus reseñas. Abrí una tarjeta para ver toda su experiencia y escribirle por mensaje directo.
-            </p>
-          </div>
-        ) : (
-          <div className="relative max-w-7xl mx-auto pt-7 pb-12 sm:pb-14 px-4 sm:px-6 lg:px-8">
-            <span aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(58% 90% at 88% -10%, rgba(0,196,255,0.18) 0%, transparent 62%), radial-gradient(45% 70% at -5% 110%, rgba(255,90,31,0.14) 0%, transparent 55%)' }} />
-            <div className="relative">
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#66DFFF]">Directorio HomIA</p>
-              <h1 className="mt-2 text-3xl sm:text-4xl font-extrabold tracking-tight text-white leading-tight">Toda la comunidad, en un solo lugar</h1>
-              <p className="mt-2.5 max-w-2xl text-[15px] leading-relaxed text-slate-300">
-                Profesionales y proveedores verificados de la app, ordenados por sus reseñas. Abrí una tarjeta para ver toda su experiencia y escribirle por mensaje directo.
-              </p>
-            </div>
-          </div>
-        )}
+      <div className={embedded ? 'mb-6' : 'relative max-w-7xl mx-auto pt-28 pb-8 px-4 sm:px-6 lg:px-8'}>
+        <p className="homy-eyebrow">Directorio HomIA</p>
+        <h1 className={embedded ? 'homy-page-title mt-1' : 'mt-2 text-3xl sm:text-4xl font-extrabold tracking-tight text-navy leading-tight'}>
+          Toda la comunidad, en un solo lugar
+        </h1>
+        <p className={`max-w-2xl text-[15px] leading-relaxed text-slate-500 ${embedded ? 'mt-1.5' : 'mt-3'}`}>
+          Profesionales y proveedores verificados de la app, ordenados por sus reseñas. Abrí una tarjeta para ver toda su experiencia y escribirle por mensaje directo.
+        </p>
       </div>
 
       {/* filtros + grid */}

@@ -1,4 +1,4 @@
-import ZAI from 'z-ai-web-dev-sdk'
+import ZAI from '@/lib/ai'
 import { readFile } from 'fs/promises'
 import path from 'path'
 

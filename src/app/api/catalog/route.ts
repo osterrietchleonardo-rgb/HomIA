@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
-import ZAI from 'z-ai-web-dev-sdk'
+import ZAI from '@/lib/ai'
 import { ok, fail, parseJson, body } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'

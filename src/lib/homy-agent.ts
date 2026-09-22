@@ -1,5 +1,5 @@
 import 'server-only'
-import ZAI from 'z-ai-web-dev-sdk'
+import ZAI from '@/lib/ai'
 import { db } from '@/lib/db'
 import { parseJson } from '@/lib/api'
 import { withinRadius } from '@/lib/geo'

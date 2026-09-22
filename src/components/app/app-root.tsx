@@ -6,6 +6,8 @@ import { useRoute, navigate, Link } from '@/lib/router'
 import { useSession, useLocation, syncLocationToServer } from '@/lib/store'
 import { Loading } from '@/components/app/ui-bits'
 import { BackdropFX } from '@/components/app/backdrop-fx'
+import { SiteHeader } from '@/components/home/site-header'
+import { SiteFooter } from '@/components/home/site-footer'
 import { Toaster } from '@/components/ui/sonner'
 import TourOverlay from '@/components/help/tour-overlay'
 import HelpDock from '@/components/help/help-dock'
@@ -112,6 +114,14 @@ export default function AppRoot() {
     if (loading && sessionGated) return <Loading text="Verificando tu sesión…" />
     return pub
   }
+  // Envuelve pantallas públicas con el header+footer del home (para que se sientan parte del sitio)
+  const withPublicShell = (content: React.ReactNode) => (
+    <div className="relative min-h-screen text-navy">
+      <SiteHeader />
+      <main>{content}</main>
+      <SiteFooter />
+    </div>
+  )
   if (s.length === 0) screen = <HomeScreen />
   else if (s[0] === 'buscar') screen = publicOrPanel(<SearchScreen />, <SearchScreen embedded />)
   else if (s[0] === 'ingresar') screen = <LoginScreen />
@@ -120,9 +130,9 @@ export default function AppRoot() {
   else if (s[0] === 'profesional' && s[1]) screen = publicOrPanel(<ProProfileScreen id={s[1]} />, <ProProfileScreen id={s[1]} />)
   else if (s[0] === 'proveedor' && s[1]) screen = publicOrPanel(<ProviderProfileScreen id={s[1]} />, <ProviderProfileScreen id={s[1]} />)
   else if (s[0] === 'notificaciones') screen = publicOrPanel(<NotificationsScreen />, <NotificationsScreen />)
-  else if (s[0] === 'directorio') screen = publicOrPanel(<DirectoryScreen />, <DirectoryScreen embedded />)
+  else if (s[0] === 'directorio') screen = inPanel ? withPanel(<DirectoryScreen embedded />) : withPublicShell(<DirectoryScreen />)
   else if (s[0] === 'mensajes') screen = publicOrPanel(<AuthGate path="/mensajes" />, <MessagesScreen embedded />)
-  else if (s[0] === 'ayuda') screen = publicOrPanel(<HelpScreen />, <HelpScreen embedded />)
+  else if (s[0] === 'ayuda') screen = inPanel ? withPanel(<HelpScreen embedded />) : withPublicShell(<HelpScreen />)
   else if (s[0] === 'panel') {
     if (loading) screen = <Loading text="Verificando tu sesión…" />
     else if (!user) {

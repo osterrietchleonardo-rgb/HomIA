@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import ZAI from "z-ai-web-dev-sdk";
+import ZAI from "@/lib/ai";
 import { HomyReplySchema, type HomyReply } from "@/lib/homy";
 
 export const runtime = "nodejs";

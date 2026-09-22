@@ -29,9 +29,15 @@ const NAV_ITEMS = [
 // Los items con `route` viven en el router SPA (#/...): next/link hace pushState
 // y no dispara hashchange, así que interceptamos el click y navegamos por el router propio.
 function goRoute(e: React.MouseEvent, item: (typeof NAV_ITEMS)[number]) {
-  if (!item.route) return;
-  e.preventDefault();
-  navigate(item.route);
+  if (item.route) {
+    e.preventDefault();
+    navigate(item.route);
+  } else if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+    // Si estamos en una página de la SPA (ej: /ayuda o /directorio) y tocamos
+    // un link ancla del home (#como-funciona), forzamos ir al home.
+    e.preventDefault();
+    window.location.assign('/' + item.href);
+  }
 }
 
 export function SiteHeader() {

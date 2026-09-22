@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   }
   // fotos: máx 4, solo rutas de subida reales de HomIA (igual que las reseñas)
   const photos = Array.isArray(d.photos)
-    ? d.photos.filter((p) => typeof p === 'string' && /^\/uploads\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_/-]+\.(jpg|jpeg|png|webp)$/i.test(p)).slice(0, 4)
+    ? d.photos.filter((p) => typeof p === 'string' && p.length < 500 && /^(https?:\/\/.+|\/uploads\/.+)\.(jpg|jpeg|png|webp)$/i.test(p)).slice(0, 4)
     : []
 
   // vinculación verificada: solo podés declarar tu propio perfil profesional

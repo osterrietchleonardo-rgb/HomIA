@@ -41,8 +41,8 @@ export async function POST(req: NextRequest) {
   const d = await body<{ frontUrl?: string; backUrl?: string; type?: string }>(req)
   if (!d.frontUrl || !d.backUrl) return fail('Subí la foto del frente y del dorso del DNI')
   for (const u of [d.frontUrl, d.backUrl]) {
-    if (!/^\/uploads\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_/-]+\.(jpg|jpeg|png|webp)$/i.test(u)) {
-      return fail('Las imágenes deben venir de la subida de HomIA (/uploads/…)')
+    if (!u || u.length > 500 || !/^(https?:\/\/.+|\/uploads\/.+)\.(jpg|jpeg|png|webp)$/i.test(u)) {
+      return fail('Las imágenes deben venir de la subida a Supabase o /uploads/')
     }
   }
 

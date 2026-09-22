@@ -31,7 +31,7 @@ const API_KEY = process.env.AI_API_KEY ?? ''
 const TEXT_MODEL = process.env.AI_MODEL ?? 'gpt-4o-mini'
 const VISION_MODEL = process.env.AI_VISION_MODEL ?? TEXT_MODEL
 
-type OpenAiShape = { choices?: Array<{ message?: { content?: string } }> }
+type OpenAiShape = { choices: Array<{ message?: { content?: string } }> }
 
 async function callChat(body: Record<string, unknown>): Promise<OpenAiShape> {
   if (!API_KEY) {
@@ -56,7 +56,8 @@ async function callChat(body: Record<string, unknown>): Promise<OpenAiShape> {
     throw new Error(`IA respondió ${res.status}: ${detail.slice(0, 300)}`)
   }
 
-  return (await res.json()) as OpenAiShape
+  const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> }
+  return { choices: data?.choices ?? [] }
 }
 
 type CreateOpts = {

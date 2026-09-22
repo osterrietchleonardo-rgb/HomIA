@@ -254,7 +254,7 @@ function copyAssets({ cli, pro, prv }) {
 // y el dictamen mapea a verificado | en_revision | rechazado.
 async function analyzeDniAi(frontPath, backPath) {
   try {
-    const ZAI = (await import('z-ai-web-dev-sdk')).default
+    const ZAI = (await import('../src/lib/ai.ts')).default
     const zai = await ZAI.create()
     const b64 = (p) => fs.readFileSync(p).toString('base64')
     const res = await zai.chat.completions.createVision({
