@@ -9,14 +9,6 @@ import { Landing } from '@/components/home/landing'
  *
  * La SPA navega por hash: #/panel/profesional, #/directorio, etc.
  */
-export default async function CatchAll({
-  params,
-}: {
-  params: Promise<{ slug?: string[] }>
-}) {
-  const { slug } = await params
-  if (!slug || slug.length === 0) {
-    return <Landing />
-  }
+export default function CatchAll() {
   return <AppRoot />
 }

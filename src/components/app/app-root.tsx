@@ -116,9 +116,9 @@ export default function AppRoot() {
   }
   // Envuelve pantallas públicas con el header+footer del home (para que se sientan parte del sitio)
   const withPublicShell = (content: React.ReactNode) => (
-    <div className="relative min-h-screen text-navy">
+    <div className="relative min-h-screen text-navy flex flex-col">
       <SiteHeader />
-      <main>{content}</main>
+      <main className="flex-1 pt-20">{content}</main>
       <SiteFooter />
     </div>
   )

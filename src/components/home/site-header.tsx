@@ -32,8 +32,8 @@ function goRoute(e: React.MouseEvent, item: (typeof NAV_ITEMS)[number]) {
   if (item.route) {
     e.preventDefault();
     navigate(item.route);
-  } else if (typeof window !== 'undefined' && window.location.pathname !== '/') {
-    // Si estamos en una página de la SPA (ej: /ayuda o /directorio) y tocamos
+  } else if (typeof window !== 'undefined' && window.location.hash.startsWith('#/')) {
+    // Si estamos en una página de la SPA (ej: #/ayuda o #/directorio) y tocamos
     // un link ancla del home (#como-funciona), forzamos ir al home.
     e.preventDefault();
     window.location.assign('/' + item.href);
