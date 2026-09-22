@@ -350,11 +350,11 @@ async function part2({ cli, pro, prv, caro, jul, proP, prvP, projA, projB, mA1, 
     ['Inodoro blanco completo', 185000, 10, 2, 'Ferrum'], ['Bidet blanco', 98000, 8, 2, 'Ferrum'],
     // electricidad
     ['Cable unipolar 2.5mm x100m', 24500, 40, 10, 'Genrod'], ['Térmica bipolar 25A', 5800, 30, 8, 'SICA'],
-    ['Diferencial 2x30mA', 23500, 18, 5, 'Genrod'], ['Toma corriente doble blanco', 1900, 90, 25, 'Genrod'],
+    ['Diferencial 2x30mA', 23500, 18, 5, 'Genrod'], ['Toma corriente doble blanca', 1900, 90, 25, 'Genrod'],
     ['Lámpara LED 9W E27', 850, 150, 30, 'Philips'], ['Tablero embutir 12 módulos', 14500, 0, 3, 'Dexel'],
     // albañilería
     ['Cemento Portland 50kg', 6900, 180, 40, 'Loma Negra'], ['Cal hidratada 25kg', 2900, 60, 15, 'Minetti'],
-    ['Ladrillo hueco 8cm', 580, 2500, 500, 'Corblock'], ['Placa yeso 9.5mm', 8900, 55, 12, 'Volcanita'],
+    ['Ladrillo hueco 8cm', 580, 2500, 500, 'Corblock'], ['Placa yeso 9.5mm 1.20x2.40', 8900, 55, 12, 'Volcanita'],
     // pintura
     ['Látex interior 20L blanco', 29500, 38, 10, 'Alba'], ['Esmalte sintético 4L', 14800, 22, 6, 'Tersuave'],
     ['Rodillo lana 22cm', 2100, 48, 12, 'Akari'],
