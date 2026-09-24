@@ -621,12 +621,13 @@ model Favorite {
 }
 
 model OAuthState {
-  id         String   @id @default(cuid())
-  state      String   @unique
-  sellerId   String // profileId del proveedor o profesional
-  sellerKind String // "provider" | "professional"
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
+  id           String   @id @default(cuid())
+  state        String   @unique
+  sellerId     String // profileId del proveedor o profesional
+  sellerKind   String // "provider" | "professional"
+  codeVerifier String? // PKCE (la app de MP tiene PKCE activado)
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
 }
 
 // ── Sobrantes: devolución de materiales al proveedor con reembolso ──

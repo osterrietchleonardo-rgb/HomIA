@@ -60,6 +60,7 @@ export async function GET(req: NextRequest) {
         grant_type: 'authorization_code',
         code,
         redirect_uri: redirectUri,
+        ...(oauthState.codeVerifier ? { code_verifier: oauthState.codeVerifier } : {}),
       }),
       signal: AbortSignal.timeout(15_000),
     })

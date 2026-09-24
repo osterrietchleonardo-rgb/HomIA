@@ -3,6 +3,7 @@ import { getSessionUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { appUrl } from '@/lib/api'
 import { v4 as uuidv4 } from 'uuid'
+import { createHash, randomBytes } from 'node:crypto'
 
 // Inicia la vinculación OAuth de Mercado Pago del vendedor (proveedor, o
 // profesional como caso secundario). El estado se guarda 10 minutos y se
@@ -39,11 +40,15 @@ export async function GET(req: NextRequest) {
   }
 
   const state = uuidv4()
+  // PKCE (S256): el verificador queda del lado del servidor y viaja solo en el canje del código
+  const codeVerifier = randomBytes(48).toString('base64url')
+  const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url')
   await db.oAuthState.create({
     data: {
       state,
       sellerId,
       sellerKind,
+      codeVerifier,
       expiresAt: new Date(Date.now() + 10 * 60 * 1000),
     },
   })
@@ -54,7 +59,8 @@ export async function GET(req: NextRequest) {
     `?client_id=${encodeURIComponent(clientId)}` +
     '&response_type=code&platform_id=mp' +
     `&state=${encodeURIComponent(state)}` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}`
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&code_challenge=${codeChallenge}&code_challenge_method=S256`
 
   return NextResponse.redirect(mpUrl)
 }
