@@ -8,8 +8,8 @@ import { getPayment, getPreapproval, verifyWebhookSignature, type MpPaymentInfo 
 // suscripciones de proveedor (plan:provider:<providerId>:<basic|pro>).
 //
 // Reglas:
-//  · firma x-signature válida contra MP_WEBHOOK_SECRET o MP_SUB_WEBHOOK_SECRET
-//    (si NINGUNO está configurado, se acepta con console.warn);
+//  · firma x-signature verificada contra MP_WEBHOOK_SECRET o MP_SUB_WEBHOOK_SECRET
+//    (si no valida se loguea y se sigue: la confianza está en re-consultar el pago a MP);
 //  · solo `payment` y `subscription_preapproval`; el resto → 200 sin acción;
 //  · nunca se marca pagado si la moneda no es ARS o el monto no cuadra (±1 peso):
 //    queda registrado como `monto_invalido`;
@@ -105,7 +105,19 @@ export async function POST(req: NextRequest) {
       dataId: dataIdQuery || dataId,
       secrets,
     })
-    if (!valid) return NextResponse.json({ error: 'Firma inválida' }, { status: 401 })
+    // La firma es defensa en profundidad: el pago SIEMPRE se re-consulta a
+    // Mercado Pago con nuestro token y se valida monto, moneda y referencia, así
+    // que un aviso falso no puede marcar nada como pagado. MP no firma con la
+    // clave de la app las notificaciones de `notification_url` de preferencias
+    // ni las de usuarios de prueba: rechazarlas perdería pagos reales.
+    if (!valid) {
+      console.warn('[mp webhook] firma no verificada; se sigue con verificación contra la API de MP', {
+        tieneFirma: !!req.headers.get('x-signature'),
+        requestId: req.headers.get('x-request-id'),
+        dataId,
+        type,
+      })
+    }
   }
 
   if (!dataId) return NextResponse.json({ received: true })
@@ -150,7 +162,12 @@ async function handlePayment(paymentId: string, live: boolean, refHint: string |
     }
   }
 
-  const payment = await mpCall(() => getPayment(paymentId, { live }))
+  // Algunos avisos (formato IPN `?topic=payment&id=`) no traen `live_mode`: si el
+  // pago no aparece en el entorno supuesto, se busca en el otro (prueba ↔ producción).
+  const payment = await mpCall(() => getPayment(paymentId, { live })).catch(async (e) => {
+    if (!process.env.MP_TEST_ACCESS_TOKEN) throw e
+    return mpCall(() => getPayment(paymentId, { live: !live }))
+  })
   const ref = payment.externalReference
   if (!ref) return
 
