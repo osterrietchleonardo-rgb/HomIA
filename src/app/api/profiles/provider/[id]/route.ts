@@ -3,6 +3,7 @@ import { ok, fail, parseJson } from '@/lib/api'
 import { db } from '@/lib/db'
 import { esProActivo } from '@/lib/plans'
 import { getSessionUser } from '@/lib/auth'
+import { esUsuarioPublico } from '@/lib/visibility'
 
 // Perfil de proveedor (requiere sesión): catálogo visible + reseñas
 export async function GET(
@@ -19,11 +20,14 @@ export async function GET(
         select: {
           id: true, displayName: true, avatarUrl: true, city: true, lat: true, lng: true,
           createdAt: true, roles: true, verificationStatus: true,
+          email: true, deletedAt: true,
         },
       },
     },
   })
   if (!prov) return fail('Proveedor no encontrado', 404)
+  // cuenta eliminada o (con HIDE_DEMO_USERS=1) demo: 404 para todos menos el propio usuario
+  if (prov.userId !== viewer.id && !esUsuarioPublico(prov.user)) return fail('Proveedor no encontrado', 404)
 
   const stock = await db.providerStock.findMany({
     where: { providerId: prov.id },

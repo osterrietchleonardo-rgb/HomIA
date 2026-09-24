@@ -100,12 +100,14 @@ code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/auth/login" -H 
 check "login correcto no se ve afectado" 200 "$code"
 
 echo "══ 7. Validación de registro ══"
-code=$(post "$BASE/api/auth/register" -H "X-Forwarded-For: 10.8.8.1" -d '{"email":"sec-audit@test.com","password":"corta1","displayName":"Audit"}')
+code=$(post "$BASE/api/auth/register" -H "X-Forwarded-For: 10.8.8.1" -d '{"email":"sec-audit@test.com","password":"corta1","displayName":"Audit","acceptTerms":true}')
 check "password de 6 chars rechazada" 400 "$code"
-code=$(post "$BASE/api/auth/register" -H "X-Forwarded-For: 10.8.8.1" -d '{"email":"sec-audit@test.com","password":"sololetresssss","displayName":"Audit"}')
+code=$(post "$BASE/api/auth/register" -H "X-Forwarded-For: 10.8.8.1" -d '{"email":"sec-audit@test.com","password":"sololetresssss","displayName":"Audit","acceptTerms":true}')
 check "password sin números rechazada" 400 "$code"
-code=$(post "$BASE/api/auth/register" -H "X-Forwarded-For: 10.8.8.1" -d '{"email":"email-malo","password":"Buena1234","displayName":"Audit"}')
+code=$(post "$BASE/api/auth/register" -H "X-Forwarded-For: 10.8.8.1" -d '{"email":"email-malo","password":"Buena1234","displayName":"Audit","acceptTerms":true}')
 check "email inválido rechazado" 400 "$code"
+code=$(post "$BASE/api/auth/register" -H "X-Forwarded-For: 10.8.8.1" -d '{"email":"sec-audit@test.com","password":"Buena1234","displayName":"Audit"}')
+check "registro sin aceptar términos rechazado (D19)" 400 "$code"
 
 echo "══ 8. XSS almacenado + limpieza ══"
 code=$(req POST /api/works $JAR/c.txt '{"title":"<script>alert(1)</script>","description":"desc x"}')

@@ -55,7 +55,12 @@ Dependencias declaradas pero sin uso verificado en `src/`: `next-auth`, `next-in
   corregido el 24/09/2026).
 - **Rutas sin `#` también funcionan.** `AppRoot` convierte `pathname` → hash al montar
   (`src/components/app/app-root.tsx:78-84`), y `SpaRedirect` en la home hace lo inverso para
-  deep-links `#/...` que caen en `/` (`src/components/home/spa-redirect.tsx`). Por eso las
+  deep-links `#/...` que caen en `/` (`src/components/home/spa-redirect.tsx`): al montar **y en cada
+  `hashchange`** mientras la SPA no está montada (`isSpaMounted()`), porque tipear o pegar
+  `somoshomia.com/#/directorio` estando en la home solo cambia el hash, sin recargar (bug del
+  24/09/2026: la home quedaba en pantalla). `AppRoot` marca la SPA al renderizar y la **desmarca al
+  desmontarse** (`unmarkSpaMounted`): al volver a `/` con el logo (navegación cliente de Next) la marca
+  quedaba en `true` y `navigate()` solo cambiaba el hash. Por eso las
   `back_urls` de Mercado Pago van **sin `#`** (§8).
 - **Registro central de pantallas:** `src/components/app/app-root.tsx:122-163` (rutas públicas y
   gate de sesión) y `panelScreen()` en `app-root.tsx:166-213` (páginas del panel por rol). Pantallas
@@ -123,8 +128,17 @@ vercel.json                  crons
   roles (JSON en `User.roles`), `hasProfessional`, `hasProvider`, ubicación y verificación.
 - Helpers: `requireAuth()` → 401 "Necesitás iniciar sesión para hacer esto"; `requireRole()` →
   403 con `needsRole` (`src/lib/api.ts:45-60`).
-- No hay recuperación de contraseña ni baja de cuenta (no existe endpoint; ver catálogo de
-  endpoints en `LOGICA-HOMIA.md` §13).
+- **Recuperar contraseña (D18, 24/09/2026, migración `0028`):** `POST /api/auth/password/forgot`
+  (sin `RESEND_API_KEY` responde 503 `needsConfig`, sin crear tokens: `emailConfigurado()` de `src/lib/email.ts`)
+  y `GET/POST /api/auth/password/reset` (§4.10). El token (32 bytes de `crypto.randomBytes`,
+  base64url) viaja solo en el link del mail; en `PasswordReset.tokenHash` se guarda su sha256
+  (`src/lib/password-reset.ts`). Política de contraseña compartida en
+  `src/lib/password-policy.ts` (mismos mensajes que el registro, que todavía valida en línea).
+  **Límite conocido:** la sesión es un JWT sin estado; cambiar la contraseña **no** cierra las
+  sesiones abiertas en otros dispositivos (no hay `tokenVersion`; hallazgo anotado, no se cambió).
+- **Baja de cuenta (D19, 24/09/2026):** existe `POST /api/profiles/me/eliminar` (§4.9). Una cuenta
+  con `User.deletedAt` no tiene sesión (`getSessionUser` filtra `deletedAt IS NULL`) y el login la
+  rechaza.
 
 ---
 
@@ -391,6 +405,159 @@ GET privados de N.
   línea de tiempo) salen en paralelo (`Promise.all`, `src/lib/orders.ts`). Medido en dev desde la PC:
   ~4,3 s por pedido de 2 productos; la transacción sigue siendo secuencial (una conexión).
 
+### 4.7 Calendario del profesional y fechas del trabajo (D21, migración `0031`, 24/09/2026)
+
+- **Esquema** (`supabase/migrations/0031_calendario_profesional.sql`, **solo aditiva**, aplicada el
+  24/09/2026 con `prisma db execute`): 8 columnas nullable en `Project` — `startDate`, `endDate`,
+  `scheduleStatus`, `scheduleProposedBy`, `scheduleNote`, `scheduleUpdatedAt`, `prevStartDate`,
+  `prevEndDate` — e índice `Project_professionalId_startDate_idx`. Los proyectos existentes quedan
+  "sin fechas". El diff de Prisma traía además las columnas de `User` de la `0029` (otro equipo), que
+  no se incluyeron; después la `0029` se aplicó aparte y el diff quedó vacío.
+- **Zona horaria:** las fechas son **días**. Viajan como `"AAAA-MM-DD"` y se guardan al **mediodía
+  UTC** (`dayToDate`: `AAAA-MM-DDT12:00:00.000Z` = 09:00 en Argentina). Leer el día = los primeros 10
+  caracteres del ISO (`dateToKey`), sin importar si el código corre en UTC (Vercel) o en UTC−3 (el
+  navegador). "Hoy" siempre en `America/Argentina/Buenos_Aires` (`todayKey`). Probado: 02:00 UTC del
+  25 es todavía el 24 en Argentina; la fecha guardada queda exactamente a las 12:00 UTC (E2E Q).
+- **Código:**
+  - `src/lib/schedule.ts` — funciones puras: días, validación, `scheduleBlockReason` (presupuesto
+    aprobado), `scheduleTransition` (máquina de estados), `busyRangesOf`, `mergeRanges`,
+    `nextFreeDay`, `freeThisWeek`. Tests sin base: `src/lib/__tests__/schedule.test.ts` (9).
+  - `src/lib/schedule-server.ts` — consultas: `scheduleView`, `bidAcceptedFor`,
+    `scheduledProjectsOf` (usa el índice nuevo), `availabilityOf` (rangos anónimos) y
+    `nextFreeForPros` (una sola consulta para N profesionales; la usa Homy).
+  - `src/app/api/projects/[id]/schedule/route.ts` — `POST` con zod (`discriminatedUnion` por
+    `accion`), concurrencia optimista (`updateMany` condicionado a `scheduleStatus` +
+    `scheduleUpdatedAt` leídos → 409 si cambió), aviso con `notificar()` de `src/lib/notify.ts`
+    (tipos `fechas_propuestas` y `fechas_reprogramacion` también por mail), mensaje en el chat si
+    existe y `logActivity`.
+  - `src/app/api/professional/calendar/route.ts` — `GET` del propio profesional (ventana ≤ 190 días).
+  - `src/app/api/profiles/professional/[id]/availability/route.ts` — `GET` **público** (ventana ≤ 186
+    días; `whereUsuarioPublico()` de `src/lib/visibility.ts`).
+  - `GET /api/projects/[id]` suma `schedule` y `scheduleBlocked`.
+  - UI: `src/components/app/schedule-card.tsx` (tarjeta + diálogos, en los dos detalles de proyecto),
+    `src/components/app/month-grid.tsx` (grilla mensual propia, lunes a domingo, sin librerías),
+    `src/components/screens/panel/profesional/calendario.tsx` (ruta `/panel/profesional/calendario`
+    en `app-root.tsx` y menú en `panel-layout.tsx`), `src/components/app/availability-section.tsx`
+    (en `pro-profile.tsx`). Selector de fechas: `<input type="date">` nativo (en el celu abre el
+    selector del sistema). No se agregaron dependencias (`date-fns` y `react-day-picker` ya estaban,
+    no hicieron falta).
+  - Homy: `ProfesionalDato.proximaFechaLibre`/`disponibleEstaSemana` (`src/lib/homy/datos.ts`),
+    expuestos por `buscar_profesionales` (`herramientas.ts`); ruta `/panel/profesional/calendario`
+    permitida en `rutas.ts`; entrada `calendario` en `conocimiento.ts`; guías en `howto-content.ts`.
+- **Costo en la base:** la disponibilidad pública y el calendario son una consulta cada uno (más la
+  sesión); `nextFreeForPros` agrega una consulta a `datos.profesionales()` de Homy.
+- **Pruebas (24/09/2026):** sección **Q** de `scripts/e2e-integral.mjs` ("Calendario y fechas del
+  trabajo") 60/60 contra un dev propio (`E2E_EMAIL_PREFIX=e2e-cal- … --only Q`, con A 126/126);
+  unitarias 9/9 (`schedule.test.ts`, la de "nadie acepta su propia propuesta" se vio fallar con el
+  bug metido a mano); recorrido visual `scratch/visual-calendario.mjs` 26/26 capturas (390×844 y
+  1280×800) sin scroll horizontal, sin textos rotos y botones tocables; purga verificada (0 usuarios
+  `e2e-cal-*`).
+
+### 4.8 Páginas legales y temas de Ayuda (24/09/2026)
+
+- **Contenido:** `src/lib/legal-content.ts` exporta `LEGAL_VERSION` (`AAAA-MM-DD`, la guarda el
+  registro al aceptar) y dos `LegalDoc` (`TERMINOS`, `PRIVACIDAD`) con `resumen` y `secciones`; cada
+  sección tiene bloques: párrafo, `{lista}`, `{tabla: {columnas, filas}}` o `{nota}`. **Cada plazo o
+  monto que cambie en el código se cambia acá y se sube `LEGAL_VERSION`.** Los nombres de cookies y
+  claves de `localStorage` listados (`homy_session`, `homia_cart_v1`, `homy_geo_denied`,
+  `homy_dock_hint`) salen del código: si se agrega otra, se agrega a la tabla.
+- **Pantalla:** `src/components/screens/legal-screen.tsx` (rutas `/terminos` y `/privacidad` en
+  `app-root.tsx`, dentro de `withPublicShell`). Tablas → tarjetas por debajo de `sm`; índice con
+  `scrollIntoView` diferido 60 ms (en el celu el índice se cierra al elegir y corre el contenido);
+  `window.print()` para PDF.
+- **Datos de la empresa:** `NEXT_PUBLIC_LEGAL_RAZON_SOCIAL`, `NEXT_PUBLIC_LEGAL_CUIT`,
+  `NEXT_PUBLIC_LEGAL_DOMICILIO`, `NEXT_PUBLIC_LEGAL_EMAIL` (públicas, se leen en el build: después de
+  cargarlas en Vercel hay que redeployar). Sin nombre y email la página muestra el aviso honesto.
+- **Ayuda por tema:** `/ayuda?tema=pagos|verificacion|resenas` abre la pregunta con ese `tema` en
+  `FAQ` (`help-screen.tsx`) y la lleva a la vista (`#ayuda-<tema>`, diferido 250 ms para no pelear con
+  `resetAppScroll()` de `navigate()`). Los links del footer usan esos temas.
+- **Verificación:** Playwright contra dev en 1280 y 390: hash tipeado en la home → 5 pantallas; logo →
+  home → header (Directorio, Materiales, Ayuda); los 17 links del footer (páginas, anclas de la home y
+  temas de Ayuda abiertos y a la vista); legales sin desborde (`scrollWidth` 390/1280). Capturas en
+  `scratch/e2e-nav/`.
+
+### 4.9 Términos al registrarse, "Eliminar mi cuenta" y datos demo ocultos (D19/D20, migración `0029`, 24/09/2026)
+
+- **Esquema** (`supabase/migrations/0029_legal_baja.sql`, **solo aditiva**, aplicada el 24/09/2026
+  con `prisma db execute`): tres columnas nullable en `User` — `termsAcceptedAt TIMESTAMP(3)`,
+  `termsVersion TEXT`, `deletedAt TIMESTAMP(3)`. Sin índices (las consultas filtran por relación y
+  el volumen es chico). Vuelta atrás: `ALTER TABLE "User" DROP COLUMN …` de las tres (se pierde solo
+  el registro de aceptación y la marca de baja).
+- **Registro:** `auth/register/route.ts` exige `acceptTerms === true` (400 `needsTerms`) y guarda
+  `termsAcceptedAt`/`termsVersion` (`LEGAL_VERSION` de `src/lib/legal-content.ts`). Pantalla:
+  casilla en el paso 3 de `auth-register.tsx`, links `target="_blank"` a `/terminos` y `/privacidad`.
+- **Baja:** `POST /api/profiles/me/eliminar` (ruta propia en vez de `DELETE /api/profiles/me`: la
+  acción es explícita y no se cruza con los cambios de otro equipo en ese archivo). Lógica en
+  `src/lib/account-deletion.ts`: `operacionesAbiertas()` (13 conteos en paralelo), 
+  `borrarDniDelBucket()` (lista recursiva de `dni-docs/<userId>/` con `SUPABASE_SERVICE_ROLE` y
+  `remove`; si falla → 503 y no se toca nada) y `anonimizarCuenta()` (una `$transaction` interactiva
+  con timeout 30 s; después borra, best effort, la foto de perfil y el logo de marca del bucket
+  público si están bajo `<userId>/`). Reglas completas en `LOGICA-HOMIA.md` §1.1. UI:
+  `src/components/app/delete-account-card.tsx` (AlertDialog con fondo sólido, `max-h-[90dvh]`
+  con scroll), insertada al final de `panel/{cliente,profesional,proveedor}/perfil.tsx`.
+- **Sesión de una cuenta eliminada:** `getSessionUser` agrega `AND u."deletedAt" IS NULL` a su única
+  consulta (sin costo extra); el login no verifica la contraseña si `deletedAt` está puesto.
+  `POST /messages/conversations` responde 404 si el destinatario está eliminado. *(Un hilo que ya
+  existía todavía acepta mensajes hacia la cuenta eliminada: no se agregó una consulta más a ese
+  camino caliente.)*
+- **Visibilidad pública:** `src/lib/visibility.ts` — `ocultarDemo()` lee `HIDE_DEMO_USERS` (`'1'`
+  = ocultar), `whereUsuarioPublico()` devuelve el `where` de Prisma sobre `User`
+  (`{ deletedAt: null }` y, con el flag, `NOT email endsWith '@homia.test'` sin distinguir
+  mayúsculas) y `esUsuarioPublico(u)` hace lo mismo sobre una fila ya leída. Se aplica como filtro
+  de relación (`user: …`, `provider: { user: … }`) en directorio, búsqueda, pines, marketplace,
+  comparables, sponsors, bolsa, detalle de trabajo, perfiles públicos y `src/lib/homy/datos.ts`.
+  Las pruebas E2E crean usuarios `@homia.test`: **la suite necesita el server con el flag en 0**.
+- **Imagen para compartir:** `src/app/opengraph-image.tsx` y `src/app/twitter-image.tsx`
+  (`ImageResponse` de `next/og`, 1200×630 PNG) con la tarjeta de `src/lib/og-card.tsx` (navy
+  `#0A2540`, "HomIA" con "IA" en naranja `#FF5A1F`, lema y línea corta; solo estilos en línea y
+  flexbox). Next agrega solo `og:image` y `twitter:image` (con ancho, alto, tipo y alt) a todas las
+  páginas; la URL absoluta sale de `metadataBase` del layout (`https://www.somoshomia.com`). En dev
+  la URL usa el host local.
+- **Páginas de error:** `src/app/error.tsx` (errores de cualquier pantalla, dentro del layout) y
+  `src/app/global-error.tsx` (errores del layout raíz: trae su propio `<html>`/`<body>` e importa
+  `globals.css`); las dos muestran `src/components/app/error-view.tsx` ("Algo salió mal",
+  **Reintentar** = `reset()`, **Ir al inicio** = link a `/`) y hacen `console.error` del error, sin
+  mostrar detalles al usuario.
+- **Verificación (24/09/2026, dev en 3111):** E2E integral con la sección A ampliada (términos y
+  baja, 42 chequeos nuevos) y C (demo visible con el flag en 0); `scratch/visibilidad-demo.mjs`
+  con `HIDE_DEMO_USERS=1` (+ `HOMY_APAGADO=1` para probar Homy sin gastar IA) y con 0; Playwright
+  390×844 y 1280×800 (`scratch/e2e-legal/`): legales, registro con la casilla, diálogo de baja con
+  409 y baja real, página de error forzada con una ruta temporal (borrada).
+
+### 4.10 Recuperar contraseña y avisos por mail (D18, migración `0028`, 24/09/2026)
+
+- **Esquema (aditivo):** `User.emailNotifications Boolean @default(true)` y modelo
+  `PasswordReset { id, userId → User (onDelete Cascade), tokenHash @unique, expiresAt, usedAt?,
+  createdAt, ip? }` con `@@index([userId])`. RLS activado en la tabla. SQL en
+  `supabase/migrations/0028_recuperar_y_mails.sql` (aplicado con `prisma db execute` el 24/09/2026;
+  `migrate diff` posterior vacío para estas sentencias).
+- **Envío de mails — `src/lib/email.ts`:** Resend por su API HTTP (`POST
+  https://api.resend.com/emails`, `Authorization: Bearer RESEND_API_KEY`), con `fetch` y
+  `AbortSignal.timeout(10 s)`; sin dependencias nuevas. `sendEmail()` **nunca tira**: devuelve
+  `{ ok: true, id }` o `{ ok: false, reason: 'no_configurado' | 'destinatario_invalido' | 'error' }`.
+  Sin `RESEND_API_KEY` no intenta y hace un `console.warn` una vez por proceso. Plantilla HTML con
+  tablas y estilos en línea (logo de texto "HomIA", navy `#0A2540`, naranja `#FF5A1F`, botón, link
+  de respaldo) + texto plano; pie "Recibís este mail porque tenés una cuenta en HomIA. Podés dejar
+  de recibir avisos por mail desde tu perfil." (el de recuperar contraseña lleva otro pie).
+  `linkAbsoluto()` convierte `#/panel/...` en `${APP_URL}/#/panel/...`. Los destinatarios de
+  dominios reservados (`.test`, `.invalid`, `.example`, `.localhost`) no se mandan a Resend real.
+  `RESEND_API_URL` (solo fuera de producción) apunta el envío a un doble local para las pruebas.
+- **Avisos — `src/lib/notify.ts`:** `notificar({ data })` / `notificarVarios({ data }, { mailSoloA })`
+  crean la `Notification` igual que `db.notification.create/createMany` y, si el `type` está en
+  `TIPOS_CON_MAIL` y el usuario tiene `emailNotifications`, programan el mail con `after()` de
+  `next/server` (corre después de responder; en Vercel mantiene viva la función hasta terminar).
+  En transacciones (`bids/[id]`, `projects` con trabajo publicado) se crea con `tx` y se llama a
+  `avisarPorMail()` después del commit. Solo se tocaron las creaciones de los tipos de la lista
+  (`LOGICA-HOMIA.md` §14.1); el resto del proyecto sigue con `db.notification.create`.
+- **Pantallas:** `/recuperar` (`auth-recuperar.tsx`) y `/restablecer?token=`
+  (`auth-restablecer.tsx`, valida el link al entrar con `GET /auth/password/reset`), registradas en
+  `app-root.tsx` con el mismo `AuthShell` que Ingresar; link en `auth-login.tsx`. Interruptor
+  `AvisosMailCard` (`src/components/screens/panel/avisos-mail-card.tsx`, carga y guarda solo con
+  `/api/profiles/me`) montado en los tres `perfil.tsx`.
+- **Pruebas:** `src/lib/__tests__/email.test.ts` (10, sin red, `fetch` doble); sección A de
+  `e2e-integral.mjs` (`flowARecuperarYMails`, con `--mail-sink <puerto>` levanta un doble de Resend);
+  visual `scratch/visual-recuperar.mjs` (73/73, capturas en `scratch/e2e-recuperar/`).
+
 ## 5. Migraciones y la base única
 
 - **Una sola base = producción.** El `.env` local, los Preview y Producción de Vercel apuntan al
@@ -417,7 +584,8 @@ GET privados de N.
   pedidos, cargo de servicio, línea de tiempo), `0023` (confirmación de reembolso en efectivo y
   recordatorio), `0024` (sobrantes con el profesional como vendedor y pata profesional →
   proveedor, §4.2), `0025` (compra directa: `Purchase.availableFrom`, §4.3), `0026` (índice `Conversation.userBId` para la bandeja, §4.5), `0027` (contratar desde un trabajo o
-  proyecto: `Project.parentProjectId`, §4.4) y `0030` (súper agente Homy: cupo y registro). La numeración salta de 0023 a 0030
+  proyecto: `Project.parentProjectId`, §4.4), `0028` (recuperar contraseña y avisos por mail:
+  `PasswordReset` y `User.emailNotifications`, §4.10), `0029` (términos aceptados y baja de cuenta en `User`, §4.9), `0030` (súper agente Homy: cupo y registro) y `0031` (fechas del trabajo y calendario del profesional, §4.7). La numeración salta de 0023 a 0030
   porque los dos equipos reservaron rangos distintos.
 - RLS: el commit `2d3b10c` activó RLS en las tablas; script en `scripts/base/enable-rls.mjs`. La app
   accede con el usuario de Prisma (no por la API REST de Supabase), así que RLS protege solo el
@@ -662,7 +830,12 @@ Nombres exactos que lee el código (`grep process.env` en `src/`) y su documenta
 | `HOMY_MODEL` / `HOMY_REASONING_EFFORT` | No (defaults `gpt-5.6-luna` / `low`) | `src/lib/homy/openai.ts:8-9` | Usa los defaults (cargadas en Vercel según el equipo) |
 | `HOMY_TOPE_DIARIO_VISITANTES` | No (default 3000) | `homy/agent/route.ts:44-49` | Tope global diario de consultas con IA de todos los visitantes |
 | `HOMY_APAGADO` | No | `homy/agent/route.ts` | `1` = Homy responde sin IA (kill-switch) |
+| `HIDE_DEMO_USERS` | **Sí al lanzar** (`1` en Vercel Production) | `src/lib/visibility.ts` | Sin la variable o en `0`: las cuentas demo `@homia.test` se ven en lo público (hoy es así). En `1` se ocultan de directorio, búsqueda, mapa, marketplace, comparables, sponsors, perfiles, bolsa y Homy (§4.9). En local va `0` (las pruebas E2E usan `@homia.test`). **No está cargada en Vercel todavía** |
+| `NEXT_PUBLIC_LEGAL_RAZON_SOCIAL` / `NEXT_PUBLIC_LEGAL_CUIT` / `NEXT_PUBLIC_LEGAL_DOMICILIO` / `NEXT_PUBLIC_LEGAL_EMAIL` | Para las páginas legales | `legal-screen.tsx` | Sin nombre y email, `/terminos` y `/privacidad` muestran un contacto genérico (§4.8). Se leen en el build: cargarlas y redeployar |
 | `NEXT_DIST_DIR` | No (solo desarrollo) | `next.config.ts:4-7` | Carpeta de build alternativa para levantar un segundo `next dev` en la misma carpeta sin pisar `.next` |
+| `RESEND_API_KEY` | **Sí para mandar mails** (recuperar contraseña y avisos) | `src/lib/email.ts` | No se manda ningún mail (log `[email] RESEND_API_KEY no está configurada`); "olvidé mi contraseña" responde igual pero el link no llega. **No está cargada todavía** (§4.10, D18) |
+| `EMAIL_FROM` | Recomendada | `src/lib/email.ts` | Default `HomIA <avisos@somoshomia.com>`. El dominio tiene que estar verificado en Resend |
+| `RESEND_API_URL` | No (solo pruebas locales) | `src/lib/email.ts` | Se ignora en producción. Apunta el envío a un doble de Resend (`e2e-integral.mjs --mail-sink`) |
 | `SUPABASE_PROJECT_URL` / `SUPABASE_SERVICE_ROLE` | Para subidas | `uploads/route.ts:44-45`, `dni-ai.ts`, `leftovers.ts:13` | Subidas 503; fotos de terceros rechazadas |
 | `SUPABASE_API_URL` / `NEXT_PUBLIC_SUPABASE_URL` | No | `leftovers.ts:13` (alternativas) | — |
 
@@ -713,9 +886,21 @@ Nombres exactos que lee el código (`grep process.env` en `src/`) y su documenta
 | `scripts/e2e/sec-audit.sh` (130 líneas) | Auditoría de seguridad en vivo: login de las 3 cuentas demo, 401 sin sesión, 403 cruzados entre roles, IDOR sobre factura/PDF/cobro/proyecto/conversación/compra, bloqueo tras 10 logins fallidos, reglas de contraseña, inyección SQL/XSS en búsquedas | `bash scripts/e2e/sec-audit.sh` (usa `http://localhost:3000`, `sec-audit.sh:3`) | Usa las cuentas demo reales |
 
 | `scripts/homy-eval.mjs` + `scripts/homy-eval-casos.json` | Set de evaluación del súper agente: 32 casos contra un server real; mide herramientas usadas, textos que deben/no deben aparecer, links válidos, montos que existen en la base y que no haya caído al respaldo (`homy-eval.mjs:1-8`). Resultado del equipo: 32/32, 0 alucinaciones | `node scripts/homy-eval.mjs [http://localhost:3061] [--solo=id1,id2] [--conc=4]` | Usa las cuentas demo solo para leer, pero **escribe** `HomyRun`, `HomySession`, `HomyMessage`, `AiUsage` y `SearchEvent` en producción; los ids quedan en `scratch/homy-eval/` para limpiarlos |
+| `src/lib/__tests__/email.test.ts` | Mails y tokens (D18): payload a Resend (Bearer, from, to, asunto, HTML con marca y botón, texto plano, pie), escape de HTML, sin clave → `no_configurado` sin red, error 4xx/red sin tirar, dominios `.test` nunca a Resend real, `linkAbsoluto`, token 32 bytes + sha256 + estados, política de contraseña (10 tests, sin red ni base) | `node --test --import ./scripts/homy-test-alias.mjs src/lib/__tests__/email.test.ts` | No escribe nada |
+| `src/lib/__tests__/schedule.test.ts` | Fechas del trabajo (D21): máquina de estados, validación, hoy en hora argentina, día al mediodía UTC, próxima fecha libre y unión de rangos públicos (9 tests, sin base) | `node --test --import ./scripts/homy-test-alias.mjs src/lib/__tests__/schedule.test.ts` | No escribe nada |
 | `src/lib/homy/__tests__/loop.test.ts` | Pruebas unitarias del loop, guardarraíles, ranking y cupo, sin base ni OpenAI (19 según el equipo) | `node --test --import ./scripts/homy-test-alias.mjs src/lib/homy/__tests__/*.test.ts` (el alias resuelve `@/…`) | No escribe nada |
 
 Build: `npm run build` (tipos estrictos). Lint: `npm run lint`.
+
+**D19/D20 (24/09/2026):** la sección A de `e2e-integral.mjs` suma aceptación de términos (400
+`needsTerms`, `termsVersion` = `LEGAL_VERSION` leído de `legal-content.ts`) y `flowBaja` (usuarios
+`<prefijo>bajapro-*` y `bajaprov-*`: 403/400/401/409 con lista, anonimización campo por campo, DNI
+fuera de la base y del bucket, historial conservado con "Usuario eliminado", login rechazado y fuera
+de directorio/búsqueda/pines/marketplace/perfiles). Las cuentas que la suite elimina quedan con email
+`eliminado-<id>@homia.invalid`: sus ids se anotan en `<E2E_OUT>/deleted-users-<prefijo>.json` y la
+purga las incluye. La suite **necesita el server con `HIDE_DEMO_USERS` en 0** (sus usuarios son
+`@homia.test`); la prueba con el flag prendido es `node scratch/visibilidad-demo.mjs <base> on|off`
+(con `on`, levantar el server con `HIDE_DEMO_USERS=1 HOMY_APAGADO=1`).
 
 ---
 
@@ -740,6 +925,7 @@ Build: `npm run build` (tipos estrictos). Lint: `npm run lint`.
 |---|---|---|
 | `prisma generate` con el dev server corriendo (Windows) | EPERM: el motor de Prisma está bloqueado por el proceso de Next | Parar el dev server propio (verificando que el puerto sea de esta carpeta) y regenerar |
 | `next build` con el dev levantado | Pisa `.next` y rompe el dev | No correr build con el dev prendido, o usar otra carpeta con `NEXT_DIST_DIR=.next-otra` (útil cuando dos equipos levantan servers en la misma carpeta) |
+| Carpetas `.next-<puerto>` y Tailwind 4 | Tailwind escanea todo lo que git no ignora: el código compilado de `.next-3101` rompió el CSS ("Unexpected token Delim") y el dev respondió 500 en todas las rutas (24/09/2026) | `/.next-*/` agregado a `.git/info/exclude` (local, no versionado). Si se clona de nuevo, agregarlo a `.gitignore` o al exclude |
 | Cantidades fraccionadas en Mercado Pago | MP exige cantidades enteras por ítem | `toMpItems` manda las líneas fraccionadas (2,5 m) como 1 × total de la línea (`mercadopago.ts:75-86`) |
 | Consultar un pago cobrado por el vendedor con el token de HomIA | MP responde 404: el pago no se acreditaba | La `notification_url` lleva `?ref=<tipo>:<id>` y el webhook consulta con el token del vendedor |
 | Heredocs en Windows (Git Bash/PowerShell) | Mensajes de commit o archivos con `$`, backticks o comillas se rompen | Escribir el texto a un archivo y usar `git commit -F archivo`; en PowerShell here-string `@'…'@` con cierre en columna 0 |
@@ -749,4 +935,6 @@ Build: `npm run build` (tipos estrictos). Lint: `npm run lint`.
 | Avisos de MP sin firma de la app | Si se rechazan, se pierden pagos reales | Se loguean y se procesan re-consultando a MP (§6.1) |
 | Pago o suscripción en el "otro" entorno | Un aviso sin `live_mode` se buscaba solo en producción | Fallback prueba ↔ producción en el webhook |
 | Contar solo requests y no consultas | Con el pooler (`pgbouncer=true`) cada operación de Prisma son ~4 sentencias (`BEGIN`/`DEALLOCATE ALL`/consulta/`COMMIT`) y con `connection_limit=1` los requests simultáneos se encolan | En rutas calientes, una sola consulta (`$queryRaw` o `$transaction([...])`); nunca `include` con `take` anidado para "el último" (Prisma trae todo y corta en memoria) (§4.5) |
+| Links a secciones de la home (`#como-funciona`) desde otra pantalla de la SPA | Cambiar el hash a `#como-funciona` hace que la SPA lo lea como la ruta `como-funciona` → "Esta página no existe" | Header y footer usan `irASeccionHome(id)` (`router.tsx`): scroll si la sección está, si no `navigate('/')` y scroll cuando aparece |
+| Cambiar solo el hash estando en la home estática | `/` no monta la SPA: la URL cambia a `#/directorio` y la home queda en pantalla | `SpaRedirect` escucha `hashchange`; `AppRoot` desmarca `spaMounted` al desmontarse (§2) |
 | Escribir desde local | Local = producción | Todo lo que escribe necesita OK de Leonardo; probar con cuentas demo y borrar lo creado |

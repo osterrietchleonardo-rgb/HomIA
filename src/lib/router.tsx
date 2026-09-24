@@ -31,6 +31,31 @@ function parseHash(): RouteState {
 // del panel recargara la página entera ("Verificando tu sesión…").
 let spaMounted = false
 export function markSpaMounted() { spaMounted = true }
+// Al salir de la SPA hacia la home estática (logo o link a '/', navegación cliente de Next),
+// AppRoot se desmonta: si la marca quedara en true, navigate() solo cambiaría el hash y la
+// home seguiría en pantalla (bug real 24/09/2026: header → Directorio no hacía nada).
+export function unmarkSpaMounted() { spaMounted = false }
+export function isSpaMounted() { return spaMounted }
+
+// Secciones de la home (#como-funciona, #motor-ia, #beneficios, #comunidad) desde el header o el
+// footer. Si la sección está en pantalla, scroll. Si no (estamos en otra pantalla de la SPA), se
+// vuelve a la home de la SPA y se hace scroll cuando aparece. Antes se cambiaba el hash a
+// '#como-funciona' y la SPA lo leía como la ruta 'como-funciona' → "Esta página no existe"
+// (bug del 24/09/2026). Con un panel/menú abierto se espera a que cierre (bloquea el scroll).
+export function irASeccionHome(id: string) {
+  if (typeof window === 'undefined') return
+  const hayMenu = !!document.querySelector('[role="dialog"][data-state="open"]')
+  const scrollA = (el: Element) => window.setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), hayMenu ? 350 : 0)
+  const el = document.getElementById(id)
+  if (el) { scrollA(el); return }
+  if (!spaMounted) { window.location.assign(`/#${id}`); return }
+  navigate('/')
+  let intentos = 0
+  const t = window.setInterval(() => {
+    const e = document.getElementById(id)
+    if (e) { window.clearInterval(t); scrollA(e) } else if (++intentos > 50) window.clearInterval(t)
+  }, 100)
+}
 
 export function navigate(to: string, opts?: { replace?: boolean }) {
   // En la home estática (page.tsx, sin AppRoot) no hay nadie escuchando el hash:

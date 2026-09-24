@@ -8,6 +8,11 @@
 //   node scripts/e2e-integral.mjs --base http://localhost:3031 --no-purge   → deja los datos (para e2e-visual)
 //   node scripts/e2e-integral.mjs --purge-only        → borra TODO lo creado por la suite (barrido por email)
 //   node scripts/e2e-integral.mjs --only A,B,D        → solo esos flujos (A siempre corre: crea los usuarios)
+//   node scripts/e2e-integral.mjs --mail-sink 3199    → levanta un doble de Resend en 3199 y verifica los mails
+//     (el server tiene que correr con RESEND_API_KEY=re_test y RESEND_API_URL=http://127.0.0.1:3199/emails)
+//
+// El server tiene que correr con HIDE_DEMO_USERS distinto de 1 (los usuarios de la suite son
+// @homia.test y con el flag prendido quedan ocultos de lo público — D20).
 //
 // Lee .env (DATABASE_URL, CRON_SECRET, SUPABASE_PROJECT_URL, SUPABASE_SERVICE_ROLE)
 // para asserts de estado en DB, forzar vencimientos y purgar Storage.
@@ -24,7 +29,7 @@ import 'dotenv/config'
 import pkg from '@prisma/client'
 import sharp from 'sharp'
 import { createClient } from '@supabase/supabase-js'
-import { writeFileSync, mkdirSync } from 'node:fs'
+import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 
@@ -52,13 +57,20 @@ const CABA = { lat: -34.6037, lng: -58.3816 }
 const RUN_IP = `10.${(TS >> 16) & 255}.${(TS >> 8) & 255}.${TS & 255}`
 const OUT_DIR = process.env.E2E_OUT || path.join(os.tmpdir(), 'homia-e2e')
 mkdirSync(OUT_DIR, { recursive: true })
+// versión vigente de los textos legales (la que el registro tiene que guardar, D19)
+const LEGAL_VERSION = (readFileSync(path.join(process.cwd(), 'src/lib/legal-content.ts'), 'utf8').match(/LEGAL_VERSION\s*=\s*'([^']+)'/) || [])[1]
+// cuentas E2E que la suite eliminó con "Eliminar mi cuenta" (quedan con email eliminado-<id>@homia.invalid):
+// se anotan acá para que la purga las encuentre aunque ya no tengan el email de prueba
+const DELETED_FILE = path.join(OUT_DIR, `deleted-users-${EMAIL_PREFIX.replace(/[^a-z0-9-]/gi, '')}.json`)
+const readDeleted = () => { try { return existsSync(DELETED_FILE) ? JSON.parse(readFileSync(DELETED_FILE, 'utf8')) : [] } catch { return [] } }
+const noteDeleted = (id) => { if (id) writeFileSync(DELETED_FILE, JSON.stringify([...new Set([...readDeleted(), id])])) }
 
 // ─────────────────────────── reporte de checks ───────────────────────────
 const FLOWS = {
   A: 'Auth y perfil', B: 'Proveedor: stock, catálogo IA, plan', C: 'Búsqueda y directorio', D: 'Trabajos y ofertas',
   E: 'Proyectos, materiales, facturas', F: 'Compra directa', G: 'Sobrantes', H: 'Reseñas', I: 'Mensajería',
   J: 'Notificaciones', K: 'Verificación DNI', L: 'Obras', M: 'CRM y favoritos', N: 'Seguridad transversal', O: 'IA',
-  P: 'Carrito y pedidos multiproveedor',
+  P: 'Carrito y pedidos multiproveedor', Q: 'Calendario y fechas del trabajo',
 }
 const results = Object.fromEntries(Object.keys(FLOWS).map((k) => [k, { pass: 0, fail: 0, external: 0, items: [] }]))
 
@@ -151,7 +163,7 @@ const manifest = { ts: TS, base: BASE, catalogElementIds: [], identityDocIdsInse
 // Rutas SPA válidas (espejo de src/components/app/app-root.tsx → panelScreen)
 const PANEL_PAGES = {
   cliente: ['', 'publicar', 'trabajos', 'materiales', 'pedidos', 'proyectos', 'facturas', 'perfil'],
-  profesional: ['', 'bolsa', 'materiales', 'pedidos', 'proyectos', 'presupuestos', 'crm', 'obras', 'vinculaciones', 'devoluciones', 'cobros', 'perfil'],
+  profesional: ['', 'bolsa', 'materiales', 'pedidos', 'proyectos', 'presupuestos', 'crm', 'obras', 'vinculaciones', 'devoluciones', 'cobros', 'calendario', 'perfil'],
   proveedor: ['', 'stock', 'cobros', 'plan', 'crm', 'vinculaciones', 'perfil'],
 }
 const PANEL_COMMON = ['directorio', 'mensajes', 'verificacion', 'ayuda']
@@ -177,7 +189,8 @@ function linkProblem(link, roles) {
 // ═════════════════════════════ A. AUTH ═════════════════════════════
 async function flowA() {
   const F = 'A'
-  const base = { password: PASSWORD, lat: CABA.lat, lng: CABA.lng, city: 'CABA', howFoundUs: 'otro' }
+  // acceptTerms: sin aceptar Términos y Privacidad no se crea la cuenta (D19)
+  const base = { password: PASSWORD, lat: CABA.lat, lng: CABA.lng, city: 'CABA', howFoundUs: 'otro', acceptTerms: true }
   const payloads = {
     cliente: { ...base, email: C.email, displayName: `${MARK} Cliente Q`, roles: ['cliente'] },
     profesional: { ...base, email: P.email, displayName: `${MARK} Pro Q`, roles: ['profesional'], professions: ['pintura'], experienceYears: 5, bio: `${MARK} pintor de prueba` },
@@ -202,6 +215,17 @@ async function flowA() {
   st(F, 'registro con email inválido', await post(bad, '/api/auth/register', { ...payloads.cliente, email: 'no-es-email' }), 400)
   st(F, 'registro proveedor sin nombre de negocio', await post(bad, '/api/auth/register', { ...payloads.proveedor, email: `${EMAIL_PREFIX}bad3-${TS}${EMAIL_DOMAIN}`, businessName: '' }), 400)
   check(F, 'los registros inválidos no crean usuarios', (await db.user.count({ where: { email: { in: [1, 2, 3].map((n) => `${EMAIL_PREFIX}bad${n}-${TS}${EMAIL_DOMAIN}`) } } })) === 0)
+
+  // D19: aceptación de Términos y Política de Privacidad
+  const { acceptTerms: _t, ...sinTerminos } = payloads.cliente
+  void _t
+  const nt = await post(bad, '/api/auth/register', { ...sinTerminos, email: `${EMAIL_PREFIX}bad4-${TS}${EMAIL_DOMAIN}` })
+  st(F, 'registro sin aceptar los términos', nt, 400)
+  check(F, 'registro sin términos avisa needsTerms', nt.data?.needsTerms === true, brief(nt))
+  st(F, 'registro con acceptTerms no booleano', await post(bad, '/api/auth/register', { ...payloads.cliente, email: `${EMAIL_PREFIX}bad5-${TS}${EMAIL_DOMAIN}`, acceptTerms: 'true' }), 400)
+  check(F, 'sin aceptar los términos no se crea la cuenta', (await db.user.count({ where: { email: { in: [4, 5].map((n) => `${EMAIL_PREFIX}bad${n}-${TS}${EMAIL_DOMAIN}`) } } })) === 0)
+  const terms = await db.user.findUnique({ where: { id: C.id }, select: { termsAcceptedAt: true, termsVersion: true } })
+  check(F, 'registro guarda termsAcceptedAt y termsVersion = LEGAL_VERSION', !!terms?.termsAcceptedAt && terms?.termsVersion === LEGAL_VERSION && Date.now() - new Date(terms.termsAcceptedAt).getTime() < 10 * 60_000, `${JSON.stringify(terms)} esperado ${LEGAL_VERSION}`)
 
   // DB: perfiles por rol, trial del proveedor, pipelines CRM
   const [uC, uP, uV] = await Promise.all([
@@ -259,6 +283,297 @@ async function flowA() {
   check(F, 'tipo de negocio canonizado', prov.kind === 'corralon', `kind=${prov.kind}`)
   const meV = await get(V, '/api/profiles/me')
   check(F, 'GET perfil no expone tokens OAuth', meV.status === 200 && !JSON.stringify(meV.data).includes('mpOauthAccessToken'), brief(meV))
+
+  await flowARecuperarYMails()
+}
+
+// ── A2. Recuperar contraseña y avisos por mail (D18, migración 0028) ──
+// Con `--mail-sink <puerto>` la suite levanta un doble de Resend en ese puerto (el server tiene
+// que correr con RESEND_API_KEY=<cualquiera> y RESEND_API_URL=http://127.0.0.1:<puerto>/emails)
+// y verifica el contenido de los mails. Sin el doble, verifica todo lo demás (tokens, límites,
+// reset, preferencia) y que nada se rompa sin mail configurado.
+const MAIL_SINK_PORT = argVal('--mail-sink')
+const sink = { mails: [], fail: false, server: null }
+async function startMailSink() {
+  if (!MAIL_SINK_PORT || sink.server) return
+  const { createServer } = await import('node:http')
+  sink.server = createServer((req, res) => {
+    let raw = ''
+    req.on('data', (c) => { raw += c })
+    req.on('end', () => {
+      if (sink.fail) { res.writeHead(500, { 'content-type': 'application/json' }); res.end('{"message":"falla simulada"}'); return }
+      let body = null
+      try { body = JSON.parse(raw) } catch { /* vacío */ }
+      sink.mails.push({ at: Date.now(), auth: req.headers.authorization || '', body })
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ id: `sink_${sink.mails.length}` }))
+    })
+  })
+  await new Promise((ok) => sink.server.listen(Number(MAIL_SINK_PORT), '127.0.0.1', ok))
+}
+const mailsTo = (email) => sink.mails.filter((m) => m.body?.to?.includes(email))
+async function waitMail(email, desde, { ms = 8000, subject } = {}) {
+  const t0 = Date.now()
+  while (Date.now() - t0 < ms) {
+    const m = mailsTo(email).find((x) => x.at >= desde && (!subject || x.body?.subject === subject))
+    if (m) return m
+    await new Promise((r) => setTimeout(r, 200))
+  }
+  return null
+}
+
+async function flowARecuperarYMails() {
+  const F = 'A'
+  const { createHash, randomBytes } = await import('node:crypto')
+  const sha = (t) => createHash('sha256').update(t, 'utf8').digest('hex')
+  const MSG = 'Si ese email tiene una cuenta, te mandamos un link para crear una nueva contraseña'
+  await startMailSink()
+  const anonR = new Actor('anonr', null)
+  anonR.ip = `10.251.${(TS >> 8) & 255}.${TS & 255}`
+
+  // ── pedir el link: misma respuesta exista o no la cuenta ──
+  const t0 = Date.now()
+  st(F, 'olvidé mi contraseña con email inválido', await post(anonR, '/api/auth/password/forgot', { email: 'no-es-email' }), 400)
+  // Sin servicio de mail (ni RESEND_API_KEY en el entorno ni doble de Resend) el pedido responde 503
+  // honesto, igual para todos los emails, y no crea tokens. El resto del flujo (restablecer) se
+  // prueba igual insertando el hash del token.
+  const mailOn = !!MAIL_SINK_PORT || !!(process.env.RESEND_API_KEY || '').trim()
+  if (!mailOn) {
+    const n1 = await post(anonR, '/api/auth/password/forgot', { email: C.email })
+    const n2 = await post(anonR, '/api/auth/password/forgot', { email: `${EMAIL_PREFIX}no-existe-${TS}${EMAIL_DOMAIN}` })
+    check(F, 'sin mail configurado: olvidé mi contraseña → 503 needsConfig, el mismo para cuenta existente y sin cuenta',
+      n1.status === 503 && n1.data?.needsConfig === true && n2.status === 503 && n1.data?.error === n2.data?.error, `${brief(n1)} ${brief(n2)}`)
+    check(F, 'sin mail configurado: no se crean tokens de recuperación', (await db.passwordReset.count({ where: { userId: C.id } })) === 0)
+  }
+  if (mailOn) {
+  const f1 = await post(anonR, '/api/auth/password/forgot', { email: C.email.toUpperCase() })
+  check(F, 'olvidé mi contraseña (cuenta existente) → 200 con el mensaje neutro', f1.status === 200 && f1.data?.message === MSG, brief(f1))
+  const f2 = await post(anonR, '/api/auth/password/forgot', { email: `${EMAIL_PREFIX}no-existe-${TS}${EMAIL_DOMAIN}` })
+  check(F, 'olvidé mi contraseña (email sin cuenta) → 200 con el MISMO mensaje', f2.status === 200 && f2.data?.message === MSG, brief(f2))
+  const rows1 = await db.passwordReset.findMany({ where: { userId: C.id } })
+  check(F, 'se creó 1 pedido de recuperación con el HASH del token (sha256), no el token', rows1.length === 1 && /^[0-9a-f]{64}$/.test(rows1[0].tokenHash) && !rows1[0].usedAt, JSON.stringify(rows1))
+  const ttl = rows1[0] ? (new Date(rows1[0].expiresAt).getTime() - Date.now()) / 60000 : 0
+  check(F, 'el link vence en 1 hora', ttl > 58 && ttl <= 60.1, `min=${ttl}`)
+  if (MAIL_SINK_PORT) {
+    const m = await waitMail(C.email, t0)
+    check(F, 'mail de recuperación enviado al usuario', !!m, `mails=${sink.mails.length}`)
+    const link = (m?.body?.html || '').match(/href="([^"]*#\/restablecer\?token=([A-Za-z0-9_-]+))"/)
+    check(F, 'el mail trae el link /#/restablecer?token=… y su hash es el guardado', !!link && sha(link[2]) === rows1[0]?.tokenHash, link?.[1] || '')
+    check(F, 'mail de recuperación: asunto, texto plano, vence en 1 hora, sin pie de "dejar de recibir avisos"',
+      m?.body?.subject === 'Creá una nueva contraseña para HomIA' && /restablecer\?token=/.test(m?.body?.text || '') && /vence en 1 hora/.test(m?.body?.text || '') && !/dejar de recibir avisos/.test(m?.body?.html || ''), JSON.stringify(m?.body?.subject))
+    check(F, 'el mail sale con Authorization Bearer', /^Bearer .+/.test(m?.auth || ''))
+    check(F, 'al email sin cuenta no se le manda nada', mailsTo(`${EMAIL_PREFIX}no-existe-${TS}${EMAIL_DOMAIN}`).length === 0)
+  }
+
+  // ── tope: 3 pedidos por cuenta por hora; el 4.º responde igual pero no crea nada ──
+  for (let i = 0; i < 3; i++) await post(anonR, '/api/auth/password/forgot', { email: C.email })
+  const f5 = await post(anonR, '/api/auth/password/forgot', { email: C.email })
+  const nRows = await db.passwordReset.count({ where: { userId: C.id } })
+  check(F, 'más de 3 pedidos por hora: sigue respondiendo 200 igual y no crea más tokens', f5.status === 200 && f5.data?.message === MSG && nRows === 3, `n=${nRows} ${brief(f5)}`)
+  }
+
+  // ── restablecer con un token conocido (se inserta su hash, como haría el pedido) ──
+  const mk = async (expiresInMs) => {
+    const token = randomBytes(32).toString('base64url')
+    await db.passwordReset.create({ data: { userId: C.id, tokenHash: sha(token), expiresAt: new Date(Date.now() + expiresInMs) } })
+    return token
+  }
+  const tok = await mk(3600_000)
+  const g1 = await get(anonR, `/api/auth/password/reset?token=${tok}`)
+  check(F, 'link válido: GET reset → 200', g1.status === 200, brief(g1))
+  const weak = await post(anonR, '/api/auth/password/reset', { token: tok, password: 'solo-letras' })
+  check(F, 'contraseña débil (sin números) → 400 y el token sigue sirviendo', weak.status === 400 && /letras y números/.test(weak.data?.error || '') && !(await db.passwordReset.findUnique({ where: { tokenHash: sha(tok) } }))?.usedAt, brief(weak))
+  st(F, 'contraseña corta', await post(anonR, '/api/auth/password/reset', { token: tok, password: 'ab12' }), 400)
+  const NEW_PW = 'Nueva2026e2e'
+  const rs = await post(anonR, '/api/auth/password/reset', { token: tok, password: NEW_PW })
+  check(F, 'restablecer con token válido → 200 y NO inicia sesión', rs.status === 200 && !anonR.cookie && !(rs.headers.get('set-cookie') || '').includes('homy_session'), brief(rs))
+  const lNew = new Actor('lnew', 'cliente')
+  st(F, 'ingresa con la contraseña NUEVA', await post(lNew, '/api/auth/login', { email: C.email, password: NEW_PW }), 200)
+  st(F, 'NO ingresa con la contraseña vieja', await post(new Actor('lold', 'cliente'), '/api/auth/login', { email: C.email, password: PASSWORD }), 401)
+  const pend = await db.passwordReset.count({ where: { userId: C.id, usedAt: null } })
+  check(F, 'al usar un link se invalidan los otros pendientes de la cuenta', pend === 0, `pendientes=${pend}`)
+  const reuse = await post(anonR, '/api/auth/password/reset', { token: tok, password: 'OtraMas2026' })
+  check(F, 'link ya usado → 400 "ya se usó"', reuse.status === 400 && reuse.data?.code === 'usado' && /ya se usó/.test(reuse.data?.error || ''), brief(reuse))
+  const tokOld = await mk(-60_000)
+  const exp = await post(anonR, '/api/auth/password/reset', { token: tokOld, password: 'OtraMas2026' })
+  check(F, 'link vencido → 400 "El link venció: pedí uno nuevo"', exp.status === 400 && exp.data?.code === 'vencido' && /venció/.test(exp.data?.error || ''), brief(exp))
+  const gExp = await get(anonR, `/api/auth/password/reset?token=${tokOld}`)
+  check(F, 'link vencido: GET reset → 400 vencido', gExp.status === 400 && gExp.data?.code === 'vencido', brief(gExp))
+  const inv = await post(anonR, '/api/auth/password/reset', { token: randomBytes(32).toString('base64url'), password: 'OtraMas2026' })
+  check(F, 'link inexistente → 400 inválido', inv.status === 400 && inv.data?.code === 'invalido', brief(inv))
+  st(F, 'restablecer sin token', await post(anonR, '/api/auth/password/reset', { password: 'OtraMas2026' }), 400)
+  // se vuelve a la contraseña de la suite (el resto de los flujos ingresa con ella)
+  const tokBack = await mk(3600_000)
+  st(F, 'restablecer de nuevo (vuelve a la contraseña de la suite)', await post(anonR, '/api/auth/password/reset', { token: tokBack, password: PASSWORD }), 200)
+  st(F, 'ingresa otra vez con la contraseña de la suite', await post(new Actor('lback', 'cliente'), '/api/auth/login', { email: C.email, password: PASSWORD }), 200)
+
+  // ── preferencia de avisos por mail ──
+  st(F, 'PUT emailNotifications con tipo inválido', await put(V, '/api/profiles/me', { emailNotifications: 'no' }), 400)
+  check(F, 'por defecto los avisos por mail están prendidos', (await db.user.findUnique({ where: { id: V.id } })).emailNotifications === true)
+  st(F, 'apagar avisos por mail', await put(V, '/api/profiles/me', { emailNotifications: false }), 200)
+  const meOff = await get(V, '/api/profiles/me')
+  check(F, 'GET perfil devuelve emailNotifications=false', meOff.data?.user?.emailNotifications === false, brief(meOff))
+  st(F, 'prender avisos por mail', await put(V, '/api/profiles/me', { emailNotifications: true }), 200)
+
+  // ── mail de evento: nueva compra → el proveedor recibe el mail (salvo que lo haya apagado) ──
+  const el = await db.catalogElement.findFirst({ where: { name: 'Cemento Portland 50kg' } }) || await db.catalogElement.findFirst({ where: { name: { notIn: ['Caño PVC desagüe 110mm', 'Membrana líquida 20kg', 'Látex interior 20L blanco', 'Caño PVC 63mm'] } }, orderBy: { name: 'asc' } })
+  const sm = await post(V, '/api/provider/stock', { elementId: el.id, price: 1000, quantity: 50, brand: `${MARK} mails` })
+  st(F, 'stock para la prueba de mails', sm, 201)
+  const stockM = sm.data?.stock?.id
+  const compras = []
+  const comprar = async (label) => {
+    const desde = Date.now()
+    const r = await post(C, '/api/purchases', { stockId: stockM, quantity: 1, type: 'compra', note: `${MARK} ${label}` })
+    if (r.data?.purchase?.id) compras.push(r.data.purchase.id)
+    return { r, desde }
+  }
+  const c1 = await comprar('mail on')
+  st(F, 'compra (avisos prendidos)', c1.r, 201)
+  check(F, 'el proveedor tiene la notificación nueva_compra', (await db.notification.count({ where: { userId: V.id, type: 'nueva_compra' } })) === 1)
+  if (MAIL_SINK_PORT) {
+    const m = await waitMail(V.email, c1.desde, { subject: 'Nueva compra: stock reservado' })
+    check(F, 'el proveedor recibe el mail "Nueva compra"', !!m, `mails a V=${mailsTo(V.email).length}`)
+    const html = m?.body?.html || ''
+    check(F, 'mail de compra: botón al panel con URL absoluta, texto plano y pie para apagar avisos',
+      /href="https?:\/\/[^"]+\/#\/panel\/proveedor\/cobros\?tab=ventas"/.test(html) && /Ver la venta: https?:\/\//.test(m?.body?.text || '') && /Podés dejar de recibir avisos por mail desde tu perfil/.test(html), html.slice(0, 200))
+    check(F, 'al cliente que compró no le llega mail por su propia compra', mailsTo(C.email).filter((x) => x.at >= c1.desde).length === 0)
+  }
+  await put(V, '/api/profiles/me', { emailNotifications: false })
+  const c2 = await comprar('mail off')
+  st(F, 'compra (avisos apagados)', c2.r, 201)
+  check(F, 'con avisos apagados la notificación en la app igual se crea', (await db.notification.count({ where: { userId: V.id, type: 'nueva_compra' } })) === 2)
+  if (MAIL_SINK_PORT) {
+    await new Promise((r) => setTimeout(r, 3000))
+    check(F, 'con emailNotifications=false el proveedor NO recibe mail', mailsTo(V.email).filter((x) => x.at >= c2.desde).length === 0, `mails=${mailsTo(V.email).length}`)
+  }
+  await put(V, '/api/profiles/me', { emailNotifications: true })
+  if (MAIL_SINK_PORT) sink.fail = true
+  const c3 = await comprar('mail falla')
+  st(F, 'compra con el envío de mail fallando → igual 201', c3.r, 201)
+  check(F, 'con el mail fallando la compra y su notificación quedan bien', (await db.notification.count({ where: { userId: V.id, type: 'nueva_compra' } })) === 3 && !!(await db.purchase.findUnique({ where: { id: c3.r.data?.purchase?.id || 'x' } })))
+  if (MAIL_SINK_PORT) { await new Promise((r) => setTimeout(r, 1500)); sink.fail = false }
+  // limpieza de la prueba (lo que quede lo borra la purga)
+  for (const id of compras) await patch(C, `/api/purchases/${id}`, { action: 'cancelar' })
+  await del(V, `/api/provider/stock?id=${stockM}`)
+  await db.notification.deleteMany({ where: { userId: V.id, type: 'nueva_compra' } })
+}
+
+// ═══════════════ A (cont.). ELIMINAR MI CUENTA (D19, Ley 25.326) ═══════════════
+// Usuarios propios (se eliminan en la prueba): un profesional con historial y un proveedor con stock.
+const XP = new Actor('bajapro', 'profesional')
+const XV = new Actor('bajaprov', 'proveedor')
+async function flowBaja() {
+  const F = 'A'
+  try {
+    await flowBajaInner(F)
+  } catch (e) {
+    check(F, 'eliminar cuenta: el flujo terminó sin excepciones', false, e instanceof Error ? `${e.message} ${e.stack?.split('\n')[1] || ''}` : String(e))
+  }
+}
+async function flowBajaInner(F) {
+  const BAJA_IP = `10.253.${(TS >> 8) & 255}.${TS & 255}`
+  XP.ip = BAJA_IP
+  XV.ip = BAJA_IP
+  const base = { password: PASSWORD, lat: CABA.lat, lng: CABA.lng, city: 'CABA', howFoundUs: 'otro', acceptTerms: true, phone: '1133334444', address: 'Calle Falsa 123', birthday: '1990-01-01' }
+  const rp = await post(XP, '/api/auth/register', { ...base, email: XP.email, displayName: `${MARK} Pro Baja`, roles: ['profesional'], professions: ['pintura'], bio: `${MARK} pintor que se va` })
+  st(F, 'baja: registro del profesional', rp, 201)
+  XP.id = rp.data?.user?.id
+  const rv = await post(XV, '/api/auth/register', { ...base, email: XV.email, displayName: `${MARK} Prov Baja`, roles: ['proveedor'], businessName: `${MARK} Corralón Baja` })
+  st(F, 'baja: registro del proveedor', rv, 201)
+  XV.id = rv.data?.user?.id
+  if (!XP.id || !XV.id) throw new Error('No se pudieron crear los usuarios de la baja')
+  XP.proId = (await db.professionalProfile.findUnique({ where: { userId: XP.id } }))?.id
+  XV.provId = (await db.providerProfile.findUnique({ where: { userId: XV.id } }))?.id
+
+  // stock del proveedor y visibilidad ANTES de la baja
+  const el = await db.catalogElement.findFirst({ where: { active: true, name: { contains: 'Caño' } }, orderBy: { name: 'asc' } })
+  const sk = await post(XV, '/api/provider/stock', { elementId: el.id, price: 4321, quantity: 7, minStock: 1, brand: `${MARK} baja` })
+  st(F, 'baja: el proveedor publica stock', sk, 201)
+  const stockId = sk.data?.stock?.id
+  const offerIn = (r) => (r.data?.results || []).some((e) => (e.offers || []).some((o) => o.stockId === stockId))
+  const inDir = async (id) => JSON.stringify((await get(C, '/api/directory')).data).includes(id)
+  check(F, 'baja: antes, el profesional está en el directorio', await inDir(XP.proId))
+  check(F, 'baja: antes, el proveedor está en el directorio', await inDir(XV.provId))
+  check(F, 'baja: antes, su oferta está en el marketplace', offerIn(await get(C, `/api/marketplace?q=${encodeURIComponent(el.name)}`)))
+  check(F, 'baja: antes, el profesional sale en la búsqueda', JSON.stringify((await get(C, `/api/search?mode=cliente&q=pintura&lat=${CABA.lat}&lng=${CABA.lng}&radius=25`)).data).includes(XP.proId))
+
+  // datos personales que se tienen que borrar: DNI (bucket privado), carrito, favorito, notificación
+  const f1 = await upload(XP, 'dni', 41)
+  const f2 = await upload(XP, 'dni', 42)
+  st(F, 'baja: sube frente del DNI', f1, 201)
+  st(F, 'baja: sube dorso del DNI', f2, 201)
+  await db.identityDocument.create({ data: { userId: XP.id, frontUrl: f1.data?.url, backUrl: f2.data?.url, status: 'en_revision', aiNotes: `${MARK} baja` } })
+  st(F, 'baja: carrito del profesional', await post(XP, '/api/cart', { stockId, quantity: 1 }), 201, '')
+  await db.favorite.create({ data: { userId: XP.id, targetUserId: P.id } })
+  await db.notification.create({ data: { userId: XP.id, type: 'e2e', title: `${MARK} aviso baja` } })
+
+  // historial con otros: un proyecto donde el profesional que se va es CLIENTE de P
+  const proj = await db.project.create({ data: { clientId: XP.id, professionalId: P.proId, title: `${MARK} Obra de la baja`, status: 'activo', laborCost: 1000 } })
+
+  // validaciones
+  st(F, 'baja sin sesión', await post(ANON, '/api/profiles/me/eliminar', { confirm: 'ELIMINAR', password: PASSWORD }), 401)
+  st(F, 'baja sin escribir ELIMINAR', await post(XP, '/api/profiles/me/eliminar', { confirm: 'eliminar', password: PASSWORD }), 400)
+  st(F, 'baja con contraseña incorrecta', await post(XP, '/api/profiles/me/eliminar', { confirm: 'ELIMINAR', password: 'Incorrecta123' }), 403)
+  const r409 = await post(XP, '/api/profiles/me/eliminar', { confirm: 'ELIMINAR', password: PASSWORD })
+  st(F, 'baja con un proyecto activo', r409, 409)
+  check(F, 'el 409 lista lo que hay que cerrar (proyecto activo como cliente)', (r409.data?.pendientes || []).some((p) => p.tipo === 'proyectos_cliente' && p.cantidad === 1 && p.ruta), brief(r409))
+  check(F, 'con el 409 no se tocó nada', (await db.user.findUnique({ where: { id: XP.id } }))?.deletedAt === null && (await db.identityDocument.count({ where: { userId: XP.id } })) === 1)
+
+  // se cierra el proyecto (finalizado, con factura pagada y reseña del que se va)
+  await db.project.update({ where: { id: proj.id }, data: { status: 'finalizado', stage: 'finalizado' } })
+  const inv = await db.invoice.create({ data: { projectId: proj.id, number: `E2E-BAJA-${TS}`, clientId: XP.id, professionalId: P.proId, laborCost: 1000, total: 1000, status: 'pagada', paymentMethod: 'efectivo', paidAt: new Date() } })
+  const rev = await db.review.create({ data: { authorId: XP.id, targetUserId: P.id, projectId: proj.id, rating: 5, comment: `${MARK} reseña de alguien que se va` } })
+
+  const ok1 = await post(XP, '/api/profiles/me/eliminar', { confirm: 'ELIMINAR', password: PASSWORD })
+  st(F, 'baja del profesional', ok1, 200)
+  noteDeleted(XP.id)
+  check(F, 'la baja borra la cookie de sesión', !XP.cookie)
+  const u = await db.user.findUnique({ where: { id: XP.id }, include: { professional: true } })
+  check(F, 'anonimizado: email eliminado-<id>@homia.invalid', u?.email === `eliminado-${XP.id}@homia.invalid`, u?.email)
+  check(F, 'anonimizado: nombre "Usuario eliminado"', u?.displayName === 'Usuario eliminado', u?.displayName)
+  check(F, 'anonimizado: teléfono, dirección, foto, ubicación y cumpleaños en null', [u?.phone, u?.address, u?.avatarUrl, u?.lat, u?.lng, u?.birthday, u?.city].every((v) => v === null), JSON.stringify({ phone: u?.phone, address: u?.address, lat: u?.lat, birthday: u?.birthday }))
+  check(F, 'anonimizado: deletedAt puesto y contraseña reemplazada', !!u?.deletedAt && !!u?.passwordHash?.startsWith('$2'))
+  check(F, 'anonimizado: roles conservados', JSON.parse(u?.roles || '[]').includes('profesional'))
+  check(F, 'anonimizado: perfil profesional sin datos personales', u?.professional && u.professional.bio === null && u.professional.lat === null)
+  check(F, 'baja: DNI borrado de la base', (await db.identityDocument.count({ where: { userId: XP.id } })) === 0)
+  const url = process.env.SUPABASE_PROJECT_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE
+  if (url && key) {
+    const sb = createClient(url, key, { auth: { persistSession: false } })
+    const { data: left } = await sb.storage.from('dni-docs').list(`${XP.id}/dni`, { limit: 100 })
+    check(F, 'baja: fotos del DNI borradas del bucket privado', (left || []).length === 0, `quedan ${(left || []).length}`)
+  }
+  check(F, 'baja: carrito, favoritos y notificaciones borrados', (await db.cartItem.count({ where: { userId: XP.id } })) === 0 && (await db.favorite.count({ where: { userId: XP.id } })) === 0 && (await db.notification.count({ where: { userId: XP.id } })) === 0)
+  check(F, 'baja: se conservan proyecto, factura y reseña de otros', !!(await db.project.findUnique({ where: { id: proj.id } })) && !!(await db.invoice.findUnique({ where: { id: inv.id } })) && !!(await db.review.findUnique({ where: { id: rev.id } })))
+  const ppP = await get(C, `/api/profiles/professional/${P.proId}`)
+  check(F, 'la reseña del que se fue muestra "Usuario eliminado"', (ppP.data?.reviews || []).some((r) => r.id === rev.id && r.author?.displayName === 'Usuario eliminado'), brief(ppP))
+  const meX = await get(XP, '/api/auth/me')
+  check(F, 'después de la baja /me → null', meX.data?.user === null, brief(meX))
+  st(F, 'login con el email viejo falla', await post(ANON, '/api/auth/login', { email: XP.email, password: PASSWORD }), 401)
+  check(F, 'baja: el profesional ya no está en el directorio', !(await inDir(XP.proId)))
+  check(F, 'baja: el profesional ya no sale en la búsqueda', !JSON.stringify((await get(C, `/api/search?mode=cliente&q=pintura&lat=${CABA.lat}&lng=${CABA.lng}&radius=25`)).data).includes(XP.proId))
+  check(F, 'baja: el profesional ya no está en los pines', !JSON.stringify((await get(C, `/api/search/pins?mode=cliente&lat=${CABA.lat}&lng=${CABA.lng}&radius=25`)).data).includes(XP.proId))
+  st(F, 'baja: su perfil público da 404', await get(C, `/api/profiles/professional/${XP.proId}`), 404)
+  // ya verificado que se conservan: se sacan para no alterar los totales de P en los flujos siguientes (Cobros, reseñas)
+  await db.review.deleteMany({ where: { id: rev.id } })
+  await db.invoice.deleteMany({ where: { id: inv.id } })
+  await db.project.deleteMany({ where: { id: proj.id } })
+
+  // proveedor sin operaciones: se va y se lleva su stock publicado. Antes, C le abre un chat
+  // (el cliente inicia) para probar que después de la baja ese hilo ya no acepta mensajes.
+  const chatXV = await post(C, '/api/messages/conversations', { targetUserId: XV.id })
+  const convXV = chatXV.data?.conversation?.id
+  const ok2 = await post(XV, '/api/profiles/me/eliminar', { confirm: 'ELIMINAR', password: PASSWORD })
+  st(F, 'baja del proveedor', ok2, 200)
+  noteDeleted(XV.id)
+  check(F, 'baja: el stock publicado del proveedor se quitó', (await db.providerStock.count({ where: { providerId: XV.provId } })) === 0)
+  check(F, 'baja: el proveedor quedó como "Proveedor eliminado"', (await db.providerProfile.findUnique({ where: { id: XV.provId } }))?.businessName === 'Proveedor eliminado')
+  check(F, 'baja: la oferta ya no está en el marketplace', !offerIn(await get(C, `/api/marketplace?q=${encodeURIComponent(el.name)}`)))
+  check(F, 'baja: el proveedor ya no está en el directorio', !(await inDir(XV.provId)))
+  st(F, 'baja: el perfil del proveedor da 404', await get(C, `/api/profiles/provider/${XV.provId}`), 404)
+  st(F, 'baja: no se puede escribirle a una cuenta eliminada', await post(C, '/api/messages/conversations', { targetUserId: XV.id }), 404)
+  const msgX = convXV ? await post(C, `/api/messages/conversations/${convXV}`, { body: `${MARK} hola` }) : { status: 0 }
+  check(F, 'baja: un chat que ya existía no acepta mensajes nuevos a la cuenta eliminada (409)', msgX.status === 409 && msgX.data?.cuentaEliminada === true, `conv=${convXV} ${brief(msgX)}`)
 }
 
 // ═════════════════════════════ B. PROVEEDOR ═════════════════════════════
@@ -398,6 +713,16 @@ async function flowC() {
   check(F, 'perfil del proveedor lista su stock', (pv.data?.stock || []).some((s) => s.id === S.stock1), brief(pv))
   const jobs = await get(ANON, '/api/jobs')
   st(F, 'bolsa de trabajos pública', jobs, 200)
+
+  // D20: esta suite necesita el server con HIDE_DEMO_USERS distinto de 1 (sus usuarios son @homia.test).
+  // Con el flag apagado, las cuentas demo se ven como siempre. La prueba con el flag prendido
+  // está aparte: scratch/visibilidad-demo.mjs (levanta el server con HIDE_DEMO_USERS=1).
+  const demoPro = await db.professionalProfile.findFirst({ where: { user: { email: 'profesional@homia.test' } }, select: { id: true } })
+  if (demoPro) {
+    const dd = await get(C, '/api/directory?kind=profesional')
+    check(F, 'con HIDE_DEMO_USERS apagado, el profesional demo está en el directorio', JSON.stringify(dd.data).includes(demoPro.id), 'si falla: el server corre con HIDE_DEMO_USERS=1')
+    st(F, 'con HIDE_DEMO_USERS apagado, el perfil demo se ve', await get(C, `/api/profiles/professional/${demoPro.id}`), 200)
+  }
 }
 
 // ═════════════════════════════ I. MENSAJERÍA ═════════════════════════════
@@ -405,7 +730,13 @@ async function flowI() {
   const F = 'I'
   const r1 = await post(P2, '/api/messages/conversations', { targetUserId: C.id })
   check(F, 'profesional NO puede iniciar chat con un cliente', r1.status === 403 && r1.data?.clientesFirst === true, brief(r1))
-  const r2 = await post(V, '/api/messages/conversations', { targetUserId: C.id })
+  // Cliente propio de esta sección: con C, V ya puede tener un hilo abierto por una compra de C
+  // (sección A, mails), y entonces el POST devuelve ese hilo en vez de 403, que es lo correcto.
+  const CI = new Actor('clientei', 'cliente')
+  CI.ip = `10.253.${(TS >> 8) & 255}.${TS & 255}`
+  st(F, 'registro de un cliente sin chats previos', await post(CI, '/api/auth/register', { email: CI.email, password: PASSWORD, displayName: `${MARK} Cliente I`, roles: ['cliente'], howFoundUs: 'otro', acceptTerms: true }), 201)
+  CI.id = (await db.user.findUnique({ where: { email: CI.email } }))?.id
+  const r2 = await post(V, '/api/messages/conversations', { targetUserId: CI.id })
   check(F, 'proveedor NO puede iniciar chat con un cliente', r2.status === 403 && r2.data?.clientesFirst === true, brief(r2))
   st(F, 'iniciar chat sin sesión', await post(ANON, '/api/messages/conversations', { targetUserId: P.id }), 401)
   st(F, 'iniciar chat consigo mismo', await post(C, '/api/messages/conversations', { targetUserId: C.id }), 400)
@@ -1504,8 +1835,11 @@ async function flowJ() {
   for (const a of actors) {
     const r = await get(a, '/api/notifications')
     st(F, `notificaciones de ${a.key}`, r, 200)
-    const list = r.data?.notifications || []
-    const types = new Set(list.map((n) => n.type))
+    // La API devuelve las últimas 50: en la corrida completa (A-P) el cliente junta más y las
+    // primeras (proyecto_creado, message) quedan fuera de esa página. Los tipos generados se
+    // cuentan en la base; la API se prueba aparte (200, lista, marcar leídas).
+    const todas = await db.notification.findMany({ where: { userId: a.id }, select: { type: true } })
+    const types = new Set(todas.map((n) => n.type))
     const missing = expected[a.id].filter((t) => !types.has(t))
     check(F, `${a.key}: se generaron las notificaciones de cada evento clave`, missing.length === 0, `faltan: ${missing.join(', ')}`)
     const roles = JSON.parse((await db.user.findUnique({ where: { id: a.id } })).roles)
@@ -1783,7 +2117,7 @@ async function mpPreference(prefId, token) {
 
 async function flowP() {
   const F = 'P'
-  const base = { password: PASSWORD, lat: CABA.lat, lng: CABA.lng, city: 'CABA', howFoundUs: 'otro' }
+  const base = { password: PASSWORD, lat: CABA.lat, lng: CABA.lng, city: 'CABA', howFoundUs: 'otro', acceptTerms: true }
   for (const [a, name] of [[VA, 'Ferretería A'], [VB, 'Corralón B']]) {
     const r = await post(a, '/api/auth/register', { ...base, email: a.email, displayName: `${MARK} Prov ${name}`, roles: ['proveedor'], businessName: `${MARK} ${name}`, address: 'Av. Siempreviva 742' })
     st(F, `registro proveedor ${name}`, r, 201)
@@ -2023,6 +2357,127 @@ async function flowP() {
   await db.providerProfile.update({ where: { id: VA.provId }, data: { mpOauthAccessToken: null, mpOauthStatus: 'disconnected', mpOauthExpiresAt: null } })
 }
 
+// ═════════════════════════════ Q. CALENDARIO Y FECHAS (D21) ═════════════════════════════
+async function flowQ() {
+  const F = 'Q'
+  const hoyAR = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+  const dia = (n) => { const d = new Date(`${hoyAR}T12:00:00.000Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
+  const sched = (id) => `/api/projects/${id}/schedule`
+  const wz = (t) => ({ professionalProfileId: P.proId, title: `${MARK} Cal ${t}`, description: `${MARK} Pintar ${t}`, address: 'Calle Privada 742', urgency: 'normal', firstMessage: `${MARK} hola, te contrato para ${t}` })
+  const hasR = (d, a, b, e) => (d.data?.ranges || []).some((r) => r.start === a && r.end === b && r.estado === e)
+
+  // proyecto A (asistente Contratar): sin cotizar → no se agenda
+  const pa = await post(C, '/api/projects', wz('living'))
+  st(F, 'contratar proyecto A', pa, 201)
+  const A = pa.data?.project?.id
+  S.calA = A
+  st(F, 'proponer sin sesión', await post(ANON, sched(A), { accion: 'proponer', startDate: dia(3), endDate: dia(5) }), 401)
+  st(F, 'proponer sin cotizar (presupuesto sin aprobar)', await post(P, sched(A), { accion: 'proponer', startDate: dia(3), endDate: dia(5) }), 409)
+  st(F, 'cotizar mano de obra', await patch(P, `/api/projects/${A}`, { laborCost: 50000 }), 200)
+  st(F, 'proponer cotizado pero todavía en presupuesto', await post(P, sched(A), { accion: 'proponer', startDate: dia(3), endDate: dia(5) }), 409)
+  st(F, 'avanzar a materiales', await patch(P, `/api/projects/${A}`, { stage: 'materiales' }), 200)
+  const dA0 = await get(C, `/api/projects/${A}`)
+  check(F, 'detalle: se puede agendar y sin fechas', dA0.data?.project?.scheduleBlocked === null && dA0.data?.project?.schedule?.status === null, brief(dA0))
+
+  // validaciones y permisos
+  st(F, 'tercero (otro profesional) no toca las fechas', await post(P2, sched(A), { accion: 'proponer', startDate: dia(3), endDate: dia(5) }), 403)
+  st(F, 'proyecto inexistente', await post(P, sched('no-existe'), { accion: 'aceptar' }), 404)
+  st(F, 'fin anterior al inicio', await post(P, sched(A), { accion: 'proponer', startDate: dia(6), endDate: dia(4) }), 400)
+  st(F, 'inicio en el pasado', await post(P, sched(A), { accion: 'proponer', startDate: dia(-2), endDate: dia(4) }), 400)
+  st(F, 'fecha con formato inválido', await post(P, sched(A), { accion: 'proponer', startDate: '15/10/2026', endDate: dia(4) }), 400)
+  st(F, 'fecha que no existe (30/02)', await post(P, sched(A), { accion: 'proponer', startDate: '2027-02-30', endDate: '2027-03-02' }), 400)
+  st(F, 'acción inválida', await post(P, sched(A), { accion: 'borrar' }), 400)
+  st(F, 'el cliente no propone primero', await post(C, sched(A), { accion: 'proponer', startDate: dia(3), endDate: dia(5) }), 409)
+  st(F, 'aceptar sin propuesta', await post(C, sched(A), { accion: 'aceptar' }), 409)
+
+  // profesional propone → cliente contrapropone → profesional acepta
+  const p1 = await post(P, sched(A), { accion: 'proponer', startDate: dia(3), endDate: dia(7), nota: `${MARK} arranco a las 8` })
+  st(F, 'profesional propone', p1, 200)
+  check(F, 'queda propuesta por el profesional', p1.data?.schedule?.status === 'propuesta' && p1.data?.schedule?.proposedBy === 'profesional' && p1.data?.schedule?.startDate === dia(3), brief(p1))
+  check(F, 'cliente notificado de la propuesta', !!(await db.notification.findFirst({ where: { userId: C.id, type: 'fechas_propuestas', link: `#/panel/cliente/proyectos/${A}` } })))
+  check(F, 'mensaje en el chat del proyecto', !!(await db.message.findFirst({ where: { senderId: P.id, body: { contains: 'Fechas del trabajo: Propuse hacer el trabajo' } } })))
+  check(F, 'línea de tiempo del proyecto', !!(await db.activityEvent.findFirst({ where: { projectId: A, type: 'fechas_propuestas' } })))
+  const dbA = await db.project.findUnique({ where: { id: A } })
+  check(F, 'fecha guardada al mediodía UTC (sin corrimiento de zona)', dbA.startDate?.toISOString() === `${dia(3)}T12:00:00.000Z`, dbA.startDate?.toISOString())
+  st(F, 'el profesional no acepta su propia propuesta', await post(P, sched(A), { accion: 'aceptar' }), 409)
+  const c1 = await post(C, sched(A), { accion: 'proponer', startDate: dia(5), endDate: dia(9) })
+  check(F, 'cliente propone otras (contrapropuesta)', c1.status === 200 && c1.data?.evento === 'contrapropuesta' && c1.data?.schedule?.proposedBy === 'cliente', brief(c1))
+  check(F, 'profesional notificado de la contrapropuesta', !!(await db.notification.findFirst({ where: { userId: P.id, type: 'fechas_propuestas', link: `#/panel/profesional/proyectos/${A}` } })))
+  st(F, 'el cliente no acepta su propia propuesta', await post(C, sched(A), { accion: 'aceptar' }), 409)
+  const a1 = await post(P, sched(A), { accion: 'aceptar' })
+  check(F, 'profesional acepta → acordada', a1.status === 200 && a1.data?.schedule?.status === 'acordada' && a1.data?.schedule?.startDate === dia(5) && a1.data?.schedule?.endDate === dia(9), brief(a1))
+  check(F, 'cliente notificado: fechas acordadas', !!(await db.notification.findFirst({ where: { userId: C.id, type: 'fechas_acordadas' } })))
+  st(F, 'aceptar de nuevo (ya acordadas)', await post(C, sched(A), { accion: 'aceptar' }), 409)
+
+  // reprogramación: la fecha acordada sigue vigente mientras se revisa; rechazarla la restaura
+  const r1 = await post(C, sched(A), { accion: 'proponer', startDate: dia(12), endDate: dia(14) })
+  check(F, 'cliente pide reprogramar', r1.status === 200 && r1.data?.evento === 'reprogramacion' && r1.data?.schedule?.prevStartDate === dia(5), brief(r1))
+  check(F, 'profesional notificado de la reprogramación', !!(await db.notification.findFirst({ where: { userId: P.id, type: 'fechas_reprogramacion' } })))
+  const av1 = await get(ANON, `/api/profiles/professional/${P.proId}/availability`)
+  check(F, 'disponibilidad: lo acordado sigue ocupado y el cambio figura por confirmar', hasR(av1, dia(5), dia(9), 'ocupado') && hasR(av1, dia(12), dia(14), 'por_confirmar'), brief(av1))
+  const rr = await post(P, sched(A), { accion: 'rechazar', motivo: `${MARK} esa semana no puedo` })
+  check(F, 'rechazar la reprogramación restaura lo acordado', rr.status === 200 && rr.data?.evento === 'reprogramacion_rechazada' && rr.data?.schedule?.status === 'acordada' && rr.data?.schedule?.startDate === dia(5) && rr.data?.schedule?.prevStartDate === null, brief(rr))
+  const r2 = await post(P, sched(A), { accion: 'proponer', startDate: dia(6), endDate: dia(10) })
+  check(F, 'el profesional también reprograma', r2.status === 200 && r2.data?.evento === 'reprogramacion', brief(r2))
+  const r2a = await post(C, sched(A), { accion: 'aceptar' })
+  check(F, 'cliente acepta la reprogramación', r2a.status === 200 && r2a.data?.schedule?.status === 'acordada' && r2a.data?.schedule?.startDate === dia(6), brief(r2a))
+
+  // proyecto B: rechazo sin fechas previas, solapamiento y carrera de aceptaciones
+  const pb = await post(C, '/api/projects', wz('cocina'))
+  const B = pb.data?.project?.id
+  S.calB = B
+  await patch(P, `/api/projects/${B}`, { laborCost: 30000 })
+  st(F, 'proyecto B en materiales', await patch(P, `/api/projects/${B}`, { stage: 'materiales' }), 200)
+  const pB1 = await post(P, sched(B), { accion: 'proponer', startDate: dia(8), endDate: dia(9) })
+  check(F, 'solapamiento: el profesional ve con qué trabajo se pisa (sin bloquear)', pB1.status === 200 && pB1.data?.solapamiento?.cantidad === 1 && pB1.data?.solapamiento?.proyectos?.[0]?.id === A, brief(pB1))
+  const rjB = await post(C, sched(B), { accion: 'rechazar', motivo: `${MARK} prefiero otro mes` })
+  check(F, 'rechazo sin fechas previas → sin fechas, con quién y motivo', rjB.status === 200 && rjB.data?.schedule?.status === null && rjB.data?.schedule?.startDate === null && rjB.data?.schedule?.proposedBy === 'cliente' && rjB.data?.schedule?.note === `${MARK} prefiero otro mes`, brief(rjB))
+  check(F, 'profesional notificado del rechazo', !!(await db.notification.findFirst({ where: { userId: P.id, type: 'fechas_rechazadas' } })))
+  st(F, 'después del rechazo el profesional propone otra', await post(P, sched(B), { accion: 'proponer', startDate: dia(20), endDate: dia(21) }), 200)
+  const cB = await post(C, sched(B), { accion: 'proponer', startDate: dia(7), endDate: dia(7) })
+  check(F, 'solapamiento al cliente: solo la cantidad (sin títulos de otros proyectos)', cB.status === 200 && cB.data?.solapamiento?.cantidad === 1 && cB.data?.solapamiento?.proyectos === undefined && !JSON.stringify(cB.data).includes('living'), brief(cB))
+  const [x1, x2] = await Promise.all([post(P, sched(B), { accion: 'aceptar' }), post(P, sched(B), { accion: 'aceptar' })])
+  check(F, 'dos aceptaciones simultáneas: una sola pasa', [x1.status, x2.status].sort().join(',') === '200,409', `${x1.status} ${x2.status}`)
+
+  // proyecto C (oferta aceptada en la bolsa): se agenda aunque siga en presupuesto
+  const jb = await post(C, '/api/jobs', { title: `${MARK} Cal bolsa`, description: `${MARK} Pintar un balcón`, categorySlug: 'pintura', urgency: 'normal', budgetMin: 10000, budgetMax: 30000, address: 'Calle Privada 742', lat: CABA.lat, lng: CABA.lng })
+  const bid = await post(P, `/api/jobs/${jb.data?.job?.id}/bids`, { amount: 20000, timelineDays: 2 })
+  const acc = await patch(C, `/api/bids/${bid.data?.bid?.id}`, { action: 'aceptar' })
+  const Cp = acc.data?.project?.id
+  S.calC = Cp
+  check(F, 'proyecto por oferta aceptada', !!Cp && (await db.project.findUnique({ where: { id: Cp } }))?.stage === 'presupuesto', brief(acc))
+  st(F, 'oferta aceptada: se agenda en presupuesto', await post(P, sched(Cp), { accion: 'proponer', startDate: dia(30), endDate: dia(31) }), 200)
+  st(F, 'cancelar el proyecto C', await patch(C, `/api/projects/${Cp}`, { status: 'cancelado', cancelReason: `${MARK} ya no hace falta` }), 200)
+  st(F, 'proyecto cancelado: no se tocan las fechas', await post(C, sched(Cp), { accion: 'aceptar' }), 409)
+
+  // calendario del profesional
+  st(F, 'calendario sin sesión', await get(ANON, '/api/professional/calendar'), 401)
+  st(F, 'calendario de alguien sin perfil profesional', await get(C, '/api/professional/calendar'), 403)
+  st(F, 'calendario con ventana demasiado larga', await get(P, `/api/professional/calendar?from=${dia(0)}&to=${dia(400)}`), 400)
+  const cal = await get(P, `/api/professional/calendar?from=${dia(0)}&to=${dia(40)}`)
+  st(F, 'calendario del profesional', cal, 200)
+  const ids = (cal.data?.projects || []).map((p) => p.id)
+  check(F, 'calendario: A y B con fechas; el cancelado no aparece', ids.includes(A) && ids.includes(B) && !ids.includes(Cp), JSON.stringify(ids))
+  check(F, 'calendario: A acordado con su rango', (cal.data?.projects || []).find((p) => p.id === A)?.ranges?.[0]?.estado === 'ocupado', brief(cal))
+  const hoyMes = await get(P, '/api/professional/calendar')
+  check(F, 'calendario sin parámetros: mes en curso', hoyMes.status === 200 && hoyMes.data?.from === `${hoyAR.slice(0, 7)}-01`, brief(hoyMes))
+
+  // disponibilidad pública: sin sesión, sin datos privados
+  const av = await get(ANON, `/api/profiles/professional/${P.proId}/availability`)
+  st(F, 'disponibilidad pública sin sesión', av, 200)
+  const avTxt = JSON.stringify(av.data)
+  const soloClaves = avTxt.replace(/"(ranges|start|end|estado|from|to|today|proximaFechaLibre|disponibleEstaSemana)"/g, '')
+  check(F, 'disponibilidad: sin título, cliente, dirección, nota ni ids', !avTxt.includes(MARK) && !avTxt.includes('Calle Privada') && !avTxt.includes(C.id) && !avTxt.includes(A) && !avTxt.includes(B) && !/title|client|address|note|nota/i.test(soloClaves), avTxt.slice(0, 300))
+  check(F, 'disponibilidad: rango acordado de A ocupado y próxima fecha libre', hasR(av, dia(6), dia(10), 'ocupado') && typeof av.data?.proximaFechaLibre === 'string' && typeof av.data?.disponibleEstaSemana === 'boolean', avTxt.slice(0, 300))
+  st(F, 'disponibilidad de profesional inexistente', await get(ANON, '/api/profiles/professional/no-existe/availability'), 404)
+  st(F, 'disponibilidad con ventana de más de 6 meses', await get(ANON, `/api/profiles/professional/${P.proId}/availability?from=${dia(0)}&to=${dia(200)}`), 400)
+  st(F, 'disponibilidad con fecha inválida', await get(ANON, `/api/profiles/professional/${P.proId}/availability?from=mañana`), 400)
+
+  // detalle del proyecto para cada parte
+  const dA = await get(C, `/api/projects/${A}`)
+  check(F, 'detalle (cliente) trae las fechas acordadas', dA.data?.project?.schedule?.status === 'acordada' && dA.data?.project?.schedule?.startDate === dia(6), brief(dA))
+}
+
 // ═══════════════ B (final). PRUEBA VENCIDA DEL PROVEEDOR ═══════════════
 // Se corre al final: deja al proveedor E2E sin plan y verifica que no opere ni aparezca.
 async function flowTrialVencido() {
@@ -2056,7 +2511,17 @@ async function flowTrialVencido() {
 // ═════════════════════════════ PURGA ═════════════════════════════
 async function purge({ quiet = false } = {}) {
   const log = (...m) => { if (!quiet) console.log(...m) }
-  const users = await db.user.findMany({ where: { email: { startsWith: EMAIL_PREFIX, endsWith: EMAIL_DOMAIN } }, select: { id: true, email: true } })
+  // + las cuentas E2E eliminadas en esta u otra corrida (solo ids anotados y con email eliminado-…@homia.invalid)
+  const deletedNoted = readDeleted()
+  const users = await db.user.findMany({
+    where: {
+      OR: [
+        { email: { startsWith: EMAIL_PREFIX, endsWith: EMAIL_DOMAIN } },
+        { id: { in: deletedNoted }, email: { startsWith: 'eliminado-', endsWith: '@homia.invalid' } },
+      ],
+    },
+    select: { id: true, email: true },
+  })
   const uids = users.map((u) => u.id)
   const extraEls = await db.catalogElement.findMany({ where: { OR: [{ id: { in: manifest.catalogElementIds } }, { name: { startsWith: 'E2E-Q ' } }] }, select: { id: true } })
   if (!uids.length && !extraEls.length) { log('Purga: no hay datos E2E.'); return { users: 0 } }
@@ -2123,6 +2588,7 @@ async function purge({ quiet = false } = {}) {
   await n('aiUsage', db.aiUsage.deleteMany({ where: { key: { in: [...uids.map((u) => `user:${u}`), ...ipHashes.map((h) => `ip:${h}`)] } } }))
   await n('homySessions', db.homySession.deleteMany({ where: { id: { in: homySessIds } } }))
   await n('identityDocuments', db.identityDocument.deleteMany({ where: { userId: { in: uids } } }))
+  await n('passwordResets', db.passwordReset.deleteMany({ where: { userId: { in: uids } } }))
   await n('stock', db.providerStock.deleteMany({ where: { providerId: { in: provIds } } }))
   await n('pipelines', db.crmPipeline.deleteMany({ where: { ownerId: { in: uids } } }))
   await n('professionalProfiles', db.professionalProfile.deleteMany({ where: { id: { in: proIds } } }))
@@ -2188,13 +2654,16 @@ async function purge({ quiet = false } = {}) {
     reviews: await db.review.count({ where: { OR: [{ authorId: { in: uids } }, { targetUserId: { in: uids } }] } }),
     returns: await db.leftoverReturn.count({ where: { OR: [{ requesterId: { in: uids } }, { providerId: { in: provIds } }, { professionalId: { in: proIds } }, { projectId: { in: projIds } }] } }),
     searchEvents: await db.searchEvent.count({ where: { userId: { in: uids } } }),
+    passwordResets: await db.passwordReset.count({ where: { userId: { in: uids } } }),
     homySessions: await db.homySession.count({ where: { OR: [{ userId: { in: uids } }, { visitorHash: { in: visitorHashes } }] } }),
     homyRuns: await db.homyRun.count({ where: { OR: [{ userId: { in: uids } }, { ipHash: { in: ipHashes } }] } }),
     e2eProfessionalsVisible: await db.professionalProfile.count({ where: { user: { displayName: { startsWith: MARK } } } }),
     catalogE2E: await db.catalogElement.count({ where: { name: { startsWith: 'E2E-Q ' } } }),
     storage: storageLeft.length,
   }
+  leftovers.deletedAccounts = deletedNoted.length ? await db.user.count({ where: { id: { in: deletedNoted } } }) : 0
   const clean = Object.values(leftovers).every((v) => v === 0)
+  if (clean && deletedNoted.length) writeFileSync(DELETED_FILE, '[]')
   log(clean ? 'Purga verificada: no queda ningún dato E2E.' : `Purga INCOMPLETA: ${JSON.stringify(leftovers)} ${storageLeft.join(' | ')}`)
   return { ...out, clean, leftovers }
 }
@@ -2214,7 +2683,7 @@ async function main() {
   }
   // ya hay restos de otra corrida: se limpian antes (idempotente)
   await purge({ quiet: true })
-  const order = [['A', flowA], ['B', flowB], ['C', flowC], ['I', flowI], ['D', flowD], ['E', flowE], ['F', flowF], ['G', flowG], ['P', flowP], ['H', flowH], ['J', flowJ], ['K', flowK], ['L', flowL], ['M', flowM], ['N', flowN], ['O', flowO], ['B', flowTrialVencido]]
+  const order = [['A', flowA], ['A', flowBaja], ['B', flowB], ['C', flowC], ['I', flowI], ['D', flowD], ['E', flowE], ['F', flowF], ['G', flowG], ['P', flowP], ['H', flowH], ['J', flowJ], ['K', flowK], ['L', flowL], ['M', flowM], ['N', flowN], ['O', flowO], ['Q', flowQ], ['B', flowTrialVencido]]
   const t0 = Date.now()
   let purgeResult = null
   try {

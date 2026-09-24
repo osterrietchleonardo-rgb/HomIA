@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { ok, fail } from '@/lib/api'
 import { db } from '@/lib/db'
+import { notificar } from '@/lib/notify'
 
 async function loadParty(userId: string, projectId: string) {
   const project = await db.project.findUnique({
@@ -152,7 +153,7 @@ export async function POST(
     return fail('No pudimos numerar la factura: probá de nuevo en unos segundos', 503)
   }
 
-  await db.notification.create({
+  await notificar({
     data: {
       userId: project.clientId,
       type: 'factura_emitida',

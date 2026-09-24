@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { ok, fail, body, parseJson } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
+import { esUsuarioPublico } from '@/lib/visibility'
 
 /** Redondea a 2 decimales (~1 km): ubicación aproximada para anónimos. */
 function coarse(v: number | null | undefined): number | null {
@@ -21,11 +22,17 @@ export async function GET(
   const job = await db.jobPost.findUnique({
     where: { id },
     include: {
-      user: { select: { id: true, displayName: true, avatarUrl: true, city: true, createdAt: true } },
-      bids: { select: { id: true, amount: true } },
+      user: { select: { id: true, displayName: true, avatarUrl: true, city: true, createdAt: true, email: true, deletedAt: true } },
+      bids: { select: { id: true, amount: true, professional: { select: { userId: true } } } },
     },
   })
   if (!job) return fail('Trabajo no encontrado', 404)
+  // trabajo de una cuenta eliminada o (con HIDE_DEMO_USERS=1) demo: solo lo ven su dueño y
+  // quienes ya ofertaron en él (src/lib/visibility.ts)
+  if (!esUsuarioPublico(job.user)) {
+    const involucrado = !!viewer && (viewer.id === job.userId || job.bids.some((b) => b.professional.userId === viewer.id))
+    if (!involucrado) return fail('Trabajo no encontrado', 404)
+  }
   const bids = await db.jobBid.count({ where: { jobId: id } })
   const isPublic = !viewer
   return ok({

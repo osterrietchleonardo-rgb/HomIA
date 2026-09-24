@@ -14,7 +14,7 @@ import {
 import { Homy, HomIAWordmark } from "@/components/homy/homy-character";
 import { cn } from "@/lib/utils";
 import { useSession } from "@/lib/store";
-import { navigate } from "@/lib/router";
+import { navigate, irASeccionHome } from "@/lib/router";
 import { LayoutDashboard } from "lucide-react";
 import CartButton from "@/components/cart/cart-button";
 
@@ -37,11 +37,10 @@ function goRoute(e: React.MouseEvent, item: (typeof NAV_ITEMS)[number]) {
   if (item.route) {
     e.preventDefault();
     navigate(item.route);
-  } else if (typeof window !== 'undefined' && window.location.hash.startsWith('#/')) {
-    // Si estamos en una página de la SPA (ej: #/ayuda o #/directorio) y tocamos
-    // un link ancla del home (#como-funciona), forzamos ir al home.
+  } else if (item.href.startsWith('#')) {
+    // Sección de la home (#como-funciona…): scroll si está en pantalla; si no, vuelve a la home.
     e.preventDefault();
-    window.location.assign('/' + item.href);
+    irASeccionHome(item.href.slice(1));
   }
 }
 

@@ -4,6 +4,7 @@ import { ok, requireAuth, fail, parseBody } from '@/lib/api'
 import { db } from '@/lib/db'
 import { isHomiaUploadUrl } from '@/lib/leftovers'
 import { assertJobOpen, closeJobWithHire, HireError } from '@/lib/job-hire'
+import { notificar, avisarPorMail, type AvisoData } from '@/lib/notify'
 
 const userSelect = { id: true, displayName: true, avatarUrl: true, verificationStatus: true } as const
 const listInclude = {
@@ -290,6 +291,8 @@ export async function POST(req: NextRequest) {
   if (job) {
     const theJob = job
     const bidOfPro = proBid
+    // el mail al profesional sale recién después del commit (nunca por algo que se revirtió)
+    let avisoPro: AvisoData | null = null
     const result = await db.$transaction(async (tx) => {
       // re-chequeo dentro de la transacción: dos contrataciones simultáneas no crean dos proyectos
       await assertJobOpen(tx, theJob.id)
@@ -303,8 +306,7 @@ export async function POST(req: NextRequest) {
         rejectedTitle: 'El cliente contrató a otro profesional para este trabajo',
         rejectedBody: `"${theJob.title}" ya tiene profesional. Tu oferta quedó rechazada: seguí buscando en la bolsa.`,
       })
-      await tx.notification.create({
-        data: bidOfPro
+      avisoPro = bidOfPro
           ? {
               userId: proUserId,
               type: 'presupuesto_aceptado',
@@ -318,8 +320,8 @@ export async function POST(req: NextRequest) {
               title: 'Te contrataron: cotizá la mano de obra para arrancar',
               body: `${auth.user.displayName} te contrató para su trabajo publicado "${theJob.title}"`,
               link: hiredLink(created.id),
-            },
-      })
+            }
+      await tx.notification.create({ data: avisoPro })
       return created
     }).catch((e: unknown) => {
       if (e instanceof HireError) return e.code
@@ -327,13 +329,14 @@ export async function POST(req: NextRequest) {
     })
     if (result === 'JOB_NOT_OPEN') return fail('Ese trabajo ya no está abierto: elegí otro o escribilo de nuevo', 409)
     if (result === 'BID_NOT_PENDING') return fail('La oferta de ese profesional cambió recién: probá de nuevo', 409)
+    if (avisoPro) avisarPorMail([avisoPro])
     project = result
   } else {
     project = await db.project.create({
       data: { ...baseData, ...(parent ? { parentProjectId: parent.id } : {}) },
     })
     // Notificar al profesional contratado (visita su panel → Proyectos)
-    await db.notification.create({
+    await notificar({
       data: {
         userId: proUserId,
         type: 'contratacion',

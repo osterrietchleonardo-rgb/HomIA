@@ -80,6 +80,19 @@ export const HOWTOS: Record<TourRole, HowTo[]> = {
       cta: 'Ver mis proyectos',
     },
     {
+      id: 'fechas-cliente',
+      title: 'Acordar las fechas del trabajo',
+      time: '1 min',
+      steps: [
+        'Cuando el presupuesto queda aprobado, tu profesional te propone inicio y fin estimado: te llega un aviso.',
+        'Abrí el proyecto: en "Fechas del trabajo" tocá Aceptar fechas, Proponer otras o Rechazar (con el motivo, si querés).',
+        'Si después necesitás moverlas, tocá "Pedir reprogramar": hasta que el profesional responda, siguen las fechas acordadas.',
+        'Antes de contratar, en el perfil del profesional mirá su Disponibilidad: días ocupados, por confirmar y su próxima fecha libre.',
+      ],
+      href: '/panel/cliente/proyectos',
+      cta: 'Ver mis proyectos',
+    },
+    {
       id: 'pagar-factura',
       title: 'Pagar una factura (Mercado Pago o efectivo)',
       time: '2 min',
@@ -199,6 +212,20 @@ export const HOWTOS: Record<TourRole, HowTo[]> = {
       ],
       href: '/panel/profesional/proyectos',
       cta: 'Ver proyectos',
+    },
+    {
+      id: 'calendario',
+      title: 'Proponer fechas y usar tu calendario',
+      time: '2 min',
+      steps: [
+        'Con el presupuesto aprobado, abrí el proyecto y en "Fechas del trabajo" tocá Proponer fechas: inicio, fin estimado y una nota si hace falta.',
+        'Si esas fechas se superponen con otro trabajo tuyo, HomIA te avisa (no te lo bloquea: podés llevar trabajos en paralelo).',
+        'El cliente las acepta, las rechaza o te propone otras; si te propone otras, vos las aceptás, rechazás o contraproponés.',
+        'En Panel → Calendario ves el mes con lo acordado (sólido) y lo por confirmar (punteado), tus días libres, los próximos trabajos y los proyectos que todavía no tienen fecha.',
+        'Tus clientes y proveedores ven en tu perfil qué días estás ocupado, sin detalles de cada trabajo.',
+      ],
+      href: '/panel/profesional/calendario',
+      cta: 'Ver mi calendario',
     },
     {
       id: 'materiales-comparar',

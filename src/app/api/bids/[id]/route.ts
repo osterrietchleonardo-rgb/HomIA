@@ -4,6 +4,7 @@ import { ok, fail, parseBody } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
 import { assertJobOpen, closeJobWithHire, HireError } from '@/lib/job-hire'
+import { avisarPorMail, type AvisoData } from '@/lib/notify'
 
 const schema = z.object({
   action: z.enum(['aceptar', 'rechazar', 'retirar'], { message: 'Acción inválida' }),
@@ -64,6 +65,8 @@ export async function PATCH(
   // aceptar → proyecto + cierre del trabajo + rechazo del resto, todo o nada.
   // El cierre del trabajo (oferta aceptada, resto rechazado con aviso, trabajo en_proceso) vive en
   // `src/lib/job-hire.ts`: lo comparte con "Contratar" eligiendo un trabajo publicado (D16).
+  // el mail al profesional sale recién después del commit (nunca por algo que se revirtió)
+  let avisoPro: AvisoData | null = null
   const project = await db.$transaction(async (tx) => {
     // re-chequeo dentro de la transacción: dos aceptaciones simultáneas no crean dos proyectos
     await assertJobOpen(tx, bid.jobId)
@@ -94,15 +97,16 @@ export async function PATCH(
       rejectedTitle: 'El cliente eligió otra oferta',
       rejectedBody: `"${bid.job.title}" ya tiene profesional. Tu oferta quedó rechazada: seguí buscando en la bolsa.`,
     })
+    avisoPro = {
+      userId: bid.professional.userId,
+      type: 'presupuesto_aceptado',
+      title: '¡Aceptaron tu presupuesto!',
+      body: `"${bid.job.title}" → se creó el proyecto. Coordiná materiales y cronograma.`,
+      link: `#/panel/profesional/proyectos/${created.id}`,
+    }
     await tx.notification.createMany({
       data: [
-        {
-          userId: bid.professional.userId,
-          type: 'presupuesto_aceptado',
-          title: '¡Aceptaron tu presupuesto!',
-          body: `"${bid.job.title}" → se creó el proyecto. Coordiná materiales y cronograma.`,
-          link: `#/panel/profesional/proyectos/${created.id}`,
-        },
+        avisoPro,
         {
           userId: bid.job.userId,
           type: 'proyecto_creado',
@@ -120,5 +124,6 @@ export async function PATCH(
 
   if (project === 'BID_NOT_PENDING') return fail('Este presupuesto ya fue decidido', 409)
   if (project === 'JOB_NOT_OPEN') return fail('El trabajo ya no está abierto', 409)
+  if (avisoPro) avisarPorMail([avisoPro])
   return ok({ project })
 }

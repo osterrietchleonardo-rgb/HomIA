@@ -3,6 +3,7 @@ import { ok, parseJson } from '@/lib/api'
 import { db } from '@/lib/db'
 import { PROVIDER_KINDS } from '@/lib/search-match'
 import { puedeOperar, esProActivo } from '@/lib/plans'
+import { whereUsuarioPublico } from '@/lib/visibility'
 
 // Directorio HomIA: todos los profesionales y proveedores registrados,
 // ordenables por reseñas/rating/trabajos y filtrables por rubro, rating
@@ -70,6 +71,8 @@ export async function GET(req: NextRequest) {
   let pros: ProCard[] = []
   if (wantPro) {
     const rows = await db.professionalProfile.findMany({
+      // sin cuentas eliminadas ni (con HIDE_DEMO_USERS=1) cuentas demo — src/lib/visibility.ts
+      where: { user: whereUsuarioPublico() },
       include: {
         user: { select: { id: true, displayName: true, avatarUrl: true, rating: true, reviewsCount: true, city: true, createdAt: true, verificationStatus: true } },
       },
@@ -114,6 +117,7 @@ export async function GET(req: NextRequest) {
   let provs: ProvCard[] = []
   if (wantProv) {
     const rows = await db.providerProfile.findMany({
+      where: { user: whereUsuarioPublico() },
       include: {
         user: { select: { id: true, avatarUrl: true, rating: true, reviewsCount: true, city: true, createdAt: true, verificationStatus: true } },
       },

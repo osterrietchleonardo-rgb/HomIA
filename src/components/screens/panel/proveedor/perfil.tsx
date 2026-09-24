@@ -9,6 +9,8 @@ import { useSession } from '@/lib/store'
 import { navigate } from '@/lib/router'
 import { ShieldCheck, Store, Star, Crown, ArrowRight, Clock, CircleAlert, Lock, ImagePlus, Loader2, Megaphone } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DeleteAccountCard } from '@/components/app/delete-account-card'
+import { AvisosMailCard } from '@/components/screens/panel/avisos-mail-card'
 
 type MeUser = {
   email: string
@@ -434,6 +436,11 @@ export default function ProviderProfile() {
             </button>
           </div>
         </section>
+
+        <AvisosMailCard role="proveedor" />
+
+        {/* Ley 25.326: derecho de supresión (D19) */}
+        <DeleteAccountCard />
       </div>
     </div>
   )

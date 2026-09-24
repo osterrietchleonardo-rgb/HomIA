@@ -132,6 +132,9 @@ export default function RegisterScreen() {
   const [cuit, setCuit] = useState('')
   const [description, setDescription] = useState('')
 
+  // D19: aceptación obligatoria de Términos y Política de Privacidad
+  const [acceptTerms, setAcceptTerms] = useState(false)
+
   const roleOpt = role ? ROLE_OPTIONS.find((o) => o.r === role) : null
 
   const roles = useMemo(() => {
@@ -169,6 +172,10 @@ export default function RegisterScreen() {
       toast.error('El nombre del negocio es obligatorio')
       return
     }
+    if (!acceptTerms) {
+      toast.error('Para crear tu cuenta tenés que aceptar los Términos y Condiciones y la Política de Privacidad')
+      return
+    }
     setBusy(true)
     try {
       // el DNI se sube DESPUÉS de crear la cuenta (la subida exige sesión)
@@ -196,6 +203,7 @@ export default function RegisterScreen() {
           companyName, companyCuit, companyWebsite, employeesCount: employeesCount ? parseInt(employeesCount) : undefined,
           serviceRadiusKm: parseFloat(serviceRadiusKm) || 15,
           businessName, cuit, description,
+          acceptTerms,
         }),
       })
       const data = await res.json()
@@ -543,7 +551,28 @@ export default function RegisterScreen() {
             </div>
           )}
 
-          <button onClick={submit} disabled={busy} className="homy-btn-primary mt-7 w-full py-3.5 text-[15px]">
+          {/* D19: aceptación obligatoria. Los links abren en otra pestaña para no perder lo cargado. */}
+          <label className="homy-glass-soft mt-6 flex cursor-pointer items-start gap-3 rounded-2xl p-4 text-sm leading-relaxed text-slate-600">
+            <input
+              type="checkbox"
+              checked={acceptTerms}
+              onChange={(e) => setAcceptTerms(e.target.checked)}
+              aria-describedby="terminos-ayuda"
+              className="mt-0.5 size-5 shrink-0 accent-[#1D63B8]"
+            />
+            <span>
+              Acepto los{' '}
+              <a href="/terminos" target="_blank" rel="noopener noreferrer" className="font-bold text-[#1D63B8] underline underline-offset-2">Términos y Condiciones</a>
+              {' '}y la{' '}
+              <a href="/privacidad" target="_blank" rel="noopener noreferrer" className="font-bold text-[#1D63B8] underline underline-offset-2">Política de Privacidad</a>
+              {' '}de HomIA.
+            </span>
+          </label>
+          <p id="terminos-ayuda" className="mt-2 px-1 text-xs leading-relaxed text-slate-400">
+            Los links se abren en otra pestaña: lo que cargaste queda acá.
+          </p>
+
+          <button onClick={submit} disabled={busy || !acceptTerms} className="homy-btn-primary mt-5 w-full py-3.5 text-[15px] disabled:cursor-not-allowed disabled:opacity-60">
             {busy ? (
               <>
                 <Loader2 className="size-4.5 animate-spin motion-reduce:animate-none" aria-hidden />
@@ -553,7 +582,7 @@ export default function RegisterScreen() {
               'Crear mi cuenta'
             )}
           </button>
-          <p className="mt-3.5 text-center text-xs leading-relaxed text-slate-400">Al crear la cuenta aceptás nuestros términos. Tus documentos quedan privados.</p>
+          <p className="mt-3.5 text-center text-xs leading-relaxed text-slate-400">Tus documentos quedan privados.</p>
         </section>
       )}
 

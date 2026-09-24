@@ -6,6 +6,8 @@ import { useSession } from '@/lib/store'
 import { navigate } from '@/lib/router'
 import { toast } from 'sonner'
 import { BadgeCheck, ShieldCheck, UserRound, BriefcaseBusiness, ArrowRight, HandCoins } from 'lucide-react'
+import { DeleteAccountCard } from '@/components/app/delete-account-card'
+import { AvisosMailCard } from '@/components/screens/panel/avisos-mail-card'
 
 const CATEGORIES = [
   { slug: 'plomeria', name: 'Plomería' },
@@ -307,6 +309,11 @@ export default function ProProfile() {
               </button>
             </div>
           </section>
+
+          <AvisosMailCard role="profesional" />
+
+          {/* Ley 25.326: derecho de supresión (D19) */}
+          <DeleteAccountCard />
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { parseJson } from '@/lib/api'
 import { withinRadius } from '@/lib/geo'
 import { puedeOperar, esProActivo } from '@/lib/plans'
+import { whereUsuarioPublico } from '@/lib/visibility'
 import { matchTerms } from '@/lib/search-match'
 
 // Comparables de materiales: mismo elemento entre todos los proveedores, ordenado por precio
@@ -15,7 +16,8 @@ export async function GET(req: NextRequest) {
   const lng = sp.get('lng') ? parseFloat(sp.get('lng')!) : null
   const radius = sp.get('radius') ? parseFloat(sp.get('radius')!) : 50
 
-  const where = elementId ? { elementId } : {}
+  // sin cuentas eliminadas ni (con HIDE_DEMO_USERS=1) cuentas demo — src/lib/visibility.ts
+  const where = { ...(elementId ? { elementId } : {}), provider: { user: whereUsuarioPublico() } }
   const stock = await db.providerStock.findMany({
     where,
     include: {

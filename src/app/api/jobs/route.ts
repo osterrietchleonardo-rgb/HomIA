@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { withinRadius } from '@/lib/geo'
 import { parseJson } from '@/lib/api'
 import { isHomiaUploadUrl } from '@/lib/leftovers'
+import { whereUsuarioPublico } from '@/lib/visibility'
 
 // GET: bolsa de trabajos (abiertos) con filtros + los míos si mine=1
 export async function GET(req: NextRequest) {
@@ -41,6 +42,8 @@ export async function GET(req: NextRequest) {
   const jobs = await db.jobPost.findMany({
     where: {
       status: 'abierto',
+      // sin cuentas eliminadas ni (con HIDE_DEMO_USERS=1) cuentas demo — src/lib/visibility.ts
+      user: whereUsuarioPublico(),
       ...(cat ? { categorySlug: cat } : {}),
       ...(urgency ? { urgency } : {}),
     },
@@ -138,7 +141,7 @@ export async function POST(req: NextRequest) {
 
   // Notificar a profesionales de la categoría
   const pros = await db.professionalProfile.findMany({
-    where: { user: { roles: { contains: 'profesional' } } },
+    where: { user: { roles: { contains: 'profesional' }, deletedAt: null } },
     select: { userId: true, professions: true },
   })
   const targets = pros.filter((p) => {

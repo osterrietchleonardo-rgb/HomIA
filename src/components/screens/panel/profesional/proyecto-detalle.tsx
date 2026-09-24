@@ -15,6 +15,7 @@ import {
 import { ClientSummaryButton } from '@/components/app/client-summary'
 import ReviewForm from '@/components/screens/panel/review-form'
 import ProSobrantes from '@/components/screens/panel/profesional/sobrantes-pro'
+import ScheduleCard, { type ScheduleInfo } from '@/components/app/schedule-card'
 import ClientProjectDetail from '@/components/screens/panel/cliente/proyecto-detalle'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
@@ -50,6 +51,9 @@ type Project = {
   job: { id: string; title: string } | null
   // D16: subcontrataciones que salieron de este proyecto (solo las ve el profesional a cargo)
   subcontracts?: { id: string; title: string; stage: string; status: string; laborCost: number; proName: string }[]
+  // D21: fechas del trabajo y, si todavía no se pueden acordar, por qué
+  schedule?: ScheduleInfo | null
+  scheduleBlocked?: string | null
   client: { id: string; displayName: string; avatarUrl: string | null; phone: string | null; email: string | null; verificationStatus?: string }
   professional: { id: string; displayName: string; personType: string }
 }
@@ -476,6 +480,11 @@ export default function ProProjectDetail({ id }: { id: string }) {
               </button>
             </div>
           </div>
+        )}
+
+        {/* D21: fechas del trabajo (vos proponés; el cliente acepta, rechaza o propone otras) */}
+        {(isActive || p.schedule?.status) && (
+          <ScheduleCard projectId={p.id} role="profesional" otherName={p.client.displayName} schedule={p.schedule} blocked={p.scheduleBlocked} onChanged={load} />
         )}
 
         {/* etapas */}

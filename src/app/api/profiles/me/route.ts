@@ -72,6 +72,8 @@ const PutSchema = z.object({
   locationShared: z.boolean().optional(),
   searchRadiusKm: z.number().min(1).max(200).optional(),
   howFoundUs: optionalText(40),
+  // avisos por mail de los eventos importantes (el de recuperar contraseña sale siempre)
+  emailNotifications: z.boolean().optional(),
   avatarUrl: z
     .string()
     .trim()
@@ -147,6 +149,7 @@ export async function PUT(req: NextRequest) {
   if (d.locationShared !== undefined) userData.locationShared = d.locationShared
   if (d.searchRadiusKm !== undefined) userData.searchRadiusKm = d.searchRadiusKm
   if (d.howFoundUs !== undefined) userData.howFoundUs = d.howFoundUs || null
+  if (d.emailNotifications !== undefined) userData.emailNotifications = d.emailNotifications
   if (d.avatarUrl !== undefined) userData.avatarUrl = d.avatarUrl || null
 
   let writePro = false

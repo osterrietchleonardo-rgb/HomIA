@@ -111,6 +111,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
                EXISTS (SELECT 1 FROM "ProviderProfile" v WHERE v."userId" = u.id) AS "hasProvider"
         FROM "User" u
         WHERE u.id = ${userId}
+          -- una cuenta eliminada ("Eliminar mi cuenta", D19) no tiene sesión aunque la cookie siga viva
+          AND u."deletedAt" IS NULL
         LIMIT 1`
       user = rows[0]
     } catch (e) {

@@ -5,8 +5,10 @@ import { Loading, AvatarUploader, VerifyBadge } from '@/components/app/ui-bits'
 import { useSession, useLocation, syncLocationToServer } from '@/lib/store'
 import { navigate } from '@/lib/router'
 import { apiFetch, NETWORK_ERROR } from '@/lib/api-client'
+import { DeleteAccountCard } from '@/components/app/delete-account-card'
 import { toast } from 'sonner'
 import { MapPin, UserRound, Phone, Building2, Cake, Save, ShieldCheck, ArrowRight, RefreshCw } from 'lucide-react'
+import { AvisosMailCard } from '@/components/screens/panel/avisos-mail-card'
 
 export default function ClientProfile() {
   const { user, refresh } = useSession()
@@ -211,6 +213,11 @@ export default function ClientProfile() {
             </>
           )}
         </section>
+
+        <AvisosMailCard role="cliente" />
+
+        {/* Ley 25.326: derecho de supresión (D19) */}
+        <DeleteAccountCard />
       </div>
     </div>
   )

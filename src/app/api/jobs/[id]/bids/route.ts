@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { ok, fail, body, parseJson } from '@/lib/api'
 import { db } from '@/lib/db'
+import { notificar } from '@/lib/notify'
 
 // GET: presupuestos de un trabajo (dueño ve todos; profesional ve el propio)
 export async function GET(
@@ -106,7 +107,7 @@ export async function POST(
       },
     })
     if (reactivated) {
-      await db.notification.create({
+      await notificar({
         data: {
           userId: job.userId,
           type: 'nuevo_presupuesto',
@@ -129,7 +130,7 @@ export async function POST(
     },
   })
 
-  await db.notification.create({
+  await notificar({
     data: {
       userId: job.userId,
       type: 'nuevo_presupuesto',

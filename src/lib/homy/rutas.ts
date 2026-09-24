@@ -38,6 +38,7 @@ export const SECCIONES: Seccion[] = [
   { ruta: '/panel/profesional/pedidos', nombre: 'Mis pedidos de materiales', rol: 'profesional' },
   { ruta: '/panel/profesional/proyectos', nombre: 'Proyectos', rol: 'profesional' },
   { ruta: '/panel/profesional/cobros', nombre: 'Cobros (facturas, cobrado y pendiente, conectar Mercado Pago)', rol: 'profesional' },
+  { ruta: '/panel/profesional/calendario', nombre: 'Calendario (fechas de tus trabajos, días libres y ocupados)', rol: 'profesional' },
   { ruta: '/panel/profesional/presupuestos', nombre: 'Mis ofertas (presupuestos)', rol: 'profesional' },
   { ruta: '/panel/profesional/crm', nombre: 'CRM clientes', rol: 'profesional' },
   { ruta: '/panel/profesional/obras', nombre: 'Mis obras', rol: 'profesional' },

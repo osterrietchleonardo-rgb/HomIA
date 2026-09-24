@@ -1,6 +1,7 @@
 import { ok } from '@/lib/api'
 import { db } from '@/lib/db'
 import { esProActivo } from '@/lib/plans'
+import { whereUsuarioPublico } from '@/lib/visibility'
 
 // ── CINTA DE SPONSORS (home) ──
 // Solo proveedores con Plan PRO ACTIVO (esProActivo): si deja de pagar o baja a
@@ -11,7 +12,8 @@ const MAX_SPONSORS = 40
 
 export async function GET() {
   const provs = await db.providerProfile.findMany({
-    where: { subscription: 'pro' },
+    // sin cuentas eliminadas ni (con HIDE_DEMO_USERS=1) cuentas demo — src/lib/visibility.ts
+    where: { subscription: 'pro', user: whereUsuarioPublico() },
     orderBy: { rating: 'desc' },
     take: 200,
     select: {

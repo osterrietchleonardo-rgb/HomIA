@@ -17,7 +17,8 @@ export async function POST(req: NextRequest) {
 
   // anti fuerza bruta: solo los intentos FALLIDOS consumen el límite
   // (10 fallos por email+IP, 30 fallos por IP, ventana de 15 minutos)
-  const passwordOk = user ? await verifyPassword(password, user.passwordHash) : false
+  // una cuenta eliminada (D19) nunca vuelve a entrar (además su email y su contraseña ya se reemplazaron)
+  const passwordOk = user && !user.deletedAt ? await verifyPassword(password, user.passwordHash) : false
   if (!user || !passwordOk) {
     const perEmail = rateLimit(`loginfail:${loginRateKey(req, email)}`, 10, 15 * 60 * 1000)
     const perIp = rateLimit(`loginfail:${ipRateKey(req, 'login')}`, 30, 15 * 60 * 1000)

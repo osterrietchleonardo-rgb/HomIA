@@ -48,6 +48,83 @@
 | Cargar stock, cobrar materiales, plan | — | — | Sí | No |
 | Reseñar | Según §9 | Según §9 | No (recibe) | No |
 
+### 1.1 Aceptación de términos y "Eliminar mi cuenta" (D19, 24/09/2026)
+
+**Aceptación al registrarse** (`auth/register/route.ts`):
+
+- `acceptTerms` tiene que ser exactamente `true`; si falta o es otra cosa → **400** "Para crear tu
+  cuenta tenés que aceptar los Términos y Condiciones y la Política de Privacidad" con
+  `needsTerms: true`, y no se crea nada. Se chequea después de validar email/contraseña/nombre y
+  antes del 409 por email repetido.
+- Se guarda `User.termsAcceptedAt` (ahora) y `User.termsVersion` = `LEGAL_VERSION` de
+  `src/lib/legal-content.ts` (formato `AAAA-MM-DD`). Las cuentas anteriores quedan en `NULL`.
+- La pantalla deshabilita **Crear mi cuenta** hasta tildar la casilla; los links a `/terminos` y
+  `/privacidad` abren en otra pestaña.
+
+**Eliminar mi cuenta** (`POST /api/profiles/me/eliminar`, `src/lib/account-deletion.ts`) — Ley
+25.326, derecho de supresión:
+
+| Paso | Regla | Respuesta |
+|---|---|---|
+| 1 | Sesión obligatoria | 401 |
+| 2 | zod: `confirm` = `ELIMINAR` (exacto, en mayúsculas) y `password` | 400 |
+| 3 | Tope: 5 intentos cada 15 min por cuenta (en memoria) | 429 |
+| 4 | La contraseña tiene que ser la actual | **403** "La contraseña no es correcta" |
+| 5 | **Operaciones abiertas** (ver abajo): si hay alguna, no se toca nada | **409** con `pendientes: [{ tipo, cantidad, texto, ruta }]` |
+| 6 | Se borran los archivos del bucket privado `dni-docs/<userId>/`; si Storage falla (o no está configurado y hay documentos), no se toca nada | 503 |
+| 7 | **Anonimización en una transacción** + borrado de foto/logo públicos + se borra la cookie | 200 `{ eliminada: true }` |
+
+Operaciones abiertas que bloquean la baja (`operacionesAbiertas`):
+
+| `tipo` | Qué cuenta |
+|---|---|
+| `proyectos_cliente` / `proyectos_profesional` | `Project.status = activo` como cliente o como profesional |
+| `facturas_por_pagar` / `facturas_sin_cobrar` | `Invoice.status = pendiente` como cliente o como profesional |
+| `pedidos_cliente` / `ventas_proveedor` | Sub-pedidos en `pendiente_aprobacion`, `esperando_stock`, `aprobado` o `entregado` (entregado = falta el pago), más los `pagado` del carrito sin evento `entregado` en la línea de tiempo |
+| `cobros_por_pagar` / `cobros_proveedor` | `ProviderCharge` en `pendiente` o `acordada_efectivo` |
+| `devoluciones_pedidas` / `_profesional` / `_proveedor` | `LeftoverReturn` en `solicitada`, `aceptada`, `aceptada_parcial`, `recibida`, `reembolso_fallido`, o `reembolsada` en efectivo/por fuera sin confirmar |
+| `suscripcion` | Proveedor con plan `basic`/`pro` y `mpPreapprovalId` (se cancela desde Mercado Pago) |
+
+Qué hace la anonimización (no borra la fila `User`, para no romper el historial de otros):
+
+- **Usuario:** email → `eliminado-<id>@homia.invalid`, nombre → "Usuario eliminado", teléfono,
+  foto, cómo nos encontró, cumpleaños, dirección, ciudad, lat/lng → `NULL`, ubicación compartida
+  apagada, contraseña → hash de 32 bytes aleatorios, verificación → `none`, avisos por mail
+  apagados, `deletedAt` = ahora. **Los roles se conservan.**
+- **Se borra:** documentos de DNI (filas + archivos), carrito, favoritos (propios y los que otros le
+  tenían), sesiones de Homy, cupo de IA, notificaciones, pedidos de recuperar contraseña, CRM propio.
+  `HomyRun` y `SearchEvent` quedan sin `userId`.
+- **Trabajos publicados:** los `abierto` pasan a `cancelado`; a todos se les borra la dirección.
+  Obras del portafolio → `visible = false`.
+- **Profesional:** ofertas `pendiente` → `retirado`; perfil sin bio, DNI/CUIL, datos de empresa,
+  habilidades ni ubicación; tokens de Mercado Pago borrados; cuentas de retiro inactivas.
+- **Proveedor:** **se borra todo su stock** (sale también de los carritos de otros; los pedidos
+  cerrados conservan su copia de cada producto); perfil → "Proveedor eliminado", sin CUIT,
+  descripción, dirección, ubicación ni marca; tokens de Mercado Pago borrados; vinculaciones
+  inactivas.
+- **Se conserva:** facturas, pagos, pedidos y cobros cerrados, devoluciones cerradas, reseñas
+  (escritas y recibidas) y mensajes: muestran "Usuario eliminado" / "Proveedor eliminado".
+- **Después:** `getSessionUser` ignora la cuenta (la cookie vieja ya no sirve), el login la rechaza
+  (401 igual que una contraseña incorrecta), no aparece en ninguna superficie pública (§1.2), su
+  perfil público da 404, no se le puede abrir una conversación nueva (404) y en un chat que ya existía no se le pueden mandar mensajes (409 `cuentaEliminada`; la conversación y el estado de las dos cuentas salen en una sola consulta).
+
+### 1.2 Qué se ve en lo público (D20, 24/09/2026)
+
+Un solo helper, `src/lib/visibility.ts` (`whereUsuarioPublico()` / `esUsuarioPublico()`):
+
+- **Cuentas eliminadas** (`deletedAt`): nunca aparecen.
+- **Cuentas demo y de prueba** (email terminado en `@homia.test`): no aparecen **solo si
+  `HIDE_DEMO_USERS=1`** en el servidor. Sin la variable (o en 0), se ven como siempre. Siguen
+  pudiendo iniciar sesión y usar su panel en los dos casos.
+
+Dónde se aplica: `GET /directory` (profesionales y proveedores), `GET /search` (profesionales,
+materiales y trabajos, en los dos modos), `GET /search/pins`, `GET /marketplace`, `GET /comparables`,
+`GET /sponsors`, `GET /jobs` (bolsa), `GET /jobs/[id]` (404 salvo al dueño y a quien ya ofertó),
+`GET /profiles/professional/[id]` y `GET /profiles/provider/[id]` (404 para todos menos el propio
+usuario) y las herramientas de datos del agente Homy (`src/lib/homy/datos.ts`: ofertas,
+profesionales y trabajos). El aviso "Nuevo trabajo en tu rubro" tampoco se manda a cuentas
+eliminadas.
+
 ---
 
 ## 2. Trabajos publicados (`JobPost`) y ofertas (`JobBid`)
@@ -210,6 +287,70 @@ las pagadas con `paidAt` desde el día 1 del mes en hora argentina (UTC−3); `p
 `pendientesCount` = facturas no pagadas; `efectivoPorConfirmar`. No devuelve tokens, email ni ids de
 Mercado Pago. Confirmar el efectivo desde Cobros usa el mismo `POST /api/invoices/[id]/cash
 {action:'confirmar'}` (mismas reglas).
+
+### 3.6 Fechas del trabajo y calendario del profesional (D21, 24/09/2026)
+
+Campos en `Project` (migración `0031`): `startDate`, `endDate` (fin estimado), `scheduleStatus`
+(`null` = sin fechas | `propuesta` | `acordada`), `scheduleProposedBy` (`profesional`|`cliente`),
+`scheduleNote`, `scheduleUpdatedAt`, `prevStartDate`/`prevEndDate`. Máquina de estados pura en
+`src/lib/schedule.ts` (`scheduleTransition`, con tests en `src/lib/__tests__/schedule.test.ts`);
+endpoint `POST /api/projects/[id]/schedule`.
+
+**Cuándo se pueden acordar fechas** (`scheduleBlockReason`): proyecto `activo`, etapa distinta de
+`finalizado`, mano de obra cotizada (> 0) **y presupuesto aprobado**. En HomIA no existe un botón de
+"aceptar la cotización": se toma como aprobado cuando (a) el proyecto nació de una oferta que el
+cliente **aceptó** en la bolsa (o del asistente con la oferta previa de ese profesional, D16:
+`JobPost.selectedBidId` → `JobBid` de este profesional en `aceptado`), o (b) el proyecto **ya salió
+de `presupuesto`** (materiales/ejecución/revisión). Antes → 409 con el motivo (la tarjeta lo muestra).
+Proyecto cancelado o finalizado → 409 para toda acción.
+
+| Estado actual | Acción | Quién | Resultado |
+|---|---|---|---|
+| sin fechas | `proponer` | **solo el profesional** (el cliente → 409 "Las fechas las propone primero el profesional") | `propuesta` por profesional |
+| `propuesta` por X | `proponer` | X | cambia su propia propuesta (sigue `propuesta` por X) |
+| `propuesta` por X | `proponer` | el otro | contrapropuesta: `propuesta` por el otro |
+| `propuesta` por X | `aceptar` | el otro (X → 409) | `acordada`; se borran `prev*` |
+| `propuesta` por X (sin `prev*`) | `rechazar` (motivo opcional) | el otro (X → 409) | sin fechas; `scheduleProposedBy` = quién rechazó, `scheduleNote` = motivo; el profesional vuelve a proponer |
+| `acordada` | `proponer` | cualquiera | **reprogramación**: `propuesta` por quien pide, `prev*` = lo acordado (sigue vigente) |
+| `propuesta` con `prev*` | `rechazar` | el otro | vuelve a `acordada` con las fechas `prev*` (no se pierde lo acordado) |
+| `acordada` o sin fechas | `aceptar`/`rechazar` | — | 409 "no hay ninguna propuesta pendiente" |
+
+- **Validación:** días `AAAA-MM-DD` reales (zod + `isDayKey`: 30/02 → 400); fin ≥ inicio (400);
+  inicio ≥ hoy en hora argentina (400); duración ≤ 365 días; inicio a ≤ 730 días.
+- **Permisos:** 401 sin sesión; 403 si no sos el cliente ni el profesional del proyecto; 404 si no
+  existe. El rol sale de la sesión, nunca del body.
+- **Carreras:** el `update` es condicional sobre `scheduleStatus` y `scheduleUpdatedAt` leídos
+  (concurrencia optimista): si otro pedido cambió las fechas en el medio → 409 "Las fechas cambiaron
+  mientras tanto". Dos "Aceptar" simultáneos: uno 200 y el otro 409 (probado en E2E Q).
+- **Avisos** en cada acción, a la otra parte: `Notification` con link al proyecto (tipos
+  `fechas_propuestas`, `fechas_reprogramacion`, `fechas_acordadas`, `fechas_rechazadas`; los dos
+  primeros además por mail vía `src/lib/notify.ts`), un mensaje en el chat cliente↔profesional si
+  existe ("Fechas del trabajo: …", enviado por quien actuó) y un `ActivityEvent` del proyecto.
+- **Solapamiento (avisa, no bloquea):** al proponer, el servidor busca otros proyectos `activo` del
+  mismo profesional con fechas `acordada` o `propuesta` (incluidas las `prev*` de una reprogramación)
+  que se toquen con el rango (días inclusive). Devuelve `solapamiento.cantidad`; **solo al
+  profesional** le agrega `proyectos` (id, título, rango, estado). Al cliente nunca le llegan títulos
+  de otros proyectos. La UI del profesional también avisa en vivo mientras elige las fechas.
+- **Ocupación de un profesional** (`busyRangesOf`): `acordada` → rango "ocupado"; `propuesta` →
+  rango "por confirmar" y, si es una reprogramación, además las `prev*` como "ocupado". Solo
+  proyectos `activo` (los cancelados o finalizados no ocupan).
+- **Próxima fecha libre:** primer día desde hoy que no cae en ningún rango ocupado **ni** por
+  confirmar (criterio conservador: no promete un día que puede quedar tomado). **Disponible esta
+  semana:** hay algún día libre entre hoy y el domingo.
+- **Privacidad de la disponibilidad pública** (`GET /profiles/professional/[id]/availability`, sin
+  sesión): solo rangos de días **unidos** por estado (no deja contar proyectos) con `estado`
+  `ocupado`|`por_confirmar`, `proximaFechaLibre` y `disponibleEstaSemana`. Nunca título, cliente,
+  dirección, nota ni ids de proyectos. Ventana por defecto hoy → +91 días, máximo 186 (≈ 6 meses),
+  no antes del mes en curso. Cuentas eliminadas o demo con `HIDE_DEMO_USERS=1` → 404
+  (`src/lib/visibility.ts`, D20).
+- **Calendario del profesional** (`GET /professional/calendar?from&to`, solo el propio profesional,
+  sale de la sesión): sus proyectos `activo`/`finalizado` con fechas que tocan la ventana (título,
+  cliente, etapa, estado y rangos), `sinFecha` = activos con presupuesto aprobado y sin fechas (con
+  quién rechazó y el motivo si corresponde) y `pendientes` = propuestas del cliente que esperan su
+  respuesta. Ventana por defecto: el mes en curso; máximo 190 días.
+- **Homy:** `buscar_profesionales` devuelve `proxima_fecha_libre` y `disponible_esta_semana` de cada
+  profesional (una sola consulta para todos, `nextFreeForPros`); la nota de la herramienta le dice que
+  la disponibilidad es orientativa y que no diga nada si viene `null`.
 
 ---
 
@@ -684,19 +825,24 @@ externo no disponible. Rutas relativas a `src/app/api/`. Cualquier `/api/*` que 
 
 | Método y ruta | Auth | Valida / hace | Errores clave |
 |---|---|---|---|
-| `POST /auth/register` | — (8/h por IP) | Email válido y único, contraseña ≥ 8 con letras y números, nombre 2–60, roles válidos, nombre de negocio si es proveedor; crea usuario, perfiles, prueba de 14 días, CRM y sesión | 400, 409 "Ya existe una cuenta con ese email", 429 |
+| `POST /auth/register` | — (8/h por IP) | Email válido y único, contraseña ≥ 8 con letras y números, nombre 2–60, **`acceptTerms: true`** (guarda `termsAcceptedAt`/`termsVersion`, §1.1), roles válidos, nombre de negocio si es proveedor; crea usuario, perfiles, prueba de 14 días, CRM y sesión | 400 (`needsTerms`), 409 "Ya existe una cuenta con ese email", 429 |
 | `POST /auth/login` | — (10 fallos email+IP, 30 por IP / 15 min) | Verifica contraseña, crea sesión | 401 "Email o contraseña incorrectos", 429 |
 | `POST /auth/logout` | — | Borra la cookie | — |
 | `GET /auth/me` | — | Usuario de la sesión o `null` | — |
+| `POST /auth/password/forgot` | — (20/h por IP) | zod `email`. **Siempre 200** con "Si ese email tiene una cuenta, te mandamos un link para crear una nueva contraseña", exista o no. Si existe y tiene < 3 pedidos en la última hora: crea `PasswordReset` (sha256 del token, vence en 1 h) y manda el mail en segundo plano con `${APP_URL}/#/restablecer?token=…`. Con 3 pedidos en la hora: 200 igual, sin crear token (D18). **Sin `RESEND_API_KEY`: 503 `needsConfig` con "Todavía no podemos mandar mails…", igual para todos los emails y sin crear tokens** (fallback honesto) | 400 email inválido, 429, 503 |
+| `GET /auth/password/reset?token=` | — (60 / 15 min por IP) | ¿El link sirve? | 400 `code` = `invalido` \| `usado` \| `vencido` |
+| `POST /auth/password/reset` | — (60 / 15 min por IP) | zod `{ token, password }`; token válido (hash, no vencido, no usado); contraseña con la **misma política que el registro** (≥ 8, letras y números); en una transacción: toma el token, cambia el hash bcrypt, marca usado e **invalida los otros pendientes** del usuario. **No inicia sesión.** Las sesiones abiertas en otros dispositivos no se cierran (el JWT no tiene estado) (D18) | 400 `code` = `invalido`/`usado`/`vencido`/`contrasena` |
 
 ### Perfiles y usuarios
 
 | Método y ruta | Auth | Valida / hace | Errores clave |
 |---|---|---|---|
 | `GET /profiles/me` | Sesión | Perfil completo; DNI como URL firmada de 10 min; sin tokens MP | 401 |
-| `PUT /profiles/me` | Sesión | zod: datos personales, profesionales y de proveedor; avatar/logo solo de HomIA; marca solo con PRO; escribe todo en una transacción | 403 `needsRole`/`needsPro` |
-| `GET /profiles/professional/[id]` | Sesión | Perfil, 12 obras, 20 reseñas, `chatBlocked` | 401, 404 |
-| `GET /profiles/provider/[id]` | Sesión | Perfil, stock (100), reseñas, `recommended`, `chatBlocked` | 401, 404 |
+| `PUT /profiles/me` | Sesión | zod: datos personales, profesionales y de proveedor; avatar/logo solo de HomIA; marca solo con PRO; `emailNotifications` (boolean, avisos por mail, §14.1); escribe todo en una transacción | 403 `needsRole`/`needsPro` |
+| `POST /profiles/me/eliminar` | Sesión | zod `confirm: "ELIMINAR"` + `password`; bloquea con operaciones abiertas; borra DNI del bucket y anonimiza (§1.1, D19) | 400, 401, 403 contraseña, 409 `pendientes`, 429, 503 Storage |
+| `GET /profiles/professional/[id]` | Sesión | Perfil, 12 obras, 20 reseñas, `chatBlocked`; cuenta eliminada o demo con `HIDE_DEMO_USERS=1` → 404 salvo al propio usuario (§1.2) | 401, 404 |
+| `GET /profiles/professional/[id]/availability` | — (público) | zod en query (`from`/`to` `AAAA-MM-DD`, máx. 186 días). Solo rangos anónimos unidos (`ocupado`/`por_confirmar`), `proximaFechaLibre`, `disponibleEstaSemana` (§3.6, D21) | 400, 404 |
+| `GET /profiles/provider/[id]` | Sesión | Perfil, stock (100), reseñas, `recommended`, `chatBlocked`; misma regla de visibilidad (§1.2) | 401, 404 |
 | `GET /users/[id]/client-summary` | Sesión | Reputación del cliente: proyectos finalizados/activos, compras, 10 reseñas | 401, 404 |
 | `PUT /users/location` | Sesión | lat/lng/radio 1–500/compartir; sincroniza el perfil profesional | 400 |
 
@@ -733,8 +879,10 @@ externo no disponible. Rutas relativas a `src/app/api/`. Cualquier `/api/*` que 
 | `GET /projects` | Sesión | Mis proyectos como cliente y como profesional, con `canReview` | — |
 | `POST /projects` | Sesión | zod; asistente Contratar o subcontratación; opcional `jobId` (trabajo propio abierto) **o** `parentProjectId` (proyecto activo propio como profesional) (§3.1, D16) | 400, 403, 404, 409 |
 | `GET /projects/hire-sources` | Sesión | zod en query (`professionalProfileId` opcional). Solo del usuario de la sesión: `jobs` = sus trabajos `abierto` (hasta 30: título, rubro, fecha, ofertas pendientes, datos para precargar y `targetBidAmount` si el profesional a contratar ya ofertó) y `projects` = sus proyectos `activo` no finalizados como profesional a cargo (hasta 30: título, cliente, etapa, datos para precargar) | 400, 401 |
-| `GET /projects/[id]` | Partes | Detalle con materiales, facturas, cobros, cuentas de retiro, id del chat; `subcontracts` (solo al profesional a cargo) y `parentProject` (solo al profesional que subcontrató) (D16) | 403, 404 |
+| `GET /projects/[id]` | Partes | Detalle con materiales, facturas, cobros, cuentas de retiro, id del chat; `subcontracts` (solo al profesional a cargo) y `parentProject` (solo al profesional que subcontrató) (D16); `schedule` (fechas del trabajo) y `scheduleBlocked` (por qué todavía no se pueden acordar, o `null`) (D21) | 403, 404 |
 | `PATCH /projects/[id]` | Partes | zod; etapa, cancelación, mano de obra, modo de materiales (§3.2) | 403, 409 |
+| `POST /projects/[id]/schedule` | Partes | zod (`accion` = `proponer` con `startDate`/`endDate`/`nota` \| `aceptar` \| `rechazar` con `motivo`); máquina de estados de fechas, aviso de solapamiento (§3.6, D21) | 400, 401, 403, 404, 409 |
+| `GET /professional/calendar` | Profesional (de la sesión) | zod en query (`from`/`to`, máx. 190 días); sus proyectos con fechas, `sinFecha` y `pendientes` (§3.6) | 400, 401, 403 |
 | `POST /projects/[id]/materials` | Profesional del proyecto | zod; §3.4 | 403, 409 |
 | `PATCH /projects/[id]/materials` | Partes según acción | zod; aprobar/rechazar/eliminar/reemplazar (§3.4) | 403, 404, 409 |
 | `GET /projects/[id]/invoice` | Partes | Facturas con ítems | 403 |
@@ -828,3 +976,43 @@ Cada evento de negocio crea una `Notification` con `link` al hash de la pantalla
 consultan cada 15 segundos desde el panel (`panel-layout.tsx:107-118`). Los avisos de pedidos llevan
 a `#/panel/<cliente|profesional>/pedidos/<id>`; el de "Factura pagada" por MP lleva al proyecto del
 profesional (antes apuntaba a una página inexistente; corregido en `2eed864`).
+
+### 14.1 Avisos por mail (D18, 24/09/2026)
+
+- **Qué eventos mandan mail** (lista blanca `TIPOS_CON_MAIL` en `src/lib/notify.ts`; los demás
+  tipos solo quedan en la campana):
+
+  | `type` | A quién | Dónde se crea |
+  |---|---|---|
+  | `nueva_compra` | Proveedor (compra directa o reserva nueva) | `src/lib/orders.ts` |
+  | `reserva_aprobada_sin_stock`, `compra_aprobada`, `reserva_disponible` | Cliente | `purchases/[id]/route.ts` |
+  | `contratacion` | Profesional contratado | `projects/route.ts` |
+  | `presupuesto_aceptado` | Profesional | `bids/[id]/route.ts`, `projects/route.ts` (contratar desde un trabajo con su oferta) |
+  | `nuevo_presupuesto` | Cliente dueño del trabajo | `jobs/[id]/bids/route.ts` |
+  | `factura_emitida` | Cliente | `projects/[id]/invoice/route.ts` |
+  | `compra_pagada_prov`, `cobro_pagado` (solo al proveedor, no al que paga), `factura_pagada` | Quien cobra por Mercado Pago | `payments/webhook/route.ts` |
+  | `devolucion_solicitada` | Quien recibe el pedido de devolución (proveedor o profesional) | `returns/route.ts` |
+
+- **No mandan mail:** mensajes del chat (`message`), ni el resto de los avisos.
+- **Preferencia:** `User.emailNotifications` (default `true`). Se cambia con
+  `PUT /profiles/me { emailNotifications }`. Apagada → solo campana. El mail de recuperar
+  contraseña **no** depende de esta preferencia.
+- **Nunca rompe la acción:** la notificación se crea como siempre y el mail se programa para
+  **después de responder** (`after()` de Next). Si Resend falla, tarda o no está configurado, la
+  compra/contratación/etc. responde igual (verificado con un doble de Resend que devuelve 500).
+  Dentro de una transacción el mail se programa recién después del commit.
+- **Sin `RESEND_API_KEY`:** no se intenta enviar (un `console.warn` por proceso).
+- Emails de dominios reservados (`.test`, `.invalid`, `.example`, `.localhost`, como las cuentas
+  demo `@homia.test`) nunca se mandan a Resend real.
+
+## Textos legales = espejo de las reglas (24/09/2026)
+
+Los Términos y la Política de Privacidad (`src/lib/legal-content.ts`) repiten, en lenguaje simple,
+las reglas de este documento: cargo de servicio 1% solo con Mercado Pago y no reembolsable en
+sobrantes; compra con stock sin aprobación y 24 h para pagar (7 días en efectivo); reservas aprobadas
+por el proveedor, 48 h; sobrantes 30 días, recordatorio y autoconfirmación a las 72 h; planes
+$50.000 / $100.000 con 14 días de prueba y baja de la vidriera por cancelación, pausa o 35 días sin
+cobro; cancelación de proyecto solo en presupuesto o materiales; 3 intentos de DNI por día; Homy 8/60
+consultas por día; fechas del proyecto propuestas y aceptadas por la otra parte. **Si cambia una de
+estas reglas, se cambia el texto legal en la misma rama y se sube `LEGAL_VERSION`.**
+

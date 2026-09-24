@@ -107,6 +107,7 @@ Convenciones de UI (no inventar otras):
 ## 4. Autenticación y seguridad (implementado y verificado)
 
 - bcrypt (hash) + JWT en cookie httpOnly. `AUTH_SECRET` obligatorio en producción (fail-fast con mensaje claro).
+- Recuperar contraseña (D18): `POST /api/auth/password/forgot` (siempre 200, no revela emails, 3 por hora por cuenta) y `GET/POST /api/auth/password/reset` (token de un uso, 1 hora; en la base solo su sha256 en `PasswordReset`; no inicia sesión). Pantallas `/recuperar` y `/restablecer`. El JWT no tiene estado: cambiar la contraseña no cierra otras sesiones.
 - El dueño de un recurso siempre sale de la sesión (`getSessionUser`), nunca del body (anti-IDOR). Los tokens OAuth de Mercado Pago nunca salen al navegador: las APIs exponen solo `mpConnected`.
 - Cabeceras de seguridad en `next.config.ts`: `nosniff`, `Referrer-Policy`, `Permissions-Policy` y `Content-Security-Policy: frame-ancestors 'self'`.
 - Auditoría de seguridad: `bash scripts/e2e/sec-audit.sh` (29 checks: sesión, 401/403 en todos los endpoints, IDOR, XSS, contraseñas; usa `http://localhost:3000` y las cuentas demo).
@@ -118,7 +119,7 @@ Convenciones de UI (no inventar otras):
 
 ## 5. Modelo de datos (40 modelos en prisma/schema.prisma)
 
-- **Identidad**: `User` (roles JSON; todo registro por pantalla recibe `cliente`), `IdentityDocument` (DNI + análisis IA, estado verificación), `OAuthState` (PKCE)
+- **Identidad**: `User` (roles JSON; todo registro por pantalla recibe `cliente`; `emailNotifications` para los avisos por mail), `IdentityDocument` (DNI + análisis IA, estado verificación), `OAuthState` (PKCE), `PasswordReset` (recuperar contraseña, hash del token)
 - **Perfiles**: `ProfessionalProfile` (con OAuth MP propio), `ProviderProfile` (multi-tipo, plan/suscripción, trial, marca PRO, OAuth MP)
 - **Catálogo**: `Category` (20), `CatalogElement` (1247 elementos con nombre canónico + aliases + descripción + unidad de venta), `ProviderStock`, `StockMovement`, `StockReservation` (sin uso: la reserva descuenta `quantity`)
 - **Trabajo**: `JobPost`, `JobBid`, `Project`, `ProjectMaterial`, `Invoice` (+`serviceFee`), `InvoiceItem`, `Payment` (+`collector`), `ProviderCharge` (+`serviceFee`), `ProviderLink`, `CompletedWork`
@@ -136,12 +137,13 @@ Notas de esquema: la base es Postgres, pero se mantienen las convenciones hereda
 
 | Dominio | Endpoints | Notas |
 |---|---|---|
-| auth | `/auth/login` `/auth/logout` `/auth/me` `/auth/register` | registro con rol (siempre suma `cliente`), cómo nos encontró; login/registro respetan `?volver=` |
+| auth | `/auth/login` `/auth/logout` `/auth/me` `/auth/register` | registro con rol (siempre suma `cliente`), cómo nos encontró, `acceptTerms: true` obligatorio (D19); login/registro respetan `?volver=`; `/profiles/me/eliminar` = baja con anonimización |
 | catálogo | `/catalog` (GET lista completa por categoría; POST alta con IA — solo proveedor, anti-duplicado) | nombre/alias/desc/unidad; la búsqueda difusa corre en el cliente con `search-match.ts` |
 | búsqueda | `/search`, `/search/pins`, `/comparables` | fuzzy + geo; pins para mapa; comparables por precio |
 | directorio | `/directory` | lista pública ordenada por reseñas, filtros rubro+precio+rating; PRO activo primero |
 | trabajos | `/jobs`, `/jobs/[id]`, `/jobs/[id]/bids`, `/bids` (GET mine=1), `/bids/[id]` | publicar/ofertar/retirar/re-ofertar/asignar; aceptar es transaccional y solo desde `pendiente` |
-| proyectos | `/projects`, `/projects/[id]`, `/projects/[id]/invoice`, `/projects/[id]/materials`, `/projects/hire-sources` | asistente Contratar (brief `budgetMin/Max`, `laborCost=0`; **D16**: opcional `jobId` = trabajo propio abierto → mismo cierre que aceptar oferta vía `src/lib/job-hire.ts`, u opcional `parentProjectId` = proyecto activo propio como profesional → subcontratación trazable, invisible para el cliente original; `hire-sources` alimenta el selector) → el pro cotiza → etapas solo hacia adelante → `finalizado` solo el cliente desde ejecución/revisión → una factura pendiente por proyecto (materiales con `invoicedAt`); stock se reserva al APROBAR el material; modo de materiales A/B lo elige el profesional en el proyecto |
+| proyectos | `/projects`, `/projects/[id]`, `/projects/[id]/invoice`, `/projects/[id]/materials`, `/projects/hire-sources`, `/projects/[id]/schedule` | asistente Contratar (brief `budgetMin/Max`, `laborCost=0`; **D16**: opcional `jobId` = trabajo propio abierto → mismo cierre que aceptar oferta vía `src/lib/job-hire.ts`, u opcional `parentProjectId` = proyecto activo propio como profesional → subcontratación trazable, invisible para el cliente original; `hire-sources` alimenta el selector) → el pro cotiza → etapas solo hacia adelante → `finalizado` solo el cliente desde ejecución/revisión → una factura pendiente por proyecto (materiales con `invoicedAt`); stock se reserva al APROBAR el material; modo de materiales A/B lo elige el profesional en el proyecto; **D21** fechas del trabajo: con presupuesto aprobado (oferta aceptada o fuera de `presupuesto`) el profesional propone inicio+fin estimado, el otro acepta/rechaza/contrapropone, reprogramar mantiene lo acordado vigente, concurrencia optimista (409), solapamiento avisa y no bloquea |
+| calendario | `/professional/calendar` (solo el profesional de la sesión), `/profiles/professional/[id]/availability` (**público**) | D21: calendario con proyectos con fechas, `sinFecha` y `pendientes`; disponibilidad pública = rangos anónimos unidos (`ocupado`/`por_confirmar`), `proximaFechaLibre`, ventana ≤ 6 meses, `whereUsuarioPublico()`; días `AAAA-MM-DD` guardados al mediodía UTC (`src/lib/schedule.ts`) |
 | facturas | `/invoices?mine=1` (GET: Cobros del profesional, solo las suyas + resumen), `/invoices/[id]` (GET detalle; POST pago MP con token del profesional + 1%), `/invoices/[id]/cash`, `/invoices/[id]/pdf` | efectivo: acordar/confirmar/cancelar, sin cargo |
 | carrito | `/cart` (GET/POST/PATCH/DELETE), `/cart/merge` (fusiona el del visitante al ingresar), `/cart/preview` (vista del carrito del visitante) | clientes y profesionales; máx. 60 productos; cantidades según unidad (`units.ts`); sin stock se puede agregar (`inStock:false`: solo reserva) |
 | pedidos | `/orders` (GET mis pedidos, POST confirmar carrito con `lineTypes`), `/orders/[id]` | **D15**: `Order` con un `Purchase` por proveedor **y tipo**. **Compra** (solo con stock): nace `aprobado` = por pagar, con reserva atómica + `ProviderCharge` en la misma transacción, sin aprobación; 24 h para pagar/elegir efectivo (efectivo: 7 días desde la compra); sin stock → 409 y nada creado. **Reserva** (con o sin stock): `pendiente_aprobacion`, la aprueba el proveedor |
@@ -200,6 +202,8 @@ Notas de esquema: la base es Postgres, pero se mantienen las convenciones hereda
 8. Pagos: toda preferencia nueva con el token del vendedor (`createSellerPreference`) y el cargo de `fees.ts`; nunca cobrar con el token de la plataforma salvo suscripciones.
 9. Una sola base = producción: todo lo que escribe (seeds, E2E, migraciones) necesita OK del dueño. Migraciones con `migrate diff` + `db execute`, nunca `db push`.
 10. Regla de los tres documentos: actualizá `docs/` (funcional, lógica, técnico, decisiones, bitácora) en la misma rama del cambio.
+11. Toda consulta nueva que muestre usuarios, perfiles, stock o trabajos en lo público (listados, búsquedas, Homy) filtra con `src/lib/visibility.ts` (`whereUsuarioPublico()` / `esUsuarioPublico()`): nunca muestra cuentas eliminadas y, con `HIDE_DEMO_USERS=1`, tampoco las demo `@homia.test` (D20). Las suites E2E corren con el flag en 0.
+12. Mails: todo envío pasa por `src/lib/email.ts` (Resend por HTTP, nunca tira, sin clave no manda). Un evento nuevo que merezca mail se crea con `notificar()` de `src/lib/notify.ts` y su `type` se suma a `TIPOS_CON_MAIL` (respeta `User.emailNotifications`). Los mensajes del chat no mandan mail.
 
 ## 11. Estado actual (24 de septiembre de 2026)
 
@@ -211,10 +215,14 @@ Notas de esquema: la base es Postgres, pero se mantienen las convenciones hereda
 ◻ Antes de lanzar: rate limit en Vercel Firewall (manual), `MP_WEBHOOK_SECRET` y `MP_SUB_WEBHOOK_SECRET` cargados, pago real de prueba de punta a punta con OAuth del vendedor.
 ✔ Sobrantes con el profesional como vendedor en modo `pro_adelanta` y pata profesional → proveedor con reembolso por fuera de HomIA (D14, migración 0024 aplicada, rama `feat/carrito-homy`).
 ✔ Contratar eligiendo un trabajo publicado (cliente) o un proyecto activo (profesional que subcontrata), con `Project.parentProjectId` (D16, migración 0027 aplicada, rama `feat/carrito-homy`).
+✔ Términos aceptados al registrarse (`acceptTerms`, `User.termsAcceptedAt/termsVersion`), "Eliminar mi cuenta" con anonimización (`POST /api/profiles/me/eliminar`, `User.deletedAt`), filtro de cuentas demo por `HIDE_DEMO_USERS`, imagen para compartir (`opengraph-image`) y páginas de error (D19/D20, migración 0029 aplicada, rama `feat/recuperar-mails`).
+✔ Recuperar contraseña por mail y avisos por mail de los eventos clave con interruptor en el perfil de los tres roles (D18, migración 0028 aplicada, rama `feat/recuperar-mails`). E2E A+B+F 286/286 con doble de Resend.
+◻ Mails: crear la cuenta de Resend, verificar `somoshomia.com` y cargar `RESEND_API_KEY` + `EMAIL_FROM` en Vercel. Sin eso no sale ningún mail (tampoco el de recuperar contraseña).
+◻ Día del lanzamiento: `HIDE_DEMO_USERS=1` en Vercel (Production) y datos `NEXT_PUBLIC_LEGAL_*`; textos legales revisados por un abogado.
 ◻ Deuda priorizada: `docs/AUDITORIA-INTEGRAL.md` §9 y `docs/PLAN-LANZAMIENTO-48H.md` §4 (zod en las rutas que faltan, `includes` en directorio/bolsa/pines, cifrado de tokens OAuth).
 
 ## 12. Variables de entorno (nombres exactos que lee el código)
 
-Ver `.env.example`: `DATABASE_URL`, `DIRECT_URL`, `AUTH_SECRET`, `APP_URL`, `MP_ACCESS_TOKEN`, `MP_PUBLIC_KEY`, `MP_CLIENT_ID`, `MP_CLIENT_SECRET`, `MP_TEST_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `MP_SUB_ACCESS_TOKEN`, `MP_SUB_TEST_ACCESS_TOKEN`, `MP_SUB_WEBHOOK_SECRET`, `MP_PROVIDER_BASIC_ARS`, `MP_PROVIDER_PRO_ARS`, `CRON_SECRET`, `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, `AI_VISION_MODEL`, `HOMY_MODEL`, `HOMY_REASONING_EFFORT`, `HOMY_TOPE_DIARIO_VISITANTES`, `HOMY_APAGADO`, `SUPABASE_PROJECT_URL`, `SUPABASE_SERVICE_ROLE`. Solo desarrollo: `NEXT_DIST_DIR`.
+Ver `.env.example`: `DATABASE_URL`, `DIRECT_URL`, `AUTH_SECRET`, `APP_URL`, `MP_ACCESS_TOKEN`, `MP_PUBLIC_KEY`, `MP_CLIENT_ID`, `MP_CLIENT_SECRET`, `MP_TEST_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `MP_SUB_ACCESS_TOKEN`, `MP_SUB_TEST_ACCESS_TOKEN`, `MP_SUB_WEBHOOK_SECRET`, `MP_PROVIDER_BASIC_ARS`, `MP_PROVIDER_PRO_ARS`, `CRON_SECRET`, `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, `AI_VISION_MODEL`, `HOMY_MODEL`, `HOMY_REASONING_EFFORT`, `HOMY_TOPE_DIARIO_VISITANTES`, `HOMY_APAGADO`, `SUPABASE_PROJECT_URL`, `SUPABASE_SERVICE_ROLE`, `HIDE_DEMO_USERS` (1 en producción al lanzar; 0 en local), `NEXT_PUBLIC_LEGAL_RAZON_SOCIAL`, `NEXT_PUBLIC_LEGAL_CUIT`, `NEXT_PUBLIC_LEGAL_DOMICILIO`, `NEXT_PUBLIC_LEGAL_EMAIL`, `RESEND_API_KEY`, `EMAIL_FROM`. Solo desarrollo: `NEXT_DIST_DIR`, `RESEND_API_URL` (doble de Resend en pruebas).
 
 Dominio: `https://www.somoshomia.com`. Webhook MP (prueba y producción, ambas apps): `https://www.somoshomia.com/api/payments/webhook`. Redirect OAuth: `https://www.somoshomia.com/api/mp/oauth/callback`.

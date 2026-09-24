@@ -97,8 +97,9 @@ export async function POST(req: NextRequest) {
   if (!d.targetUserId) return fail('Falta el destinatario')
   if (d.targetUserId === me) return fail('No podés iniciar una conversación con vos mismo')
 
-  const target = await db.user.findUnique({ where: { id: d.targetUserId }, select: { id: true, roles: true } })
-  if (!target) return fail('Usuario no encontrado', 404)
+  const target = await db.user.findUnique({ where: { id: d.targetUserId }, select: { id: true, roles: true, deletedAt: true } })
+  // a una cuenta eliminada (D19) no se le puede escribir
+  if (!target || target.deletedAt) return fail('Usuario no encontrado', 404)
 
   const key = pair(me, d.targetUserId)
 

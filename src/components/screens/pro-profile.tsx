@@ -8,6 +8,7 @@ import { Loading, EmptyState, UAvatar, UStars, VerifyBadge } from '@/components/
 import { ProfileGate } from '@/components/app/profile-gate'
 import ReviewsShortcut, { formatRating } from '@/components/app/reviews-shortcut'
 import HireWizard, { type HireTarget } from '@/components/app/hire-wizard'
+import AvailabilitySection from '@/components/app/availability-section'
 import { formatDate } from '@/lib/format'
 import { toast } from 'sonner'
 import { ChevronLeft, MapPin, HardHat, Briefcase, Star, ArrowUpRight, ImageOff, Search, Images, SendHorizonal, Heart, Share2, MessageCircleOff, Camera, X } from 'lucide-react'
@@ -227,6 +228,9 @@ export default function ProProfileScreen({ id }: { id: string }) {
             )}
           </div>
         )}
+
+        {/* disponibilidad (D21): días ocupados / por confirmar, sin datos de los trabajos */}
+        <AvailabilitySection professionalId={p.id} />
 
         {/* obras */}
         <section>

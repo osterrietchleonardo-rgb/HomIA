@@ -91,6 +91,15 @@ export default function LoginScreen() {
                 {show ? <EyeOff className="size-5" aria-hidden /> : <Eye className="size-5" aria-hidden />}
               </button>
             </div>
+            <div className="mt-1 flex justify-end">
+              <button
+                type="button"
+                onClick={() => navigate(`/recuperar${email.trim() ? `?email=${encodeURIComponent(email.trim())}` : ''}`)}
+                className="min-h-[44px] rounded px-1 text-sm font-bold text-[#1D63B8] underline-offset-2 transition-colors duration-300 hover:text-[#2b8fe0] hover:underline"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
           </div>
           <button type="submit" disabled={busy} className="homy-btn-primary mt-1 w-full py-3.5 text-[15px]">
             {busy ? (

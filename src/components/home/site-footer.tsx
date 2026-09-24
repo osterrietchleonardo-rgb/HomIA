@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { Homy, HomIAWordmark } from "@/components/homy/homy-character";
-import { navigate } from "@/lib/router";
+import { navigate, irASeccionHome } from "@/lib/router";
 
 const FOOTER_COLUMNS = [
   {
@@ -27,9 +27,11 @@ const FOOTER_COLUMNS = [
     title: "Ayuda y confianza",
     links: [
       { label: "Centro de ayuda: dónde hago cada cosa", href: "/#/ayuda", route: "/ayuda" },
-      { label: "Pagos con Mercado Pago o efectivo", href: "/#/ayuda", route: "/ayuda" },
-      { label: "Verificación de identidad por IA", href: "/#/ayuda", route: "/ayuda" },
-      { label: "Reseñas con fotos", href: "/#/ayuda", route: "/ayuda" },
+      { label: "Pagos con Mercado Pago o efectivo", href: "/#/ayuda?tema=pagos", route: "/ayuda?tema=pagos" },
+      { label: "Verificación de identidad por IA", href: "/#/ayuda?tema=verificacion", route: "/ayuda?tema=verificacion" },
+      { label: "Reseñas con fotos", href: "/#/ayuda?tema=resenas", route: "/ayuda?tema=resenas" },
+      { label: "Términos y Condiciones", href: "/#/terminos", route: "/terminos" },
+      { label: "Política de Privacidad", href: "/#/privacidad", route: "/privacidad" },
     ],
   },
 ];
@@ -39,14 +41,8 @@ export function SiteFooter() {
     if (route.startsWith("#") && route !== "#") {
       // ancla de la home: si la sección está montada, scroll nativo;
       // si no (estamos en otra pantalla de la SPA), volvemos a la home con el ancla.
-      const id = route.slice(1);
-      const el = document.getElementById(id);
       e.preventDefault();
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth" });
-      } else {
-        window.location.assign("/#" + id);
-      }
+      irASeccionHome(route.slice(1));
       return;
     }
     if (route.startsWith("/")) {

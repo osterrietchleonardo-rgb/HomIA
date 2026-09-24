@@ -4,6 +4,7 @@ import { hashPassword, createSession, parseRoles } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { ensureDefaultPipelines } from '@/lib/pipelines'
 import { rateLimit, ipRateKey } from '@/lib/rate-limit'
+import { LEGAL_VERSION } from '@/lib/legal-content'
 
 type RegisterBody = {
   email: string
@@ -31,6 +32,7 @@ type RegisterBody = {
   businessName?: string
   cuit?: string
   description?: string
+  acceptTerms?: boolean
 }
 
 export async function POST(req: NextRequest) {
@@ -57,6 +59,11 @@ export async function POST(req: NextRequest) {
   }
   if (data.email.length > 200 || data.password.length > 200) {
     return fail('Email o contraseña demasiado largos')
+  }
+  // D19: sin aceptar los Términos y la Política de Privacidad no se crea la cuenta
+  // (se guarda cuándo y qué versión de los textos aceptó).
+  if (data.acceptTerms !== true) {
+    return fail('Para crear tu cuenta tenés que aceptar los Términos y Condiciones y la Política de Privacidad', 400, { needsTerms: true })
   }
   const email = data.email.trim().toLowerCase()
   const exists = await db.user.findUnique({ where: { email } })
@@ -86,6 +93,8 @@ export async function POST(req: NextRequest) {
       lat: data.lat ?? null,
       lng: data.lng ?? null,
       locationShared: !!(data.lat && data.lng),
+      termsAcceptedAt: new Date(),
+      termsVersion: LEGAL_VERSION,
     },
   })
 

@@ -7,6 +7,7 @@ import { withinRadius } from '@/lib/geo'
 import { matchScore, canonicalCategoria } from '@/lib/search-match'
 import { matchTerms } from '@/lib/search-match'
 import { puedeOperar, esProActivo } from '@/lib/plans'
+import { whereUsuarioPublico } from '@/lib/visibility'
 
 // ── MARKETPLACE DE MATERIALES ──
 // El cliente (o cualquier usuario) busca lo que necesita comprar — sin
@@ -90,7 +91,8 @@ export async function GET(req: NextRequest) {
   // ── 2. Ofertas reales de esos elementos (stock de todos los proveedores, con y sin stock) ──
   const stocks = elementIds.length
     ? await db.providerStock.findMany({
-        where: { elementId: { in: elementIds } },
+        // sin cuentas eliminadas ni (con HIDE_DEMO_USERS=1) cuentas demo — src/lib/visibility.ts
+        where: { elementId: { in: elementIds }, provider: { user: whereUsuarioPublico() } },
         include: {
           provider: {
             include: {

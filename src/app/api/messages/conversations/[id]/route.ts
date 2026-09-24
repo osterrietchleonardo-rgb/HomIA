@@ -135,9 +135,20 @@ export async function POST(
   if (!parsed.success) return fail(parsed.error.issues[0]?.message || 'El mensaje está vacío', 400)
   const text = parsed.data.body
 
-  const conv = await db.conversation.findUnique({ where: { id }, select: { id: true, userAId: true, userBId: true } })
+  // Una sola consulta: la conversación y si alguna de las dos cuentas se eliminó (no se le
+  // escribe a una cuenta eliminada: nadie va a leer ese mensaje).
+  const rows = await db.$queryRaw<{ id: string; userAId: string; userBId: string; hayEliminado: boolean }[]>`
+    SELECT c.id, c."userAId", c."userBId",
+      (ua."deletedAt" IS NOT NULL OR ub."deletedAt" IS NOT NULL) AS "hayEliminado"
+    FROM "Conversation" c
+    JOIN "User" ua ON ua.id = c."userAId"
+    JOIN "User" ub ON ub.id = c."userBId"
+    WHERE c.id = ${id}
+    LIMIT 1`
+  const conv = rows[0]
   if (!conv) return fail('Conversación no encontrada', 404)
   if (conv.userAId !== me && conv.userBId !== me) return fail('No tenés acceso a esta conversación', 403)
+  if (conv.hayEliminado) return fail('Esta cuenta se eliminó: ya no recibe mensajes', 409, { cuentaEliminada: true })
   const otherId = conv.userAId === me ? conv.userBId : conv.userAId
 
   // mensaje + fecha de la conversación + aviso al otro, en una sola transacción

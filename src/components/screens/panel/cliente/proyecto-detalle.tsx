@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import ReviewForm from '../review-form'
 import SobrantesSection from '@/components/screens/panel/sobrantes-section'
+import ScheduleCard, { type ScheduleInfo } from '@/components/app/schedule-card'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -52,6 +53,9 @@ type Project = {
   urgency?: string | null; address?: string | null; deadline?: string | null; photos?: string[]
   // D16: solo llega si quien mira es el profesional que subcontrató desde su proyecto
   parentProject?: { id: string; title: string } | null
+  // D21: fechas del trabajo y, si todavía no se pueden acordar, por qué
+  schedule?: ScheduleInfo | null
+  scheduleBlocked?: string | null
   professional: {
     id: string; userId: string; displayName: string; avatarUrl: string | null; verificationStatus?: string
     personType: string; companyName: string | null; phone: string | null; email: string | null
@@ -352,6 +356,11 @@ export default function ClientProjectDetail({ id }: { id: string }) {
             </div>
           )}
         </section>
+      )}
+
+      {/* D21: fechas del trabajo (el profesional propone, vos aceptás, rechazás o proponés otras) */}
+      {(isActive || p.schedule?.status) && (
+        <ScheduleCard projectId={p.id} role="cliente" otherName={proName} schedule={p.schedule} blocked={p.scheduleBlocked} onChanged={load} />
       )}
 
       {/* etapas + números */}

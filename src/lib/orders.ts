@@ -14,6 +14,7 @@ import { qtyMatchesStep } from '@/lib/units'
 import { round2 } from '@/lib/fees'
 import { logActivity } from '@/lib/activity'
 import { COMPRA_PAGO_MS, fmtDeadline, type OrderLineMode } from '@/lib/order-rules'
+import { notificar } from '@/lib/notify'
 
 // ─────────────────────────── ítems de un sub-pedido ───────────────────────────
 
@@ -307,7 +308,7 @@ export async function createOrder(input: {
         },
       })
       await db.conversation.update({ where: { id: conv.id }, data: { lastMessageAt: new Date() } })
-      await db.notification.create({
+      await notificar({
         data: {
           userId: prov.userId,
           type: 'nueva_compra',

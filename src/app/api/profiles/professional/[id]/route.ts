@@ -3,6 +3,7 @@ import { ok, fail } from '@/lib/api'
 import { db } from '@/lib/db'
 import { parseJson } from '@/lib/api'
 import { getSessionUser } from '@/lib/auth'
+import { esUsuarioPublico } from '@/lib/visibility'
 
 // Perfil de profesional (requiere sesión): incluye usuario, obras y reseñas recibidas
 export async function GET(
@@ -19,11 +20,14 @@ export async function GET(
         select: {
           id: true, displayName: true, avatarUrl: true, rating: true, reviewsCount: true,
           city: true, lat: true, lng: true, createdAt: true, roles: true, verificationStatus: true,
+          email: true, deletedAt: true,
         },
       },
     },
   })
   if (!pro) return fail('Profesional no encontrado', 404)
+  // cuenta eliminada o (con HIDE_DEMO_USERS=1) demo: 404 para todos menos el propio usuario
+  if (pro.userId !== viewer.id && !esUsuarioPublico(pro.user)) return fail('Profesional no encontrado', 404)
 
   const works = await db.completedWork.findMany({
     where: { professionalId: pro.id, visible: true },

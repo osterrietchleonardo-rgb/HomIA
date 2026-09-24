@@ -173,6 +173,15 @@ const NUCLEO: Entrada[] = [
     claves: 'cotizar cotizo presupuesto presupuestar mandar oferta precio proyecto',
   },
   {
+    id: 'calendario',
+    titulo: 'Calendario y fechas del trabajo',
+    roles: ['todos', 'profesional', 'cliente'],
+    texto:
+      'Con el presupuesto aprobado, en el detalle del proyecto aparece "Fechas del trabajo": el profesional propone inicio y fin estimado, y el cliente las acepta, las rechaza o propone otras (el profesional también puede aceptar, rechazar o contraproponer lo que proponga el cliente; nadie acepta su propia propuesta). Lo acordado se puede reprogramar: mientras el otro decide, siguen las fechas acordadas. Cada paso le llega al otro como aviso. El profesional ve todo en Panel → Calendario (mes con lo acordado y lo propuesto, días libres y ocupados, próximos trabajos y proyectos sin fecha). En el perfil del profesional, clientes y proveedores ven su Disponibilidad de los próximos 3 meses: días ocupados, por confirmar y la próxima fecha libre, sin ver de qué trabajo se trata. Si dos trabajos se superponen, HomIA avisa pero no lo bloquea.',
+    ruta: '/panel/profesional/calendario',
+    claves: 'calendario agenda fechas fecha inicio fin disponibilidad disponible ocupado cuando empieza reprogramar turno',
+  },
+  {
     id: 'homy',
     titulo: 'Homy, el asistente',
     roles: ['todos'],
@@ -187,6 +196,41 @@ const NUCLEO: Entrada[] = [
     texto:
       'HomIA no comparte teléfonos, emails, direcciones ni DNI de otros usuarios. Para hablar con un profesional o proveedor se usa el chat de la plataforma (el cliente inicia). Los perfiles públicos muestran nombre, rubro, zona, reseñas, obras y si está verificado.',
     claves: 'telefono email direccion dni datos contacto de otro usuario privacidad',
+  },
+  {
+    id: 'recuperar-contrasena',
+    titulo: 'Me olvidé la contraseña',
+    roles: ['todos'],
+    ruta: '/recuperar',
+    texto:
+      'En Ingresar se toca "¿Olvidaste tu contraseña?", se escribe el email de la cuenta y HomIA manda un link para crear una contraseña nueva (mirar también spam o promociones). El link vence en 1 hora y sirve una sola vez; si venció o ya se usó, se pide otro. Se pueden pedir hasta 3 links por hora. Después se ingresa con la contraseña nueva: los datos, proyectos y pedidos quedan como estaban. Homy no puede cambiar ni ver contraseñas.',
+    claves: 'olvide contraseña clave password recuperar restablecer no puedo entrar ingresar cuenta bloqueada link mail',
+  },
+  {
+    id: 'avisos-mail',
+    titulo: 'Avisos por mail',
+    roles: ['todos'],
+    ruta: '/panel',
+    texto:
+      'Además del aviso en la campanita, HomIA manda un mail al email de la cuenta con los eventos importantes: compra o reserva nueva (al proveedor), te contrataron o te aceptaron el presupuesto (al profesional), oferta nueva en tu trabajo, factura emitida y reserva aprobada o lista para retirar (al cliente), pago acreditado por Mercado Pago (a quien cobra) y pedido de devolución de sobrantes (a quien lo recibe). Los mensajes del chat NO llegan por mail. Se apagan desde Mi perfil → "Recibir avisos por mail" (el mail para crear una nueva contraseña llega siempre).',
+    claves: 'mail email correo aviso notificacion me avisan enterarme apagar desactivar dejar de recibir spam',
+  },
+  {
+    id: 'eliminar-cuenta',
+    titulo: 'Eliminar mi cuenta',
+    roles: ['todos'],
+    ruta: '/panel',
+    texto:
+      'Se hace desde Mi perfil → "Eliminar mi cuenta" (al final de la página, en los tres roles): hay que escribir ELIMINAR y la contraseña. Si hay algo abierto (proyectos activos, facturas o cobros sin pagar, pedidos sin cerrar, devoluciones en curso o, si es proveedor, la suscripción de Mercado Pago activa) no se elimina y la app lista qué cerrar primero. Al eliminarla se borran los datos personales (nombre, email, teléfono, dirección, foto, ubicación, cumpleaños), las fotos del DNI, el carrito, los favoritos, las conversaciones con Homy y las notificaciones, y el perfil deja de aparecer; se conservan sin nombre las facturas, pagos y pedidos cerrados (obligación legal) y las reseñas y mensajes, que figuran como "Usuario eliminado". No se puede deshacer. Homy no puede eliminar cuentas.',
+    claves: 'eliminar borrar dar de baja cerrar cuenta darme de baja borrar mis datos supresion ley 25326 privacidad',
+  },
+  {
+    id: 'terminos',
+    titulo: 'Términos y Política de Privacidad',
+    roles: ['todos'],
+    texto:
+      'Para crear una cuenta hay que aceptar los Términos y Condiciones y la Política de Privacidad (casilla obligatoria en el último paso del registro). Las dos páginas están en el pie de la portada ("Términos y Condiciones" y "Política de Privacidad") y explican las reglas de uso, pagos, plazos, qué datos se guardan y para qué.',
+    claves: 'terminos condiciones politica privacidad legal datos personales aceptar',
   },
   {
     id: 'no-existe',

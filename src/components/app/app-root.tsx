@@ -2,7 +2,7 @@
 // AppRoot HomIA — router SPA por hash con todas las pantallas
 import { useEffect } from 'react'
 import dynamic from 'next/dynamic'
-import { useRoute, navigate, Link, markSpaMounted } from '@/lib/router'
+import { useRoute, navigate, Link, markSpaMounted, unmarkSpaMounted } from '@/lib/router'
 import { useSession, useLocation, syncLocationToServer } from '@/lib/store'
 import { useCartSync } from '@/lib/cart'
 import { Loading } from '@/components/app/ui-bits'
@@ -23,6 +23,8 @@ const HomeScreen = dynamic(() => import('@/components/screens/home-screen'), { s
 const SearchScreen = dynamic(() => import('@/components/screens/search-screen'), { ssr: false, loading: () => <Loading /> })
 const LoginScreen = dynamic(() => import('@/components/screens/auth-login'), { ssr: false, loading: () => <Loading /> })
 const RegisterScreen = dynamic(() => import('@/components/screens/auth-register'), { ssr: false, loading: () => <Loading /> })
+const RecoverScreen = dynamic(() => import('@/components/screens/auth-recuperar'), { ssr: false, loading: () => <Loading /> })
+const ResetScreen = dynamic(() => import('@/components/screens/auth-restablecer'), { ssr: false, loading: () => <Loading /> })
 const JobDetailScreen = dynamic(() => import('@/components/screens/job-detail'), { ssr: false, loading: () => <Loading /> })
 const ProProfileScreen = dynamic(() => import('@/components/screens/pro-profile'), { ssr: false, loading: () => <Loading /> })
 const ProviderProfileScreen = dynamic(() => import('@/components/screens/provider-profile'), { ssr: false, loading: () => <Loading /> })
@@ -31,6 +33,7 @@ const DirectoryScreen = dynamic(() => import('@/components/screens/directory-scr
 const MarketplaceScreen = dynamic(() => import('@/components/screens/marketplace-screen'), { ssr: false, loading: () => <Loading /> })
 const MessagesScreen = dynamic(() => import('@/components/screens/messages-screen'), { ssr: false, loading: () => <Loading /> })
 const HelpScreen = dynamic(() => import('@/components/screens/help-screen'), { ssr: false, loading: () => <Loading /> })
+const LegalScreen = dynamic(() => import('@/components/screens/legal-screen'), { ssr: false, loading: () => <Loading /> })
 const CartScreen = dynamic(() => import('@/components/screens/cart-screen'), { ssr: false, loading: () => <Loading /> })
 
 // Pedidos del carrito (cliente y profesional que compra)
@@ -59,6 +62,7 @@ const ProLinks = dynamic(() => import('@/components/screens/panel/profesional/vi
 const ProReturns = dynamic(() => import('@/components/screens/panel/profesional/devoluciones'), { ssr: false, loading: () => <Loading /> })
 const ProProfileEdit = dynamic(() => import('@/components/screens/panel/profesional/perfil'), { ssr: false, loading: () => <Loading /> })
 const ProCobros = dynamic(() => import('@/components/screens/panel/profesional/cobros'), { ssr: false, loading: () => <Loading /> })
+const ProCalendar = dynamic(() => import('@/components/screens/panel/profesional/calendario'), { ssr: false, loading: () => <Loading /> })
 
 // Panel proveedor
 const ProviderDashboard = dynamic(() => import('@/components/screens/panel/proveedor/dashboard'), { ssr: false, loading: () => <Loading /> })
@@ -80,6 +84,7 @@ export default function AppRoot() {
   const location = useLocation()
   // la SPA está montada: desde acá navigate() cambia el hash sin recargar la página
   markSpaMounted()
+  useEffect(() => { markSpaMounted(); return () => unmarkSpaMounted() }, [])
 
   // carrito: se sincroniza con la sesión (y fusiona el del visitante al ingresar)
   useCartSync()
@@ -143,6 +148,8 @@ export default function AppRoot() {
   else if (s[0] === 'buscar') screen = publicOrPanel(shell(<SearchScreen />), <SearchScreen embedded />)
   else if (s[0] === 'ingresar') screen = <LoginScreen />
   else if (s[0] === 'registrarse') screen = <RegisterScreen />
+  else if (s[0] === 'recuperar') screen = <RecoverScreen />
+  else if (s[0] === 'restablecer') screen = <ResetScreen />
   else if (s[0] === 'trabajo' && s[1]) screen = publicOrPanel(shell(<JobDetailScreen id={s[1]} />), <JobDetailScreen id={s[1]} />)
   else if (s[0] === 'profesional' && s[1]) screen = publicOrPanel(shell(<ProProfileScreen id={s[1]} />), <ProProfileScreen id={s[1]} />)
   else if (s[0] === 'proveedor' && s[1]) screen = publicOrPanel(shell(<ProviderProfileScreen id={s[1]} />), <ProviderProfileScreen id={s[1]} />)
@@ -151,6 +158,7 @@ export default function AppRoot() {
   else if (s[0] === 'materiales') screen = inPanel ? withPanel(<MarketplaceScreen embedded />) : withPublicShell(<MarketplaceScreen />)
   else if (s[0] === 'mensajes') screen = publicOrPanel(<AuthGate path="/mensajes" />, <MessagesScreen embedded />)
   else if (s[0] === 'ayuda') screen = inPanel ? withPanel(<HelpScreen embedded />) : withPublicShell(<HelpScreen />)
+  else if (s[0] === 'terminos' || s[0] === 'privacidad') screen = inPanel ? withPanel(<LegalScreen tipo={s[0]} />) : withPublicShell(<LegalScreen tipo={s[0]} />, 'pt-20')
   else if (s[0] === 'carrito') screen = inPanel ? withPanel(<CartScreen embedded />) : loading ? <Loading text="Verificando tu sesión…" /> : withPublicShell(<CartScreen />, 'pt-20')
   else if (s[0] === 'panel') {
     if (loading) screen = <Loading text="Verificando tu sesión…" />
@@ -216,6 +224,7 @@ function panelScreen(route: ReturnType<typeof useRoute>) {
     if (page === 'vinculaciones') return <ProLinks />
     if (page === 'devoluciones') return <ProReturns />
     if (page === 'cobros') return <ProCobros />
+    if (page === 'calendario') return <ProCalendar />
     if (page === 'perfil') return <ProProfileEdit />
     return <NotFound />
   }

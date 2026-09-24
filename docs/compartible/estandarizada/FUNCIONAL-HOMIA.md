@@ -25,6 +25,20 @@
     las secciones, además de "Ir a la home" y "Cerrar sesión".
 - **Campana (arriba):** tus avisos. Tocar un aviso te lleva a lo que pasó. Se actualiza sola cada
   15 segundos.
+- **Avisos por mail** *(D18, 24/09/2026)*: además de la campana, HomIA te manda un mail con lo más
+  importante, con un botón que te lleva directo a esa pantalla:
+  - **Proveedor:** te compraron o te reservaron; te pagaron por Mercado Pago (una venta o un cobro);
+    un profesional te pide devolver materiales.
+  - **Profesional:** te contrataron o te aceptaron un presupuesto; te pagaron una factura por
+    Mercado Pago; un cliente te pide devolver sobrantes.
+  - **Cliente:** llegó una oferta nueva a tu trabajo; te emitieron una factura; tu reserva fue
+    aprobada o ya está para retirar.
+  - Los **mensajes del chat no llegan por mail** (serían demasiados).
+  - **Cómo apagarlos:** en **Mi perfil**, tarjeta **Avisos por mail** → interruptor **"Recibir
+    avisos por mail"**. Los avisos de la campana siguen igual. El mail para crear una nueva
+    contraseña llega siempre.
+  - Hoy los mails salen solo cuando está configurado el servicio de envío (Resend, ver
+    `decisiones.md` D18).
 - **Mensajes:** chat uno a uno, estilo WhatsApp. La bandeja se actualiza sola.
 - **Si tu cuenta tiene más de un perfil** (por ejemplo, profesional y también cliente), arriba
   aparece **"Perfil: …"** para cambiar de panel.
@@ -38,8 +52,33 @@
   (validó su DNI), **en revisión** o **no verificada**.
 - **Si no hay conexión:** la app avisa "No pudimos conectar. Reintentá en unos segundos". Nunca
   muestra datos inventados.
+- **Si algo se rompe** (un error inesperado de la pantalla), en vez de la pantalla técnica de
+  Next.js aparece **"Algo salió mal"** con dos botones: **Reintentar** (vuelve a cargar esa parte) e
+  **Ir al inicio**. No se muestran detalles técnicos. *(24/09/2026.)*
+- **Compartir el link de HomIA** por WhatsApp o redes muestra una imagen de vista previa: fondo azul
+  oscuro, "HomIA", "Tu hogar en buenas manos" y "Profesionales verificados, materiales y pagos en un
+  solo lugar". *(24/09/2026.)*
+- **Eliminar mi cuenta** (los tres roles, al final de **Mi perfil**) *(D19, 24/09/2026)*:
+  1. Tocás **Eliminar mi cuenta**. Se abre una ventana que explica **qué se borra** (nombre, email,
+     teléfono, dirección, foto, ubicación, cumpleaños, fotos del DNI, carrito, favoritos,
+     conversaciones con Homy, notificaciones; tu perfil deja de aparecer en directorio, búsquedas y
+     marketplace y, si sos proveedor, se quita tu stock publicado) y **qué se conserva sin tu
+     nombre** (facturas, pagos y pedidos cerrados, por obligación legal; reseñas y mensajes que
+     intercambiaste, que pasan a figurar como "Usuario eliminado").
+  2. Escribís **ELIMINAR** y tu **contraseña**, y tocás **Eliminar definitivamente**.
+  3. Si tenés algo abierto (proyectos activos, facturas o cobros sin pagar, pedidos sin cerrar,
+     devoluciones en curso o, si sos proveedor, la suscripción de Mercado Pago activa), **no se
+     elimina**: la ventana te lista qué tenés que cerrar, con un **"Ir a verlo"** en cada cosa.
+  4. Si no, la cuenta se elimina al instante, se cierra la sesión y te lleva al inicio. **No se
+     puede deshacer** y con ese email y contraseña ya no se puede entrar.
+- **Qué se ve en lo público:** en el directorio, el buscador, el mapa, los materiales, la cinta de
+  sponsors, los perfiles, la bolsa de trabajos y las respuestas de Homy **nunca aparecen cuentas
+  eliminadas**. Además, desde el lanzamiento se van a ocultar las **cuentas de demostración** (las de
+  prueba que hoy llenan la app), para que el primer cliente real no vea profesionales, proveedores,
+  trabajos ni reseñas de mentira. Las cuentas demo siguen pudiendo entrar a su panel para probar.
+  *(D20, 24/09/2026.)*
 
-*Fuente: `src/components/screens/panel/panel-layout.tsx`, `src/components/help/help-dock.tsx`.*
+*Fuente: `src/components/screens/panel/panel-layout.tsx`, `src/components/help/help-dock.tsx`, `src/components/app/delete-account-card.tsx`, `src/app/error.tsx`, `src/app/opengraph-image.tsx`.*
 
 ---
 
@@ -228,6 +267,10 @@ En el perfil de un proveedor, los productos **sin stock** muestran el botón **R
      trabajo.
    - Proveedor: nombre del local (obligatorio), CUIT y descripción. Se muestra el aviso "14 días
      gratis para probar. Después: Básico $50.000/mes o PRO $100.000/mes".
+   - **Al final, la casilla obligatoria** "Acepto los Términos y Condiciones y la Política de
+     Privacidad de HomIA". Los dos nombres son links que abren las páginas en **otra pestaña**, así
+     no se pierde lo que cargaste. Sin tildarla, el botón **Crear mi cuenta** queda apagado. HomIA
+     guarda cuándo aceptaste y qué versión de los textos. *(D19, 24/09/2026.)*
 
 **Cosas a saber:**
 
@@ -241,10 +284,34 @@ En el perfil de un proveedor, los productos **sin stock** muestran el botón **R
 
 **Ingresar:** email y contraseña.
 
-- **No hay opción de "olvidé mi contraseña".**
 - Después de 10 intentos fallidos seguidos hay que esperar unos minutos.
 
-*Fuente: `src/components/screens/auth-register.tsx`, `auth-login.tsx`.*
+**¿Olvidaste tu contraseña?** *(D18, 24/09/2026)* — sirve igual para los tres roles:
+
+1. En **Ingresar**, debajo de la contraseña, tocás **"¿Olvidaste tu contraseña?"**. Si ya habías
+   escrito tu email, pasa solo a la pantalla siguiente.
+2. En **Recuperar contraseña** escribís el email de tu cuenta y tocás **Mandarme el link**. La
+   pantalla siempre dice lo mismo: "Si ese email tiene una cuenta, te mandamos un link para crear
+   una nueva contraseña" (así nadie puede averiguar qué emails están registrados). Te recuerda
+   mirar spam o promociones. **Mientras HomIA no tenga el servicio de mails activado**, en vez de
+   eso dice "Todavía no podemos mandar mails para recuperar la contraseña. Probá de nuevo más
+   tarde." (igual para cualquier email): no promete un mail que no va a llegar.
+3. Te llega un mail de HomIA con el botón **Crear nueva contraseña**. El link **vence en 1 hora** y
+   **sirve una sola vez**. Se pueden pedir hasta 3 links por hora.
+4. El link abre **Nueva contraseña**: la escribís dos veces (mínimo 8 caracteres, con letras y
+   números; el ojito la muestra u oculta) y tocás **Guardar la nueva contraseña**.
+5. Listo: "Tu contraseña se cambió". **No entra solo**: tocás **Ir a ingresar** y entrás con la
+   nueva. La vieja deja de funcionar. Tus datos, proyectos y pedidos quedan como estaban.
+
+Si el link venció o ya se usó, la pantalla lo dice claro ("El link venció: pedí uno nuevo" / "Este
+link ya se usó…") con el botón **Pedir un link nuevo**. Si pediste varios links, al usar uno los
+demás dejan de servir.
+
+> **Importante (hoy):** el mail sale solo cuando está configurado el servicio de envío (Resend,
+> ver `decisiones.md` D18). Sin eso, la pantalla responde igual pero **no llega ningún mail**.
+
+*Fuente: `src/components/screens/auth-register.tsx`, `auth-login.tsx`, `auth-recuperar.tsx`,
+`auth-restablecer.tsx`.*
 
 ### 1.8 Ayuda
 
@@ -256,7 +323,34 @@ En el perfil de un proveedor, los productos **sin stock** muestran el botón **R
 - **Recorrido guiado:** requiere cuenta y no arranca solo. Se inicia desde el botón **?**, la
   página de Ayuda o la tarjeta "Tus primeros pasos".
 
+- **Temas directos desde el pie de página:** "Pagos con Mercado Pago o efectivo", "Verificación de
+  identidad por IA" y "Reseñas con fotos" abren la Ayuda con esa pregunta ya desplegada y a la vista
+  (no el principio de la página).
+
 *Fuente: `src/components/screens/help-screen.tsx`, `src/components/help/*`.*
+
+### 1.9 Términos y Condiciones y Política de Privacidad
+
+Desde el pie de página de cualquier pantalla pública (y desde la casilla de aceptación del registro).
+Pensadas para leerse en el celu:
+
+- Arriba, un cambio rápido entre **Términos** y **Privacidad**, la fecha de vigencia y
+  "Imprimir o guardar en PDF".
+- **"En pocas palabras":** lo más importante en 6-7 puntos, con la aclaración de que vale el texto
+  completo.
+- **Índice:** desplegable en el celu, fijo al costado en la computadora; tocar un título lleva a esa
+  sección.
+- **Tablas claras** (plazos de compras y reservas, quién paga qué, planes, qué datos guardamos, quién
+  ve cada dato, con qué empresas se comparten y dónde, cookies, cuánto tiempo se guarda cada cosa). En
+  el celu cada fila se ve como tarjeta.
+- Todo lo que dicen (1% solo con Mercado Pago, 24 h / 7 días / 48 h, 30 días de sobrantes, planes
+  $50.000 y $100.000, 14 días de prueba, 3 intentos de DNI por día, 8 y 60 consultas de Homy) es lo
+  mismo que aplica el sistema.
+- **Contacto:** razón social, CUIT, domicilio y email de la empresa. Mientras no estén cargados, la
+  página lo dice ("Todavía no publicamos acá…"), sin inventarlos.
+- Versión inicial: la tiene que revisar un abogado antes del lanzamiento (D22).
+
+*Fuente: `src/lib/legal-content.ts`, `src/components/screens/legal-screen.tsx`.*
 
 ---
 
@@ -389,6 +483,24 @@ vuelven atrás.
   - **Modo B — "los pagás directamente al proveedor":** cada proveedor te manda un cobro aparte y
     la factura del profesional es solo por la mano de obra.
 - Contacto: **Abrir chat**, llamar o mandar un email.
+- **Fechas del trabajo** *(24/09/2026)*: cuándo arranca y cuándo termina (estimado). Ver abajo.
+
+**Fechas del trabajo (inicio y fin estimado):**
+
+- Aparecen cuando el presupuesto quedó aprobado (aceptaste su oferta en la bolsa, o el proyecto ya
+  pasó a Materiales). Antes, la tarjeta te explica por qué todavía no.
+- **Las propone primero el profesional.** Te llega un aviso (en la app y por mail) y un mensaje en el
+  chat. En la tarjeta **"Fechas del trabajo"** tenés tres botones:
+  - **Aceptar fechas** → quedan **acordadas**.
+  - **Proponer otras** → elegís inicio y fin estimado (y una nota si querés). Ahora el profesional
+    decide: las acepta, las rechaza o te propone otras.
+  - **Rechazar** → podés contar el motivo; el proyecto queda sin fechas y el profesional propone otras.
+- Nadie acepta su propia propuesta: siempre decide el otro.
+- **Reprogramar:** con fechas acordadas, tocá **Pedir reprogramar**. Mientras el profesional decide,
+  **siguen valiendo las fechas acordadas** (la tarjeta muestra las dos). Si las rechaza, siguen las
+  de antes; si las acepta, pasan a ser las nuevas. El profesional también puede pedirte reprogramar.
+- Si el profesional ya tiene otros trabajos en parte de esas fechas, te avisamos cuántos (sin decirte
+  cuáles). No es un impedimento: puede llevar trabajos en paralelo.
 
 **Materiales por aprobar:**
 
@@ -413,7 +525,7 @@ vuelven atrás.
 - Si todavía no hay factura, te avisa: "¿finalizás igual?".
 - Al finalizar se habilitan las reseñas y ya no se puede deshacer.
 
-*Fuente: `cliente/proyecto-detalle.tsx`; reglas en `LOGICA-HOMIA.md` §3.*
+*Fuente: `cliente/proyecto-detalle.tsx`, `src/components/app/schedule-card.tsx`; reglas en `LOGICA-HOMIA.md` §3 y §3.6.*
 
 ### 2.6 Facturas: pagar
 
@@ -649,8 +761,11 @@ sobrantes**.
 - Podés cambiar tu foto, nombre, celular, dirección, ciudad y cumpleaños.
 - Podés compartir tu ubicación y elegir el **radio de búsqueda** (1 a 100 km).
 - El email no se puede cambiar.
+- **Avisos por mail:** interruptor "Recibir avisos por mail" (prendido de fábrica). Dice a qué email
+  llegan y qué avisa (oferta nueva, factura, reserva aprobada o lista). Ver "Lo básico para todos".
+- Al final: **Eliminar mi cuenta** (ver "Lo básico para todos").
 
-*Fuente: `cliente/perfil.tsx`.*
+*Fuente: `cliente/perfil.tsx`, `panel/avisos-mail-card.tsx`.*
 
 ---
 
@@ -667,6 +782,7 @@ sobrantes**.
 | **Proyectos** | Barra de abajo | Obras en curso |
 | **Mensajes** | Barra de abajo | Chats |
 | **Cobros** | Más | Conectar Mercado Pago, lo cobrado y lo pendiente, todas tus facturas (3.8) |
+| **Calendario** | Más | Tus trabajos por fecha: acordados, por confirmar, días libres y proyectos sin fecha (3.16) |
 | **Materiales** | Más | Buscar materiales, carrito y comparar precios |
 | **Mis pedidos** | Más | Seguir y pagar los pedidos de materiales |
 | **Mis ofertas** | Más | Presupuestos que mandaste |
@@ -765,6 +881,8 @@ Si también publicaste trabajos como cliente, el selector muestra los dos grupos
 - **Finalizar:** no podés finalizar la obra vos. Cuando termines, pasala a **Revisión**; el cliente
   revisa y la da por finalizada.
 - **Cancelar:** se puede solo en Presupuesto o Materiales.
+- **Fechas del trabajo:** con el presupuesto aprobado, proponé inicio y fin estimado desde la tarjeta
+  "Fechas del trabajo" del proyecto (ver 3.16).
 - **Contacto con el cliente:**
   - **Abrir chat:** si el cliente todavía no te escribió, ves "El cliente todavía no abrió el chat".
   - **Ver reputación:** te muestra con quién vas a trabajar (sus reseñas de otros profesionales,
@@ -979,6 +1097,11 @@ proyectos. **No es una cuenta bancaria ni guarda plata.**
   - Acceso **"Cobros y Mercado Pago"** (lleva a Cobros, ver 3.8).
   - Un aviso: usar HomIA es gratis; cuando alguien paga por Mercado Pago se suma un cargo de
     servicio del 1% que paga quien compra (vos cobrás el 100% de tu factura).
+  - **Avisos por mail:** interruptor "Recibir avisos por mail" (te contrataron, te aceptaron un
+    presupuesto, te pagaron una factura por MP, te piden devolver sobrantes). Ver "Lo básico para
+    todos".
+  - Al final: **Eliminar mi cuenta** (ver "Lo básico para todos"): antes tenés que terminar tus
+    proyectos activos y cobrar tus facturas pendientes.
 - **Reputación del cliente** (botón **Reputación** en el chat con un cliente, **Ver reputación** en
   el proyecto, y en los pedidos del proveedor): muestra nombre, verificación, ciudad, antigüedad, un
   atajo **"★ 5 · 1 reseña"** que baja hasta la lista **"Lo que dicen los profesionales que
@@ -999,11 +1122,52 @@ como cliente: su cotización, el avance, el pago y la reseña.
 
 - Nombre (o empresa), verificación, oficios, ciudad, radio y antigüedad.
 - **Atajo a tus reseñas** "★ 4,5 · 12 reseñas" que baja hasta la sección Reseñas (ver 1.5).
-- Cifras (obras, años de experiencia, reseñas), bio y habilidades, **Trabajos realizados** y
-  **Reseñas** con fotos.
+- Cifras (obras, años de experiencia, reseñas), bio y habilidades, **Disponibilidad**,
+  **Trabajos realizados** y **Reseñas** con fotos.
+- **Disponibilidad** *(24/09/2026)*: un calendario de los próximos 3 meses (se pasa de mes con las
+  flechas) con tus días **ocupados** (fechas acordadas, en azul oscuro), **por confirmar** (fechas
+  propuestas, punteado) y **libres** (verde claro), más un resumen: **"Disponible esta semana"** o
+  **"Próxima fecha libre: 14/10"**. Nunca se ve de qué trabajo se trata, para quién ni dónde.
+  Como el perfil pide cuenta (ver 1.5), la ven clientes, proveedores y otros profesionales con
+  sesión; un visitante sin cuenta ve "Ingresá para ver este profesional".
 - Botones **Contactar**, **Contratar**, favorito y compartir.
 
-*Fuente: `src/components/screens/pro-profile.tsx`.*
+*Fuente: `src/components/screens/pro-profile.tsx`, `src/components/app/availability-section.tsx`.*
+
+### 3.16 Calendario y fechas del trabajo *(24/09/2026)*
+
+**Acordar las fechas de un proyecto** (tarjeta **"Fechas del trabajo"** en el detalle del proyecto):
+
+1. Cuando el presupuesto queda aprobado (el cliente aceptó tu oferta en la bolsa, o el proyecto ya
+   pasó a Materiales), tocá **Proponer fechas**: inicio, fin estimado y una nota opcional (ej.
+   "arranco a las 8"). El inicio no puede ser anterior a hoy y el fin no puede ser antes del inicio.
+2. Si esas fechas se pisan con otros trabajos tuyos, el cuadro te avisa en el momento con cuáles
+   ("Se superpone con 2 trabajos ese período"). **No te bloquea**: podés llevar trabajos en paralelo.
+3. Al cliente le llega un aviso (app y mail) y un mensaje en el chat. Mientras decide, la tarjeta
+   dice **"Esperando respuesta"**; podés **Cambiar mi propuesta**.
+4. El cliente las **acepta** (quedan **acordadas**), las **rechaza** (con motivo: proponé otras) o
+   **te propone otras**: ahí la tarjeta dice **"Te toca responder"** y vos aceptás, rechazás o
+   contraproponés. Nadie acepta su propia propuesta.
+5. **Reprogramar:** con fechas acordadas, cualquiera de los dos toca **Pedir reprogramar**. Hasta que
+   el otro responda siguen valiendo las acordadas; si rechaza, quedan las de antes.
+
+**Pantalla Calendario** (menú → Calendario):
+
+- **Resumen del mes:** días **ocupados** (acordados), **propuestos** (por confirmar) y **libres**.
+- **El mes** (flechas para ir al anterior o al siguiente; hoy en naranja): en la compu, cada día
+  muestra barritas con el nombre del trabajo (azul = acordado, punteado = por confirmar, gris =
+  finalizado); en el celu, puntitos. Tocando un día ves abajo sus trabajos; tocando un trabajo vas
+  al proyecto.
+- **Próximos trabajos:** los de los próximos 6 meses con su estado ("Arranca en 3 días", "En curso",
+  "Esperando al cliente", "Te toca responder").
+- **Sin fecha todavía:** proyectos con presupuesto aprobado que no tienen fechas, con el botón
+  **Proponer fechas** (y el motivo, si el cliente rechazó las anteriores).
+- Si un cliente te propuso fechas, arriba aparece el aviso "N clientes te propusieron fechas".
+- Lo acordado y lo propuesto se ve en tu perfil público como **Disponibilidad** (3.15), sin datos
+  de cada trabajo.
+
+*Fuente: `src/components/screens/panel/profesional/calendario.tsx`, `src/components/app/schedule-card.tsx`;
+reglas en `LOGICA-HOMIA.md` §3.6.*
 
 ---
 
@@ -1310,6 +1474,11 @@ En la cinta de sponsors aparecen primero los proveedores que cargaron logo propi
 - **Foto, plan y verificación:** foto del negocio, el estado de tu plan y el acceso a la
   verificación.
 - **Marca en la portada:** solo PRO (ver 4.9).
+- **Avisos por mail:** interruptor "Recibir avisos por mail" (te compraron o reservaron, te pagaron
+  por MP, te piden devolver materiales). Ver "Lo básico para todos".
+- Al final: **Eliminar mi cuenta** (ver "Lo básico para todos"). Si tenés un plan pago activo,
+  primero cancelá la suscripción desde tu cuenta de Mercado Pago. Al eliminarla se quita todo tu
+  stock publicado.
 
 *Fuente: `proveedor/perfil.tsx`.*
 

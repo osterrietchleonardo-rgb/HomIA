@@ -5,6 +5,7 @@ import { parseJson } from '@/lib/api'
 import { withinRadius, type WithGeo } from '@/lib/geo'
 import { matchTerms, canonicalCategoria } from '@/lib/search-match'
 import { puedeOperar, esProActivo } from '@/lib/plans'
+import { whereUsuarioPublico } from '@/lib/visibility'
 
 // Búsqueda dual HomIA
 // mode=cliente    → profesionales + trabajos abiertos + MATERIALES en proveedores
@@ -24,6 +25,8 @@ export async function GET(req: NextRequest) {
   // Matchea por nombre del elemento, ALIASES ("caño" encuentra "Caño PVC desagüe",
   // "corrugado" encuentra el caño de luz), descripción, marca y nombre del proveedor.
   const stock = await db.providerStock.findMany({
+    // sin cuentas eliminadas ni (con HIDE_DEMO_USERS=1) cuentas demo — src/lib/visibility.ts
+    where: { provider: { user: whereUsuarioPublico() } },
     include: {
       element: { include: { category: true } },
       provider: {
@@ -85,6 +88,7 @@ export async function GET(req: NextRequest) {
   if (mode === 'cliente') {
     // ── Profesionales ──
     const pros = await db.professionalProfile.findMany({
+      where: { user: whereUsuarioPublico() },
       include: {
         user: { select: { id: true, displayName: true, avatarUrl: true, rating: true, reviewsCount: true, city: true, verificationStatus: true } },
       },
@@ -124,7 +128,7 @@ export async function GET(req: NextRequest) {
 
     // ── Trabajos abiertos de la categoría (para mostrar demanda) ──
     const openJobs = await db.jobPost.findMany({
-      where: { status: 'abierto', ...(cat ? { categorySlug: cat } : {}) },
+      where: { status: 'abierto', user: whereUsuarioPublico(), ...(cat ? { categorySlug: cat } : {}) },
       include: { user: { select: { displayName: true } }, bids: { select: { id: true } } },
       orderBy: { createdAt: 'desc' },
       take: 30,
@@ -157,6 +161,7 @@ export async function GET(req: NextRequest) {
   const openJobs = await db.jobPost.findMany({
     where: {
       status: 'abierto',
+      user: whereUsuarioPublico(),
       ...(catFilter ? { categorySlug: catFilter } : {}),
       ...(urgency ? { urgency } : {}),
     },

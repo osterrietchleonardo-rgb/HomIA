@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { parseJson } from '@/lib/api'
 import { withinRadius } from '@/lib/geo'
 import { puedeOperar, esProActivo } from '@/lib/plans'
+import { whereUsuarioPublico } from '@/lib/visibility'
 
 // Pines para el mapa de búsqueda: profesionales, trabajos y materiales con coords reales
 export async function GET(req: NextRequest) {
@@ -25,7 +26,8 @@ export async function GET(req: NextRequest) {
 
   if (mode === 'cliente') {
     const pros = await db.professionalProfile.findMany({
-      where: { lat: { not: null }, lng: { not: null } },
+      // sin cuentas eliminadas ni (con HIDE_DEMO_USERS=1) cuentas demo — src/lib/visibility.ts
+      where: { lat: { not: null }, lng: { not: null }, user: whereUsuarioPublico() },
       include: { user: { select: { displayName: true, city: true } } },
     })
     const filtered = pros.filter((p) => {
@@ -48,6 +50,7 @@ export async function GET(req: NextRequest) {
   } else {
     // materiales (pines en proveedores)
     const stock = await db.providerStock.findMany({
+      where: { provider: { user: whereUsuarioPublico() } },
       include: {
         element: { include: { category: true } },
         provider: { include: { user: { select: { city: true } } } },
@@ -88,7 +91,7 @@ export async function GET(req: NextRequest) {
 
   // trabajos siempre visibles en el mapa
   const jobs = await db.jobPost.findMany({
-    where: { status: 'abierto', lat: { not: null }, lng: { not: null }, ...(cat ? { categorySlug: cat } : {}) },
+    where: { status: 'abierto', lat: { not: null }, lng: { not: null }, user: whereUsuarioPublico(), ...(cat ? { categorySlug: cat } : {}) },
     include: { user: { select: { city: true } } },
     take: 100,
   })

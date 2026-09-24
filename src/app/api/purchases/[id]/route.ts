@@ -12,6 +12,7 @@ import { logActivity } from '@/lib/activity'
 import { sellerTokenOr503, mpDown } from '@/lib/seller-pay'
 import { LEGACY_PREFIX } from '@/lib/order-view'
 import { RESERVA_MS, COMPRA_EFECTIVO_MS, fmtDeadline, fmtDay } from '@/lib/order-rules'
+import { notificar } from '@/lib/notify'
 
 // ── Máquina de estados de un sub-pedido (a UN proveedor, con uno o más ítems) ──
 // D15 (24/09/2026, Leonardo): "Las compras no necesitan aprobación del proveedor: son
@@ -328,7 +329,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         if (upd.count === 0) return fail('El pedido cambió de estado recién: actualizá la pantalla', 409)
         await savePrice()
         const dia = fmtDay(availableFrom)
-        await db.notification.create({
+        await notificar({
           data: {
             userId: purchase.clientId,
             type: 'reserva_aprobada_sin_stock',
@@ -356,7 +357,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await db.purchase.update({ where: { id }, data: { approvedAt: new Date(), reservationExpiresAt: expiresAt, total, chargeId: newCharge.id } })
     await savePrice()
     const hasta = fmtDeadline(expiresAt)
-    await db.notification.create({
+    await notificar({
       data: {
         userId: purchase.clientId,
         type: 'compra_aprobada',
@@ -397,7 +398,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const expiresAt = new Date(Date.now() + RESERVA_MS)
     await db.purchase.update({ where: { id }, data: { reservationExpiresAt: expiresAt, chargeId: newCharge.id } })
     const hasta = fmtDeadline(expiresAt)
-    await db.notification.create({
+    await notificar({
       data: {
         userId: purchase.clientId,
         type: 'reserva_disponible',

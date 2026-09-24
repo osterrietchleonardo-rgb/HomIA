@@ -5,6 +5,7 @@ import { planTransicion } from '@/lib/plans'
 import { round2, serviceFeeFor } from '@/lib/fees'
 import { logActivity } from '@/lib/activity'
 import { parseJson } from '@/lib/api'
+import { notificar, notificarVarios } from '@/lib/notify'
 
 // Webhook de Mercado Pago (Checkout Pro + Suscripciones).
 // Confirma pagos de facturas de proyecto (invoice:<id>, o <invoiceId> histórico),
@@ -295,7 +296,7 @@ async function applyPurchasePayment(purchase: PurchaseWithProvider, payment: MpP
   }
   const panel = parseJson<string[]>(purchase.client.roles, []).includes('cliente') ? 'cliente' : 'profesional'
   const orderKey = purchase.orderId || `legacy-${purchase.id}`
-  await db.notification.createMany({
+  await notificarVarios({
     data: [
       {
         userId: purchase.clientId,
@@ -394,7 +395,7 @@ async function applyChargePayment(chargeId: string, payment: MpPaymentInfo, coll
   } else {
     await logActivity({ projectId: charge.projectId, actorRole: 'sistema', type: 'pagado', message: `Mercado Pago acreditó el pago del cobro ${charge.number}.`, data: { mpPaymentId: payment.id } })
   }
-  await db.notification.createMany({
+  await notificarVarios({
     data: [
       {
         userId: charge.provider.userId,
@@ -411,7 +412,7 @@ async function applyChargePayment(chargeId: string, payment: MpPaymentInfo, coll
         link: charge.projectId ? `#/panel/cliente/proyectos/${charge.projectId}` : '#/panel/cliente/pedidos',
       },
     ],
-  })
+  }, { mailSoloA: [charge.provider.userId] })
 }
 
 async function applyInvoicePayment(invoiceId: string, payment: MpPaymentInfo, collector: 'vendedor' | 'plataforma') {
@@ -442,7 +443,7 @@ async function applyInvoicePayment(invoiceId: string, payment: MpPaymentInfo, co
     select: { userId: true },
   })
   if (pro) {
-    await db.notification.create({
+    await notificar({
       data: {
         userId: pro.userId,
         type: 'factura_pagada',

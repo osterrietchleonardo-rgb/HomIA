@@ -1,8 +1,8 @@
 'use client'
 // Centro de ayuda HomIA — "¿Dónde hago cada cosa?" por rol + reglas de confianza + FAQ.
 // Pública (desde home/footer) y embebida en el panel de los 3 roles.
-import { useState } from 'react'
-import { navigate, Link } from '@/lib/router'
+import { useEffect, useState } from 'react'
+import { navigate, Link, useRoute } from '@/lib/router'
 import { useSession } from '@/lib/store'
 import { startTour } from '@/components/help/tour-overlay'
 import { openVideo } from '@/components/help/video-modal'
@@ -103,26 +103,29 @@ const GUIDES: RoleGuide[] = [
   },
 ]
 
-const FAQ = [
+const FAQ: { q: string; a: string; tema?: string }[] = [
   {
     q: '¿Cómo funciona el pago al finalizar la obra?',
     a: 'Cuando la obra termina, el profesional emite la factura y el cliente la paga. El dinero va directo al profesional. Así el cliente sabe que paga recién cuando aprueba el trabajo terminado.',
   },
   {
     q: '¿Dónde dejo una reseña, a quién y en qué momento?',
+    tema: 'resenas',
     a: 'Las reseñas se dejan desde el detalle de un proyecto, y se activan recién cuando la obra finaliza. Solo pueden reseñarse participantes reales de esa obra: el cliente califica a su profesional y a cada proveedor que le vendió materiales, y el profesional califica al cliente. Una reseña por persona y proyecto, con estrellas, comentario y hasta 4 fotos. Nadie puede reseñar sin un proyecto real entre ambos.',
   },
   {
     q: '¿Cómo pago una factura: Mercado Pago o efectivo?',
-    a: 'El cliente elige el método al pagar: Mercado Pago (el dinero va directo a la cuenta de quien cobra) o efectivo. Con efectivo, el acuerdo queda registrado: el profesional ve que va a cobrar en efectivo y confirma desde su panel cuando recibe el dinero — recién ahí la factura queda pagada. Podés cancelar el acuerdo antes de la confirmación y elegir otro método.',
+    tema: 'pagos',
+    a: 'El cliente elige el método al pagar: Mercado Pago (el dinero va directo a la cuenta de quien cobra: el profesional o el proveedor, nunca queda retenido en HomIA; se suma un «Cargo de servicio HomIA (1%)» que ves antes de pagar) o efectivo (sin cargo). Para cobrar por Mercado Pago, el profesional o el proveedor tiene que haber conectado su cuenta; si no lo hizo, te lo decimos y podés pagar en efectivo. Con efectivo, el acuerdo queda registrado: el profesional ve que va a cobrar en efectivo y confirma desde su panel cuando recibe el dinero — recién ahí la factura queda pagada. Podés cancelar el acuerdo antes de la confirmación y elegir otro método.',
   },
   {
     q: '¿Quién paga los materiales?',
     a: 'Lo acuerdan profesional y cliente en cada proyecto y lo ven los dos siempre: (1) los adelanta el profesional y los cobra junto con la mano de obra en su factura, o (2) el cliente los paga directamente al proveedor: el proveedor emite el cobro desde su panel (Panel → Cobros) y el cliente paga con Mercado Pago o acuerda efectivo. En el modo 2, la factura del profesional cubre solo mano de obra.',
   },
   {
-    q: '¿Por qué hay usuarios "No verificados"?',
-    a: 'HomIA verifica la identidad con el DNI: subís foto del frente y del dorso y un modelo de IA analiza que el documento sea real y legible. Quien no lo subió aparece con la marca "No verificado" junto a su nombre — es información clave para decidir con quién contratás.',
+    q: '¿Cómo funciona la verificación de identidad y por qué hay usuarios "No verificados"?',
+    tema: 'verificacion',
+    a: 'HomIA verifica la identidad con el DNI: desde tu panel (Verificación) subís una foto del frente y otra del dorso, y un modelo de IA de visión revisa que sea un documento real, legible y que coincida con los datos de tu cuenta. Podés intentarlo hasta 3 veces por día. Cada perfil muestra siempre su estado: "Verificado", "En revisión" o "No verificado" — nunca se oculta, es información clave para decidir con quién contratás. Las fotos de tu DNI se guardan en un almacenamiento privado: nadie más las ve, los demás solo ven el estado. La insignia confirma el documento; no garantiza la calidad del trabajo.',
   },
   {
     q: '¿Quién puede iniciar un chat?',
@@ -156,6 +159,18 @@ const FAQ = [
     q: '¿Puedo tener más de un rol?',
     a: 'Sí. Con la misma cuenta podés ser cliente, profesional y/o proveedor. Cambiás de rol desde el selector arriba a la derecha del panel, y cada rol tiene su propio panel con sus herramientas.',
   },
+  {
+    q: '¿Me olvidé la contraseña?',
+    a: 'En Ingresar tocá "¿Olvidaste tu contraseña?", escribí el email de tu cuenta y te mandamos un link para crear una nueva (revisá también spam o promociones). El link vence en 1 hora y sirve una sola vez; si venció, pedí otro. Después ingresás con la contraseña nueva: tus datos, proyectos y pedidos quedan como estaban.',
+  },
+  {
+    q: '¿HomIA me avisa por mail?',
+    a: 'Sí, además del aviso en la campanita te mandamos un mail con lo importante: una compra o reserva nueva (proveedor), que te contrataron o te aceptaron un presupuesto (profesional), una oferta nueva, una factura o una reserva aprobada o lista para retirar (cliente), pagos acreditados por Mercado Pago y pedidos de devolución de sobrantes. Los mensajes del chat no llegan por mail. Podés apagar los avisos por mail desde Mi perfil.',
+  },
+  {
+    q: '¿Cómo elimino mi cuenta?',
+    a: 'Desde Mi perfil, al final: "Eliminar mi cuenta". Escribís ELIMINAR y tu contraseña. Si tenés proyectos, pedidos, facturas, cobros o devoluciones abiertos (o, si sos proveedor, tu suscripción de Mercado Pago activa), primero tenés que cerrarlos: la app te dice cuáles. Se borran tus datos personales, las fotos de tu DNI, tu carrito, favoritos, conversaciones con Homy y notificaciones, y tu perfil deja de aparecer. Las facturas, pagos y pedidos cerrados se conservan sin tu nombre porque la ley nos obliga, y tus reseñas y mensajes quedan como "Usuario eliminado". No se puede deshacer.',
+  },
 ]
 
 const TOUR_ROLES: { id: TourRole; label: string; icon: React.ComponentType<{ className?: string }>; tone: string }[] = [
@@ -176,7 +191,20 @@ export default function HelpScreen({ embedded = false }: { embedded?: boolean })
     : TOUR_ROLES
   const defaultTab = visibleGuides[0]?.id ?? 'cliente'
   const [tab, setTab] = useState(defaultTab)
-  const [openFaq, setOpenFaq] = useState<number | null>(0)
+  // ?tema=pagos|verificacion|resenas (links del footer): abre esa pregunta y la muestra
+  const { query } = useRoute()
+  const tema = query.tema
+  const faqDelTema = tema ? FAQ.findIndex((f) => f.tema === tema) : -1
+  const [openFaq, setOpenFaq] = useState<number | null>(faqDelTema >= 0 ? faqDelTema : 0)
+  useEffect(() => {
+    if (faqDelTema < 0) return
+    // después del reseteo de scroll de navigate(); abre la pregunta aunque la pantalla ya estuviera montada
+    const t = window.setTimeout(() => {
+      setOpenFaq(faqDelTema)
+      document.getElementById(`ayuda-${tema}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 250)
+    return () => window.clearTimeout(t)
+  }, [faqDelTema, tema])
   const guide = visibleGuides.find((g) => g.id === tab) || visibleGuides[0] || GUIDES[0]
 
   return (
@@ -331,7 +359,7 @@ export default function HelpScreen({ embedded = false }: { embedded?: boolean })
         </h2>
         <div className="mt-4 space-y-2">
           {FAQ.map((f, i) => (
-            <div key={f.q} className="homy-glass-soft overflow-hidden rounded-2xl">
+            <div key={f.q} id={f.tema ? `ayuda-${f.tema}` : undefined} className="homy-glass-soft scroll-mt-24 overflow-hidden rounded-2xl">
               <button onClick={() => setOpenFaq(openFaq === i ? null : i)} aria-expanded={openFaq === i}
                 className="homy-focus flex min-h-[52px] w-full items-center gap-3 px-4 py-3 text-left">
                 <span className="min-w-0 flex-1 text-sm font-extrabold text-[#0A2540]">{f.q}</span>

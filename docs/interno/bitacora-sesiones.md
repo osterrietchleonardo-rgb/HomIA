@@ -26,6 +26,37 @@
 
 ---
 
+## 2026-09-24 — Calendario del profesional y acuerdo de fechas del trabajo (D21) (Leonardo)
+
+Con el presupuesto aprobado el profesional propone inicio y fin estimado, el cliente acepta/rechaza/contrapropone, se puede reprogramar (lo acordado sigue vigente), el solapamiento avisa sin bloquear; pantalla Panel → Calendario y "Disponibilidad" anónima en el perfil público; Homy conoce la próxima fecha libre. Migración `0031_calendario_profesional.sql` aplicada (8 columnas nullable + índice, diff vacío). E2E Q 60/60, unitarias 9/9, visual 26/26, purga verificada. Detalle: `decisiones.md` D21, `FUNCIONAL` 2.5/3.5/3.15/3.16, `LOGICA` §3.6/§13, `TECNICO` §4.7/§5/§9, `AGENTS.md` §6. Rama `feat/recuperar-mails`, sin commit.
+
+## 2026-09-24 — Recuperar contraseña y avisos por mail (revisión de lanzamiento)
+
+Una línea: D18 en `decisiones.md`; migración `0028` aplicada (`PasswordReset` + `User.emailNotifications`, solo aditiva); FUNCIONAL "Lo básico para todos", 1.7, 2.12, 3.13, 4.10; LÓGICA catálogo (auth y `PUT /profiles/me`) y §14.1; TÉCNICO §3, §4.10, §5, §7, §9, §11. Pruebas: E2E A+B+F 286/286 con doble de Resend, A 126/126 sin clave, unitarias 10/10, visual 73/73. **Pendiente de Leonardo:** cuenta de Resend, dominio `somoshomia.com` verificado y `RESEND_API_KEY`/`EMAIL_FROM` en `.env` y Vercel (sin eso no sale ningún mail).
+
+---
+
+## 2026-09-24 — Términos al registrarse, "Eliminar mi cuenta", demo oculto al lanzar, imagen para compartir y página de error (Leonardo, revisión de lanzamiento)
+
+Una línea: D19 y D20 en `decisiones.md`; migración `0029` aplicada (3 columnas nullable en `User`); FUNCIONAL "Lo básico para todos", 1.7, 2.12, 3.13, 4.10; LÓGICA §1.1-1.2 y catálogo; TÉCNICO §3, §4.9, §5, §7. **Pendiente de Leonardo:** `HIDE_DEMO_USERS=1` en Vercel el día del lanzamiento, datos `NEXT_PUBLIC_LEGAL_*` y revisión de un abogado.
+
+---
+
+## 2026-09-24 — Integración de los tres equipos: recuperar contraseña y mails (D18), términos, baja y demo oculto (D19-D20), calendario (D21)
+
+**Lo hecho al integrar (revisión propia de los informes):** "Olvidé mi contraseña" sin servicio de mail ya no promete un link (503 honesto, sin tokens); un chat existente no acepta mensajes a una cuenta eliminada (409, una consulta); la prueba I usa un cliente propio (el chat C↔V ya lo abría la compra de la sección A); la sección A prueba los dos casos nuevos. Verificado el `BUG-A-PROPOSITO` de `notify.ts`: ya no está. `tsconfig.json` sin cambios. tsc, eslint, 38 tests unitarios y `next build` verdes; suite completa contra el build (ver resultado en esta entrada).
+**Pendiente de Leonardo:** Resend (`RESEND_API_KEY`, `EMAIL_FROM`), datos de la empresa (`NEXT_PUBLIC_LEGAL_*`), `HIDE_DEMO_USERS=1` el día del lanzamiento, revisión legal; decidir si el perfil del profesional se abre a visitantes sin cuenta (hoy exige sesión, por eso el visitante no ve la Disponibilidad).
+
+## 2026-09-24 — Header y footer que no llevaban a su sección; páginas legales detalladas (Leonardo)
+
+**El pedido:** "las paginas del header (directorio, materiales y ayuda) no llevan a su apartado!!! (ej. https://www.somoshomia.com/#/directorio) queda en la home. ademas, todas las secciones del footer que tengan link deben llevar al apartado correspodiente" y "crear una pagina en el footer … sobre politica de privacidad y terminos y condiciones … lo mas claro, transparente y detallado posible".
+**Lo medido:** reproducido en producción con Playwright: estando en la home, ir a `/#/directorio` (tipeado, pegado o link no interceptado) deja la home en pantalla; también logo → home → header. Los 3 links de Ayuda del footer iban al principio de la Ayuda.
+**Causa real:** `SpaRedirect` solo miraba el hash al montar; `spaMounted` quedaba en `true` al salir de la SPA con el logo. Encontrado además al recorrer el menú móvil: desde cualquier pantalla interna, Cómo funciona / Motor IA / Beneficios / Comunidad (menú y footer) mostraban "Esta página no existe" → `irASeccionHome` (19/19 OK).
+**Lo hecho:** `spa-redirect.tsx` escucha `hashchange`; `router.tsx` `unmarkSpaMounted`/`isSpaMounted`; `app-root.tsx` desmarca al desmontarse; Ayuda por tema (`?tema=`); footer apunta a cada tema; legales reescritos (D22). TÉCNICO §2, §4.8 y trampas; FUNCIONAL 1.8-1.9; LÓGICA "Textos legales". Verificado en dev 1280/390, todos OK.
+**Qué mirar:** después del deploy, repetir la prueba contra `https://www.somoshomia.com` (`scratchpad/pw/nav-local.mjs <url>`).
+**Pendiente:** datos de la empresa (`NEXT_PUBLIC_LEGAL_*`) y revisión de un abogado.
+**Suite completa (build de producción, puerto 3071):** 908/909, purga verificada. La única falla (J: faltan `proyecto_creado`, `message` del cliente) era de la prueba: la API de notificaciones devuelve las últimas 50 y en la corrida A-P el cliente junta más; ahora los tipos se cuentan en la base (`e2e-integral.mjs`).
+
 ## 2026-09-24 — Mensajería rápida, atajos a reseñas, stock con scroll y Cobros del profesional (Leonardo)
 
 "La mensajería tarda en cada movimiento" → causa: con el pooler cada consulta Prisma = ~4 idas a la base y `connection_limit=1` encola; bandeja/hilo hacían 6–7 consultas (la bandeja traía todos los mensajes), cada clic re-montaba panel y pantalla, `/api/auth/me` ×3 al arrancar. Ahora 1 consulta por endpoint, cursor `?after=`, envío optimista, memoria entre montajes, `/me` ×1; índice `Conversation.userBId` (migración `0026`, aditiva, aplicada). Medido (390×844, dev compartido): abrir bandeja 5,6 s/6 req → 2,0 s/3 req; abrir hilo 4,6 s/4 req → 1,5 s/1 req; enviar → burbuja en 50 ms (antes esperaba el POST, 5 req); volver a Mensajes desde otra pantalla 0,14 s; polling 12 s 9 → 7 req (4–9 s c/u → ~1 s). Además: atajo "★ 4,5 · N reseñas" en perfiles y reputación del cliente (botón 44 px), catálogo del proveedor en caja con scroll (60 % de pantalla), Cobros del profesional (`/panel/profesional/cobros`, `GET /api/invoices?mine=1`, OAuth vuelve ahí). E2E A,B,D,E,F,G,I,N 663/663; visual 390 y 1280 38/38 c/u. Detalle: `TECNICO` §4.5, `LOGICA` §3.5/§10/§12.1/§13, `FUNCIONAL` 1.5/2.10/3.8/3.13/3.15/4.12, `AGENTS.md` §6/§7. Rama `feat/carrito-homy`, sin commit.

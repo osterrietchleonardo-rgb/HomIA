@@ -13,7 +13,7 @@ import CartButton from '@/components/cart/cart-button'
 import {
   LayoutDashboard, Briefcase, FolderKanban, FileText, User, Bell, LogOut,
   Search, Boxes, Users, Link2, HardHat, ClipboardList, Home, Sparkles,
-  Compass, MessageCircle, ShieldCheck, LifeBuoy, HandCoins, Package, Crown, MoreHorizontal, ShoppingBag, Undo2,
+  Compass, MessageCircle, ShieldCheck, LifeBuoy, HandCoins, Package, Crown, MoreHorizontal, ShoppingBag, Undo2, CalendarDays,
 } from 'lucide-react'
 
 /** `short`: etiqueta para la barra inferior móvil (≥11px, sin truncar) */
@@ -61,6 +61,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/panel/profesional/pedidos', label: 'Mis pedidos', short: 'Pedidos', icon: ShoppingBag },
     { to: '/panel/profesional/presupuestos', label: 'Mis ofertas', icon: FileText },
     { to: '/panel/profesional/proyectos', label: 'Proyectos', icon: FolderKanban },
+    { to: '/panel/profesional/calendario', label: 'Calendario', icon: CalendarDays },
     { to: '/panel/profesional/cobros', label: 'Cobros', icon: HandCoins },
     { to: '/panel/profesional/devoluciones', label: 'Devoluciones', icon: Undo2 },
     { to: '/panel/profesional/crm', label: 'CRM clientes', icon: Users },

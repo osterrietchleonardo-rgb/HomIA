@@ -3,6 +3,8 @@ import { z } from 'zod'
 import type { Prisma } from '@prisma/client'
 import { ok, fail, parseBody } from '@/lib/api'
 import { db } from '@/lib/db'
+import { scheduleBlockReason } from '@/lib/schedule'
+import { bidAcceptedFor, scheduleView } from '@/lib/schedule-server'
 
 // Orden de etapas: solo se avanza, nunca se retrocede.
 const STAGES = ['presupuesto', 'materiales', 'ejecucion', 'revision', 'finalizado'] as const
@@ -71,6 +73,12 @@ export async function GET(
     select: { id: true },
   })
 
+  // fechas del trabajo (D21): estado del acuerdo y, si todavía no se puede, por qué
+  const scheduleBlocked = scheduleBlockReason({
+    status: project.status, stage: project.stage, laborCost: project.laborCost,
+    bidAccepted: project.stage === 'presupuesto' && project.laborCost > 0 ? await bidAcceptedFor(project) : false,
+  })
+
   return ok({
     project: {
       id: project.id,
@@ -85,6 +93,8 @@ export async function GET(
       materialsPaymentMode: project.materialsPaymentMode,
       conversationId: conv?.id || null,
       createdAt: project.createdAt,
+      schedule: scheduleView(project),
+      scheduleBlocked,
       job: project.job,
       // "Parte del proyecto <título>": solo si quien mira es el cliente de esta subcontratación
       // Y además el profesional a cargo del proyecto original. El subcontratado no lo ve.

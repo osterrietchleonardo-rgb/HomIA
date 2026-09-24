@@ -9,6 +9,7 @@ import {
 } from '@/lib/leftovers'
 import { purchaseLines } from '@/lib/orders'
 import { logActivity } from '@/lib/activity'
+import { notificar } from '@/lib/notify'
 
 // ── SOBRANTES: devolución de materiales a quien los vendió (D14, ver src/lib/leftovers.ts) ──
 // GET  ?role=solicitante|proveedor|profesional [&tipo=cliente|profesional_a_proveedor] [&projectId=|&purchaseId=]
@@ -291,7 +292,7 @@ export async function POST(req: NextRequest) {
 
   const n = prepared.length
   const estimado = round2(prepared.reduce((a, i) => a + i.qtyRequested * i.unitPricePaid, 0))
-  await db.notification.create({
+  await notificar({
     data: {
       userId: sellerUserId,
       type: 'devolucion_solicitada',
@@ -389,7 +390,7 @@ async function createProToProvider(
 
   const n = prepared.length
   const estimado = round2(prepared.reduce((a, i) => a + i.qtyRequested * i.unitPricePaid, 0))
-  await db.notification.create({
+  await notificar({
     data: {
       userId: provider.userId,
       type: 'devolucion_solicitada',

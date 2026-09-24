@@ -36,9 +36,20 @@ model User {
   // Se muestra PÚBLICamente junto al nombre (directorio, perfiles, mensajes).
   verificationStatus String    @default("none")
   verifiedAt         DateTime?
+  // Avisos por mail de los eventos importantes (compras, contrataciones, facturas…).
+  // Se apaga desde el perfil. El mail de recuperar contraseña se manda siempre.
+  emailNotifications Boolean   @default(true)
+  // Aceptación de Términos y Política de Privacidad al registrarse (D19, migración 0029).
+  // termsVersion = LEGAL_VERSION de src/lib/legal-content.ts vigente al aceptar.
+  termsAcceptedAt    DateTime?
+  termsVersion       String?
+  // "Eliminar mi cuenta" (Ley 25.326, D19): la cuenta queda anonimizada y oculta de todo lo
+  // público; getSessionUser la trata como inexistente y el login la rechaza.
+  deletedAt          DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
+  passwordResets    PasswordReset[]
   documents         IdentityDocument[]
   professional      ProfessionalProfile?
   provider          ProviderProfile?
@@ -301,6 +312,19 @@ model Project {
   // Subcontratación (D16): proyecto del profesional del que sale esta contratación.
   // Solo lo ve el profesional que subcontrata; el cliente original no.
   parentProjectId      String?
+  // Fechas del trabajo (D21, migración 0031): días guardados al mediodía UTC (ver src/lib/schedule.ts).
+  //   scheduleStatus: null = sin fechas | propuesta | acordada
+  //   scheduleProposedBy: profesional|cliente → quién hizo la propuesta vigente
+  //     (con scheduleStatus null tras un rechazo: quién la rechazó; scheduleNote = motivo)
+  //   prevStartDate/prevEndDate: fechas acordadas que siguen vigentes mientras se revisa una reprogramación
+  startDate            DateTime?
+  endDate              DateTime? // fin estimado
+  scheduleStatus       String?
+  scheduleProposedBy   String?
+  scheduleNote         String?
+  scheduleUpdatedAt    DateTime?
+  prevStartDate        DateTime?
+  prevEndDate          DateTime?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
@@ -315,6 +339,7 @@ model Project {
   works        CompletedWork[]
 
   @@index([parentProjectId])
+  @@index([professionalId, startDate])
 }
 
 model ProjectMaterial {
@@ -685,6 +710,22 @@ model Notification {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Recuperar contraseña (migración 0028). El token real (32 bytes aleatorios, base64url)
+// viaja SOLO en el link del mail; acá se guarda su sha256. Vence en 1 hora y se usa una vez.
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  ip        String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model HomySession {

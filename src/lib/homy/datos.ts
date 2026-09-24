@@ -5,6 +5,8 @@ import 'server-only'
 import { db } from '@/lib/db'
 import { parseJson } from '@/lib/api'
 import { puedeOperar, esProActivo, planState } from '@/lib/plans'
+import { whereUsuarioPublico } from '@/lib/visibility'
+import { nextFreeForPros } from '@/lib/schedule-server'
 
 export type ElementoCatalogo = {
   id: string
@@ -52,6 +54,10 @@ export type ProfesionalDato = {
   resenas: number
   obras: number
   experiencia: number
+  // calendario del profesional (D21): primer día sin trabajos acordados ni propuestos
+  // ("AAAA-MM-DD"; null = sin días libres en el próximo año) y si le queda algún día libre esta semana
+  proximaFechaLibre?: string | null
+  disponibleEstaSemana?: boolean
 }
 
 export type TrabajoDato = {
@@ -106,7 +112,8 @@ export const fuenteDatosPrisma: FuenteDatos = {
   async ofertas(elementoIds) {
     if (elementoIds.length === 0) return []
     const rows = await db.providerStock.findMany({
-      where: { elementId: { in: elementoIds } },
+      // sin cuentas eliminadas ni (con HIDE_DEMO_USERS=1) cuentas demo — src/lib/visibility.ts
+      where: { elementId: { in: elementoIds }, provider: { user: whereUsuarioPublico() } },
       include: {
         element: { select: { name: true, unit: true } },
         provider: {
@@ -144,11 +151,19 @@ export const fuenteDatosPrisma: FuenteDatos = {
 
   async profesionales() {
     const rows = await db.professionalProfile.findMany({
+      where: { user: whereUsuarioPublico() },
       include: { user: { select: { displayName: true, city: true, verificationStatus: true, rating: true, reviewsCount: true } } },
       take: 500,
     })
+    // una sola consulta para la disponibilidad de todos (si falla, Homy sigue sin ese dato)
+    const libres = await nextFreeForPros(rows.map((p) => p.id)).catch((e) => {
+      console.error('[homy/datos] disponibilidad', e)
+      return new Map<string, { proximaFechaLibre: string | null; disponibleEstaSemana: boolean }>()
+    })
     return rows.map((p) => ({
       id: p.id,
+      proximaFechaLibre: libres.get(p.id)?.proximaFechaLibre,
+      disponibleEstaSemana: libres.get(p.id)?.disponibleEstaSemana,
       nombre: p.companyName ? `${p.companyName} (${p.user.displayName})` : p.user.displayName,
       rubros: parseJson<string[]>(p.professions, []),
       habilidades: parseJson<string[]>(p.skills, []),
@@ -166,7 +181,7 @@ export const fuenteDatosPrisma: FuenteDatos = {
 
   async trabajosAbiertos() {
     const rows = await db.jobPost.findMany({
-      where: { status: 'abierto' },
+      where: { status: 'abierto', user: whereUsuarioPublico() },
       select: {
         id: true, title: true, description: true, categorySlug: true, urgency: true, budgetMin: true, budgetMax: true,
         city: true, lat: true, lng: true, createdAt: true, _count: { select: { bids: true } },
