@@ -5,6 +5,7 @@ import { Loading, AvatarUploader, VerifyBadge } from '@/components/app/ui-bits'
 import { useSession } from '@/lib/store'
 import { navigate } from '@/lib/router'
 import { toast } from 'sonner'
+import MpConnectCard from '@/components/app/mp-connect-card'
 import { BadgeCheck, ShieldCheck, UserRound, BriefcaseBusiness, ArrowRight } from 'lucide-react'
 
 const CATEGORIES = [
@@ -143,9 +144,12 @@ export default function ProProfile() {
             <span className="homy-icon-chip homy-chip-mint size-9 shrink-0 [&_svg]:size-4" aria-hidden><BadgeCheck /></span>
             <p className="text-[13px] leading-relaxed text-slate-600">
               <b>Usar HomIA es gratis para clientes y profesionales.</b> Las suscripciones de pago son solo para proveedores
-              (14 días gratis, después Básico $50.000/mes o PRO $100.000/mes). HomIA cobra además un 1% en las compras de materiales por Mercado Pago: es lo que financia la plataforma, la IA y las búsquedas que te traen trabajos.
+              (14 días gratis, después Básico $50.000/mes o PRO $100.000/mes). Cuando alguien paga por Mercado Pago, suma un cargo de servicio HomIA del 1% que paga quien compra (vos cobrás el 100% de tu factura): es lo que financia la plataforma, la IA y las búsquedas que te traen trabajos.
             </p>
           </section>
+
+          {/* cobro de facturas con el Mercado Pago del profesional (OAuth) */}
+          <MpConnectCard kind="professional" returnPath="/panel/profesional/perfil" />
 
           {/* identidad */}
           <section className="homy-glass rounded-3xl p-5 sm:p-6">

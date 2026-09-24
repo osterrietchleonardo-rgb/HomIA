@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { useSession } from "@/lib/store";
 import { navigate } from "@/lib/router";
 import { LayoutDashboard } from "lucide-react";
+import CartButton from "@/components/cart/cart-button";
 
 const NAV_ITEMS = [
   { label: "Directorio", href: "#/directorio", route: "/directorio" },
@@ -72,18 +73,18 @@ export function SiteHeader() {
         {/* Logo: Homy sin fondo + wordmark */}
         <Link
           href="/"
-          className="group flex items-center gap-2.5 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="group flex shrink-0 items-center gap-2.5 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="HomIA — Ir al inicio"
         >
           <span className="transition-transform duration-300 group-hover:scale-110">
             <Homy size={46} state="idle" />
           </span>
-          <HomIAWordmark className="text-[26px] sm:text-[28px]" />
+          <HomIAWordmark className="whitespace-nowrap text-[26px] sm:text-[28px]" />
         </Link>
 
         {/* Navegación desktop */}
         <nav
-          className="hidden items-center gap-1 lg:flex"
+          className="hidden min-w-0 items-center gap-0.5 xl:flex"
           aria-label="Navegación principal"
         >
           {NAV_ITEMS.map((item) => (
@@ -91,15 +92,19 @@ export function SiteHeader() {
               key={item.href}
               href={item.href}
               onClick={(e) => goRoute(e, item)}
-              className="homy-nav-link rounded-full px-4 py-2 text-[15px] font-semibold text-navy/70 transition-colors hover:text-navy"
+              className="homy-nav-link whitespace-nowrap rounded-full px-3 py-2 text-[14.5px] font-semibold text-navy/70 transition-colors hover:text-navy 2xl:px-4 2xl:text-[15px]"
             >
               {item.label}
             </Link>
           ))}
         </nav>
 
+        <div className="flex shrink-0 items-center gap-2">
+        {/* Carrito (visitantes, clientes y profesionales; el proveedor puro no lo ve) */}
+        <CartButton tone="light" />
+
         {/* Acciones */}
-        <div className="hidden items-center gap-2 lg:flex">
+        <div className="hidden items-center gap-2 xl:flex">
           {!loading && user ? (
             <Button
               className="rounded-full bg-navy font-semibold text-white shadow-[0_10px_24px_-10px_rgba(10,37,64,0.6)] transition-all hover:bg-[#123455] active:scale-[0.98]"
@@ -112,13 +117,13 @@ export function SiteHeader() {
             <>
               <Button
                 variant="ghost"
-                className="rounded-full font-semibold text-navy hover:bg-confort"
+                className="whitespace-nowrap rounded-full font-semibold text-navy hover:bg-confort"
                 onClick={() => navigate("/ingresar")}
               >
                 Ingresar
               </Button>
               <button
-                className="homy-btn-primary px-5 py-2.5 text-[14px]"
+                className="homy-btn-primary whitespace-nowrap px-5 py-2.5 text-[14px]"
                 onClick={() => navigate("/registrarse")}
               >
                 <Sparkles className="size-4" aria-hidden />
@@ -130,7 +135,7 @@ export function SiteHeader() {
 
         {/* Menú mobile */}
         <Sheet open={open} onOpenChange={setOpen}>
-          <SheetTrigger asChild className="lg:hidden">
+          <SheetTrigger asChild className="xl:hidden">
             <Button
               variant="outline"
               size="icon"
@@ -204,6 +209,7 @@ export function SiteHeader() {
             </nav>
           </SheetContent>
         </Sheet>
+        </div>
       </div>
     </header>
   );

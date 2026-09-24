@@ -8,6 +8,18 @@ export function formatARS(n: number | null | undefined): string {
   }).format(n)
 }
 
+/** Moneda con centavos solo cuando existen (ej. el cargo de servicio del 1%: $12,35). */
+export function formatARSCents(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(n)) return '—'
+  const cents = Math.round(Math.abs(n) * 100) % 100 !== 0
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: cents ? 2 : 0,
+    maximumFractionDigits: cents ? 2 : 0,
+  }).format(n)
+}
+
 export function formatDate(d: string | Date | null | undefined): string {
   if (!d) return '—'
   const date = typeof d === 'string' ? new Date(d) : d

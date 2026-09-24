@@ -4,8 +4,10 @@
 //   directas ahí mismo. Sin conexión, sus clientes solo pueden pagarle en efectivo.
 // · Cobros: proyectos con modo "el cliente paga los materiales al proveedor" —
 //   el proveedor emite el cobro y el cliente paga con Mercado Pago o efectivo.
-// · Ventas: pedidos directos del marketplace (sin proyecto) — aceptar (fija precio,
-//   reserva stock y emite el cobro) → el cliente paga → entregar → reseña.
+// · Ventas: tu parte de cada pedido del carrito (uno o más productos) — aprobar
+//   (reserva atómica de TODOS los ítems y emite el cobro) o rechazar el pedido entero
+//   con motivo → el cliente paga (MP con el cargo de servicio 1% que paga él, o
+//   efectivo) → entregar → reseña. Cada acción queda en la línea de tiempo.
 import { useCallback, useEffect, useState } from 'react'
 import { useRoute, navigate } from '@/lib/router'
 import { StatusBadge, Loading, UAvatar, VerifyBadge } from '@/components/app/ui-bits'
@@ -20,7 +22,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import {
   HandCoins, Store, CircleCheck, Hourglass, Banknote, ReceiptText, Info, Wallet,
-  ShoppingBag, Truck, Undo2, MessageCircle, CreditCard, Link2, Unlink, CircleAlert, Clock, RefreshCw,
+  ShoppingBag, Truck, Undo2, MessageCircle, CreditCard, Link2, Unlink, CircleAlert, Clock, RefreshCw, History,
 } from 'lucide-react'
 import { ClientSummaryButton } from '@/components/app/client-summary'
 import DevolucionesTab from './devoluciones-tab'
@@ -38,10 +40,15 @@ type Charge = {
   client: { id: string; displayName: string }
 }
 type SaleCharge = { id: string; number: string; status: string; method: string | null; paidAt: string | null; amount: number }
+type SaleLine = { id: string; legacy: boolean; stockId: string | null; elementName: string; unit: string; quantity: number; unitPrice: number; total: number }
+type SaleEvent = { id: string; actorRole: string; actorName: string | null; type: string; message: string; createdAt: string }
 type Sale = {
-  id: string; elementName: string; quantity: number; unit: string; unitPrice: number; total: number; status: string
+  id: string; elementName: string; quantity: number | null; unit: string; unitPrice: number | null; total: number; serviceFee: number; status: string
   type: 'compra' | 'reserva'; note: string | null; chargeId: string | null; createdAt: string
   stockId: string | null; paymentMethod: string | null; rejectionReason: string | null; reservationExpiresAt: string | null
+  orderNumber: string | null
+  lines: SaleLine[]
+  events: SaleEvent[]
   charge?: SaleCharge | null
   client: { id: string; displayName: string; avatarUrl: string | null; verificationStatus: string }
 }
@@ -87,7 +94,8 @@ export default function ProviderCharges() {
   // diálogos
   const [approveTarget, setApproveTarget] = useState<Sale | null>(null)
   const [approvePrice, setApprovePrice] = useState('')
-  const [approveStock, setApproveStock] = useState<StockLite | null | undefined>(undefined)
+  // stock disponible por oferta de cada ítem del pedido (undefined = consultando)
+  const [approveStock, setApproveStock] = useState<Record<string, StockLite> | null | undefined>(undefined)
   const [rejectTarget, setRejectTarget] = useState<Sale | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [disconnectOpen, setDisconnectOpen] = useState(false)
@@ -189,21 +197,22 @@ export default function ProviderCharges() {
 
   async function openApprove(sale: Sale) {
     setApproveTarget(sale)
-    setApprovePrice(sale.unitPrice > 0 ? String(sale.unitPrice) : '')
+    setApprovePrice(sale.lines.length === 1 && sale.lines[0].unitPrice > 0 ? String(sale.lines[0].unitPrice) : '')
     setApproveStock(undefined)
-    if (!sale.stockId) { setApproveStock(null); return }
+    if (sale.lines.every((l) => !l.stockId)) { setApproveStock(null); return }
     try {
       const res = await fetch('/api/provider/stock')
       const d = await readJson(res)
-      const row = (d.stock as StockLite[] | undefined)?.find((s) => s.id === sale.stockId)
-      setApproveStock(row ? { id: row.id, quantity: row.quantity, unit: row.unit } : null)
+      const map: Record<string, StockLite> = {}
+      for (const row of (d.stock as StockLite[] | undefined) || []) map[row.id] = { id: row.id, quantity: row.quantity, unit: row.unit }
+      setApproveStock(map)
     } catch { setApproveStock(null) }
   }
 
   async function doApprove() {
     if (!approveTarget) return
     const price = parseFloat(approvePrice)
-    const needsPrice = approveTarget.total <= 0
+    const needsPrice = approveTarget.total <= 0 && approveTarget.lines.length === 1
     if (needsPrice && (!price || price <= 0)) { toast.error('Fijá el precio unitario para aprobar el pedido'); return }
     const body: Record<string, unknown> = { action: 'aprobar' }
     if (price > 0) body.unitPrice = price
@@ -296,7 +305,7 @@ export default function ProviderCharges() {
             <h2 className="text-[15px] font-extrabold text-[#0A2540]">Cobrá con tu Mercado Pago</h2>
             <p className="mt-0.5 text-[13px] leading-relaxed text-slate-600">
               {mp?.status === 'connected' ? (
-                <><b className="text-[#0e9f6e]">Conectado</b>{mpExpires ? ` hasta ${mpExpires.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}` : ''}. La plata de tus ventas directas entra en tu cuenta.</>
+                <><b className="text-[#0e9f6e]">Conectado</b>{mpExpires ? ` hasta ${mpExpires.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}` : ''}. La plata de tus ventas y cobros entra en tu cuenta: cobrás el 100% de tu precio (el cliente paga aparte el cargo de servicio HomIA del 1%).</>
               ) : mp?.status === 'expired' ? (
                 <><b className="text-[#FF5A1F]">Vencido: volvé a conectar.</b> Sin conexión, tus clientes solo pueden pagarte en efectivo.</>
               ) : (
@@ -330,7 +339,7 @@ export default function ProviderCharges() {
             className="homy-tab shrink-0"
           >
             {t === 'cobros' ? <HandCoins className="size-4" aria-hidden /> : t === 'ventas' ? <ShoppingBag className="size-4" aria-hidden /> : <Undo2 className="size-4" aria-hidden />}
-            {t === 'cobros' ? 'Cobros de proyectos' : t === 'ventas' ? 'Ventas directas' : 'Devoluciones'}
+            {t === 'cobros' ? 'Cobros de proyectos' : t === 'ventas' ? 'Ventas (pedidos)' : 'Devoluciones'}
             {badge > 0 && (
               <span className="homy-badge-pop ml-1 grid size-[18px] place-items-center rounded-full bg-[#FF5A1F] text-[10px] font-extrabold text-white">
                 {badge}
@@ -482,14 +491,14 @@ export default function ProviderCharges() {
           {!sales || sales.length === 0 ? (
             <div className="homy-empty homy-glass-soft border border-dashed border-[#0A2540]/12">
               <span className="homy-empty-icon homy-chip-gold" aria-hidden><ShoppingBag className="size-6" /></span>
-              <h3 className="font-extrabold tracking-tight text-[#0A2540]">Todavía no tenés pedidos directos</h3>
+              <h3 className="font-extrabold tracking-tight text-[#0A2540]">Todavía no tenés pedidos</h3>
               <p className="mt-1.5 max-w-md text-sm leading-relaxed text-slate-500">
-                Los clientes pueden pedirte insumos desde la sección <b>Materiales</b> de su panel, sin proyecto de por medio. Cuando llegue el primero, lo gestionás acá: aceptar → cobrar → entregar → reseña.
+                Los clientes y profesionales suman tus productos a su <b>carrito</b> desde Materiales o tu perfil. Cuando confirmen, te llega tu parte del pedido y la gestionás acá: aprobar → cobrar → entregar → reseña.
               </p>
             </div>
           ) : (
             <>
-              <p className="homy-page-sub -mt-2 mb-4">Así funciona un pedido directo: lo aceptás (se reserva el stock y se emite el cobro) → el cliente paga por Mercado Pago o acuerda efectivo → lo entregás → te califica. Mirá la reputación del cliente antes de aceptar.</p>
+              <p className="homy-page-sub -mt-2 mb-4">Así funciona tu parte de un pedido: la aprobás (se reservan TODOS los productos y se emite el cobro) o la rechazás entera con un motivo → el cliente paga por Mercado Pago o acuerda efectivo → lo entregás → te califica. Mirá la reputación del cliente antes de aprobar.</p>
               <div className="space-y-3">
                 {sales.map((v) => {
                   const meta = SALE_META[v.status] || SALE_META.cancelado
@@ -503,7 +512,8 @@ export default function ProviderCharges() {
                           <UAvatar name={v.client.displayName} url={v.client.avatarUrl} size={42} />
                           <div className="min-w-0">
                             <p className="flex flex-wrap items-center gap-x-1.5 text-[15px] font-extrabold text-[#0A2540] leading-snug">
-                              {v.elementName} × {v.quantity} {v.unit}
+                              {v.orderNumber ? `Pedido ${v.orderNumber}` : v.elementName}
+                              {v.lines.length > 1 && <span className="text-[12px] font-bold text-slate-400">· {v.lines.length} productos</span>}
                             </p>
                             <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-slate-500">
                               {v.client.displayName}
@@ -522,6 +532,17 @@ export default function ProviderCharges() {
                         </div>
                       </div>
 
+                      {/* ítems del pedido */}
+                      <ul className="mt-2.5 divide-y divide-[#0A2540]/6 rounded-2xl bg-white/45 px-3 ring-1 ring-[#0A2540]/8">
+                        {v.lines.map((l) => (
+                          <li key={l.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-1.5 text-[13px]">
+                            <span className="min-w-0 flex-[1_1_11rem] font-bold text-[#0A2540]">{l.elementName}</span>
+                            <span className="text-[12px] text-slate-500 tabular-nums">{l.quantity} {l.unit} × {formatARS(l.unitPrice)}</span>
+                            <span className="homy-num-adapt ml-auto font-extrabold tabular-nums text-[#0A2540]">{formatARS(l.total)}</span>
+                          </li>
+                        ))}
+                      </ul>
+
                       {/* método de pago + estado del cobro */}
                       {!['pendiente_aprobacion', 'rechazado', 'cancelado'].includes(v.status) && (
                         <p className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-slate-500">
@@ -532,6 +553,9 @@ export default function ProviderCharges() {
                           <span>· {chargeLabel(v.charge)}{v.charge?.number ? ` (${v.charge.number})` : ''}</span>
                           {chargePaid && v.charge?.paidAt && <span>· cobrado {formatDate(v.charge.paidAt)}</span>}
                         </p>
+                      )}
+                      {v.paymentMethod === 'mercadopago' && (
+                        <p className="mt-1 text-[11.5px] text-slate-400">Cobrás {formatARS(v.total)} (el 100% de tu precio). El cliente paga aparte el cargo de servicio HomIA (1%).</p>
                       )}
                       {v.status === 'aprobado' && expires && !chargePaid && (
                         <p className="mt-1 flex items-center gap-1.5 text-[12px] text-slate-400">
@@ -545,10 +569,10 @@ export default function ProviderCharges() {
                       <div className="mt-3 flex flex-wrap gap-2">
                         {v.status === 'pendiente_aprobacion' && (
                           <>
-                            <button disabled={busy} onClick={() => void openApprove(v)} className="homy-btn-primary px-4 py-2 text-sm disabled:opacity-50">
-                              <CircleCheck className="mr-1 inline size-4" aria-hidden /> Aceptar
+                            <button disabled={busy} onClick={() => void openApprove(v)} className="homy-btn-primary min-h-[40px] px-4 py-2 text-sm disabled:opacity-50">
+                              <CircleCheck className="mr-1 inline size-4" aria-hidden /> Aprobar pedido
                             </button>
-                            <button disabled={busy} onClick={() => { setRejectTarget(v); setRejectReason('') }} className="homy-glass-soft px-4 py-2 text-sm font-bold text-slate-500 hover:text-red-600 rounded-full transition disabled:opacity-50">
+                            <button disabled={busy} onClick={() => { setRejectTarget(v); setRejectReason('') }} className="homy-glass-soft min-h-[40px] px-4 py-2 text-sm font-bold text-slate-500 hover:text-red-600 rounded-full transition disabled:opacity-50">
                               <Undo2 className="mr-1 inline size-4" aria-hidden /> Rechazar
                             </button>
                           </>
@@ -585,10 +609,30 @@ export default function ProviderCharges() {
                             <CircleCheck className="size-3.5" aria-hidden /> Venta cobrada — el cliente puede calificarte
                           </span>
                         )}
-                        <button onClick={() => navigate(`/mensajes?c=nuevo:${v.client.id}`)} className="homy-glass-soft ml-auto inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold text-[#1D63B8] transition hover:bg-white">
+                        <button onClick={() => navigate(`/mensajes?c=nuevo:${v.client.id}`)} className="homy-glass-soft ml-auto inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold text-[#1D63B8] transition hover:bg-white">
                           <MessageCircle className="size-3.5" aria-hidden /> Chatear
                         </button>
                       </div>
+
+                      {/* línea de tiempo de ESTA parte del pedido (el proveedor no ve la de otros) */}
+                      {v.events.length > 0 && (
+                        <details className="group mt-3 rounded-2xl bg-[#0A2540]/[0.03] px-3 py-2">
+                          <summary className="flex min-h-[36px] cursor-pointer list-none items-center gap-1.5 text-[12.5px] font-bold text-slate-600">
+                            <History className="size-3.5 text-[#1D63B8]" aria-hidden /> Línea de tiempo ({v.events.length})
+                            <span aria-hidden className="ml-auto text-xs text-slate-400 transition group-open:rotate-180">▾</span>
+                          </summary>
+                          <ol className="mt-1.5 space-y-2 border-l-2 border-[#1D63B8]/15 pb-1 pl-3">
+                            {[...v.events].reverse().map((e) => (
+                              <li key={e.id}>
+                                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                                  {new Date(e.createdAt).toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · {e.actorRole === 'proveedor' ? 'Vos' : e.actorRole === 'sistema' ? 'HomIA' : e.actorName || 'Cliente'}
+                                </p>
+                                <p className="text-[12.5px] leading-snug text-[#0A2540]">{e.message}</p>
+                              </li>
+                            ))}
+                          </ol>
+                        </details>
+                      )}
                     </article>
                   )
                 })}
@@ -602,41 +646,57 @@ export default function ProviderCharges() {
       <Dialog open={!!approveTarget} onOpenChange={(o) => { if (!o && !busy) setApproveTarget(null) }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Aceptar pedido</DialogTitle>
+            <DialogTitle>Aprobar pedido{approveTarget?.orderNumber ? ` ${approveTarget.orderNumber}` : ''}</DialogTitle>
             <DialogDescription>
-              {approveTarget ? `${approveTarget.elementName} × ${approveTarget.quantity} ${approveTarget.unit} para ${approveTarget.client.displayName}.` : ''} Al aceptar, reservamos el stock y emitimos el cobro al cliente.
+              {approveTarget ? `${approveTarget.lines.length} producto${approveTarget.lines.length === 1 ? '' : 's'} para ${approveTarget.client.displayName}.` : ''} Al aprobar, reservamos TODOS los productos juntos y emitimos el cobro al cliente. Si alguno no alcanza, no se reserva nada.
             </DialogDescription>
           </DialogHeader>
           {approveTarget && (
             <div className="space-y-3">
-              <p className="rounded-xl bg-[#0A2540]/4 px-3 py-2 text-[13px] text-slate-600">
-                Stock disponible:{' '}
-                {approveStock === undefined ? 'consultando…'
-                  : approveStock === null ? 'no encontrado'
-                    : <b className={approveStock.quantity >= approveTarget.quantity ? 'text-[#0e9f6e]' : 'text-red-600'}>{approveStock.quantity} {approveStock.unit}</b>}
-                {approveStock && approveStock.quantity < approveTarget.quantity && ' — no alcanza para este pedido'}
-              </p>
-              <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-400" htmlFor="apr-precio">
-                Precio unitario {approveTarget.total <= 0 ? '(obligatorio)' : '(podés ajustarlo)'}
-              </label>
-              <input
-                id="apr-precio"
-                type="number" min="1" step="0.01" inputMode="decimal"
-                value={approvePrice}
-                onChange={(e) => setApprovePrice(e.target.value)}
-                placeholder="Ej: 12500"
-                className="homy-glass-input w-full rounded-2xl px-4 py-3 text-[15px]"
-                autoFocus
-              />
-              {parseFloat(approvePrice) > 0 && (
-                <p className="text-[12.5px] text-slate-500 tabular-nums">Total del cobro: <b className="text-[#0A2540]">{formatARS(parseFloat(approvePrice) * approveTarget.quantity)}</b></p>
+              <ul className="max-h-[40dvh] divide-y divide-[#0A2540]/8 overflow-y-auto rounded-xl bg-[#0A2540]/4 px-3">
+                {approveTarget.lines.map((l) => {
+                  const st = l.stockId && approveStock ? approveStock[l.stockId] : undefined
+                  const short = !!st && st.quantity < l.quantity
+                  return (
+                    <li key={l.id} className="py-2 text-[13px]">
+                      <p className="font-bold text-[#0A2540]">{l.elementName} × {l.quantity} {l.unit}</p>
+                      <p className="text-[12px] text-slate-500">
+                        Stock: {approveStock === undefined ? 'consultando…' : !st ? 'no encontrado' : <b className={short ? 'text-red-600' : 'text-[#0e9f6e]'}>{st.quantity} {st.unit}</b>}
+                        {short && ' — no alcanza'}
+                      </p>
+                    </li>
+                  )
+                })}
+              </ul>
+              {approveTarget.lines.length === 1 && (
+                <>
+                  <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-400" htmlFor="apr-precio">
+                    Precio unitario {approveTarget.total <= 0 ? '(obligatorio)' : '(podés ajustarlo)'}
+                  </label>
+                  <input
+                    id="apr-precio"
+                    type="number" min="1" step="0.01" inputMode="decimal"
+                    value={approvePrice}
+                    onChange={(e) => setApprovePrice(e.target.value)}
+                    placeholder="Ej: 12500"
+                    className="homy-glass-input w-full rounded-2xl px-4 py-3 text-[15px]"
+                  />
+                </>
               )}
+              <p className="text-[12.5px] text-slate-500 tabular-nums">
+                Total del cobro: <b className="text-[#0A2540]">{formatARS(approveTarget.lines.length === 1 && parseFloat(approvePrice) > 0 ? parseFloat(approvePrice) * approveTarget.lines[0].quantity : approveTarget.total)}</b>
+              </p>
             </div>
           )}
           <DialogFooter>
             <button type="button" disabled={busy} onClick={() => setApproveTarget(null)} className="homy-glass-soft min-h-[44px] rounded-full px-4 text-sm font-bold text-slate-500">Volver</button>
-            <button type="button" disabled={busy || (!!approveStock && approveTarget != null && approveStock.quantity < approveTarget.quantity)} onClick={() => void doApprove()} className="homy-btn-primary min-h-[44px] px-5 text-sm disabled:opacity-50">
-              <CircleCheck className="size-4" aria-hidden /> {busy ? 'Aceptando…' : 'Aceptar y reservar stock'}
+            <button
+              type="button"
+              disabled={busy || (!!approveStock && approveTarget != null && approveTarget.lines.some((l) => !!l.stockId && !!approveStock[l.stockId] && approveStock[l.stockId].quantity < l.quantity))}
+              onClick={() => void doApprove()}
+              className="homy-btn-primary min-h-[44px] px-5 text-sm disabled:opacity-50"
+            >
+              <CircleCheck className="size-4" aria-hidden /> {busy ? 'Aprobando…' : 'Aprobar y reservar todo'}
             </button>
           </DialogFooter>
         </DialogContent>
@@ -646,9 +706,9 @@ export default function ProviderCharges() {
       <Dialog open={!!rejectTarget} onOpenChange={(o) => { if (!o && !busy) setRejectTarget(null) }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Rechazar pedido</DialogTitle>
+            <DialogTitle>Rechazar el pedido entero</DialogTitle>
             <DialogDescription>
-              {rejectTarget ? `${rejectTarget.elementName} × ${rejectTarget.quantity} ${rejectTarget.unit}. ` : ''}Contale al cliente por qué: le llega en la notificación.
+              {rejectTarget ? `${rejectTarget.elementName}. ` : ''}Se rechazan todos los productos de tu parte. Contale al cliente por qué: le llega en la notificación y en su pedido.
             </DialogDescription>
           </DialogHeader>
           <textarea

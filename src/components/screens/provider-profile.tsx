@@ -2,6 +2,7 @@
 // Perfil de proveedor (requiere sesión): catálogo/stock, reseñas desglosadas
 // (texto + fotos), contacto, favoritos y compartir.
 import { useEffect, useState } from 'react'
+import { addToCart } from '@/lib/cart'
 import { navigate } from '@/lib/router'
 import { useSession } from '@/lib/store'
 import { Loading, EmptyState, UAvatar, UStars, VerifyBadge, StatusBadge } from '@/components/app/ui-bits'
@@ -49,6 +50,8 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
   const [q, setQ] = useState('')
   const [fav, setFav] = useState(false)
   const [zoom, setZoom] = useState<string | null>(null)
+  // oferta que se está agregando al carrito (spinner/disabled en su botón)
+  const [adding, setAdding] = useState<string | null>(null)
 
   useEffect(() => {
     (async () => {
@@ -114,17 +117,23 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
   // búsqueda difusa (acentos, plurales) sobre nombre + marca + categoría
   const filtered = data.stock.filter((s) => !q.trim() || matchTerms(q, `${s.name} ${s.brand || ''} ${s.category}`))
   const categories = [...new Set(data.stock.map((s) => s.categorySlug))]
-  const isClient = user.roles.includes('cliente')
+  // compran clientes y profesionales (el proveedor puro no tiene carrito)
+  const canBuy = user.roles.includes('cliente') || user.roles.includes('profesional')
 
   function goBack() {
     if (window.history.length > 1) window.history.back()
     else navigate('/directorio')
   }
 
-  // "Pedir": el cliente va al marketplace con este elemento preseleccionado
-  function order(s: Stock) {
-    if (!isClient) { toast('Entrá como cliente para pedir'); return }
-    navigate(`/panel/cliente/materiales?stock=${encodeURIComponent(s.id)}&q=${encodeURIComponent(s.name)}`)
+  // "Agregar al carrito": suma el elemento al carrito (el pedido se confirma desde el carrito)
+  async function order(s: Stock) {
+    if (!canBuy) { toast('El carrito es para clientes y profesionales'); return }
+    setAdding(s.id)
+    try {
+      await addToCart(s.id, 1, s.name)
+    } finally {
+      setAdding(null)
+    }
   }
 
   async function contact() {
@@ -262,11 +271,12 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
                     <p className="homy-num text-lg font-extrabold text-[#16A34A] text-right">{formatARS(s.price)}</p>
                     {user.id !== p.userId && (
                       <button
-                        onClick={() => order(s)}
-                        className="homy-btn-dark homy-focus min-h-[36px] px-3.5 py-1.5 text-xs"
-                        aria-label={`Pedir ${s.name}`}
+                        onClick={() => void order(s)}
+                        disabled={adding === s.id || s.status === 'agotado'}
+                        className="homy-btn-dark homy-focus min-h-[40px] px-3.5 py-1.5 text-xs disabled:opacity-50"
+                        aria-label={`Agregar ${s.name} al carrito`}
                       >
-                        <ShoppingCart className="size-3.5" aria-hidden /> Pedir
+                        <ShoppingCart className="size-3.5" aria-hidden /> {s.status === 'agotado' ? 'Sin stock' : 'Al carrito'}
                       </button>
                     )}
                   </div>

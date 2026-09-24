@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Carpeta de build opcional por variable de entorno: permite levantar un segundo
+  // `next dev` (o correr `next build`) en la misma carpeta sin pisar el `.next` de
+  // otro server en uso (varios equipos trabajan en paralelo). Sin la variable: `.next`.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   typescript: {
     // El build de producción NO tolera errores de tipos.
     ignoreBuildErrors: false,

@@ -2,11 +2,13 @@
 // suscripciones de proveedor. Dos apps de MP de la MISMA cuenta cobradora:
 //   · Checkout Pro   → MP_ACCESS_TOKEN (+ MP_TEST_ACCESS_TOKEN para pagos de prueba)
 //   · Suscripciones  → MP_SUB_ACCESS_TOKEN (+ MP_SUB_TEST_ACCESS_TOKEN)
-// Las ventas directas del proveedor se cobran con SU token OAuth (nunca con el
-// de la plataforma): si no está conectado, se lanza PROVIDER_NOT_CONNECTED.
+// Compras, facturas y cobros se cobran SIEMPRE con el token OAuth del vendedor
+// (proveedor o profesional; nunca con el de la plataforma) + cargo de servicio
+// HomIA (1%) como marketplace_fee. Sin token → PROVIDER_NOT_CONNECTED.
 import { createHmac } from 'crypto'
 import { MercadoPagoConfig, Preference, Payment, PreApproval } from 'mercadopago'
 import { PLAN_PRICE_ARS } from '@/lib/plans'
+import { SERVICE_FEE_LABEL, round2 } from '@/lib/fees'
 import { db } from '@/lib/db'
 
 const MP_TOKEN = process.env.MP_ACCESS_TOKEN || ''
@@ -15,8 +17,9 @@ const MP_TEST_TOKEN = process.env.MP_TEST_ACCESS_TOKEN || ''
 const MP_SUB_TEST_TOKEN = process.env.MP_SUB_TEST_ACCESS_TOKEN || ''
 const MP_API = 'https://api.mercadopago.com'
 
-/** Error de dominio: el proveedor no vinculó su cuenta de Mercado Pago. */
+/** Error de dominio: el vendedor (proveedor o profesional) no vinculó su cuenta de Mercado Pago. */
 export const PROVIDER_NOT_CONNECTED = 'PROVIDER_NOT_CONNECTED'
+export const SELLER_NOT_CONNECTED = PROVIDER_NOT_CONNECTED
 
 export function mpConfigured(): boolean {
   return MP_TOKEN.length > 10
@@ -48,38 +51,74 @@ export type PreferenceResult = {
   initPoint: string
 }
 
-export async function createInvoicePreference(input: {
-  invoiceId: string
-  invoiceNumber: string
-  title: string
-  total: number
+// ── PREFERENCIAS DE PAGO CON EL TOKEN DEL VENDEDOR ──
+// Decisión del dueño (2026-09-24): el dinero va SIEMPRE a la cuenta de quien vende
+// (compras → proveedor; factura de proyecto → profesional; cobro de materiales →
+// proveedor). Toda preferencia se crea con el token OAuth del vendedor y lleva:
+//   · los ítems reales (lo que cobra el vendedor, el 100% de su precio),
+//   · un ítem "Cargo de servicio HomIA (1%)" que paga el cliente,
+//   · `marketplace_fee` = ese cargo (MP lo acredita en la cuenta de HomIA).
+// Sin token del vendedor → SELLER_NOT_CONNECTED: el caller responde 503 honesto y ofrece efectivo.
+// external_reference = "<tipo>:<id>" y la notification_url lleva ?ref= con lo mismo:
+// el webhook necesita saber de antemano qué token usar para consultar el pago.
+
+export type SellerPrefItem = { id: string; title: string; quantity: number; unitPrice: number }
+export type SellerPrefKind = 'purchase' | 'invoice' | 'charge'
+
+const BACK_PATHS: Record<SellerPrefKind, (id: string) => string> = {
+  purchase: () => '/panel/cliente/pedidos',
+  invoice: () => '/panel/cliente/facturas',
+  charge: () => '/panel/cliente/proyectos',
+}
+
+/** MP exige cantidades enteras: una línea fraccionada (2,5 m) va como 1 × total de la línea. */
+export function toMpItems(items: SellerPrefItem[]) {
+  return items.map((i) => {
+    const entera = Number.isInteger(i.quantity) && i.quantity > 0
+    return {
+      id: i.id.slice(0, 250),
+      title: (entera ? i.title : `${i.title} × ${i.quantity}`).slice(0, 250),
+      quantity: entera ? i.quantity : 1,
+      currency_id: 'ARS',
+      unit_price: entera ? round2(i.unitPrice) : round2(i.unitPrice * i.quantity),
+    }
+  })
+}
+
+export async function createSellerPreference(input: {
+  kind: SellerPrefKind
+  id: string
+  items: SellerPrefItem[]
+  serviceFee: number
   payerEmail: string
   baseUrl: string
+  sellerAccessToken: string | null | undefined
+  /** ruta del panel a la que vuelve el cliente (default según el tipo) */
+  backPath?: string
 }): Promise<PreferenceResult> {
-  const mp = new Preference(client())
-  const res = await mp.create({
-    body: {
-      items: [
-        {
-          id: input.invoiceId,
-          title: input.title,
-          description: `Factura ${input.invoiceNumber} — HomIA`,
-          quantity: 1,
-          currency_id: 'ARS',
-          unit_price: input.total,
-        },
-      ],
-      payer: { email: input.payerEmail },
-      external_reference: input.invoiceId,
-      back_urls: {
-        success: `${input.baseUrl}/panel/cliente/facturas?estado=pagado`,
-        pending: `${input.baseUrl}/panel/cliente/facturas?estado=pendiente`,
-        failure: `${input.baseUrl}/panel/cliente/facturas?estado=fallo`,
-      },
-      notification_url: `${input.baseUrl}/api/payments/webhook`,
-      statement_descriptor: 'HOMIA',
+  if (!input.sellerAccessToken) throw new Error(SELLER_NOT_CONNECTED)
+  const mp = new Preference(client(input.sellerAccessToken))
+  const ref = `${input.kind}:${input.id}`
+  const back = input.backPath || BACK_PATHS[input.kind](input.id)
+  const sep = back.includes('?') ? '&' : '?'
+  const items = toMpItems(input.items)
+  if (input.serviceFee > 0) {
+    items.push({ id: 'cargo-servicio-homia', title: SERVICE_FEE_LABEL, quantity: 1, currency_id: 'ARS', unit_price: round2(input.serviceFee) })
+  }
+  const body: PreferenceBody = {
+    items,
+    payer: { email: input.payerEmail },
+    external_reference: ref,
+    back_urls: {
+      success: `${input.baseUrl}${back}${sep}pago=ok`,
+      pending: `${input.baseUrl}${back}${sep}pago=pendiente`,
+      failure: `${input.baseUrl}${back}${sep}pago=fallo`,
     },
-  })
+    notification_url: `${input.baseUrl}/api/payments/webhook?ref=${encodeURIComponent(ref)}`,
+    statement_descriptor: 'HOMIA',
+  }
+  if (input.serviceFee > 0) body.marketplace_fee = round2(input.serviceFee)
+  const res = await mp.create({ body })
   return {
     id: res.id || '',
     initPoint: (res.init_point || res.sandbox_init_point || '') as string,
@@ -115,98 +154,6 @@ export async function getPayment(
     transactionAmountRefunded: Number(res.transaction_amount_refunded || 0),
     currencyId: String(res.currency_id || ''),
     liveMode: res.live_mode !== false,
-  }
-}
-
-// ── COBRO DE MATERIALES PROVEEDOR → CLIENTE ──
-// En proyectos con modo "cliente_paga_proveedor", el proveedor emite el cobro
-// por los materiales aprobados y el cliente lo paga (MP o efectivo).
-// external_reference = "charge:<chargeId>" — el webhook lo distingue de facturas.
-export async function createChargePreference(input: {
-  chargeId: string
-  chargeNumber: string
-  title: string
-  total: number
-  payerEmail: string
-  baseUrl: string
-}): Promise<PreferenceResult> {
-  const mp = new Preference(client())
-  const res = await mp.create({
-    body: {
-      items: [
-        {
-          id: input.chargeId,
-          title: input.title.slice(0, 250),
-          description: `Cobro de materiales ${input.chargeNumber} — HomIA`,
-          quantity: 1,
-          currency_id: 'ARS',
-          unit_price: input.total,
-        },
-      ],
-      payer: { email: input.payerEmail },
-      external_reference: `charge:${input.chargeId}`,
-      back_urls: {
-        success: `${input.baseUrl}/panel/cliente/proyectos?cobro=pagado`,
-        pending: `${input.baseUrl}/panel/cliente/proyectos?cobro=pendiente`,
-        failure: `${input.baseUrl}/panel/cliente/proyectos?cobro=fallo`,
-      },
-      notification_url: `${input.baseUrl}/api/payments/webhook`,
-      statement_descriptor: 'HOMIA',
-    },
-  })
-  return {
-    id: res.id || '',
-    initPoint: (res.init_point || res.sandbox_init_point || '') as string,
-  }
-}
-
-// ── COMPRA DIRECTA EN MARKETPLACE ──
-// Se cobra SIEMPRE con el token OAuth del proveedor (la plata va a su cuenta).
-// Sin token → PROVIDER_NOT_CONNECTED: el caller responde 503 honesto y ofrece efectivo.
-export async function createPurchasePreference(input: {
-  purchaseId: string
-  title: string
-  total: number
-  payerEmail: string
-  baseUrl: string
-  sellerAccessToken?: string | null
-  marketplaceFee?: number
-}): Promise<PreferenceResult> {
-  if (!input.sellerAccessToken) throw new Error(PROVIDER_NOT_CONNECTED)
-  const mp = new Preference(client(input.sellerAccessToken))
-
-  const body: PreferenceBody = {
-    items: [
-      {
-        id: input.purchaseId,
-        title: input.title.slice(0, 250),
-        description: 'Compra en Marketplace — HomIA',
-        quantity: 1,
-        currency_id: 'ARS',
-        unit_price: input.total,
-      },
-    ],
-    payer: { email: input.payerEmail },
-    external_reference: `purchase:${input.purchaseId}`,
-    back_urls: {
-      success: `${input.baseUrl}/panel/cliente/materiales?compra=pagado`,
-      pending: `${input.baseUrl}/panel/cliente/materiales?compra=pendiente`,
-      failure: `${input.baseUrl}/panel/cliente/materiales?compra=fallo`,
-    },
-    notification_url: `${input.baseUrl}/api/payments/webhook`,
-    statement_descriptor: 'HOMIA',
-  }
-
-  // comisión de la plataforma: solo tiene sentido con el token del vendedor
-  if (input.marketplaceFee && input.marketplaceFee > 0) {
-    body.marketplace_fee = input.marketplaceFee
-  }
-
-  const res = await mp.create({ body })
-
-  return {
-    id: res.id || '',
-    initPoint: (res.init_point || res.sandbox_init_point || '') as string,
   }
 }
 
@@ -352,12 +299,22 @@ type SellerOauth = {
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
 
+/** ¿El vendedor tiene Mercado Pago conectado? (solo estado, sin tocar a MP) */
+export function sellerMpConnected(s: { mpOauthStatus: string; mpOauthAccessToken?: string | null } | null | undefined): boolean {
+  return !!s && s.mpOauthStatus === 'connected' && (s.mpOauthAccessToken === undefined || !!s.mpOauthAccessToken)
+}
+
 /**
- * Devuelve un access token OAuth vigente del proveedor. Si vence en menos de 7
+ * Devuelve un access token OAuth vigente del vendedor. Si vence en menos de 7
  * días y hay refresh token, lo renueva contra MP y persiste los campos. Si la
  * renovación falla, marca `mpOauthStatus = 'expired'` y lanza PROVIDER_NOT_CONNECTED.
  */
-export async function ensureFreshSellerToken(provider: SellerOauth): Promise<string> {
+export async function ensureFreshSellerToken(provider: SellerOauth, kind: 'provider' | 'professional' = 'provider'): Promise<string> {
+  // el mismo perfil se actualiza en su tabla (ProviderProfile o ProfessionalProfile)
+  const save = (data: { mpOauthStatus: string; mpOauthAccessToken?: string; mpOauthRefreshToken?: string | null; mpOauthExpiresAt?: Date }) =>
+    kind === 'professional'
+      ? db.professionalProfile.update({ where: { id: provider.id }, data })
+      : db.providerProfile.update({ where: { id: provider.id }, data })
   if (!provider.mpOauthAccessToken || provider.mpOauthStatus !== 'connected') {
     throw new Error(PROVIDER_NOT_CONNECTED)
   }
@@ -367,7 +324,7 @@ export async function ensureFreshSellerToken(provider: SellerOauth): Promise<str
   if (!provider.mpOauthRefreshToken) {
     // vencido o por vencer y sin cómo renovarlo
     if (expiresAt < Date.now()) {
-      await db.providerProfile.update({ where: { id: provider.id }, data: { mpOauthStatus: 'expired' } })
+      await save({ mpOauthStatus: 'expired' })
       throw new Error(PROVIDER_NOT_CONNECTED)
     }
     return provider.mpOauthAccessToken
@@ -394,19 +351,16 @@ export async function ensureFreshSellerToken(provider: SellerOauth): Promise<str
     const expiresIn = Number.isFinite(Number(data.expires_in)) && Number(data.expires_in) > 0
       ? Number(data.expires_in)
       : 15552000
-    await db.providerProfile.update({
-      where: { id: provider.id },
-      data: {
-        mpOauthAccessToken: data.access_token,
-        mpOauthRefreshToken: data.refresh_token || provider.mpOauthRefreshToken,
-        mpOauthExpiresAt: new Date(Date.now() + expiresIn * 1000),
-        mpOauthStatus: 'connected',
-      },
+    await save({
+      mpOauthAccessToken: data.access_token,
+      mpOauthRefreshToken: data.refresh_token || provider.mpOauthRefreshToken,
+      mpOauthExpiresAt: new Date(Date.now() + expiresIn * 1000),
+      mpOauthStatus: 'connected',
     })
     return data.access_token
   } catch (e) {
-    console.error('[mp] no se pudo renovar el token OAuth del proveedor', provider.id, e)
-    await db.providerProfile.update({ where: { id: provider.id }, data: { mpOauthStatus: 'expired' } })
+    console.error('[mp] no se pudo renovar el token OAuth del vendedor', kind, provider.id, e)
+    await save({ mpOauthStatus: 'expired' }).catch(() => undefined)
     throw new Error(PROVIDER_NOT_CONNECTED)
   }
 }

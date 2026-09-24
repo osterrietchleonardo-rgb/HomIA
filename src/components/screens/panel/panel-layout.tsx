@@ -9,10 +9,11 @@ import RoleSwitcher from '@/components/app/role-switcher'
 import { Homy, HomIAWordmark } from '@/components/homy/homy-character'
 import { toast } from 'sonner'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import CartButton from '@/components/cart/cart-button'
 import {
   LayoutDashboard, Briefcase, FolderKanban, FileText, User, Bell, LogOut,
   Search, Boxes, Users, Link2, HardHat, ClipboardList, Home, Sparkles,
-  Compass, MessageCircle, ShieldCheck, LifeBuoy, HandCoins, Package, Crown, MoreHorizontal,
+  Compass, MessageCircle, ShieldCheck, LifeBuoy, HandCoins, Package, Crown, MoreHorizontal, ShoppingBag,
 } from 'lucide-react'
 
 /** `short`: etiqueta para la barra inferior móvil (≥11px, sin truncar) */
@@ -44,6 +45,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/panel/cliente/publicar', label: 'Publicar trabajo', icon: Briefcase },
     { to: '/panel/cliente/trabajos', label: 'Mis trabajos', short: 'Trabajos', icon: ClipboardList },
     { to: '/panel/cliente/materiales', label: 'Materiales', icon: Package },
+    { to: '/panel/cliente/pedidos', label: 'Mis pedidos', short: 'Pedidos', icon: ShoppingBag },
     { to: '/panel/cliente/proyectos', label: 'Proyectos', icon: FolderKanban },
     { to: '/panel/cliente/facturas', label: 'Facturas', icon: FileText },
     { to: '/panel/cliente/directorio', label: 'Directorio', icon: Compass },
@@ -56,6 +58,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/panel/profesional', label: 'Inicio', icon: LayoutDashboard },
     { to: '/panel/profesional/bolsa', label: 'Bolsa de trabajos', short: 'Bolsa', icon: Search },
     { to: '/panel/profesional/materiales', label: 'Materiales', icon: Boxes },
+    { to: '/panel/profesional/pedidos', label: 'Mis pedidos', short: 'Pedidos', icon: ShoppingBag },
     { to: '/panel/profesional/presupuestos', label: 'Mis ofertas', icon: FileText },
     { to: '/panel/profesional/proyectos', label: 'Proyectos', icon: FolderKanban },
     { to: '/panel/profesional/crm', label: 'CRM clientes', icon: Users },
@@ -203,6 +206,8 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
                 </span>
               </Link>
             )}
+            {/* carrito: solo en los paneles que compran (cliente y profesional) */}
+            {(role === 'cliente' || role === 'profesional') && <CartButton tone="dark" />}
             <button
               onClick={() => navigate('/notificaciones')}
               data-tour="top-notificaciones"
@@ -287,7 +292,7 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
         </aside>
 
         {/* contenido — ÚNICO contenedor que scrollea dentro del marco */}
-        <main id="homy-app-main" className="homy-app-main px-4 py-5 sm:px-6 lg:px-8 lg:pt-7 lg:pb-10 pb-28">{children}</main>
+        <main id="homy-app-main" className="homy-app-main px-4 py-5 sm:px-6 lg:px-8 lg:pt-7 lg:pb-24 pb-44">{children}</main>
       </div>
 
       {/* bottom nav mobile — vidrio fuerte flotante: 4 accesos del rol + "Más" */}

@@ -1,9 +1,9 @@
 /**
  * Cliente de IA portable — reemplazo 1:1 de `z-ai-web-dev-sdk` fuera del sandbox.
  *
- * Expone la MISMA interfaz que usan hoy los 4 call-sites del proyecto
- * (src/app/api/homy/route.ts, src/lib/homy-agent.ts, src/lib/dni-ai.ts,
- * src/app/api/catalog/route.ts):
+ * Expone la MISMA interfaz que usan hoy los call-sites del proyecto
+ * (src/lib/dni-ai.ts y src/app/api/catalog/route.ts). El súper agente Homy NO
+ * usa este shim: va por la Responses API en src/lib/homy/openai.ts (HOMY_MODEL).
  *
  *   const zai = await ZAI.create()
  *   await zai.chat.completions.create({ messages, temperature? })

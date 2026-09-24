@@ -129,11 +129,15 @@ const FAQ = [
   },
   {
     q: '¿Publicar un trabajo cuesta algo?',
-    a: 'No. Publicar, recibir presupuestos, contratar y chatear es gratis para el cliente, y también para el profesional. HomIA cobra una comisión del 1% únicamente en las compras de materiales pagadas por Mercado Pago; las facturas de trabajos no tienen comisión.',
+    a: 'No. Publicar, recibir presupuestos, contratar y chatear es gratis para el cliente, y también para el profesional. Solo cuando pagás con Mercado Pago (una factura, un cobro de materiales o una compra) se suma un «Cargo de servicio HomIA (1%)» que paga quien compra; el profesional o el proveedor cobra el 100% de su precio. En efectivo no hay cargo.',
+  },
+  {
+    q: '¿Cómo funciona el carrito de materiales?',
+    a: 'Sumás productos de uno o varios proveedores con «Agregar al carrito» (también sin cuenta: se guarda en tu dispositivo y, al crear tu cuenta o ingresar, se pasa a tu cuenta). Al confirmar, cada proveedor recibe su parte, la aprueba y te reserva el stock. Después le pagás a cada uno por separado, en el orden que quieras: Mercado Pago (+1% de cargo de servicio) o efectivo al retirar. Todo se sigue en Mis pedidos.',
   },
   {
     q: '¿Qué hago con los materiales que sobraron?',
-    a: 'Los devolvés al local del proveedor. Desde el detalle del proyecto (o desde Mis compras, si fue una compra directa) cargás cada sobrante con foto y cantidad. El proveedor acepta todos o algunos ítems, los acercás al local y él confirma la recepción. Si pagaste con Mercado Pago, el reembolso vuelve solo a tu medio de pago; si pagaste en efectivo, te lo devuelven en el mostrador y lo confirmás en la app. Tenés hasta 30 días desde el pago.',
+    a: 'Los devolvés al local del proveedor. Desde el detalle del proyecto (o desde Mis pedidos, si fue una compra de materiales) cargás cada sobrante con foto y cantidad. El proveedor acepta todos o algunos ítems, los acercás al local y él confirma la recepción. Si pagaste con Mercado Pago, el reembolso (el precio de lo que devolvés; el cargo de servicio del 1% no se devuelve) vuelve solo a tu medio de pago; si pagaste en efectivo, te lo devuelven en el mostrador y lo confirmás en la app. Tenés hasta 30 días desde el pago.',
   },
   {
     q: '¿Cuánto cuesta HomIA para un proveedor?',

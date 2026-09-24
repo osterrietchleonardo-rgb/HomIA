@@ -296,7 +296,7 @@ export default function JobDetailScreen({ id }: { id: string }) {
                 )}
               </div>
             )}
-            {myBid && (myBid.status === 'aceptado' || myBid.status === 'retirado') ? null : (
+            {myBid && myBid.status === 'aceptado' ? null : (
             <>
             <div className="grid sm:grid-cols-3 gap-3.5 mt-1">
               <div>

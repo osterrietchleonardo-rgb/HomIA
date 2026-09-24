@@ -4,7 +4,9 @@
 import { useEffect, useState } from 'react'
 import { navigate } from '@/lib/router'
 import { StatusBadge, Loading, UAvatar, VerifyBadge } from '@/components/app/ui-bits'
-import { formatARS, formatDate } from '@/lib/format'
+import { formatARS, formatARSCents, formatDate } from '@/lib/format'
+import { MpFeeBreakdown, NoMpNotice, PaidFeeLine } from '@/components/app/mp-fee'
+import { totalWithMp } from '@/lib/fees'
 import { toast } from 'sonner'
 import {
   Check, ArrowRight, Star, FolderKanban, Phone, Mail, Package, ReceiptText,
@@ -37,8 +39,11 @@ type Material = {
   id: string; name: string; unit: string; quantity: number; unitPrice: number; subtotal: number; status: string
   note: string | null; providerName: string | null; providerUserId: string | null; invoicedAt: string | null; createdAt: string
 }
-type Invoice = { id: string; number: string; total: number; status: string; issuedAt: string; paymentMethod?: string | null }
-type Charge = { id: string; number: string; description: string; amount: number; status: string; method: string | null; createdAt: string; providerName: string | null }
+type Invoice = { id: string; number: string; total: number; serviceFee?: number; status: string; issuedAt: string; paymentMethod?: string | null }
+type Charge = {
+  id: string; number: string; description: string; amount: number; serviceFee?: number; status: string; method: string | null
+  createdAt: string; providerName: string | null; providerMpConnected?: boolean
+}
 type Brief = { urgency?: string | null; address?: string | null; deadline?: string | null; photos?: string[] }
 type Project = {
   id: string; title: string; description: string | null; stage: string; status: string
@@ -48,6 +53,7 @@ type Project = {
   professional: {
     id: string; userId: string; displayName: string; avatarUrl: string | null; verificationStatus?: string
     personType: string; companyName: string | null; phone: string | null; email: string | null
+    mpConnected?: boolean
   }
 }
 type Data = { project: Project; materials: Material[]; invoices: Invoice[]; charges: Charge[]; role: string }
@@ -56,7 +62,7 @@ const STAGES = ['presupuesto', 'materiales', 'ejecucion', 'revision', 'finalizad
 const STAGE_LABEL: Record<string, string> = {
   presupuesto: 'Presupuesto', materiales: 'Materiales', ejecucion: 'Ejecución', revision: 'Revisión', finalizado: 'Finalizado',
 }
-const MP_NO_CONFIG = 'El pago online no está disponible por ahora: podés acordar efectivo'
+const MP_NO_CONFIG = 'El pago con Mercado Pago no está disponible: podés pagar en efectivo'
 const NET_ERROR = 'No pudimos conectar con HomIA. Revisá tu conexión y probá de nuevo.'
 
 async function readJson(res: Response): Promise<Record<string, unknown> & { error?: string; needsConfig?: boolean; initPoint?: string }> {
@@ -149,7 +155,8 @@ export default function ClientProjectDetail({ id }: { id: string }) {
       const res = await fetch(`/api/invoices/${invoiceId}`, { method: 'POST' })
       const d = await readJson(res)
       if (!res.ok) {
-        toast.error(d.needsConfig ? MP_NO_CONFIG : (d.error || 'No se pudo iniciar el pago'))
+        if (d.needsConfig) toast.info(d.error || MP_NO_CONFIG)
+        else toast.error(d.error || 'No se pudo iniciar el pago')
         return
       }
       if (d.initPoint) window.location.href = d.initPoint
@@ -185,7 +192,8 @@ export default function ClientProjectDetail({ id }: { id: string }) {
       })
       const d = await readJson(res)
       if (!res.ok) {
-        toast.error(d.needsConfig ? MP_NO_CONFIG : (d.error || 'No se pudo iniciar el pago'))
+        if (d.needsConfig) toast.info(d.error || MP_NO_CONFIG)
+        else toast.error(d.error || 'No se pudo iniciar el pago')
         return
       }
       if (method === 'mercadopago') {
@@ -547,11 +555,13 @@ export default function ClientProjectDetail({ id }: { id: string }) {
                     <div className="flex flex-wrap items-center gap-3">
                       <p className="font-extrabold tabular-nums">{formatARS(ch.amount)}</p>
                       {ch.status === 'pendiente' && (
-                        <div className="flex items-center gap-2">
-                          <button disabled={busy !== null} onClick={() => payCharge(ch.id, 'mercadopago')} className="homy-btn-primary px-4 py-2 text-sm disabled:opacity-60">
-                            {cBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Wallet className="size-4" aria-hidden />} Mercado Pago
-                          </button>
-                          <button disabled={busy !== null} onClick={() => payCharge(ch.id, 'efectivo')} className="homy-glass-soft homy-focus rounded-xl px-4 py-2 text-sm font-bold text-[#0A2540] transition hover:bg-[#0A2540]/10 disabled:opacity-60">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {ch.providerMpConnected && (
+                            <button disabled={busy !== null} onClick={() => payCharge(ch.id, 'mercadopago')} className="homy-btn-primary min-h-[40px] px-4 py-2 text-sm disabled:opacity-60">
+                              {cBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Wallet className="size-4" aria-hidden />} Mercado Pago · {formatARSCents(totalWithMp(ch.amount))}
+                            </button>
+                          )}
+                          <button disabled={busy !== null} onClick={() => payCharge(ch.id, 'efectivo')} className="homy-glass-soft homy-focus min-h-[40px] rounded-xl px-4 py-2 text-sm font-bold text-[#0A2540] transition hover:bg-[#0A2540]/10 disabled:opacity-60">
                             <Banknote className="mr-1 inline size-4" aria-hidden /> Efectivo
                           </button>
                         </div>
@@ -563,6 +573,14 @@ export default function ClientProjectDetail({ id }: { id: string }) {
                       )}
                       {ch.status === 'pagada' && <StatusBadge status="pagada" />}
                     </div>
+                    {ch.status === 'pendiente' && (
+                      <div className="basis-full">
+                        {ch.providerMpConnected ? <MpFeeBreakdown subtotal={ch.amount} className="mt-1 max-w-sm" /> : <NoMpNotice name={ch.providerName || 'El proveedor'} />}
+                      </div>
+                    )}
+                    {ch.status === 'pagada' && ch.method === 'mercadopago' && (
+                      <div className="basis-full"><PaidFeeLine subtotal={ch.amount} fee={ch.serviceFee || 0} /></div>
+                    )}
                   </div>
                 )
               })}
@@ -585,7 +603,7 @@ export default function ClientProjectDetail({ id }: { id: string }) {
         {data.invoices.length === 0 ? (
           <p className="homy-glass-soft flex items-start gap-2.5 rounded-xl p-3.5 text-sm text-slate-500">
             <Info className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden />
-            El profesional emite la factura con el detalle (mano de obra y, si corresponde, materiales). La pagás con Mercado Pago o en efectivo.
+            El profesional emite la factura con el detalle (mano de obra y, si corresponde, materiales). La pagás con Mercado Pago (+ cargo de servicio HomIA del 1%) o en efectivo sin cargo.
           </p>
         ) : (
           <div className="space-y-2.5 homy-stagger">
@@ -618,16 +636,28 @@ export default function ClientProjectDetail({ id }: { id: string }) {
                         </button>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <button disabled={busy !== null} onClick={() => payInvoice(inv.id)} className="homy-btn-primary px-4 py-2 text-sm disabled:opacity-60">
-                          {iBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Wallet className="size-4" aria-hidden />} Mercado Pago
-                        </button>
-                        <button disabled={busy !== null} onClick={() => invoiceCash(inv.id, 'acordar')} className="homy-glass-soft homy-focus rounded-xl px-4 py-2 text-sm font-bold text-[#0A2540] transition hover:bg-[#0A2540]/10 disabled:opacity-60">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {p.professional.mpConnected && (
+                          <button disabled={busy !== null} onClick={() => payInvoice(inv.id)} className="homy-btn-primary min-h-[40px] px-4 py-2 text-sm disabled:opacity-60">
+                            {iBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Wallet className="size-4" aria-hidden />} Mercado Pago · {formatARSCents(totalWithMp(inv.total))}
+                          </button>
+                        )}
+                        <button disabled={busy !== null} onClick={() => invoiceCash(inv.id, 'acordar')} className="homy-glass-soft homy-focus min-h-[40px] rounded-xl px-4 py-2 text-sm font-bold text-[#0A2540] transition hover:bg-[#0A2540]/10 disabled:opacity-60">
                           <Banknote className="mr-1 inline size-4" aria-hidden /> Efectivo
                         </button>
                       </div>
                     ))}
                   </div>
+                  {inv.status === 'pendiente' && inv.paymentMethod !== 'efectivo' && (
+                    <div className="basis-full">
+                      {p.professional.mpConnected
+                        ? <MpFeeBreakdown subtotal={inv.total} className="mt-1 max-w-sm" />
+                        : <NoMpNotice name={p.professional.companyName || p.professional.displayName} />}
+                    </div>
+                  )}
+                  {inv.status === 'pagada' && inv.paymentMethod === 'mercadopago' && (
+                    <div className="basis-full"><PaidFeeLine subtotal={inv.total} fee={inv.serviceFee || 0} /></div>
+                  )}
                 </div>
               )
             })}

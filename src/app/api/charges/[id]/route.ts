@@ -1,7 +1,12 @@
 import { NextRequest } from 'next/server'
-import { ok, fail, body, appUrl } from '@/lib/api'
+import { ok, fail, body, appUrl, parseJson } from '@/lib/api'
 import { db } from '@/lib/db'
-import { createChargePreference, mpConfigured } from '@/lib/mercadopago'
+import { createSellerPreference } from '@/lib/mercadopago'
+import { serviceFeeFor, totalWithMp } from '@/lib/fees'
+import { sellerTokenOr503, mpDown } from '@/lib/seller-pay'
+import { logActivity } from '@/lib/activity'
+import { fmt } from '@/lib/orders'
+import { LEGACY_PREFIX } from '@/lib/order-view'
 
 // GET: detalle de un cobro (partes del proyecto: cliente o proveedor dueño)
 export async function GET(
@@ -25,6 +30,8 @@ export async function GET(
   if (charge.clientId !== user.id && charge.provider.userId !== user.id) {
     return fail('No tenés acceso a este cobro', 403)
   }
+  // los tokens OAuth nunca salen al navegador: solo si el proveedor cobra por MP
+  const { mpOauthAccessToken, mpOauthStatus } = charge.provider
   return ok({
     charge: {
       ...charge,
@@ -34,8 +41,10 @@ export async function GET(
         businessName: charge.provider.businessName,
         displayName: charge.provider.user.displayName,
         email: charge.provider.user.email,
+        mpConnected: mpOauthStatus === 'connected' && !!mpOauthAccessToken,
       },
       client: charge.client,
+      mpServiceFee: serviceFeeFor(charge.amount),
     },
   })
 }
@@ -68,10 +77,14 @@ export async function POST(
   if (d.method !== 'mercadopago' && d.method !== 'efectivo') return fail('Elegí el método de pago: mercadopago o efectivo')
 
   if (d.method === 'efectivo') {
+    // en efectivo no hay cargo de servicio
     await db.providerCharge.update({
       where: { id: charge.id },
-      data: { status: 'acordada_efectivo', method: 'efectivo' },
+      data: { status: 'acordada_efectivo', method: 'efectivo', serviceFee: 0 },
     })
+    if (charge.projectId) {
+      await logActivity({ projectId: charge.projectId, actorId: user.id, actorRole: 'cliente', type: 'cobro_efectivo_acordado', message: `${user.displayName} acordó pagar el cobro ${charge.number} (${fmt(charge.amount)}) en efectivo.` })
+    }
     await db.notification.create({
       data: {
         userId: charge.provider.userId,
@@ -84,30 +97,34 @@ export async function POST(
     return ok({ method: 'efectivo', status: 'acordada_efectivo' })
   }
 
-  // Mercado Pago
-  if (!mpConfigured()) {
-    return fail('El pago con Mercado Pago no está disponible por ahora. Podés pagar en efectivo o reintentar más tarde.', 503, { needsConfig: true })
-  }
-  const baseUrl = appUrl()
+  // Mercado Pago: con el token del PROVEEDOR (la plata va a su cuenta) + cargo de servicio 1%
+  const tk = await sellerTokenOr503(charge.provider, 'provider', charge.provider.businessName)
+  if (tk.error) return tk.error
+  const fee = serviceFeeFor(charge.amount)
   let preference: { id: string; initPoint: string }
   try {
-    preference = await createChargePreference({
-      chargeId: charge.id,
-      chargeNumber: charge.number,
-      title: titulo,
-      total: charge.amount,
+    preference = await createSellerPreference({
+      kind: 'charge',
+      id: charge.id,
+      items: [{ id: charge.id, title: `${titulo} (${charge.number})`, quantity: 1, unitPrice: charge.amount }],
+      serviceFee: fee,
       payerEmail: user.email,
-      baseUrl,
+      baseUrl: appUrl(),
+      sellerAccessToken: tk.token,
+      backPath: charge.projectId ? `/panel/cliente/proyectos/${charge.projectId}` : '/panel/cliente/pedidos',
     })
   } catch (e) {
-    console.error('[charges] createChargePreference', e)
-    return fail('Mercado Pago no respondió. Probá de nuevo en un rato o acordá efectivo con el proveedor.', 503)
+    console.error('[charges] createSellerPreference', e)
+    return mpDown()
   }
   await db.providerCharge.update({
     where: { id: charge.id },
-    data: { mpPreferenceId: preference.id, method: 'mercadopago' },
+    data: { mpPreferenceId: preference.id, method: 'mercadopago', serviceFee: fee },
   })
-  return ok({ initPoint: preference.initPoint, preferenceId: preference.id })
+  if (charge.projectId) {
+    await logActivity({ projectId: charge.projectId, actorId: user.id, actorRole: 'cliente', type: 'pago_mp_iniciado', message: `${user.displayName} inició el pago del cobro ${charge.number} con Mercado Pago: ${fmt(charge.amount)} + cargo de servicio ${fmt(fee)}.` })
+  }
+  return ok({ initPoint: preference.initPoint, preferenceId: preference.id, serviceFee: fee, totalMp: totalWithMp(charge.amount) })
 }
 
 // PATCH: el proveedor confirma que cobró el efectivo acordado
@@ -133,15 +150,27 @@ export async function PATCH(
 
   await db.providerCharge.update({
     where: { id: charge.id },
-    data: { status: 'pagada', method: 'efectivo', paidAt: new Date() },
+    data: { status: 'pagada', method: 'efectivo', paidAt: new Date(), serviceFee: 0 },
   })
-  // si el cobro nació de una compra directa, la compra queda pagada → habilita reseña
+  // si el cobro nació de una compra (sub-pedido), la compra queda pagada → habilita reseña
   // (Purchase no tiene paidAt: la fecha de cobro vive en charge.paidAt)
+  let link = charge.projectId ? `#/panel/cliente/proyectos/${charge.projectId}` : '#/panel/cliente/pedidos'
   if (charge.projectId == null) {
+    const p = await db.purchase.findFirst({
+      where: { chargeId: charge.id },
+      select: { id: true, orderId: true, client: { select: { roles: true } } },
+    })
     await db.purchase.updateMany({
       where: { chargeId: charge.id, status: { notIn: ['cancelado', 'rechazado'] } },
-      data: { status: 'pagado', paymentMethod: 'efectivo' },
+      data: { status: 'pagado', paymentMethod: 'efectivo', serviceFee: 0 },
     })
+    if (p) {
+      const panel = parseJson<string[]>(p.client.roles, []).includes('cliente') ? 'cliente' : 'profesional'
+      link = `#/panel/${panel}/pedidos/${p.orderId || `${LEGACY_PREFIX}${p.id}`}`
+      await logActivity({ orderId: p.orderId, purchaseId: p.id, actorId: user.id, actorRole: 'proveedor', type: 'pagado', message: `${user.displayName} confirmó que cobró ${fmt(charge.amount)} en efectivo.` })
+    }
+  } else {
+    await logActivity({ projectId: charge.projectId, actorId: user.id, actorRole: 'proveedor', type: 'pagado', message: `${user.displayName} confirmó que cobró ${charge.number} (${fmt(charge.amount)}) en efectivo.` })
   }
   await db.notification.create({
     data: {
@@ -149,7 +178,7 @@ export async function PATCH(
       type: 'cobro_efectivo_confirmado',
       title: 'Cobro en efectivo confirmado',
       body: `El proveedor confirmó que cobró ${charge.number} en efectivo. Quedó registrado como pagado.`,
-      link: charge.projectId ? `#/panel/cliente/proyectos/${charge.projectId}` : '#/panel/cliente/materiales?tab=compras',
+      link,
     },
   })
   return ok({ success: true, status: 'pagada' })

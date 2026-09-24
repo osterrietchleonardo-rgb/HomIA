@@ -1,9 +1,13 @@
 'use client'
-// Facturas del cliente + elección de método de pago: Mercado Pago o efectivo (lo confirma el profesional)
+// Facturas del cliente + elección de método de pago: Mercado Pago (a la cuenta del
+// profesional, + cargo de servicio HomIA del 1% que paga el cliente) o efectivo sin
+// cargo (lo confirma el profesional). Si el profesional no conectó MP, solo efectivo.
 import { useEffect, useState } from 'react'
 import { navigate, useRoute } from '@/lib/router'
 import { StatusBadge, Loading } from '@/components/app/ui-bits'
-import { formatARS, formatDate } from '@/lib/format'
+import { formatARS, formatARSCents, formatDate } from '@/lib/format'
+import { MpFeeBreakdown, NoMpNotice, PaidFeeLine } from '@/components/app/mp-fee'
+import { totalWithMp } from '@/lib/fees'
 import { toast } from 'sonner'
 import { Wallet, ReceiptText, CircleCheck, ArrowLeft, FileDown, Banknote, Undo2, Hourglass, RefreshCcw, Loader2 } from 'lucide-react'
 
@@ -22,13 +26,17 @@ function verPdf(id: string, number_: string) {
 }
 
 type Invoice = {
-  id: string; number: string; total: number; status: string; issuedAt: string
+  id: string; number: string; total: number; serviceFee?: number; status: string; issuedAt: string
   laborCost: number; materialsCost: number; paymentMethod?: string | null
   project: { id: string; title: string }
+  pro: { name: string; mpConnected: boolean }
 }
-type ProjectRow = { id: string; title: string; invoices: Omit<Invoice, 'project'>[] }
+type ProjectRow = {
+  id: string; title: string; invoices: Omit<Invoice, 'project' | 'pro'>[]
+  pro?: { mpConnected?: boolean; user?: { displayName?: string } }
+}
 
-const MP_NO_CONFIG = 'El pago online no está disponible por ahora: podés acordar efectivo'
+const MP_NO_CONFIG = 'El pago con Mercado Pago no está disponible: podés pagar en efectivo'
 const NET_ERROR = 'No pudimos conectar con HomIA. Revisá tu conexión y probá de nuevo.'
 
 export default function ClientInvoices() {
@@ -51,7 +59,11 @@ export default function ClientInvoices() {
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setError(d.error || 'No pudimos cargar tus facturas'); return }
       const projects = (d.asClient || []) as ProjectRow[]
-      const all = projects.flatMap((p) => (p.invoices || []).map((inv) => ({ ...inv, project: { id: p.id, title: p.title } })))
+      const all = projects.flatMap((p) => (p.invoices || []).map((inv) => ({
+        ...inv,
+        project: { id: p.id, title: p.title },
+        pro: { name: p.pro?.user?.displayName || 'El profesional', mpConnected: !!p.pro?.mpConnected },
+      })))
       all.sort((a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime())
       setInvoices(all)
     } catch {
@@ -71,7 +83,8 @@ export default function ClientInvoices() {
       const res = await fetch(`/api/invoices/${inv.id}`, { method: 'POST' })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        toast.error(data.needsConfig ? MP_NO_CONFIG : (data.error || 'No se pudo iniciar el pago'))
+        if (data.needsConfig) toast.info(data.error || MP_NO_CONFIG)
+        else toast.error(data.error || 'No se pudo iniciar el pago')
         return
       }
       if (data.initPoint) window.location.href = data.initPoint
@@ -111,7 +124,7 @@ export default function ClientInvoices() {
         <div className="min-w-0">
           <span className="homy-eyebrow">Pagos</span>
           <h1 className="homy-page-title mt-1.5">Facturas</h1>
-          <p className="homy-page-sub">Todo lo que tenés que pagar y lo ya pagado. Pagás con Mercado Pago o efectivo.</p>
+          <p className="homy-page-sub">Todo lo que tenés que pagar y lo ya pagado. Pagás con Mercado Pago (+1% de cargo de servicio) o en efectivo.</p>
         </div>
       </header>
 
@@ -193,7 +206,7 @@ export default function ClientInvoices() {
                     <div className="min-w-0 flex-1">
                       <p className="font-bold text-[#0A2540]">{inv.number}</p>
                       {inv.project.title && (
-                        <button onClick={() => navigate(`/panel/cliente/proyectos/${inv.project.id}`)} className="homy-focus line-clamp-1 rounded text-left text-xs font-bold text-[#1D63B8] hover:underline">
+                        <button onClick={() => navigate(`/panel/cliente/proyectos/${inv.project.id}`)} className="homy-focus block max-w-full truncate rounded py-2.5 text-left text-xs font-bold text-[#1D63B8] hover:underline">
                           {inv.project.title}
                         </button>
                       )}
@@ -220,9 +233,11 @@ export default function ClientInvoices() {
                         </div>
                       ) : (
                         <div className="flex flex-wrap items-center gap-2">
-                          <button disabled={busy !== null} onClick={() => payMP(inv)} className="homy-btn-primary px-4 py-3 text-sm disabled:opacity-60 sm:py-2.5">
-                            {busy === inv.id ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Wallet className="size-4" aria-hidden />} Pagar con Mercado Pago
-                          </button>
+                          {inv.pro.mpConnected && (
+                            <button disabled={busy !== null} onClick={() => payMP(inv)} className="homy-btn-primary min-h-[44px] px-4 py-3 text-sm disabled:opacity-60 sm:py-2.5">
+                              {busy === inv.id ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Wallet className="size-4" aria-hidden />} Pagar {formatARSCents(totalWithMp(inv.total))} con Mercado Pago
+                            </button>
+                          )}
                           <button
                             disabled={busy !== null}
                             onClick={() => cashAction(inv, 'acordar')}
@@ -234,10 +249,15 @@ export default function ClientInvoices() {
                         </div>
                       )}
                     </div>
+                    {inv.paymentMethod !== 'efectivo' && (
+                      <div className="basis-full">
+                        {inv.pro.mpConnected ? <MpFeeBreakdown subtotal={inv.total} className="max-w-sm" /> : <NoMpNotice name={inv.pro.name} />}
+                      </div>
+                    )}
                   </div>
                 ))}
                 <p className="homy-glass-soft rounded-xl px-4 py-3 text-xs leading-relaxed text-slate-500">
-                  ¿Cómo pagás? Con <span className="font-bold text-[#0A2540]">Mercado Pago</span> el pago queda registrado al instante. Con <span className="font-bold text-[#0A2540]">Efectivo</span>, el profesional confirma en su panel cuando recibe el dinero y la factura queda pagada.
+                  ¿Cómo pagás? Con <span className="font-bold text-[#0A2540]">Mercado Pago</span> la plata va a la cuenta del profesional, el pago queda registrado al instante y se suma el cargo de servicio HomIA (1%). Con <span className="font-bold text-[#0A2540]">Efectivo</span> no hay cargo: el profesional confirma en su panel cuando recibe el dinero y la factura queda pagada.
                 </p>
               </div>
             </section>
@@ -261,6 +281,7 @@ export default function ClientInvoices() {
                       <p className="font-bold text-[#0A2540]">{inv.number}</p>
                       {inv.project.title && <p className="line-clamp-1 text-xs font-semibold text-slate-500">{inv.project.title}</p>}
                       <p className="text-xs text-slate-400">{formatDate(inv.issuedAt)}{inv.paymentMethod ? ` · ${inv.paymentMethod === 'mercadopago' ? 'Mercado Pago' : 'efectivo'}` : ''}</p>
+                      {inv.paymentMethod === 'mercadopago' && <PaidFeeLine subtotal={inv.total} fee={inv.serviceFee || 0} />}
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
                       <p className="font-bold tabular-nums">{formatARS(inv.total)}</p>
@@ -283,7 +304,7 @@ export default function ClientInvoices() {
       )}
 
       {invoices.length > 0 && (
-        <button onClick={() => navigate('/panel/cliente/proyectos')} className="homy-focus mt-7 inline-flex items-center gap-1.5 rounded-lg text-sm font-bold text-[#1D63B8] hover:underline">
+        <button onClick={() => navigate('/panel/cliente/proyectos')} className="homy-focus mt-7 inline-flex min-h-[44px] items-center gap-1.5 rounded-lg text-sm font-bold text-[#1D63B8] hover:underline">
           <ArrowLeft className="size-4" aria-hidden /> Ver mis proyectos
         </button>
       )}

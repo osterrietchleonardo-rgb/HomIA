@@ -7,10 +7,10 @@ import { isHomiaUploadUrl } from '@/lib/leftovers'
 const userSelect = { id: true, displayName: true, avatarUrl: true, verificationStatus: true } as const
 const listInclude = {
   client: { select: userSelect },
-  pro: { select: { id: true, userId: true, user: { select: userSelect } } },
+  pro: { select: { id: true, userId: true, mpOauthStatus: true, mpOauthAccessToken: true, user: { select: userSelect } } },
   materials: { select: { id: true, status: true, provider: { select: { user: { select: { id: true } } } } } },
   invoices: {
-    select: { id: true, number: true, total: true, status: true, paymentMethod: true, issuedAt: true, laborCost: true, materialsCost: true },
+    select: { id: true, number: true, total: true, serviceFee: true, status: true, paymentMethod: true, issuedAt: true, laborCost: true, materialsCost: true },
     orderBy: { issuedAt: 'desc' as const },
   },
   job: { select: { id: true } },
@@ -92,10 +92,10 @@ type SerializableProject = {
   materialsPaymentMode: string; deadline: Date | null
   createdAt: Date; updatedAt: Date; jobId: string | null
   client: UserLite
-  pro: { id: string; userId: string; user: UserLite }
+  pro: { id: string; userId: string; mpOauthStatus: string; mpOauthAccessToken: string | null; user: UserLite }
   materials: { id: string; status: string }[]
   invoices: {
-    id: string; number: string; total: number; status: string; paymentMethod: string | null
+    id: string; number: string; total: number; serviceFee: number; status: string; paymentMethod: string | null
     issuedAt: Date; laborCost: number; materialsCost: number
   }[]
   job: { id: string } | null
@@ -126,6 +126,8 @@ function serializeProject(p: SerializableProject) {
     pro: {
       id: p.pro.id,
       userId: p.pro.userId,
+      // cobra facturas por Mercado Pago (solo el estado: el token nunca sale al navegador)
+      mpConnected: p.pro.mpOauthStatus === 'connected' && !!p.pro.mpOauthAccessToken,
       user: {
         displayName: p.pro.user.displayName,
         avatarUrl: p.pro.user.avatarUrl,
@@ -136,6 +138,7 @@ function serializeProject(p: SerializableProject) {
       id: i.id,
       number: i.number,
       total: i.total,
+      serviceFee: i.serviceFee,
       status: i.status,
       paymentMethod: i.paymentMethod,
       issuedAt: i.issuedAt,

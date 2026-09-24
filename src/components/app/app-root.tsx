@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { useRoute, navigate, Link } from '@/lib/router'
 import { useSession, useLocation, syncLocationToServer } from '@/lib/store'
+import { useCartSync } from '@/lib/cart'
 import { Loading } from '@/components/app/ui-bits'
 import { BackdropFX } from '@/components/app/backdrop-fx'
 import { SiteHeader } from '@/components/home/site-header'
@@ -30,6 +31,11 @@ const DirectoryScreen = dynamic(() => import('@/components/screens/directory-scr
 const MarketplaceScreen = dynamic(() => import('@/components/screens/marketplace-screen'), { ssr: false, loading: () => <Loading /> })
 const MessagesScreen = dynamic(() => import('@/components/screens/messages-screen'), { ssr: false, loading: () => <Loading /> })
 const HelpScreen = dynamic(() => import('@/components/screens/help-screen'), { ssr: false, loading: () => <Loading /> })
+const CartScreen = dynamic(() => import('@/components/screens/cart-screen'), { ssr: false, loading: () => <Loading /> })
+
+// Pedidos del carrito (cliente y profesional que compra)
+const OrdersScreen = dynamic(() => import('@/components/screens/panel/pedidos'), { ssr: false, loading: () => <Loading /> })
+const OrderDetail = dynamic(() => import('@/components/screens/panel/pedido-detalle'), { ssr: false, loading: () => <Loading /> })
 
 // Panel cliente
 const ClientDashboard = dynamic(() => import('@/components/screens/panel/cliente/dashboard'), { ssr: false, loading: () => <Loading /> })
@@ -70,6 +76,8 @@ export default function AppRoot() {
   const route = useRoute()
   const { user, loading, refresh } = useSession()
   const location = useLocation()
+  // carrito: se sincroniza con la sesión (y fusiona el del visitante al ingresar)
+  useCartSync()
 
   useEffect(() => {
     refresh()
@@ -138,6 +146,7 @@ export default function AppRoot() {
   else if (s[0] === 'materiales') screen = inPanel ? withPanel(<MarketplaceScreen embedded />) : withPublicShell(<MarketplaceScreen />)
   else if (s[0] === 'mensajes') screen = publicOrPanel(<AuthGate path="/mensajes" />, <MessagesScreen embedded />)
   else if (s[0] === 'ayuda') screen = inPanel ? withPanel(<HelpScreen embedded />) : withPublicShell(<HelpScreen />)
+  else if (s[0] === 'carrito') screen = inPanel ? withPanel(<CartScreen embedded />) : loading ? <Loading text="Verificando tu sesión…" /> : withPublicShell(<CartScreen />, 'pt-20')
   else if (s[0] === 'panel') {
     if (loading) screen = <Loading text="Verificando tu sesión…" />
     else if (!user) {
@@ -180,6 +189,8 @@ function panelScreen(route: ReturnType<typeof useRoute>) {
     if (page === 'publicar') return <PublishJob />
     if (page === 'trabajos') return <MyJobs highlightId={sub} />
     if (page === 'materiales') return <ClientMaterials />
+    if (page === 'pedidos' && sub) return <OrderDetail id={sub} role="cliente" />
+    if (page === 'pedidos') return <OrdersScreen role="cliente" />
     if (page === 'proyectos' && sub) return <ClientProjectDetail id={sub} />
     if (page === 'proyectos') return <ClientProjects />
     if (page === 'facturas') return <ClientInvoices />
@@ -190,6 +201,8 @@ function panelScreen(route: ReturnType<typeof useRoute>) {
     if (page === '') return <ProDashboard />
     if (page === 'bolsa') return <ProJobsBoard />
     if (page === 'materiales') return <ClientMaterials role="profesional" />
+    if (page === 'pedidos' && sub) return <OrderDetail id={sub} role="profesional" />
+    if (page === 'pedidos') return <OrdersScreen role="profesional" />
     if (page === 'proyectos' && sub) return <ProProjectDetail id={sub} />
     if (page === 'proyectos') return <ProProjects />
     if (page === 'presupuestos') return <ProBids />

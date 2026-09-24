@@ -1,6 +1,8 @@
 // Sobrantes — reglas compartidas entre POST /api/returns, GET /api/returns/eligible
 // y PATCH /api/returns/[id]. Un pedido de devolución agrupa ítems pagados a UN solo
 // proveedor; el reembolso vuelve por el mismo medio con el que se pagó.
+// Si el pago fue por Mercado Pago e incluyó el cargo de servicio HomIA (1%), se
+// reembolsa solo el precio de los ítems devueltos: el cargo de servicio no se devuelve.
 import { db } from '@/lib/db'
 
 export const RETURN_WINDOW_DAYS = 30
@@ -21,15 +23,29 @@ export type PaidOrigin = {
   paymentMethod: 'mercadopago' | 'efectivo' | null
   mpPaymentId: string | null
   paidAt: Date | null
-  /** monto total del pago original (tope de reembolso) */
+  /** monto total del pago original */
   paidAmount: number
+  /** cargo de servicio HomIA (1%) incluido en el pago: NO se reembolsa */
+  serviceFee: number
   /** ya reembolsado por MP sobre ese pago */
   refundedAmount: number
 }
 
-/** Cantidad ya devuelta (aceptada o, si sigue en curso, pedida) de un material/compra. */
-export async function alreadyReturnedQty(key: { materialId?: string | null; purchaseId?: string | null }, excludeReturnId?: string): Promise<number> {
-  const where = key.materialId ? { materialId: key.materialId } : key.purchaseId ? { purchaseId: key.purchaseId } : null
+/** Tope de reembolso de un pago: lo pagado sin el cargo de servicio, menos lo ya reembolsado. */
+export function refundableOf(o: { paidAmount: number; serviceFee: number; refundedAmount: number }): number {
+  return round2(Math.max(0, o.paidAmount - o.serviceFee - o.refundedAmount))
+}
+
+/** Cantidad ya devuelta (aceptada o, si sigue en curso, pedida) de un material, un
+ *  ítem de compra (carrito, multi-ítem) o una compra histórica de un solo ítem. */
+export async function alreadyReturnedQty(key: { materialId?: string | null; purchaseId?: string | null; purchaseItemId?: string | null }, excludeReturnId?: string): Promise<number> {
+  const where = key.materialId
+    ? { materialId: key.materialId }
+    : key.purchaseItemId
+      ? { purchaseItemId: key.purchaseItemId }
+      : key.purchaseId
+        ? { purchaseId: key.purchaseId, purchaseItemId: null }
+        : null
   if (!where) return 0
   const items = await db.leftoverItem.findMany({
     where: {
@@ -44,7 +60,7 @@ export async function alreadyReturnedQty(key: { materialId?: string | null; purc
 
 /** Pago original de una compra directa (charge + Payment). */
 export async function purchasePaidOrigin(purchase: {
-  id: string; chargeId: string | null; paymentMethod: string | null; mpPaymentId: string | null; total: number; updatedAt: Date
+  id: string; chargeId: string | null; paymentMethod: string | null; mpPaymentId: string | null; total: number; serviceFee: number; updatedAt: Date
 }): Promise<PaidOrigin> {
   const charge = purchase.chargeId ? await db.providerCharge.findUnique({ where: { id: purchase.chargeId } }) : null
   const payment = await db.payment.findFirst({
@@ -62,13 +78,14 @@ export async function purchasePaidOrigin(purchase: {
     mpPaymentId: method === 'mercadopago' ? (purchase.mpPaymentId || charge?.mpPaymentId || payment?.mpPaymentId || null) : null,
     paidAt: payment?.confirmedAt || charge?.paidAt || payment?.createdAt || purchase.updatedAt,
     paidAmount: payment?.amount ?? charge?.amount ?? purchase.total,
+    serviceFee: method === 'mercadopago' ? purchase.serviceFee || charge?.serviceFee || 0 : 0,
     refundedAmount: payment?.refundedAmount ?? 0,
   }
 }
 
 type MaterialRow = { id: string; invoicedAt: Date | null; providerId: string | null }
-type InvoiceRow = { id: string; status: string; paymentMethod: string | null; mpPaymentId: string | null; paidAt: Date | null; issuedAt: Date; total: number }
-type ChargeRow = { id: string; status: string; method: string | null; mpPaymentId: string | null; paidAt: Date | null; amount: number; materialIds: string }
+type InvoiceRow = { id: string; status: string; paymentMethod: string | null; mpPaymentId: string | null; paidAt: Date | null; issuedAt: Date; total: number; serviceFee: number }
+type ChargeRow = { id: string; status: string; method: string | null; mpPaymentId: string | null; paidAt: Date | null; amount: number; serviceFee: number; materialIds: string }
 
 /** Pago original de un material de proyecto: cobro del proveedor (modo B) o factura del profesional (modo A). */
 export async function materialPaidOrigin(material: MaterialRow, invoices: InvoiceRow[], charges: ChargeRow[]): Promise<PaidOrigin | null> {
@@ -87,6 +104,7 @@ export async function materialPaidOrigin(material: MaterialRow, invoices: Invoic
       mpPaymentId: method === 'mercadopago' ? (charge.mpPaymentId || payment?.mpPaymentId || null) : null,
       paidAt: payment?.confirmedAt || charge.paidAt || payment?.createdAt || null,
       paidAmount: payment?.amount ?? charge.amount,
+      serviceFee: method === 'mercadopago' ? charge.serviceFee : 0,
       refundedAmount: payment?.refundedAmount ?? 0,
     }
   }
@@ -106,6 +124,7 @@ export async function materialPaidOrigin(material: MaterialRow, invoices: Invoic
     mpPaymentId: method === 'mercadopago' ? (invoice.mpPaymentId || payment?.mpPaymentId || null) : null,
     paidAt: payment?.confirmedAt || invoice.paidAt || payment?.createdAt || null,
     paidAmount: payment?.amount ?? invoice.total,
+    serviceFee: method === 'mercadopago' ? invoice.serviceFee : 0,
     refundedAmount: payment?.refundedAmount ?? 0,
   }
 }

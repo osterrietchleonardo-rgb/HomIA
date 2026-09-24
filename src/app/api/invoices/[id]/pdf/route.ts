@@ -3,10 +3,16 @@ import { fail } from '@/lib/api'
 import { db } from '@/lib/db'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import { getSessionUser } from '@/lib/auth'
+import { SERVICE_FEE_LABEL } from '@/lib/fees'
 
 // Formato de moneda para el PDF (es-AR, sin decimales)
 function ars(n: number): string {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
+}
+/** Con centavos cuando los hay (cargo de servicio del 1%). */
+function arsCents(n: number): string {
+  const cents = Math.round(Math.abs(n) * 100) % 100 !== 0
+  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: cents ? 2 : 0 }).format(n)
 }
 function fecha(d: Date | null | undefined): string {
   if (!d) return '—'
@@ -164,6 +170,22 @@ export async function GET(
   page.drawText(total, { x: W - M - 14 - bold.widthOfTextAtSize(total, 12), y: y - 21.5, size: 12, font: bold, color: GOLD })
   y -= 44
 
+  // pagada por Mercado Pago: el cliente pagó además el cargo de servicio HomIA (1%).
+  // El total de la factura (lo que cobra el profesional) no cambia.
+  if (invoice.paymentMethod === 'mercadopago' && invoice.serviceFee > 0) {
+    const feeRows: [string, string, boolean][] = [
+      [SERVICE_FEE_LABEL, arsCents(invoice.serviceFee), false],
+      ['Total pagado con Mercado Pago', arsCents(invoice.total + invoice.serviceFee), true],
+    ]
+    feeRows.forEach(([k, v, strong]) => {
+      const f = strong ? bold : font
+      page.drawText(winansi(k), { x: cols.cant - 60, y: y - 4, size: 9.5, font: f, color: strong ? NAVY : MUTED })
+      page.drawText(v, { x: cols.sub - f.widthOfTextAtSize(v, 9.5), y: y - 4, size: 9.5, font: f, color: INK })
+      y -= 16
+    })
+    y -= 10
+  }
+
   // modo de pago de materiales (contexto para el cliente)
   if (invoice.project.materialsPaymentMode === 'cliente_paga_proveedor' && invoice.materialsCost === 0) {
     page.drawRectangle({ x: M, y: y - 30, width: W - M * 2, height: 30, color: rgb(0.9, 0.96, 1) })
@@ -197,7 +219,7 @@ export async function GET(
     page.drawText(efectivoAcordado ? 'PAGO EN EFECTIVO ACORDADO' : 'PAGO PENDIENTE', { x: M + 14, y: y - 16, size: 8.5, font: bold, color: efectivoAcordado ? BLUE : ORANGE })
     page.drawText(winansi(efectivoAcordado
       ? 'El cliente acordó pagar en efectivo. Queda saldada cuando el profesional confirma el cobro desde su panel.'
-      : 'El cliente elige cómo pagar: Mercado Pago (respaldado por HomIA) o efectivo (el profesional confirma el cobro).'), {
+      : 'El cliente elige cómo pagar: Mercado Pago (+ cargo de servicio HomIA del 1%) o efectivo sin cargo (el profesional confirma el cobro).'), {
       x: M + 14, y: y - 31, size: 8.5, font, color: INK, maxWidth: W - M * 2 - 26,
     })
     y -= 54
@@ -206,7 +228,7 @@ export async function GET(
   // footer
   page.drawLine({ start: { x: M, y: 64 }, end: { x: W - M, y: 64 }, thickness: 1, color: LINE })
   page.drawText(winansi('Documento generado electrónicamente por HomIA - comprobante interno de la plataforma.'), { x: M, y: 48, size: 8, font, color: MUTED })
-  page.drawText(winansi('Métodos de pago: Mercado Pago (con respaldo) o efectivo (el profesional confirma el cobro recibido).'), { x: M, y: 36, size: 8, font, color: MUTED })
+  page.drawText(winansi('Métodos de pago: Mercado Pago (+1% de cargo de servicio HomIA) o efectivo (el profesional confirma el cobro recibido).'), { x: M, y: 36, size: 8, font, color: MUTED })
   page.drawText('homia.app', { x: W - M - bold.widthOfTextAtSize('homia.app', 8.5), y: 48, size: 8.5, font: bold, color: BLUE })
 
   const bytes = await pdf.save()

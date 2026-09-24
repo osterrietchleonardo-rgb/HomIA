@@ -84,7 +84,8 @@ export const HOWTOS: Record<TourRole, HowTo[]> = {
       time: '2 min',
       steps: [
         'Entrá a Panel → Facturas (o al detalle del proyecto) y abrí la factura pendiente.',
-        'Elegí el método: Pagar con Mercado Pago (el dinero va directo al profesional) o Efectivo.',
+        'Elegí el método: Pagar con Mercado Pago (el dinero va directo al profesional y se suma el cargo de servicio HomIA del 1%) o Efectivo (sin cargo).',
+        'Si tu profesional todavía no conectó Mercado Pago, la factura se paga en efectivo: la pantalla te lo avisa.',
         'Con efectivo: el acuerdo queda registrado y tu profesional lo confirma cuando recibe el dinero. Podés cancelar el acuerdo antes y cambiar de método.',
         'Descargá el comprobante con el botón PDF cuando quieras.',
       ],
@@ -98,11 +99,25 @@ export const HOWTOS: Record<TourRole, HowTo[]> = {
       steps: [
         'Si el proyecto usa el modo "el cliente paga al proveedor", tus materiales se cobran por separado de la factura del profesional.',
         'En el detalle del proyecto, buscá la sección Pagos a proveedores.',
-        'Cada proveedor emite su cobro por los materiales aprobados: lo pagás con Mercado Pago o acordás efectivo.',
+        'Cada proveedor emite su cobro por los materiales aprobados: lo pagás con Mercado Pago (+1% de cargo de servicio HomIA) o acordás efectivo sin cargo.',
         'El proveedor confirma el efectivo al recibirlo y todo queda registrado.',
       ],
       href: '/panel/cliente/proyectos',
       cta: 'Ir a proyectos',
+    },
+    {
+      id: 'carrito',
+      title: 'Comprar materiales con el carrito',
+      time: '3 min',
+      steps: [
+        'En Materiales tocá «Agregar al carrito» en cada producto que quieras, aunque sean de proveedores distintos.',
+        'Abrí el carrito (ícono de arriba): los productos están agrupados por proveedor; ajustá cantidades o sacá lo que no va.',
+        'Tocá «Confirmar pedido», elegí por proveedor si comprás (7 días para retirar) o reservás (48 h) y enviá.',
+        'Cada proveedor aprueba su parte. En Mis pedidos le pagás a cada uno: Mercado Pago (+1% de cargo de servicio) o efectivo al retirar.',
+        'Retirás, el proveedor marca la entrega y calificás tu compra.',
+      ],
+      href: '/panel/cliente/pedidos',
+      cta: 'Ver mis pedidos',
     },
     {
       id: 'resena',
@@ -224,6 +239,19 @@ export const HOWTOS: Record<TourRole, HowTo[]> = {
       cta: 'Ir a proyectos',
     },
     {
+      id: 'cobrar-mp',
+      title: 'Cobrar tus facturas con tu Mercado Pago',
+      time: '2 min',
+      steps: [
+        'Entrá a Panel → Mi perfil y buscá el bloque «Cobrá con tu Mercado Pago».',
+        'Tocá «Conectar Mercado Pago» e ingresá con tu cuenta: volvés solo a tu perfil.',
+        'Desde ahí, cuando un cliente paga tu factura por Mercado Pago, la plata entra directo en tu cuenta y cobrás el 100%: el cargo de servicio HomIA del 1% lo paga el cliente.',
+        'Sin conexión, tus clientes solo pueden pagarte en efectivo (vos confirmás el cobro).',
+      ],
+      href: '/panel/profesional/perfil',
+      cta: 'Ir a mi perfil',
+    },
+    {
       id: 'obras',
       title: 'Cargar tus obras para vender más',
       time: '3 min',
@@ -329,6 +357,20 @@ export const HOWTOS: Record<TourRole, HowTo[]> = {
       ],
       href: '/panel/proveedor/cobros',
       cta: 'Ir a cobros',
+    },
+    {
+      id: 'ventas-pedidos',
+      title: 'Aprobar o rechazar un pedido del carrito',
+      time: '2 min',
+      steps: [
+        'Entrá a Panel → Cobros → Ventas (pedidos): ves tu parte de cada pedido con todos sus productos.',
+        'Tocá «Aprobar pedido»: reservamos TODOS los productos juntos y emitimos el cobro. Si alguno no alcanza, no se reserva nada y te decimos cuál.',
+        'Si no podés tomarlo, rechazalo entero con un motivo: el cliente lo ve en su pedido.',
+        'El cliente paga por Mercado Pago (cobrás el 100%; el 1% de cargo de servicio lo paga él) o en efectivo al retirar.',
+        'Cuando retira, marcá «Entregado». Todo queda en la línea de tiempo del pedido.',
+      ],
+      href: '/panel/proveedor/cobros?tab=ventas',
+      cta: 'Ir a Ventas',
     },
     {
       id: 'confirmar-efectivo',

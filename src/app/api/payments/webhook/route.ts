@@ -2,11 +2,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getPayment, getPreapproval, cancelPreapproval, verifyWebhookSignature, type MpPaymentInfo } from '@/lib/mercadopago'
 import { planTransicion } from '@/lib/plans'
+import { round2, serviceFeeFor } from '@/lib/fees'
+import { logActivity } from '@/lib/activity'
+import { parseJson } from '@/lib/api'
 
 // Webhook de Mercado Pago (Checkout Pro + Suscripciones).
-// Confirma pagos de facturas de proyecto (external_reference = <invoiceId>),
-// cobros de materiales (charge:<id>), compras directas (purchase:<id>) y
+// Confirma pagos de facturas de proyecto (invoice:<id>, o <invoiceId> histórico),
+// cobros de materiales (charge:<id>), compras/sub-pedidos (purchase:<id>) y
 // suscripciones de proveedor (plan:provider:<providerId>:<basic|pro>).
+//
+// Desde el carrito (2026-09) facturas, cobros y compras se cobran con el token
+// OAuth del VENDEDOR: la notification_url trae ?ref=<tipo>:<id> para consultar
+// el pago con el token de quien cobró (profesional o proveedor). El monto
+// esperado es subtotal + cargo de servicio HomIA (1%), ±1 peso.
 //
 // Reglas:
 //  · firma x-signature verificada contra MP_WEBHOOK_SECRET o MP_SUB_WEBHOOK_SECRET
@@ -53,12 +61,25 @@ function amountValid(payment: MpPaymentInfo, expected: number): boolean {
   return payment.currencyId === 'ARS' && amountMatches(payment.transactionAmount, expected)
 }
 
+/** Monto esperado de un pago MP = subtotal + cargo de servicio HomIA (1%).
+ *  También se acepta el subtotal solo: preferencias creadas antes del cargo. */
+function feeAwareValid(payment: MpPaymentInfo, subtotal: number, storedFee: number): boolean {
+  const withFee = round2(subtotal + (storedFee > 0 ? storedFee : serviceFeeFor(subtotal)))
+  return amountValid(payment, withFee) || amountValid(payment, subtotal)
+}
+
+/** Cargo efectivamente cobrado (lo pagado menos el subtotal), nunca negativo. */
+function paidFee(payment: MpPaymentInfo, subtotal: number): number {
+  return Math.max(0, round2(payment.transactionAmount - subtotal))
+}
+
 /** Registro idempotente del pago por `mpPaymentId` (factura, cobro o compra).
  *  Si el monto/moneda no cuadra, queda con status `monto_invalido`. */
 async function recordPayment(
   payment: MpPaymentInfo,
   target: { invoiceId?: string; chargeId?: string; purchaseId?: string },
-  valid: boolean
+  valid: boolean,
+  collector: 'vendedor' | 'plataforma'
 ) {
   const status = valid ? payment.status : 'monto_invalido'
   await db.payment.upsert({
@@ -69,6 +90,7 @@ async function recordPayment(
       purchaseId: target.purchaseId ?? null,
       method: 'mercadopago',
       mpPaymentId: payment.id,
+      collector,
       status,
       amount: payment.transactionAmount,
       refundedAmount: payment.transactionAmountRefunded ?? 0,
@@ -147,24 +169,65 @@ export async function POST(req: NextRequest) {
 
 // ─────────────────────────── PAGOS ───────────────────────────
 
+type SellerToken = { token: string | null; kind: 'purchase' | 'charge' | 'invoice'; id: string }
+
+/** Token del vendedor que cobró según la referencia (proveedor o profesional). */
+async function sellerTokenFor(ref: string): Promise<SellerToken | null> {
+  const [kind, id] = ref.split(':')
+  if (!id) return null
+  if (kind === 'purchase') {
+    const p = await db.purchase.findUnique({ where: { id }, select: { provider: { select: { mpOauthAccessToken: true } } } })
+    return p ? { token: p.provider.mpOauthAccessToken, kind, id } : null
+  }
+  if (kind === 'charge') {
+    const c = await db.providerCharge.findUnique({ where: { id }, select: { provider: { select: { mpOauthAccessToken: true } } } })
+    return c ? { token: c.provider.mpOauthAccessToken, kind, id } : null
+  }
+  if (kind === 'invoice') {
+    const i = await db.invoice.findUnique({ where: { id }, select: { professionalId: true } })
+    if (!i) return null
+    const pro = await db.professionalProfile.findUnique({ where: { id: i.professionalId }, select: { mpOauthAccessToken: true } })
+    return { token: pro?.mpOauthAccessToken ?? null, kind, id }
+  }
+  return null
+}
+
+async function applyByRef(ref: string, payment: MpPaymentInfo, collector: 'vendedor' | 'plataforma') {
+  if (ref.startsWith('purchase:')) {
+    const purchase = await findPurchaseWithProvider(ref.slice('purchase:'.length))
+    if (purchase) await applyPurchasePayment(purchase, payment, collector)
+    return
+  }
+  if (ref.startsWith('charge:')) {
+    await applyChargePayment(ref.slice('charge:'.length), payment, collector)
+    return
+  }
+  // formato histórico: external_reference = <invoiceId>
+  const invoiceId = ref.startsWith('invoice:') ? ref.slice('invoice:'.length) : ref
+  await applyInvoicePayment(invoiceId, payment, collector)
+}
+
 async function handlePayment(paymentId: string, live: boolean, refHint: string | null) {
-  // Pista opcional en la notification_url (?ref=purchase:<id>): los pagos de
-  // compra directa los cobra el proveedor, así que hay que consultarlos con SU token.
-  if (refHint && refHint.startsWith('purchase:')) {
-    const purchase = await findPurchaseWithProvider(refHint.slice('purchase:'.length))
-    if (purchase?.provider.mpOauthAccessToken) {
-      const payment = await mpCall(() =>
-        getPayment(paymentId, { accessToken: purchase.provider.mpOauthAccessToken, live })
-      )
+  // Pista en la notification_url (?ref=<tipo>:<id>): los pagos los cobra el
+  // vendedor, así que se consultan con SU token (el de la plataforma no los ve).
+  if (refHint && /^(purchase|charge|invoice):/.test(refHint)) {
+    const seller = await sellerTokenFor(refHint)
+    if (seller?.token) {
+      console.info('[mp webhook] consultando el pago con el token del vendedor', { ref: refHint, paymentId })
+      const payment = await mpCall(() => getPayment(paymentId, { accessToken: seller.token, live }))
       if (payment.externalReference === refHint) {
-        await applyPurchasePayment(purchase, payment)
+        await applyByRef(refHint, payment, 'vendedor')
         return
       }
+      console.error('[mp webhook] la referencia del pago no coincide con la pista', { refHint, ext: payment.externalReference })
+      return
     }
+    console.warn('[mp webhook] el vendedor de la pista no tiene Mercado Pago conectado: se intenta con el token de la plataforma', { ref: refHint })
   }
 
-  // Algunos avisos (formato IPN `?topic=payment&id=`) no traen `live_mode`: si el
-  // pago no aparece en el entorno supuesto, se busca en el otro (prueba ↔ producción).
+  // Sin pista (preferencias históricas con token de la plataforma). Algunos avisos
+  // (formato IPN `?topic=payment&id=`) no traen `live_mode`: si el pago no aparece
+  // en el entorno supuesto, se busca en el otro (prueba ↔ producción).
   const payment = await mpCall(() => getPayment(paymentId, { live })).catch(async (e) => {
     if (!process.env.MP_TEST_ACCESS_TOKEN) throw e
     return mpCall(() => getPayment(paymentId, { live: !live }))
@@ -173,74 +236,67 @@ async function handlePayment(paymentId: string, live: boolean, refHint: string |
   if (!ref) return
 
   if (ref.startsWith('purchase:')) {
-    const purchase = await findPurchaseWithProvider(ref.slice('purchase:'.length))
-    if (!purchase) return
     // el pago tiene que existir en la cuenta del proveedor (es quien cobra)
-    if (!purchase.provider.mpOauthAccessToken) {
-      console.error('[mp webhook] compra sin proveedor conectado a MP', purchase.id)
+    const seller = await sellerTokenFor(ref)
+    if (!seller?.token) {
+      console.error('[mp webhook] compra sin proveedor conectado a MP', ref)
       return
     }
-    const sellerPayment = await mpCall(() =>
-      getPayment(paymentId, { accessToken: purchase.provider.mpOauthAccessToken, live })
-    )
-    await applyPurchasePayment(purchase, sellerPayment)
+    const sellerPayment = await mpCall(() => getPayment(paymentId, { accessToken: seller.token, live }))
+    await applyByRef(ref, sellerPayment, 'vendedor')
     return
   }
-
-  if (ref.startsWith('charge:')) {
-    await applyChargePayment(ref.slice('charge:'.length), payment)
-    return
-  }
-
-  // formato histórico: external_reference = <invoiceId>
-  const invoiceId = ref.startsWith('invoice:') ? ref.slice('invoice:'.length) : ref
-  await applyInvoicePayment(invoiceId, payment)
+  await applyByRef(ref, payment, 'plataforma')
 }
 
 function findPurchaseWithProvider(purchaseId: string) {
   return db.purchase.findUnique({
     where: { id: purchaseId },
     include: {
-      provider: {
-        select: { id: true, userId: true, mpOauthAccessToken: true },
-      },
+      provider: { select: { id: true, userId: true, businessName: true, mpOauthAccessToken: true } },
+      client: { select: { roles: true } },
     },
   })
 }
 
 type PurchaseWithProvider = NonNullable<Awaited<ReturnType<typeof findPurchaseWithProvider>>>
 
-async function applyPurchasePayment(purchase: PurchaseWithProvider, payment: MpPaymentInfo) {
-  const valid = amountValid(payment, purchase.total)
-  await recordPayment(payment, { purchaseId: purchase.id, chargeId: purchase.chargeId ?? undefined }, valid)
+async function applyPurchasePayment(purchase: PurchaseWithProvider, payment: MpPaymentInfo, collector: 'vendedor' | 'plataforma') {
+  const valid = feeAwareValid(payment, purchase.total, purchase.serviceFee)
+  await recordPayment(payment, { purchaseId: purchase.id, chargeId: purchase.chargeId ?? undefined }, valid, collector)
   if (!valid) {
     console.error('[mp webhook] compra: monto/moneda no cuadra', {
-      purchaseId: purchase.id, esperado: purchase.total, pagado: payment.transactionAmount, moneda: payment.currencyId,
+      purchaseId: purchase.id, esperado: round2(purchase.total + purchase.serviceFee), pagado: payment.transactionAmount, moneda: payment.currencyId,
     })
     return
   }
   if (payment.status !== 'approved') return
   if (purchase.status === 'pagado') return // ya estaba pagada: no se toca
 
-  await db.purchase.update({
-    where: { id: purchase.id },
-    data: { status: 'pagado', paymentMethod: 'mercadopago', mpPaymentId: payment.id },
+  const fee = paidFee(payment, purchase.total)
+  // condicional: dos avisos simultáneos no duplican notificaciones ni eventos
+  const upd = await db.purchase.updateMany({
+    where: { id: purchase.id, status: { not: 'pagado' } },
+    data: { status: 'pagado', paymentMethod: 'mercadopago', mpPaymentId: payment.id, serviceFee: fee },
   })
+  if (upd.count === 0) return
   // si la compra tiene un cobro asociado, también queda pagado
   if (purchase.chargeId) {
     await db.providerCharge.updateMany({
       where: { id: purchase.chargeId, status: { not: 'pagada' } },
-      data: { status: 'pagada', method: 'mercadopago', mpPaymentId: payment.id, paidAt: new Date() },
+      data: { status: 'pagada', method: 'mercadopago', mpPaymentId: payment.id, paidAt: new Date(), serviceFee: fee },
     })
   }
+  const panel = parseJson<string[]>(purchase.client.roles, []).includes('cliente') ? 'cliente' : 'profesional'
+  const orderKey = purchase.orderId || `legacy-${purchase.id}`
   await db.notification.createMany({
     data: [
       {
         userId: purchase.clientId,
         type: 'compra_pagada_cliente',
         title: 'Pago confirmado',
-        body: `El pago por tu pedido de ${purchase.elementName} fue aprobado.`,
-        link: '#/panel/cliente/materiales?tab=compras',
+        body: `El pago de tu pedido a ${purchase.provider.businessName} (${purchase.elementName}) fue aprobado.`,
+        link: `#/panel/${panel}/pedidos/${orderKey}`,
       },
       {
         userId: purchase.provider.userId,
@@ -251,33 +307,42 @@ async function applyPurchasePayment(purchase: PurchaseWithProvider, payment: MpP
       },
     ],
   })
+  await logActivity({
+    orderId: purchase.orderId, purchaseId: purchase.id, actorId: null, actorRole: 'sistema', type: 'pagado',
+    message: `Mercado Pago acreditó el pago: ${purchase.total.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 })}${fee > 0 ? ` + cargo de servicio ${fee.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 })}` : ''}.`,
+    data: { mpPaymentId: payment.id, amount: payment.transactionAmount },
+  })
 }
 
-async function applyChargePayment(chargeId: string, payment: MpPaymentInfo) {
+async function applyChargePayment(chargeId: string, payment: MpPaymentInfo, collector: 'vendedor' | 'plataforma') {
   const charge = await db.providerCharge.findUnique({
     where: { id: chargeId },
     include: { provider: { select: { userId: true } } },
   })
   if (!charge) return
 
-  const valid = amountValid(payment, charge.amount)
-  await recordPayment(payment, { chargeId: charge.id }, valid)
+  const valid = feeAwareValid(payment, charge.amount, charge.serviceFee)
+  await recordPayment(payment, { chargeId: charge.id }, valid, collector)
   if (!valid) {
     console.error('[mp webhook] cobro: monto/moneda no cuadra', {
-      chargeId: charge.id, esperado: charge.amount, pagado: payment.transactionAmount, moneda: payment.currencyId,
+      chargeId: charge.id, esperado: round2(charge.amount + charge.serviceFee), pagado: payment.transactionAmount, moneda: payment.currencyId,
     })
     return
   }
   if (payment.status !== 'approved') return
   if (charge.status === 'pagada') return // ya estaba pagado: no se toca
 
-  await db.providerCharge.update({
-    where: { id: charge.id },
-    data: { status: 'pagada', method: 'mercadopago', mpPaymentId: payment.id, paidAt: new Date() },
+  const fee = paidFee(payment, charge.amount)
+  const upd = await db.providerCharge.updateMany({
+    where: { id: charge.id, status: { not: 'pagada' } },
+    data: { status: 'pagada', method: 'mercadopago', mpPaymentId: payment.id, paidAt: new Date(), serviceFee: fee },
   })
+  if (upd.count === 0) return
   // si el cobro nació de una compra directa, la compra queda pagada → habilita reseña
   if (charge.projectId == null) {
-    await db.purchase.updateMany({ where: { chargeId: charge.id }, data: { status: 'pagado' } })
+    await db.purchase.updateMany({ where: { chargeId: charge.id }, data: { status: 'pagado', paymentMethod: 'mercadopago', serviceFee: fee } })
+  } else {
+    await logActivity({ projectId: charge.projectId, actorRole: 'sistema', type: 'pagado', message: `Mercado Pago acreditó el pago del cobro ${charge.number}.`, data: { mpPaymentId: payment.id } })
   }
   await db.notification.createMany({
     data: [
@@ -293,32 +358,35 @@ async function applyChargePayment(chargeId: string, payment: MpPaymentInfo) {
         type: 'cobro_pagado',
         title: 'Pago del cobro acreditado',
         body: `Tu pago de ${charge.number} quedó acreditado para el proveedor.`,
-        link: charge.projectId ? `#/panel/cliente/proyectos/${charge.projectId}` : '#/panel/cliente/materiales?tab=compras',
+        link: charge.projectId ? `#/panel/cliente/proyectos/${charge.projectId}` : '#/panel/cliente/pedidos',
       },
     ],
   })
 }
 
-async function applyInvoicePayment(invoiceId: string, payment: MpPaymentInfo) {
+async function applyInvoicePayment(invoiceId: string, payment: MpPaymentInfo, collector: 'vendedor' | 'plataforma') {
   const invoice = await db.invoice.findUnique({ where: { id: invoiceId } })
   if (!invoice) return
 
-  const valid = amountValid(payment, invoice.total)
-  await recordPayment(payment, { invoiceId: invoice.id }, valid)
+  const valid = feeAwareValid(payment, invoice.total, invoice.serviceFee)
+  await recordPayment(payment, { invoiceId: invoice.id }, valid, collector)
 
   if (!valid) {
     console.error('[mp webhook] factura: monto/moneda no cuadra', {
-      invoiceId: invoice.id, esperado: invoice.total, pagado: payment.transactionAmount, moneda: payment.currencyId,
+      invoiceId: invoice.id, esperado: round2(invoice.total + invoice.serviceFee), pagado: payment.transactionAmount, moneda: payment.currencyId,
     })
     return
   }
   if (payment.status !== 'approved') return
   if (invoice.status === 'pagada') return // ya estaba pagada: no se toca
 
-  await db.invoice.update({
-    where: { id: invoice.id },
-    data: { status: 'pagada', paymentMethod: 'mercadopago', mpPaymentId: payment.id, paidAt: new Date() },
+  const fee = paidFee(payment, invoice.total)
+  const upd = await db.invoice.updateMany({
+    where: { id: invoice.id, status: { not: 'pagada' } },
+    data: { status: 'pagada', paymentMethod: 'mercadopago', mpPaymentId: payment.id, paidAt: new Date(), serviceFee: fee },
   })
+  if (upd.count === 0) return
+  await logActivity({ projectId: invoice.projectId, actorRole: 'sistema', type: 'pagado', message: `Mercado Pago acreditó el pago de la factura ${invoice.number}.`, data: { mpPaymentId: payment.id } })
   const pro = await db.professionalProfile.findUnique({
     where: { id: invoice.professionalId },
     select: { userId: true },
@@ -329,8 +397,8 @@ async function applyInvoicePayment(invoiceId: string, payment: MpPaymentInfo) {
         userId: pro.userId,
         type: 'factura_pagada',
         title: 'Factura pagada',
-        body: `${invoice.number} fue pagada por Mercado Pago`,
-        link: '#/panel/profesional/facturas',
+        body: `${invoice.number} fue pagada por Mercado Pago: el dinero se acredita en tu cuenta.`,
+        link: `#/panel/profesional/proyectos/${invoice.projectId}`,
       },
     })
   }

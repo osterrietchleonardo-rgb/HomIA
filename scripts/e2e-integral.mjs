@@ -14,9 +14,10 @@
 //
 // Crea sus propios usuarios `e2e-q-<rol>-<timestamp>@homia.test`, todo lo que crea
 // lleva la marca [E2E], y al final purga TODO (usuarios, perfiles, stock, trabajos,
-// ofertas, proyectos, materiales, facturas, pagos, cobros, compras, devoluciones,
-// reseñas, obras, conversaciones, mensajes, notificaciones, CRM, favoritos, eventos
-// de búsqueda, elementos de catálogo creados con IA y archivos de Storage).
+// ofertas, proyectos, materiales, facturas, pagos, cobros, compras, pedidos, carritos,
+// eventos de la línea de tiempo, devoluciones, reseñas, obras, conversaciones, mensajes,
+// notificaciones, CRM, favoritos, eventos de búsqueda, elementos de catálogo creados con
+// IA y archivos de Storage).
 // Nunca toca datos que no creó.
 // ─────────────────────────────────────────────────────────────────────────────
 import 'dotenv/config'
@@ -56,6 +57,7 @@ const FLOWS = {
   A: 'Auth y perfil', B: 'Proveedor: stock, catálogo IA, plan', C: 'Búsqueda y directorio', D: 'Trabajos y ofertas',
   E: 'Proyectos, materiales, facturas', F: 'Compra directa', G: 'Sobrantes', H: 'Reseñas', I: 'Mensajería',
   J: 'Notificaciones', K: 'Verificación DNI', L: 'Obras', M: 'CRM y favoritos', N: 'Seguridad transversal', O: 'IA',
+  P: 'Carrito y pedidos multiproveedor',
 }
 const results = Object.fromEntries(Object.keys(FLOWS).map((k) => [k, { pass: 0, fail: 0, external: 0, items: [] }]))
 
@@ -147,12 +149,12 @@ const manifest = { ts: TS, base: BASE, catalogElementIds: [], identityDocIdsInse
 
 // Rutas SPA válidas (espejo de src/components/app/app-root.tsx → panelScreen)
 const PANEL_PAGES = {
-  cliente: ['', 'publicar', 'trabajos', 'materiales', 'proyectos', 'facturas', 'perfil'],
-  profesional: ['', 'bolsa', 'materiales', 'proyectos', 'presupuestos', 'crm', 'obras', 'vinculaciones', 'perfil'],
+  cliente: ['', 'publicar', 'trabajos', 'materiales', 'pedidos', 'proyectos', 'facturas', 'perfil'],
+  profesional: ['', 'bolsa', 'materiales', 'pedidos', 'proyectos', 'presupuestos', 'crm', 'obras', 'vinculaciones', 'perfil'],
   proveedor: ['', 'stock', 'cobros', 'plan', 'crm', 'vinculaciones', 'perfil'],
 }
 const PANEL_COMMON = ['directorio', 'mensajes', 'verificacion', 'ayuda']
-const TOP_ROUTES = ['', 'buscar', 'ingresar', 'registrarse', 'notificaciones', 'directorio', 'materiales', 'mensajes', 'ayuda']
+const TOP_ROUTES = ['', 'buscar', 'ingresar', 'registrarse', 'notificaciones', 'directorio', 'materiales', 'mensajes', 'ayuda', 'carrito']
 function linkProblem(link, roles) {
   if (!link) return null
   if (!link.startsWith('#/')) return `no empieza con "#/" (${link})`
@@ -655,8 +657,29 @@ async function flowE() {
   st(F, 'PDF de factura sin sesión', await get(ANON, `/api/invoices/${S.inv1}/pdf`), 401)
   st(F, 'pro no paga la factura por MP', await post(P, `/api/invoices/${S.inv1}`, {}), 403)
   const mp = await post(C, `/api/invoices/${S.inv1}`, {})
-  check(F, 'pago MP de factura: init_point real o 503 honesto', (mp.status === 200 && /^https:\/\//.test(mp.data?.initPoint || '')) || (mp.status === 503 && mp.data?.needsConfig), brief(mp))
+  check(F, 'factura por MP sin MP del profesional → 503 needsConfig honesto', mp.status === 503 && mp.data?.needsConfig === true && /todavía no conectó Mercado Pago/.test(mp.data?.error || '') && /efectivo/.test(mp.data?.error || ''), brief(mp))
   check(F, 'mensaje de MP sin jerga de desarrollo', !JSON.stringify(mp.data || {}).includes('.env'), brief(mp))
+  const detInv = await get(C, `/api/invoices/${S.inv1}`)
+  check(F, 'detalle de factura: el profesional no cobra por MP y el 1% calculado', detInv.data?.professional?.mpConnected === false && detInv.data?.invoice?.mpServiceFee === 555, brief(detInv))
+  // con el MP del profesional (token de PRUEBA escrito en su perfil): preferencia a SU nombre + 1%
+  if (process.env.MP_TEST_ACCESS_TOKEN) {
+    const tk = process.env.MP_TEST_ACCESS_TOKEN
+    await db.professionalProfile.update({ where: { id: P.proId }, data: { mpOauthAccessToken: tk, mpOauthStatus: 'connected', mpOauthExpiresAt: new Date(Date.now() + 180 * 86400000) } })
+    const mp2 = await post(C, `/api/invoices/${S.inv1}`, {})
+    check(F, 'factura por MP con el token del profesional: total + 1% (55500 + 555)', mp2.status === 200 && /^https:\/\//.test(mp2.data?.initPoint || '') && mp2.data?.serviceFee === 555 && mp2.data?.totalMp === 56055, brief(mp2))
+    check(F, 'cargo fijado en la factura', (await db.invoice.findUnique({ where: { id: S.inv1 } }))?.serviceFee === 555)
+    if (mp2.data?.preferenceId) {
+      const r = await fetch(`https://api.mercadopago.com/checkout/preferences/${mp2.data.preferenceId}`, { headers: { Authorization: `Bearer ${tk}` } })
+      const pref = await r.json().catch(() => null)
+      const items = pref?.items || []
+      const sum = Math.round(items.reduce((a, i) => a + i.unit_price * i.quantity, 0) * 100) / 100
+      check(F, 'preferencia de la factura: ítems reales + cargo, marketplace_fee = 555', r.status === 200 && items.length === 4 && items.some((i) => i.title === 'Cargo de servicio HomIA (1%)' && i.unit_price === 555) && pref?.marketplace_fee === 555 && sum === 56055, `HTTP ${r.status} ${JSON.stringify(items.map((i) => [i.title, i.quantity, i.unit_price]))} fee=${pref?.marketplace_fee}`)
+      check(F, 'preferencia de la factura: referencia invoice:<id> y pista ?ref=', pref?.external_reference === `invoice:${S.inv1}` && (pref?.notification_url || '').includes(encodeURIComponent(`invoice:${S.inv1}`)), `${pref?.external_reference} ${pref?.notification_url}`)
+    }
+    await db.professionalProfile.update({ where: { id: P.proId }, data: { mpOauthAccessToken: null, mpOauthStatus: 'disconnected', mpOauthExpiresAt: null } })
+  } else {
+    check(F, 'MP_TEST_ACCESS_TOKEN configurado para probar el 1% de facturas', false, 'falta MP_TEST_ACCESS_TOKEN en .env')
+  }
 
   // efectivo: acordar / cancelar / confirmar
   st(F, 'pro no acuerda efectivo', await post(P, `/api/invoices/${S.inv1}/cash`, { action: 'acordar' }), 403)
@@ -673,6 +696,7 @@ async function flowE() {
   st(F, 'pro confirma el cobro', await post(P, `/api/invoices/${S.inv1}/cash`, { action: 'confirmar' }), 200)
   const invDb = await db.invoice.findUnique({ where: { id: S.inv1 }, include: { payments: true } })
   check(F, 'factura pagada en efectivo', invDb.status === 'pagada' && invDb.paymentMethod === 'efectivo' && !!invDb.paidAt && invDb.payments[0]?.status === 'confirmado', JSON.stringify(invDb))
+  check(F, 'en efectivo no hay cargo de servicio', invDb.serviceFee === 0, `serviceFee=${invDb.serviceFee}`)
   st(F, 'confirmar dos veces', await post(P, `/api/invoices/${S.inv1}/cash`, { action: 'confirmar' }), 400)
   st(F, 'modo de pago inmutable con factura emitida', await patch(C, `/api/projects/${pid}`, { materialsPaymentMode: 'cliente_paga_proveedor' }), 409)
 
@@ -727,6 +751,10 @@ async function flowE() {
   st(F, 'detalle del cobro tercero', await get(P2, `/api/charges/${S.charge2}`), 403)
   st(F, 'proveedor no paga su cobro', await post(V, `/api/charges/${S.charge2}`, { method: 'efectivo' }), 403)
   st(F, 'cobro sin método', await post(C, `/api/charges/${S.charge2}`, {}), 400)
+  const chMp = await post(C, `/api/charges/${S.charge2}`, { method: 'mercadopago' })
+  check(F, 'cobro por MP sin MP del proveedor → 503 needsConfig honesto', chMp.status === 503 && chMp.data?.needsConfig === true && /todavía no conectó Mercado Pago/.test(chMp.data?.error || ''), brief(chMp))
+  const detCh = await get(C, `/api/charges/${S.charge2}`)
+  check(F, 'detalle del cobro: 1% calculado y sin tokens del proveedor', detCh.data?.charge?.mpServiceFee === 80 && detCh.data?.charge?.provider?.mpConnected === false && !JSON.stringify(detCh.data).includes('mpOauth'), brief(detCh))
   st(F, 'confirmar efectivo no acordado', await patch(V, `/api/charges/${S.charge2}`, {}), 400)
   st(F, 'cliente acuerda efectivo con el proveedor', await post(C, `/api/charges/${S.charge2}`, { method: 'efectivo' }), 200)
   st(F, 'cliente no confirma el cobro del proveedor', await patch(C, `/api/charges/${S.charge2}`, {}), 403)
@@ -930,6 +958,12 @@ async function flowG() {
   st(F, 'recibir dos veces', await patch(V, `/api/returns/${S.ret1}`, { action: 'recibir' }), 409)
   const rf = await patch(V, `/api/returns/${S.ret1}`, { action: 'reembolsar_efectivo' })
   check(F, 'reembolso en efectivo → reembolsada', rf.status === 200 && rf.data?.status === 'reembolsada', brief(rf))
+  // el solicitante confirma que recibió el efectivo (diseño §6.1)
+  st(F, 'el proveedor no confirma por el cliente', await patch(V, `/api/returns/${S.ret1}`, { action: 'confirmar_reembolso' }), 403)
+  const cf = await patch(C, `/api/returns/${S.ret1}`, { action: 'confirmar_reembolso' })
+  check(F, 'el cliente confirma que recibió el reembolso en efectivo', cf.status === 200 && (await db.leftoverReturn.findUnique({ where: { id: S.ret1 } }))?.refundConfirmedBy === 'solicitante', brief(cf))
+  st(F, 'confirmar el reembolso dos veces', await patch(C, `/api/returns/${S.ret1}`, { action: 'confirmar_reembolso' }), 409)
+  check(F, 'proveedor notificado de la confirmación', !!(await db.notification.findFirst({ where: { userId: V.id, type: 'devolucion_reembolso_confirmado' } })))
   const elA2 = await get(C, `/api/returns/eligible?purchaseId=${S.purchaseA}`)
   check(F, 'lo devuelto se descuenta de lo elegible (quedan 3)', elA2.data?.items?.[0]?.remaining === 3, brief(elA2))
 
@@ -958,6 +992,29 @@ async function flowG() {
   check(F, 'recibir menos de lo aceptado prorratea el reembolso', recC.status === 200 && recC.data?.refundTotal === 2000, brief(recC))
   check(F, 'stock del látex vuelve (+1)', (await db.providerStock.findUnique({ where: { id: S.stock3 } })).quantity === s3b + 1)
   st(F, 'reembolso efectivo (proyecto)', await patch(V, `/api/returns/${S.retC}`, { action: 'reembolsar_efectivo' }), 200)
+  // cron: confirmación automática a las 72 h + recordatorio al proveedor por devolución sin responder
+  const H72 = 72 * 3600_000
+  await db.leftoverReturn.update({ where: { id: S.retC }, data: { refundedAt: new Date(Date.now() - H72 - 3600_000) } })
+  const rY = await post(C, '/api/returns', { purchaseId: S.purchaseA, items: [{ ...item, qty: 1 }] })
+  st(F, 'devolución que el proveedor no responde', rY, 201)
+  S.retY = rY.data?.return?.id
+  if (S.retY) await db.leftoverReturn.update({ where: { id: S.retY }, data: { requestedAt: new Date(Date.now() - H72 - 3600_000) } })
+  const lim = new Date(Date.now() - H72)
+  const ajenasConf = await db.leftoverReturn.count({ where: { status: 'reembolsada', refundConfirmedAt: null, refundedAt: { lt: lim }, OR: [{ paymentMethod: null }, { paymentMethod: { not: 'mercadopago' } }], id: { not: S.retC } } })
+  const ajenasRec = await db.leftoverReturn.count({ where: { status: 'solicitada', reminderSentAt: null, requestedAt: { lt: lim }, id: { not: S.retY || 'x' } } })
+  const ajenasRes = await db.purchase.count({ where: { status: 'aprobado', reservationExpiresAt: { lt: new Date() } } })
+  if (!process.env.CRON_SECRET || ajenasConf + ajenasRec + ajenasRes > 0) {
+    check(F, 'cron de sobrantes no corrido: tocaría datos ajenos (o falta CRON_SECRET)', true)
+  } else {
+    const cr = await get(ANON, '/api/cron/reservations', { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } })
+    const rc72 = await db.leftoverReturn.findUnique({ where: { id: S.retC } })
+    check(F, 'cron: confirma solo el reembolso en efectivo a las 72 h', cr.status === 200 && cr.data?.autoConfirmed === 1 && rc72?.refundConfirmedBy === 'automatico' && !!rc72?.refundConfirmedAt, brief(cr))
+    const nRec = await db.notification.count({ where: { userId: V.id, type: 'devolucion_recordatorio' } })
+    check(F, 'cron: un recordatorio al proveedor por la devolución sin responder', cr.data?.reminded === 1 && nRec === 1 && !!(await db.leftoverReturn.findUnique({ where: { id: S.retY } }))?.reminderSentAt, brief(cr))
+    const cr2 = await get(ANON, '/api/cron/reservations', { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } })
+    check(F, 'cron: el recordatorio no se repite', cr2.data?.reminded === 0 && (await db.notification.count({ where: { userId: V.id, type: 'devolucion_recordatorio' } })) === 1, brief(cr2))
+  }
+  if (S.retY) st(F, 'el cliente cancela la devolución sin responder', await patch(C, `/api/returns/${S.retY}`, { action: 'cancelar' }), 200)
   st(F, 'devolver todo el material otra vez (tope)', await post(C, '/api/returns', { projectId: S.project1, items: [{ ...mItem, photoUrl: photo, qty: 10 }] }), 409)
   // cancelación por el solicitante
   const rx = await post(C, '/api/returns', { projectId: S.project2, items: [{ materialId: S.m6, elementId: S.E3.id, condition: 'sin_abrir', photoUrl: photo, qty: 1 }] })
@@ -1195,7 +1252,8 @@ async function flowN() {
     ['POST', '/api/reviews'], ['POST', '/api/messages/conversations'], ['POST', `/api/messages/conversations/${x}`], ['PATCH', '/api/notifications'],
     ['POST', '/api/favorites'], ['POST', '/api/crm/deals'], ['PATCH', '/api/crm/deals'], ['DELETE', `/api/crm/deals?id=${x}`], ['POST', '/api/crm/pipelines'],
     ['POST', '/api/works'], ['PATCH', `/api/works/${x}`], ['DELETE', `/api/works/${x}`], ['POST', '/api/uploads'], ['POST', '/api/verification/dni'],
-    ['POST', '/api/homy'], ['POST', '/api/homy/agent'], ['PUT', '/api/users/location'], ['DELETE', '/api/mp/oauth'],
+    ['PUT', '/api/users/location'], ['DELETE', '/api/mp/oauth'],
+    ['POST', '/api/cart'], ['PATCH', '/api/cart'], ['DELETE', '/api/cart'], ['POST', '/api/cart/merge'], ['POST', '/api/orders'],
   ]
   const leaks = []
   for (const [m, u] of mutating) {
@@ -1203,7 +1261,7 @@ async function flowN() {
     if (r.status !== 401) leaks.push(`${m} ${u} → ${r.status}`)
   }
   check(F, `los ${mutating.length} endpoints mutantes sin sesión → 401`, leaks.length === 0, leaks.join(' | '))
-  const readPriv = ['/api/projects', `/api/projects/${S.project1}`, `/api/invoices/${S.inv1}`, `/api/invoices/${S.inv1}/pdf`, '/api/purchases', '/api/returns', '/api/messages/conversations', '/api/messages/unread', '/api/crm/pipelines', '/api/favorites', '/api/provider/charges', '/api/provider/links', '/api/provider/plan', '/api/verification/dni', `/api/charges/${S.charge2}`, '/api/profiles/me']
+  const readPriv = ['/api/projects', `/api/projects/${S.project1}`, `/api/invoices/${S.inv1}`, `/api/invoices/${S.inv1}/pdf`, '/api/purchases', '/api/returns', '/api/messages/conversations', '/api/messages/unread', '/api/crm/pipelines', '/api/favorites', '/api/provider/charges', '/api/provider/links', '/api/provider/plan', '/api/verification/dni', `/api/charges/${S.charge2}`, '/api/profiles/me', '/api/cart', '/api/orders', `/api/orders/${S.orderP || x}`]
   const leaks2 = []
   for (const u of readPriv) {
     const r = await get(ANON, u)
@@ -1260,21 +1318,283 @@ async function flowN() {
 }
 
 // ═════════════════════════════ O. IA ═════════════════════════════
+// Token de visitante de esta corrida (el agente guarda su conversación con el hash del token)
+const HOMY_VISITOR_TOKEN = `e2eq${TS}visitante`.slice(0, 40)
+
+/** Llama al súper agente y devuelve los eventos del stream NDJSON. */
+async function homyAgent(actor, body, headers = {}) {
+  // NDJSON (content-type x-ndjson): se lee crudo, no como JSON único
+  const r = await http(actor, 'POST', '/api/homy/agent', { json: body, headers, raw: true })
+  const text = r.buf ? r.buf.toString('utf8') : ''
+  const events = []
+  for (const ln of text.split('\n')) {
+    const t = ln.trim()
+    if (!t) continue
+    try { events.push(JSON.parse(t)) } catch { /* línea no JSON */ }
+  }
+  return { ...r, events, end: events.find((e) => e.t === 'final' || e.t === 'limite') || null }
+}
+
 async function flowO() {
   const F = 'O'
-  st(F, 'Homy sin sesión', await post(ANON, '/api/homy', { message: 'hola' }), 401)
-  st(F, 'superagente sin sesión', await post(ANON, '/api/homy/agent', { message: 'hola' }), 401)
-  const h = await post(C, '/api/homy', { message: 'Se me rompió una canilla y pierde agua' })
-  check(F, 'Homy responde con JSON válido (IA o fallback honesto)', h.status === 200 && typeof h.data?.reply?.message === 'string' && h.data.reply.suggestions?.length === 3, brief(h))
-  check(F, 'Homy categoriza con la IA (no fallback)', h.data?.ok === true, brief(h))
-  const hb = await post(C, '/api/homy', { message: '' })
-  check(F, 'Homy con mensaje vacío → fallback sin 500', hb.status === 200 && hb.data?.ok === false, brief(hb))
-  st(F, 'superagente body inválido', await post(C, '/api/homy/agent', { message: '' }), 400)
-  const a = await post(C, '/api/homy/agent', { message: 'Necesito un pintor para el living', mode: 'cliente', lat: CABA.lat, lng: CABA.lng })
-  check(F, 'superagente responde (no 500)', a.status === 200 && a.data?.ok === true && typeof a.data?.message === 'string', brief(a))
-  check(F, 'superagente crea sesión del usuario', !!a.data?.sessionId && !!(await db.homySession.findFirst({ where: { id: a.data.sessionId, userId: C.id } })))
-  const a2 = await post(P, '/api/homy/agent', { message: 'seguimos', sessionId: a.data?.sessionId })
-  check(F, 'sesión ajena del superagente no se reutiliza', a2.status === 200 && a2.data?.sessionId !== a.data?.sessionId, brief(a2))
+  // contrato: POST /api/homy/agent es público (visitante 8/día por IP, logueado 60/día) y responde NDJSON
+  st(F, 'superagente con body inválido → 400 (sin gastar IA)', await post(C, '/api/homy/agent', { mensaje: '', puerta: 'panel' }), 400)
+  st(F, 'superagente con puerta inválida → 400', await post(ANON, '/api/homy/agent', { mensaje: 'hola homy', puerta: 'cualquiera' }), 400)
+  // 1) visitante sin cuenta (IP ficticia de la corrida: no consume el cupo de nadie real)
+  const v = await homyAgent(ANON, { mensaje: 'Necesito un plomero en Palermo', puerta: 'home_buscador' }, { 'x-homy-visitante': HOMY_VISITOR_TOKEN })
+  check(F, 'visitante: stream con "inicio" y cierre "final" o "limite"', v.status === 200 && v.events.some((e) => e.t === 'inicio') && !!v.end, `HTTP ${v.status} eventos=${v.events.map((e) => e.t).join(',')}`)
+  check(F, 'visitante: la respuesta final trae texto', v.end?.t === 'limite' || (typeof v.end?.mensaje === 'string' && v.end.mensaje.length > 0), JSON.stringify(v.end)?.slice(0, 200))
+  if (v.end?.sessionId) manifest.homyVisitorSessions = [v.end.sessionId]
+  // 2) logueado
+  const c = await homyAgent(C, { mensaje: 'Busco un pintor para el living', puerta: 'panel', rolPanel: 'cliente', lat: CABA.lat, lng: CABA.lng })
+  check(F, 'logueado: stream con cierre "final" o "limite"', c.status === 200 && !!c.end, `HTTP ${c.status} eventos=${c.events.map((e) => e.t).join(',')}`)
+  const sid = c.end?.sessionId
+  check(F, 'logueado: la sesión queda a su nombre', !!sid && !!(await db.homySession.findFirst({ where: { id: sid, userId: C.id } })), `sessionId=${sid}`)
+  // la conversación de otro no se entrega (ni a otro usuario ni a un visitante)
+  const own = await get(C, `/api/homy/agent?sessionId=${sid}`)
+  check(F, 'el dueño ve su conversación', own.status === 200 && own.data?.sessionId === sid && (own.data?.turnos || []).length >= 1, brief(own))
+  const other = await get(P, `/api/homy/agent?sessionId=${sid}`)
+  check(F, 'otro usuario NO ve la conversación ajena', other.status === 200 && other.data?.sessionId === null && (other.data?.turnos || []).length === 0, brief(other))
+  const anonO = await get(ANON, `/api/homy/agent?sessionId=${sid}`, { headers: { 'x-homy-visitante': HOMY_VISITOR_TOKEN } })
+  check(F, 'un visitante NO ve la conversación de un usuario', anonO.status === 200 && anonO.data?.sessionId === null, brief(anonO))
+}
+
+// ═════════════════════════════ P. CARRITO Y PEDIDOS MULTIPROVEEDOR ═════════════════════════════
+// 2 proveedores descartables (A y B) con stock, el cliente de la suite y un visitante
+// que crea su cuenta. Carrito → pedido con un sub-pedido por proveedor → A aprueba
+// (reserva atómica), B rechaza → el cliente paga A en efectivo → A confirma y entrega.
+// El 1% se verifica con una preferencia REAL de MP creada con el token de PRUEBA.
+const VA = new Actor('provA', 'proveedor')
+const VB = new Actor('provB', 'proveedor')
+const CV = new Actor('visitante', 'cliente')
+const P_IP = `10.252.${(TS >> 8) & 255}.${TS & 255}`
+for (const a of [VA, VB, CV]) a.ip = P_IP
+
+async function mpPreference(prefId, token) {
+  const r = await fetch(`https://api.mercadopago.com/checkout/preferences/${encodeURIComponent(prefId)}`, { headers: { Authorization: `Bearer ${token}` } })
+  return { status: r.status, data: await r.json().catch(() => null) }
+}
+
+async function flowP() {
+  const F = 'P'
+  const base = { password: PASSWORD, lat: CABA.lat, lng: CABA.lng, city: 'CABA', howFoundUs: 'otro' }
+  for (const [a, name] of [[VA, 'Ferretería A'], [VB, 'Corralón B']]) {
+    const r = await post(a, '/api/auth/register', { ...base, email: a.email, displayName: `${MARK} Prov ${name}`, roles: ['proveedor'], businessName: `${MARK} ${name}`, address: 'Av. Siempreviva 742' })
+    st(F, `registro proveedor ${name}`, r, 201)
+    a.id = r.data?.user?.id
+    a.provId = a.id ? (await db.providerProfile.findUnique({ where: { userId: a.id } }))?.id : undefined
+  }
+  if (!VA.provId || !VB.provId) throw new Error('No se pudieron crear los proveedores del carrito')
+  const mk = async (a, el, price, quantity) => {
+    const r = await post(a, '/api/provider/stock', { elementId: el.id, price, quantity, minStock: 1 })
+    st(F, `stock ${el.name} en ${a.key}`, r, 201)
+    return r.data?.stock?.id
+  }
+  const sA1 = await mk(VA, S.E1, 1000, 50) // caño (barra)
+  const sA3 = await mk(VA, S.E3, 2000, 20) // látex (bidón)
+  const sB2 = await mk(VB, S.E2, 25000, 10) // membrana (tambor)
+  const q = async (id) => (await db.providerStock.findUnique({ where: { id } })).quantity
+
+  // ── visitante: carrito local (se muestra con /api/cart/preview) ──
+  const pv = await post(ANON, '/api/cart/preview', { items: [{ stockId: sA1, quantity: 2 }, { stockId: sB2, quantity: 1 }, { stockId: 'no-existe', quantity: 1 }] })
+  st(F, 'preview del carrito del visitante', pv, 200)
+  const pvc = pv.data?.cart
+  check(F, 'preview: 2 proveedores + 1 oferta inexistente marcada', pvc?.groups?.length === 2 && pvc?.orphans?.length === 1 && pvc?.blocked === true, brief(pv))
+  check(F, 'preview: 1% por proveedor (20 + 250) y total con MP', pvc?.subtotal === 27000 && pvc?.serviceFee === 270 && pvc?.totalMp === 27270, brief(pv))
+  st(F, 'carrito sin sesión (GET)', await get(ANON, '/api/cart'), 401)
+  st(F, 'confirmar pedido sin sesión', await post(ANON, '/api/orders', {}), 401)
+  st(F, 'preview con cantidad inválida', await post(ANON, '/api/cart/preview', { items: [{ stockId: sA1, quantity: -1 }] }), 400)
+
+  // el visitante crea su cuenta y su carrito local se fusiona con el de la cuenta
+  const rv = await post(CV, '/api/auth/register', { ...base, email: CV.email, displayName: `${MARK} Visitante`, roles: ['cliente'] })
+  st(F, 'el visitante crea su cuenta', rv, 201)
+  CV.id = rv.data?.user?.id
+  const mg = await post(CV, '/api/cart/merge', { items: [{ stockId: sA1, quantity: 2 }, { stockId: sB2, quantity: 1 }, { stockId: 'no-existe', quantity: 1 }] })
+  check(F, 'fusión del carrito local al ingresar (2 líneas, descarta la inexistente)', mg.status === 200 && mg.data?.merged === 2 && mg.data?.skipped?.length === 1 && mg.data?.cart?.count === 2, brief(mg))
+  const mg2 = await post(CV, '/api/cart/merge', { items: [{ stockId: sA1, quantity: 100 }] })
+  check(F, 'fusión con tope en el stock disponible (50)', mg2.data?.cart?.groups?.flatMap((g) => g.items).find((l) => l.stockId === sA1)?.quantity === 50, brief(mg2))
+  const vac = await del(CV, '/api/cart')
+  check(F, 'vaciar carrito', vac.status === 200 && vac.data?.cart?.count === 0 && (await db.cartItem.count({ where: { userId: CV.id } })) === 0, brief(vac))
+
+  // ── cliente: agregar / editar / eliminar ──
+  st(F, 'proveedor puro no tiene carrito', await get(VA, '/api/cart'), 403)
+  st(F, 'agregar oferta inexistente', await post(C, '/api/cart', { stockId: 'no-existe', quantity: 1 }), 404)
+  st(F, 'agregar media barra (se vende entera)', await post(C, '/api/cart', { stockId: sA1, quantity: 0.5 }), 400)
+  st(F, 'agregar más que el stock', await post(C, '/api/cart', { stockId: sA1, quantity: 51 }), 409)
+  st(F, 'agregar 3 caños', await post(C, '/api/cart', { stockId: sA1, quantity: 3 }), 201)
+  const add2 = await post(C, '/api/cart', { stockId: sA1, quantity: 2 })
+  check(F, 'agregar de nuevo suma (5)', add2.status === 201 && (await db.cartItem.findUnique({ where: { userId_stockId: { userId: C.id, stockId: sA1 } } }))?.quantity === 5, brief(add2))
+  st(F, 'editar cantidad a 4', await patch(C, '/api/cart', { stockId: sA1, quantity: 4 }), 200)
+  st(F, 'editar cantidad a 0', await patch(C, '/api/cart', { stockId: sA1, quantity: 0 }), 400)
+  st(F, 'agregar 2 bidones de látex', await post(C, '/api/cart', { stockId: sA3, quantity: 2 }), 201)
+  st(F, 'agregar 1 tambor de membrana (otro proveedor)', await post(C, '/api/cart', { stockId: sB2, quantity: 1 }), 201)
+  st(F, 'eliminar el látex', await del(C, `/api/cart?stockId=${sA3}`), 200)
+  st(F, 'eliminar algo que no está', await del(C, `/api/cart?stockId=${sA3}`), 404)
+  await post(C, '/api/cart', { stockId: sA3, quantity: 2 })
+  const cart = await get(C, '/api/cart')
+  const cv = cart.data?.cart
+  const gA = cv?.groups?.find((g) => g.provider.id === VA.provId)
+  const gB = cv?.groups?.find((g) => g.provider.id === VB.provId)
+  check(F, 'carrito agrupado por proveedor (A: 2 ítems, B: 1)', cart.status === 200 && cv?.count === 3 && gA?.items?.length === 2 && gB?.items?.length === 1, brief(cart))
+  check(F, 'subtotales por proveedor (8000 y 25000) y total 33000', gA?.subtotal === 8000 && gB?.subtotal === 25000 && cv?.subtotal === 33000, brief(cart))
+  check(F, 'cargo de servicio 1% (80 + 250 = 330) y total con MP 33330', gA?.serviceFee === 80 && gB?.serviceFee === 250 && cv?.serviceFee === 330 && cv?.totalMp === 33330, brief(cart))
+  check(F, 'el carrito informa que el proveedor no cobra por MP', gA?.provider?.mpConnected === false, brief(cart))
+
+  // línea bloqueada: sin stock → no se puede confirmar hasta sacarla
+  await db.providerStock.update({ where: { id: sB2 }, data: { quantity: 0, status: 'agotado' } })
+  const blk = await get(C, '/api/cart')
+  check(F, 'ítem sin stock queda marcado en el carrito', blk.data?.cart?.blocked === true && blk.data?.cart?.groups?.find((g) => g.provider.id === VB.provId)?.items?.[0]?.problem === 'sin_stock', brief(blk))
+  const ob = await post(C, '/api/orders', {})
+  check(F, 'confirmar con un ítem sin stock → 409 que dice cuál', ob.status === 409 && /Membrana/i.test(ob.data?.error || '') && (ob.data?.problems || []).length === 1, brief(ob))
+  await db.providerStock.update({ where: { id: sB2 }, data: { quantity: 10, status: 'disponible' } })
+
+  // ── confirmar: 1 pedido con 2 sub-pedidos, stock intacto ──
+  const before = { a1: await q(sA1), a3: await q(sA3), b2: await q(sB2) }
+  const od = await post(C, '/api/orders', { types: { [VB.provId]: 'reserva' }, note: `${MARK} paso el sábado` })
+  st(F, 'confirmar el carrito', od, 201)
+  S.orderP = od.data?.order?.id
+  check(F, 'número de pedido PED-AAAA-NNNNNN', /^PED-\d{4}-\d{6}$/.test(od.data?.order?.number || ''), brief(od))
+  const subs = await db.purchase.findMany({ where: { orderId: S.orderP || 'x' }, include: { items: true } })
+  const pA = subs.find((p) => p.providerId === VA.provId)
+  const pB = subs.find((p) => p.providerId === VB.provId)
+  S.purPA = pA?.id
+  S.purPB = pB?.id
+  check(F, '1 pedido con 2 sub-pedidos y sus ítems', subs.length === 2 && pA?.items?.length === 2 && pB?.items?.length === 1, JSON.stringify(subs.map((s) => ({ p: s.providerId, n: s.items.length }))))
+  check(F, 'total de cada sub-pedido = suma de sus ítems (8000 y 25000)', pA?.total === 8000 && pB?.total === 25000 && pA.items.reduce((a, i) => a + i.total, 0) === 8000, JSON.stringify(subs.map((s) => s.total)))
+  check(F, 'tipo por proveedor (A compra, B reserva) y nota', pA?.type === 'compra' && pB?.type === 'reserva' && !!pA?.note?.includes('sábado'), JSON.stringify(subs.map((s) => [s.type, s.note])))
+  check(F, 'el carrito quedó vacío', (await db.cartItem.count({ where: { userId: C.id } })) === 0)
+  check(F, 'el stock NO se toca hasta aprobar', (await q(sA1)) === before.a1 && (await q(sA3)) === before.a3 && (await q(sB2)) === before.b2)
+  check(F, 'cada proveedor notificado de su parte', !!(await db.notification.findFirst({ where: { userId: VA.id, type: 'nueva_compra' } })) && !!(await db.notification.findFirst({ where: { userId: VB.id, type: 'nueva_compra' } })))
+  const convA = await db.conversation.findFirst({ where: { OR: [{ userAId: C.id, userBId: VA.id }, { userAId: VA.id, userBId: C.id }] }, include: { messages: { orderBy: { createdAt: 'asc' } } } })
+  check(F, 'el pedido abre el chat con cada proveedor (lo inicia el cliente)', !!convA && convA.messages[0]?.senderId === C.id && convA.messages[0]?.body.includes(od.data?.order?.number || '¿?'), JSON.stringify(convA?.messages?.[0]))
+  st(F, 'confirmar con el carrito vacío', await post(C, '/api/orders', {}), 400)
+
+  // ── IDOR ──
+  st(F, 'detalle del pedido (cliente dueño)', await get(C, `/api/orders/${S.orderP}`), 200)
+  st(F, 'otro cliente no ve el pedido', await get(CV, `/api/orders/${S.orderP}`), 403)
+  st(F, 'un proveedor no ve el pedido completo', await get(VA, `/api/orders/${S.orderP}`), 403)
+  st(F, 'pedido sin sesión', await get(ANON, `/api/orders/${S.orderP}`), 401)
+  st(F, 'pedido inexistente', await get(C, '/api/orders/no-existe'), 404)
+  const vbSales = await get(VB, '/api/purchases?as=proveedor')
+  check(F, 'proveedor B ve su sub-pedido y NO el de A', vbSales.status === 200 && !(vbSales.data?.purchases || []).some((p) => p.id === S.purPA) && (vbSales.data?.purchases || []).some((p) => p.id === S.purPB), brief(vbSales))
+  st(F, 'proveedor B no puede aprobar el sub-pedido de A', await patch(VB, `/api/purchases/${S.purPA}`, { action: 'aprobar' }), 403)
+  st(F, 'otro cliente no paga el sub-pedido', await patch(CV, `/api/purchases/${S.purPA}`, { action: 'pagar_efectivo' }), 403)
+
+  // ── A aprueba: reserva atómica de TODOS los ítems ──
+  await db.providerStock.update({ where: { id: sA3 }, data: { quantity: 1 } })
+  const apShort = await patch(VA, `/api/purchases/${S.purPA}`, { action: 'aprobar' })
+  check(F, 'si un ítem no alcanza → 409 que dice cuál', apShort.status === 409 && /Látex/i.test(apShort.data?.error || '') && apShort.data?.item?.available === 1, brief(apShort))
+  check(F, '…y no se reservó nada (rollback)', (await q(sA1)) === before.a1 && (await q(sA3)) === 1 && (await db.purchase.findUnique({ where: { id: S.purPA } })).status === 'pendiente_aprobacion')
+  await db.providerStock.update({ where: { id: sA3 }, data: { quantity: before.a3 } })
+  const apA = await patch(VA, `/api/purchases/${S.purPA}`, { action: 'aprobar' })
+  st(F, 'proveedor A aprueba su parte', apA, 200)
+  S.chargePA = apA.data?.chargeId
+  check(F, 'reserva de todos los ítems (−4 caños, −2 látex)', (await q(sA1)) === before.a1 - 4 && (await q(sA3)) === before.a3 - 2)
+  check(F, 'un movimiento de reserva por ítem', (await db.stockMovement.count({ where: { stockId: { in: [sA1, sA3] }, type: 'reserva', note: { contains: S.purPA } } })) === 2)
+  check(F, 'cobro emitido por el total del sub-pedido', (await db.providerCharge.findUnique({ where: { id: S.chargePA || 'x' } }))?.amount === 8000)
+  st(F, 'aprobar dos veces', await patch(VA, `/api/purchases/${S.purPA}`, { action: 'aprobar' }), 409)
+  check(F, 'cliente notificado de la aprobación con link a su pedido', !!(await db.notification.findFirst({ where: { userId: C.id, type: 'compra_aprobada', link: `#/panel/cliente/pedidos/${S.orderP}` } })))
+
+  // ── B rechaza el pedido entero con motivo ──
+  st(F, 'proveedor B rechaza su parte con motivo', await patch(VB, `/api/purchases/${S.purPB}`, { action: 'rechazar', reason: `${MARK} sin retiro este mes` }), 200)
+  check(F, 'el rechazo no toca el stock de B', (await q(sB2)) === before.b2)
+  check(F, 'cliente notificado del rechazo con link a su pedido', !!(await db.notification.findFirst({ where: { userId: C.id, type: 'compra_rechazada', link: `#/panel/cliente/pedidos/${S.orderP}` } })))
+
+  // ── el cliente paga A: sin MP del proveedor → 503 honesto; en efectivo ──
+  const mpA = await patch(C, `/api/purchases/${S.purPA}`, { action: 'pagar_mp' })
+  check(F, 'pagar_mp sin MP del proveedor → 503 needsConfig con mensaje honesto', mpA.status === 503 && mpA.data?.needsConfig === true && /todavía no conectó Mercado Pago/.test(mpA.data?.error || '') && /efectivo/.test(mpA.data?.error || ''), brief(mpA))
+  const cashA = await patch(C, `/api/purchases/${S.purPA}`, { action: 'pagar_efectivo' })
+  check(F, 'cliente elige efectivo (sin cargo de servicio)', cashA.status === 200 && cashA.data?.chargeStatus === 'acordada_efectivo' && (await db.purchase.findUnique({ where: { id: S.purPA } })).serviceFee === 0, brief(cashA))
+  check(F, 'proveedor A notificado del efectivo', !!(await db.notification.findFirst({ where: { userId: VA.id, type: 'cobro_efectivo_acordado' } })))
+  st(F, 'proveedor A confirma el efectivo', await patch(VA, `/api/charges/${S.chargePA}`, {}), 200)
+  check(F, 'sub-pedido A pagado', (await db.purchase.findUnique({ where: { id: S.purPA } })).status === 'pagado')
+  const enA = await patch(VA, `/api/purchases/${S.purPA}`, { action: 'entregar' })
+  check(F, 'A entrega (queda pagado) con un consumo por ítem', enA.status === 200 && enA.data?.status === 'pagado' && (await db.stockMovement.count({ where: { stockId: { in: [sA1, sA3] }, type: 'consumo', note: { contains: S.purPA } } })) === 2, brief(enA))
+
+  // ── seguimiento y línea de tiempo ──
+  const det = await get(C, `/api/orders/${S.orderP}`)
+  const sum = det.data?.order?.summary
+  check(F, 'resumen: 1 de 1 proveedor activo pagado, nada pendiente', sum?.activeProviders === 1 && sum?.paidProviders === 1 && sum?.pendingAmount === 0 && sum?.status === 'completo', JSON.stringify(sum))
+  check(F, 'detalle con estados distintos por proveedor', (det.data?.order?.purchases || []).map((p) => p.status).sort().join(',') === 'pagado,rechazado', brief(det))
+  const evs = det.data?.events || []
+  const types = evs.map((e) => e.type)
+  const need = ['pedido_creado', 'subpedido_creado', 'aprobado', 'rechazado', 'pago_efectivo_acordado', 'pagado', 'entregado']
+  check(F, 'línea de tiempo con cada acción (quién, qué, cuándo)', need.every((t) => types.includes(t)) && evs.every((e) => e.message && e.createdAt && e.actorRole), `tipos=${types.join(',')}`)
+  const vaSales = await get(VA, '/api/purchases?as=proveedor')
+  const saleA = (vaSales.data?.purchases || []).find((p) => p.id === S.purPA)
+  check(F, 'proveedor A ve sus ítems y SOLO su línea de tiempo', saleA?.lines?.length === 2 && saleA?.orderNumber === od.data?.order?.number && saleA.events.length > 0 && saleA.events.every((e) => e.type !== 'rechazado' && e.type !== 'pedido_creado'), brief(vaSales))
+  const lo = await get(C, '/api/orders')
+  check(F, 'mis pedidos lista el pedido con su resumen', (lo.data?.orders || []).some((o) => o.id === S.orderP && o.summary?.paidProviders === 1), brief(lo))
+
+  // ── sobrantes por ítem de una compra multi-ítem ──
+  const el = await get(C, `/api/returns/eligible?purchaseId=${S.purPA}`)
+  const itemsEl = el.data?.items || []
+  check(F, 'sobrantes: un elegible por ítem (con purchaseItemId)', itemsEl.length === 2 && itemsEl.every((i) => !!i.purchaseItemId), brief(el))
+  const photo = (await upload(C, 'sobrantes', 61)).data?.url
+  const lat = itemsEl.find((i) => i.elementId === S.E3.id)
+  const retItem = { purchaseId: S.purPA, purchaseItemId: lat?.purchaseItemId, elementId: S.E3.id, condition: 'sin_abrir', photoUrl: photo }
+  const rr = await post(C, '/api/returns', { purchaseId: S.purPA, items: [{ ...retItem, qty: 1 }] })
+  check(F, 'devolución de un ítem de la compra multi-ítem', rr.status === 201 && rr.data?.return?.items?.[0]?.unitPricePaid === 2000, brief(rr))
+  st(F, 'devolver más de lo comprado de ese ítem', await post(C, '/api/returns', { purchaseId: S.purPA, items: [{ ...retItem, qty: 2 }] }), 409)
+  if (rr.data?.return?.id) st(F, 'el cliente cancela la devolución', await patch(C, `/api/returns/${rr.data.return.id}`, { action: 'cancelar' }), 200)
+
+  // ── vencimiento por cron: libera TODOS los ítems ──
+  await post(C, '/api/cart', { stockId: sA1, quantity: 1 })
+  await post(C, '/api/cart', { stockId: sA3, quantity: 1 })
+  const od2 = await post(C, '/api/orders', {})
+  const p2 = await db.purchase.findFirst({ where: { orderId: od2.data?.order?.id || 'x' } })
+  st(F, 'pedido de 2 ítems para el vencimiento aprobado', await patch(VA, `/api/purchases/${p2?.id}`, { action: 'aprobar' }), 200)
+  const mid = { a1: await q(sA1), a3: await q(sA3) }
+  await db.purchase.update({ where: { id: p2.id }, data: { reservationExpiresAt: new Date(Date.now() - 60_000) } })
+  const ajenas = await db.purchase.count({ where: { status: 'aprobado', reservationExpiresAt: { lt: new Date() }, id: { not: p2.id } } })
+  if (!process.env.CRON_SECRET || ajenas > 0) {
+    check(F, 'cron no corrido (hay reservas vencidas ajenas o falta CRON_SECRET): se cancela a mano', true)
+    await patch(C, `/api/purchases/${p2.id}`, { action: 'cancelar' })
+  } else {
+    const cr = await get(ANON, '/api/cron/reservations', { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } })
+    check(F, 'cron vence el sub-pedido multi-ítem', cr.status === 200 && cr.data?.cancelled >= 1, brief(cr))
+    check(F, 'cron devuelve TODOS los ítems al stock', (await q(sA1)) === mid.a1 + 1 && (await q(sA3)) === mid.a3 + 1)
+    check(F, 'cron deja el evento en la línea de tiempo', !!(await db.activityEvent.findFirst({ where: { purchaseId: p2.id, type: 'vencido' } })))
+  }
+
+  // ── cargo de servicio 1% con una preferencia REAL de MP (token de PRUEBA) ──
+  const testToken = process.env.MP_TEST_ACCESS_TOKEN
+  if (!testToken) {
+    check(F, 'MP_TEST_ACCESS_TOKEN configurado para probar el 1%', false, 'falta MP_TEST_ACCESS_TOKEN en .env')
+    return
+  }
+  await db.providerProfile.update({ where: { id: VA.provId }, data: { mpOauthAccessToken: testToken, mpOauthStatus: 'connected', mpOauthExpiresAt: new Date(Date.now() + 180 * 86400000) } })
+  st(F, 'precio con centavos (1234,55)', await patch(VA, '/api/provider/stock', { id: sA3, price: 1234.55 }), 200)
+  await post(C, '/api/cart', { stockId: sA1, quantity: 3 })
+  await post(C, '/api/cart', { stockId: sA3, quantity: 1 })
+  const cm = await get(C, '/api/cart')
+  check(F, 'carrito: 1% redondeado a 2 decimales (4234,55 → 42,35)', cm.data?.cart?.subtotal === 4234.55 && cm.data?.cart?.serviceFee === 42.35 && cm.data?.cart?.totalMp === 4276.9, brief(cm))
+  check(F, 'el carrito informa que A ahora cobra por MP', cm.data?.cart?.groups?.[0]?.provider?.mpConnected === true, brief(cm))
+  const od3 = await post(C, '/api/orders', {})
+  const p3 = await db.purchase.findFirst({ where: { orderId: od3.data?.order?.id || 'x' } })
+  st(F, 'A aprueba el pedido a pagar por MP', await patch(VA, `/api/purchases/${p3?.id}`, { action: 'aprobar' }), 200)
+  const pay = await patch(C, `/api/purchases/${p3?.id}`, { action: 'pagar_mp' })
+  check(F, 'pagar_mp con MP del proveedor → preferencia creada con el total + 1%', pay.status === 200 && /^https:\/\//.test(pay.data?.initPoint || '') && pay.data?.serviceFee === 42.35 && pay.data?.totalMp === 4276.9, brief(pay))
+  const p3db = await db.purchase.findUnique({ where: { id: p3?.id || 'x' } })
+  const ch3 = p3db?.chargeId ? await db.providerCharge.findUnique({ where: { id: p3db.chargeId } }) : null
+  check(F, 'cargo fijado en el sub-pedido y en su cobro', p3db?.serviceFee === 42.35 && ch3?.serviceFee === 42.35 && p3db?.paymentMethod === 'mercadopago', JSON.stringify({ s: p3db?.serviceFee, c: ch3?.serviceFee }))
+  check(F, 'evento "pago por MP iniciado" en la línea de tiempo', !!(await db.activityEvent.findFirst({ where: { purchaseId: p3?.id || 'x', type: 'pago_mp_iniciado' } })))
+  if (pay.data?.preferenceId) {
+    const pref = await mpPreference(pay.data.preferenceId, testToken)
+    const items = pref.data?.items || []
+    const feeItem = items.find((i) => i.title === 'Cargo de servicio HomIA (1%)')
+    const sumItems = Math.round(items.reduce((a, i) => a + i.unit_price * i.quantity, 0) * 100) / 100
+    check(F, 'la preferencia existe en MP (consultada con el token del vendedor)', pref.status === 200, `HTTP ${pref.status}`)
+    check(F, 'preferencia: los 2 ítems reales + el ítem "Cargo de servicio HomIA (1%)"', items.length === 3 && feeItem?.unit_price === 42.35 && items.some((i) => i.quantity === 3 && i.unit_price === 1000) && items.some((i) => i.quantity === 1 && i.unit_price === 1234.55), JSON.stringify(items.map((i) => [i.title, i.quantity, i.unit_price])))
+    check(F, 'preferencia: marketplace_fee = 1% (42,35) y total 4276,90', pref.data?.marketplace_fee === 42.35 && sumItems === 4276.9, `fee=${pref.data?.marketplace_fee} total=${sumItems}`)
+    check(F, 'preferencia: referencia y pista ?ref= para el webhook', pref.data?.external_reference === `purchase:${p3.id}` && (pref.data?.notification_url || '').includes(`ref=${encodeURIComponent(`purchase:${p3.id}`)}`), `${pref.data?.external_reference} ${pref.data?.notification_url}`)
+  }
+  // webhook: con la pista consulta el pago con el token del VENDEDOR; un id inexistente → MP 404 → "deferred"
+  const wh = await post(ANON, `/api/payments/webhook?ref=${encodeURIComponent(`purchase:${p3?.id}`)}&type=payment&data.id=999999999999`, { type: 'payment', data: { id: '999999999999' }, live_mode: false })
+  check(F, 'webhook con pista y pago inexistente → 200 deferred (MP reintenta)', wh.status === 200 && wh.data?.deferred === true, brief(wh))
+  check(F, 'el sub-pedido sigue sin pagar', (await db.purchase.findUnique({ where: { id: p3?.id || 'x' } }))?.status === 'aprobado')
+  st(F, 'el cliente cancela el pedido de prueba de MP', await patch(C, `/api/purchases/${p3?.id}`, { action: 'cancelar' }), 200)
+  await db.providerProfile.update({ where: { id: VA.provId }, data: { mpOauthAccessToken: null, mpOauthStatus: 'disconnected', mpOauthExpiresAt: null } })
 }
 
 // ═══════════════ B (final). PRUEBA VENCIDA DEL PROVEEDOR ═══════════════
@@ -1324,6 +1644,8 @@ async function purge({ quiet = false } = {}) {
   const jobIds = jobs.map((j) => j.id)
   const purchases = await db.purchase.findMany({ where: { OR: [{ clientId: { in: uids } }, { providerId: { in: provIds } }] }, select: { id: true } })
   const purIds = purchases.map((p) => p.id)
+  const orders = await db.order.findMany({ where: { OR: [{ clientId: { in: uids } }, { purchases: { some: { id: { in: purIds } } } }] }, select: { id: true } })
+  const ordIds = orders.map((o) => o.id)
   const charges = await db.providerCharge.findMany({ where: { OR: [{ providerId: { in: provIds } }, { clientId: { in: uids } }, { projectId: { in: projIds } }] }, select: { id: true } })
   const chIds = charges.map((c) => c.id)
   const invoices = await db.invoice.findMany({ where: { projectId: { in: projIds } }, select: { id: true } })
@@ -1331,6 +1653,8 @@ async function purge({ quiet = false } = {}) {
   const convs = await db.conversation.findMany({ where: { OR: [{ userAId: { in: uids } }, { userBId: { in: uids } }] }, select: { id: true } })
   const out = {}
   const n = async (k, p) => { out[k] = (await p).count }
+  await n('activityEvents', db.activityEvent.deleteMany({ where: { OR: [{ orderId: { in: ordIds } }, { purchaseId: { in: purIds } }, { projectId: { in: projIds } }, { actorId: { in: uids } }] } }))
+  await n('cartItems', db.cartItem.deleteMany({ where: { OR: [{ userId: { in: uids } }, { stock: { providerId: { in: provIds } } }] } }))
   await n('leftoverReturns', db.leftoverReturn.deleteMany({ where: { OR: [{ requesterId: { in: uids } }, { providerId: { in: provIds } }, { projectId: { in: projIds } }, { purchaseId: { in: purIds } }] } }))
   await n('works', db.completedWork.deleteMany({ where: { OR: [{ authorId: { in: uids } }, { projectId: { in: projIds } }, { professionalId: { in: proIds } }] } }))
   await n('reviews', db.review.deleteMany({ where: { OR: [{ authorId: { in: uids } }, { targetUserId: { in: uids } }, { projectId: { in: projIds } }, { purchaseId: { in: purIds } }] } }))
@@ -1342,7 +1666,9 @@ async function purge({ quiet = false } = {}) {
   await n('projects', db.project.deleteMany({ where: { id: { in: projIds } } }))
   await n('bids', db.jobBid.deleteMany({ where: { OR: [{ jobId: { in: jobIds } }, { professionalId: { in: proIds } }] } }))
   await n('jobs', db.jobPost.deleteMany({ where: { id: { in: jobIds } } }))
+  await n('purchaseItems', db.purchaseItem.deleteMany({ where: { purchaseId: { in: purIds } } }))
   await n('purchases', db.purchase.deleteMany({ where: { id: { in: purIds } } }))
+  await n('orders', db.order.deleteMany({ where: { id: { in: ordIds } } }))
   await n('links', db.providerLink.deleteMany({ where: { OR: [{ providerId: { in: provIds } }, { professionalId: { in: proIds } }] } }))
   await n('favorites', db.favorite.deleteMany({ where: { OR: [{ userId: { in: uids } }, { targetUserId: { in: uids } }] } }))
   await n('messages', db.message.deleteMany({ where: { conversationId: { in: convs.map((c) => c.id) } } }))
@@ -1359,7 +1685,16 @@ async function purge({ quiet = false } = {}) {
     },
   }))
   await n('searchEvents', db.searchEvent.deleteMany({ where: { userId: { in: uids } } }))
-  await n('homySessions', db.homySession.deleteMany({ where: { userId: { in: uids } } }))
+  // Homy: sesiones (usuario o visitante de la corrida), corridas y cupos de esta suite
+  const { createHash } = await import('node:crypto')
+  const homyHash = (v) => createHash('sha256').update(`${process.env.AUTH_SECRET || 'homy-dev-secret-cambiar-en-produccion-9f2a'}:${v}`).digest('hex').slice(0, 40)
+  const visitorHashes = [homyHash(`visitante:${HOMY_VISITOR_TOKEN}`)]
+  const ipHashes = [RUN_IP, P_IP].map(homyHash)
+  const homySess = await db.homySession.findMany({ where: { OR: [{ userId: { in: uids } }, { visitorHash: { in: visitorHashes } }, { id: { in: manifest.homyVisitorSessions || [] } }] }, select: { id: true } })
+  const homySessIds = homySess.map((x) => x.id)
+  await n('homyRuns', db.homyRun.deleteMany({ where: { OR: [{ userId: { in: uids } }, { sessionId: { in: homySessIds } }, { ipHash: { in: ipHashes } }] } }))
+  await n('aiUsage', db.aiUsage.deleteMany({ where: { key: { in: [...uids.map((u) => `user:${u}`), ...ipHashes.map((h) => `ip:${h}`)] } } }))
+  await n('homySessions', db.homySession.deleteMany({ where: { id: { in: homySessIds } } }))
   await n('identityDocuments', db.identityDocument.deleteMany({ where: { userId: { in: uids } } }))
   await n('stock', db.providerStock.deleteMany({ where: { providerId: { in: provIds } } }))
   await n('pipelines', db.crmPipeline.deleteMany({ where: { ownerId: { in: uids } } }))
@@ -1415,6 +1750,10 @@ async function purge({ quiet = false } = {}) {
     projects: await db.project.count({ where: { id: { in: projIds } } }),
     jobs: await db.jobPost.count({ where: { id: { in: jobIds } } }),
     purchases: await db.purchase.count({ where: { id: { in: purIds } } }),
+    purchaseItems: await db.purchaseItem.count({ where: { purchaseId: { in: purIds } } }),
+    orders: await db.order.count({ where: { OR: [{ id: { in: ordIds } }, { clientId: { in: uids } }] } }),
+    cartItems: await db.cartItem.count({ where: { userId: { in: uids } } }),
+    activityEvents: await db.activityEvent.count({ where: { OR: [{ orderId: { in: ordIds } }, { purchaseId: { in: purIds } }, { projectId: { in: projIds } }, { actorId: { in: uids } }] } }),
     charges: await db.providerCharge.count({ where: { id: { in: chIds } } }),
     invoices: await db.invoice.count({ where: { id: { in: invIds } } }),
     stock: await db.providerStock.count({ where: { providerId: { in: provIds } } }),
@@ -1422,6 +1761,9 @@ async function purge({ quiet = false } = {}) {
     reviews: await db.review.count({ where: { OR: [{ authorId: { in: uids } }, { targetUserId: { in: uids } }] } }),
     returns: await db.leftoverReturn.count({ where: { requesterId: { in: uids } } }),
     searchEvents: await db.searchEvent.count({ where: { userId: { in: uids } } }),
+    homySessions: await db.homySession.count({ where: { OR: [{ userId: { in: uids } }, { visitorHash: { in: visitorHashes } }] } }),
+    homyRuns: await db.homyRun.count({ where: { OR: [{ userId: { in: uids } }, { ipHash: { in: ipHashes } }] } }),
+    e2eProfessionalsVisible: await db.professionalProfile.count({ where: { user: { displayName: { startsWith: MARK } } } }),
     catalogE2E: await db.catalogElement.count({ where: { name: { startsWith: 'E2E-Q ' } } }),
     storage: storageLeft.length,
   }
@@ -1445,7 +1787,7 @@ async function main() {
   }
   // ya hay restos de otra corrida: se limpian antes (idempotente)
   await purge({ quiet: true })
-  const order = [['A', flowA], ['B', flowB], ['C', flowC], ['I', flowI], ['D', flowD], ['E', flowE], ['F', flowF], ['G', flowG], ['H', flowH], ['J', flowJ], ['K', flowK], ['L', flowL], ['M', flowM], ['N', flowN], ['O', flowO], ['B', flowTrialVencido]]
+  const order = [['A', flowA], ['B', flowB], ['C', flowC], ['I', flowI], ['D', flowD], ['E', flowE], ['F', flowF], ['G', flowG], ['P', flowP], ['H', flowH], ['J', flowJ], ['K', flowK], ['L', flowL], ['M', flowM], ['N', flowN], ['O', flowO], ['B', flowTrialVencido]]
   const t0 = Date.now()
   let purgeResult = null
   try {
@@ -1462,7 +1804,7 @@ async function main() {
       console.log(`  ${results[k].pass} ok · ${results[k].fail} fallas · ${results[k].external} ajenos (${((Date.now() - t) / 1000).toFixed(1)} s)`)
     }
   } finally {
-    const users = { cliente: C.email, profesional: P.email, profesional2: P2.email, proveedor: V.email, password: PASSWORD, ids: { C: C.id, P: P.id, P2: P2.id, V: V.id, proId: P.proId, provId: V.provId }, S }
+    const users = { cliente: C.email, profesional: P.email, profesional2: P2.email, proveedor: V.email, provA: VA.email, provB: VB.email, visitante: CV.email, password: PASSWORD, ids: { C: C.id, P: P.id, P2: P2.id, V: V.id, VA: VA.id, VB: VB.id, CV: CV.id, proId: P.proId, provId: V.provId }, S }
     writeFileSync(path.join(OUT_DIR, 'last-run.json'), JSON.stringify({ ...manifest, users, results }, null, 2))
     if (!NO_PURGE) purgeResult = await purge()
     else console.log(`\n--no-purge: datos E2E conservados. Credenciales en ${path.join(OUT_DIR, 'last-run.json')}`)

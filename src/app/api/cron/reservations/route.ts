@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { parseJson } from '@/lib/api'
+import { purchaseLines, releaseLines } from '@/lib/orders'
+import { logActivity } from '@/lib/activity'
+import { LEGACY_PREFIX } from '@/lib/order-view'
+import { runLeftoverTasks } from '@/lib/leftovers-cron'
 
 export async function GET(request: Request) {
   // Solo el cron de Vercel (Authorization: Bearer CRON_SECRET). Sin secreto
@@ -11,15 +16,24 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Vencen los pedidos APROBADOS (reserva 48 h / compra 7 días) cuyo plazo pasó
-    // y cuyo cobro todavía no está pagado: se cancelan, devuelven el stock
-    // reservado, anulan el cobro y avisan a las dos partes.
+    // Vencen los sub-pedidos APROBADOS (reserva 48 h / compra 7 días) cuyo plazo pasó
+    // y cuyo cobro todavía no está pagado: se cancelan, devuelven al stock TODOS
+    // los ítems reservados, anulan el cobro, avisan a las dos partes y queda en la
+    // línea de tiempo.
     const now = new Date()
     const candidates = await db.purchase.findMany({
       where: { status: 'aprobado', reservationExpiresAt: { lt: now } },
-      include: { provider: { select: { userId: true, businessName: true } } },
+      include: {
+        items: { orderBy: { createdAt: 'asc' } },
+        provider: { select: { userId: true, businessName: true } },
+        client: { select: { roles: true } },
+        order: { select: { number: true } },
+      },
     })
-    if (candidates.length === 0) return NextResponse.json({ success: true, cancelled: 0 })
+    // Sobrantes: confirmación automática de reembolsos en efectivo (72 h) y
+    // recordatorio al proveedor por devoluciones sin responder (72 h)
+    const leftovers = await runLeftoverTasks(now)
+    if (candidates.length === 0) return NextResponse.json({ success: true, cancelled: 0, ...leftovers })
 
     const chargeIds = candidates.map((p) => p.chargeId).filter((x): x is string => !!x)
     const charges = chargeIds.length
@@ -32,31 +46,16 @@ export async function GET(request: Request) {
       // el cliente ya pagó (MP o efectivo confirmado): no se vence, se entrega
       if (p.chargeId && chargeStatus.get(p.chargeId) === 'pagada') continue
 
+      const esReserva = p.type === 'reserva'
       // cancelar de forma atómica (por si otro proceso la tocó entre medio)
       const upd = await db.purchase.updateMany({
         where: { id: p.id, status: 'aprobado' },
-        data: { status: 'cancelado', rejectionReason: p.type === 'reserva' ? 'Reserva vencida (48 h)' : 'Plazo de retiro vencido (7 días)' },
+        data: { status: 'cancelado', rejectionReason: esReserva ? 'Reserva vencida (48 h)' : 'Plazo de retiro vencido (7 días)' },
       })
       if (upd.count === 0) continue
       cancelled++
 
-      if (p.stockId) {
-        const stock = await db.providerStock.findUnique({ where: { id: p.stockId }, select: { id: true, minStock: true } })
-        if (stock) {
-          const s = await db.providerStock.update({
-            where: { id: stock.id },
-            data: { quantity: { increment: p.quantity } },
-            select: { quantity: true, minStock: true },
-          })
-          await db.stockMovement.create({
-            data: { stockId: stock.id, type: 'liberacion', quantity: p.quantity, note: `Vencimiento del pedido ${p.id}` },
-          })
-          await db.providerStock.update({
-            where: { id: stock.id },
-            data: { status: s.quantity <= 0 ? 'agotado' : s.quantity <= s.minStock ? 'por_agotar' : 'disponible' },
-          })
-        }
-      }
+      await releaseLines(purchaseLines(p), `Vencimiento del pedido ${p.id}`)
       if (p.chargeId) {
         await db.providerCharge.updateMany({
           where: { id: p.chargeId, status: { not: 'pagada' } },
@@ -64,8 +63,8 @@ export async function GET(request: Request) {
         })
       }
 
-      const label = `${p.elementName} × ${p.quantity} ${p.unit}`
-      const esReserva = p.type === 'reserva'
+      const label = `${p.order ? `${p.order.number} · ` : ''}${p.elementName}`
+      const panel = parseJson<string[]>(p.client.roles, []).includes('cliente') ? 'cliente' : 'profesional'
       await db.notification.createMany({
         data: [
           {
@@ -75,7 +74,7 @@ export async function GET(request: Request) {
             body: esReserva
               ? `Pasaron las 48 h de tu reserva de ${label} en ${p.provider.businessName} y se canceló. Si lo seguís necesitando, volvé a pedirlo.`
               : `Pasaron los 7 días para pagar y retirar ${label} en ${p.provider.businessName} y el pedido se canceló. Si lo seguís necesitando, volvé a pedirlo.`,
-            link: '#/panel/cliente/materiales?tab=compras',
+            link: `#/panel/${panel}/pedidos/${p.orderId || `${LEGACY_PREFIX}${p.id}`}`,
           },
           {
             userId: p.provider.userId,
@@ -86,9 +85,13 @@ export async function GET(request: Request) {
           },
         ],
       })
+      await logActivity({
+        orderId: p.orderId, purchaseId: p.id, actorRole: 'sistema', type: 'vencido',
+        message: esReserva ? 'La reserva venció a las 48 h sin pago: se canceló y el stock volvió al proveedor.' : 'Pasaron los 7 días sin pago: el pedido se canceló y el stock volvió al proveedor.',
+      })
     }
 
-    return NextResponse.json({ success: true, cancelled, checked: candidates.length })
+    return NextResponse.json({ success: true, cancelled, checked: candidates.length, ...leftovers })
   } catch (error) {
     console.error('Error in reservations cron:', error)
     return new NextResponse('Internal Server Error', { status: 500 })

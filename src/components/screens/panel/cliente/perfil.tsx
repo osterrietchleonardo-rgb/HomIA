@@ -113,7 +113,7 @@ export default function ClientProfile() {
             <span className="mt-0.5 block text-[12.5px] leading-snug text-slate-500">
               {vStatus === 'verificado'
                 ? 'Tu DNI está verificado: los profesionales ven tu check verde.'
-                : vStatus === 'pendiente'
+                : vStatus === 'en_revision'
                   ? 'Tu DNI está en revisión. Te avisamos cuando termine.'
                   : vStatus === 'rechazado'
                     ? 'La verificación no pasó: revisá el motivo y volvé a subir tu DNI.'

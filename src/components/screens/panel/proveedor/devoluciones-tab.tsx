@@ -209,6 +209,13 @@ export default function DevolucionesTab({ returns, mpConnected, onChanged }: {
                   {r.paymentMethod === 'mercadopago' ? `Reembolsado por Mercado Pago el ${formatDate(r.refundedAt)}` : `Reembolsado en efectivo el ${formatDate(r.refundedAt)}`}
                 </p>
               )}
+              {r.status === 'reembolsada' && r.paymentMethod !== 'mercadopago' && (
+                <p className="mt-1 text-[12px] font-semibold text-slate-500">
+                  {r.refundConfirmedAt
+                    ? (r.refundConfirmedBy === 'automatico' ? 'Reembolso confirmado automáticamente (pasaron 72 h).' : 'El cliente confirmó que recibió el reembolso.')
+                    : 'Esperando que el cliente confirme que recibió el efectivo (se confirma solo a las 72 h).'}
+                </p>
+              )}
               {r.status === 'reembolso_fallido' && (
                 <p className="mt-2.5 rounded-xl bg-red-500/8 px-3 py-2 text-[12px] text-red-700">
                   Falló el reembolso por Mercado Pago{r.providerNote ? `: ${r.providerNote}` : ''}.{!mpConnected ? ' Revisá que tu cuenta de Mercado Pago siga conectada.' : ''}

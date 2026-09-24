@@ -225,6 +225,13 @@ export default function RegisterScreen() {
       if (location.shared) syncLocationToServer(location.lat!, location.lng!, location.radiusKm)
       await refresh()
       toast.success('¡Bienvenido a HomIA!')
+      // ?volver=: vuelve a donde estaba (ej. el carrito del visitante, que se fusiona al entrar);
+      // solo rutas internas de la app (nunca una URL externa)
+      const volver = route.query.volver || ''
+      if (volver.startsWith('/') && !volver.startsWith('//')) {
+        navigate(volver, { replace: true })
+        return
+      }
       navigate(`/panel/${rolesPayload.includes('proveedor') ? 'proveedor' : rolesPayload.includes('profesional') ? 'profesional' : 'cliente'}`, { replace: true })
     } finally {
       setBusy(false)

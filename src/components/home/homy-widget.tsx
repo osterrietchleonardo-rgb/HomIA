@@ -1,163 +1,64 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
+// Botón flotante de Homy en la home (landing y home de la SPA): mismo súper
+// agente, misma conversación y mismo cupo que el buscador principal.
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Lock, Send, X } from "lucide-react";
+import { X } from "lucide-react";
 import { Homy } from "@/components/homy/homy-character";
-import type { HomyChatTurn, HomyReply } from "@/lib/homy";
-import { navigate } from "@/lib/router";
-import { cn } from "@/lib/utils";
+import { HomyConversacion } from "@/components/homy/homy-conversacion";
+import { useDuenioHomy, useHomy } from "@/components/homy/homy-store";
 
-interface ChatMessage extends HomyChatTurn {
-  id: string;
-  suggestions?: string[];
-  degraded?: boolean;
-  /** la IA pidió login: el mensaje trae los botones de registro/ingreso */
-  needsLogin?: boolean;
-}
-
-/** Ruta SPA actual (hash) para volver después de registrarse/ingresar. */
-function currentPath(): string {
-  if (typeof window === "undefined") return "/";
-  return window.location.hash.replace(/^#/, "") || "/";
-}
-
-const WELCOME_MESSAGE =
-  "¡Hola! Soy Homy, el asistente de HomIA. Contame qué necesita tu hogar —con tus palabras, sin tecnicismos— y yo me encargo de interpretarlo y armar el pedido.";
-
-let messageId = 0;
-const nextId = () => `msg-${Date.now()}-${messageId++}`;
+const SUGERENCIAS = [
+  "Se me gotea la canilla, ¿qué necesito?",
+  "Busco un plomero en Palermo",
+  "¿Cómo funciona el pago?",
+  "¿Cuánto cuesta ser proveedor?",
+];
 
 export function HomyWidget() {
   const [open, setOpen] = useState(false);
-  const [input, setInput] = useState("");
-  const [thinking, setThinking] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: "welcome", role: "homy", content: WELCOME_MESSAGE },
-  ]);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const botonRef = useRef<HTMLButtonElement>(null);
+  const { user } = useDuenioHomy();
+  const ocupado = useHomy((s) => s.ocupado);
 
+  // el buscador y otros CTA de la home abren este mismo chat
   useEffect(() => {
     const onOpen = () => setOpen(true);
     window.addEventListener("homy:open", onOpen);
     return () => window.removeEventListener("homy:open", onOpen);
   }, []);
 
+  // Esc cierra y devuelve el foco al botón
   useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [messages, thinking, open]);
-
-  const send = useCallback(
-    async (text: string) => {
-      const trimmed = text.trim();
-      if (!trimmed || thinking) return;
-
-      const history: HomyChatTurn[] = messages
-        .filter((m) => m.id !== "welcome")
-        .slice(-6)
-        .map((m) => ({ role: m.role, content: m.content }));
-
-      setMessages((prev) => [
-        ...prev,
-        { id: nextId(), role: "user", content: trimmed },
-      ]);
-      setInput("");
-      setThinking(true);
-
-      try {
-        const res = await fetch("/api/homy", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: trimmed, history }),
-        });
-        const data = (await res.json()) as {
-          ok: boolean;
-          reply?: HomyReply;
-          needsLogin?: boolean;
-        };
-        if (res.status === 401 && data.needsLogin) {
-          // Homy (IA) es para usuarios registrados: gate honesto, sin inventar respuesta
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: nextId(),
-              role: "homy",
-              content:
-                "Para usar Homy creá tu cuenta gratis (1 minuto). Es lo que me deja interpretar tu pedido y armarte el paso a paso.",
-              needsLogin: true,
-            },
-          ]);
-          return;
-        }
-        if (!data.reply) throw new Error("sin respuesta");
-        const reply = data.reply;
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: nextId(),
-            role: "homy",
-            content: reply.message,
-            suggestions: reply.suggestions,
-            degraded: !data.ok,
-          },
-        ]);
-      } catch {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: nextId(),
-            role: "homy",
-            content:
-              "Se me cortó la conexión un segundo, pero sigo acá. Probá de nuevo en un momento y seguimos cuidando tu hogar.",
-            degraded: true,
-          },
-        ]);
-      } finally {
-        setThinking(false);
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        botonRef.current?.focus();
       }
-    },
-    [messages, thinking]
-  );
-
-  const onSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    void send(input);
-  };
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
   return (
     <>
-      {/* Botón flotante */}
       <motion.button
+        ref={botonRef}
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ delay: 1.1, type: "spring", stiffness: 260, damping: 18 }}
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? "Cerrar chat con Homy" : "Abrir chat con Homy"}
         aria-expanded={open}
+        data-homy-fab
         className="fixed bottom-5 right-5 z-50 grid size-[68px] place-items-center rounded-full border border-white/80 bg-white/85 shadow-[0_16px_40px_-12px_rgba(10,37,64,0.35)] backdrop-blur-md transition-transform hover:scale-105 active:scale-95 sm:bottom-6 sm:right-6"
       >
         <span className="pointer-events-none absolute inset-0 animate-ping rounded-full border border-ai/30 [animation-duration:2.6s]" aria-hidden />
-        {open ? (
-          <X className="size-6 text-navy" aria-hidden />
-        ) : (
-          <Homy size={44} state="idle" />
-        )}
-        {!open && (
-          <span
-            className="absolute -right-0.5 -top-0.5 size-3.5 rounded-full border-2 border-white bg-action"
-            aria-hidden
-          />
-        )}
+        {open ? <X className="size-6 text-navy" aria-hidden /> : <Homy size={44} state={ocupado ? "thinking" : "idle"} />}
       </motion.button>
 
-      {/* Panel de chat */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -165,134 +66,36 @@ export function HomyWidget() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 18, scale: 0.97 }}
             transition={{ type: "spring", stiffness: 280, damping: 26 }}
-            className="fixed bottom-24 right-4 z-50 flex h-[min(560px,calc(100dvh-8rem))] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[28px] border border-white/70 bg-white/85 shadow-[0_32px_80px_-24px_rgba(10,37,64,0.45)] backdrop-blur-2xl sm:right-6"
+            className="fixed bottom-24 right-3 z-50 flex h-[min(620px,calc(100dvh-7.5rem))] w-[min(400px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-[28px] border border-white/70 bg-[#f6f8fb]/95 shadow-[0_32px_80px_-24px_rgba(10,37,64,0.45)] backdrop-blur-2xl sm:right-6"
             role="dialog"
             aria-label="Chat con Homy, asistente de HomIA"
+            data-homy-panel
           >
-            {/* Encabezado */}
-            <div className="flex items-center gap-3 border-b border-line/70 bg-white/60 px-5 py-4">
-              <Homy size={42} state={thinking ? "thinking" : "idle"} />
-              <div className="flex-1">
+            <div className="flex items-center gap-3 border-b border-line/70 bg-white/70 px-4 py-3">
+              <Homy size={38} state={ocupado ? "thinking" : "idle"} />
+              <div className="min-w-0 flex-1">
                 <p className="text-[15px] font-extrabold text-navy">Homy</p>
-                <p className="flex items-center gap-1.5 text-xs text-navy/50">
-                  <span className="relative flex size-2">
-                    <span className="absolute size-full animate-ping rounded-full bg-ai opacity-60" />
-                    <span className="relative size-2 rounded-full bg-ai" />
-                  </span>
-                  En línea · responde al instante
-                </p>
+                <p className="truncate text-xs text-navy/50">Responde con datos reales de HomIA</p>
               </div>
               <button
-                onClick={() => setOpen(false)}
+                onClick={() => { setOpen(false); botonRef.current?.focus(); }}
                 aria-label="Cerrar chat"
-                className="grid size-8 place-items-center rounded-full text-navy/40 transition-colors hover:bg-confort hover:text-navy"
+                className="homy-focus grid size-9 place-items-center rounded-full text-navy/40 transition-colors hover:bg-confort hover:text-navy"
               >
                 <X className="size-4" />
               </button>
             </div>
-
-            {/* Mensajes */}
-            <div
-              ref={scrollRef}
-              className="homy-scroll flex-1 space-y-4 overflow-y-auto px-4 py-4"
-            >
-              {messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={cn(
-                    "flex flex-col gap-2",
-                    m.role === "user" ? "items-end" : "items-start"
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "max-w-[85%] rounded-3xl px-4 py-3 text-[14px] leading-relaxed",
-                      m.role === "user"
-                        ? "rounded-br-lg bg-navy font-medium text-chalk shadow-md"
-                        : "rounded-bl-lg border border-line/80 bg-white text-navy/85 shadow-sm"
-                    )}
-                  >
-                    {m.content}
-                    {m.degraded && (
-                      <span className="mt-1.5 block text-[11px] text-navy/40">
-                        (respuesta con capacidad reducida)
-                      </span>
-                    )}
-                  </div>
-                  {m.needsLogin && (
-                    <div className="flex max-w-[92%] flex-wrap gap-1.5">
-                      <button
-                        onClick={() => navigate(`/registrarse?volver=${encodeURIComponent(currentPath())}`)}
-                        className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full bg-action px-3.5 py-1.5 text-xs font-bold text-white transition-all hover:brightness-110 active:scale-[0.97]"
-                      >
-                        <Lock className="size-3.5" aria-hidden /> Crear cuenta gratis
-                      </button>
-                      <button
-                        onClick={() => navigate(`/ingresar?volver=${encodeURIComponent(currentPath())}`)}
-                        className="inline-flex min-h-[40px] items-center rounded-full border border-navy/15 bg-white/80 px-3.5 py-1.5 text-xs font-bold text-navy transition-all hover:border-navy/30 active:scale-[0.97]"
-                      >
-                        Ya tengo cuenta
-                      </button>
-                    </div>
-                  )}
-                  {m.suggestions && m.suggestions.length > 0 && (
-                    <div className="flex max-w-[92%] flex-wrap gap-1.5">
-                      {m.suggestions.map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => void send(s)}
-                          className="rounded-full border border-tech/20 bg-white/80 px-3 py-1.5 text-xs font-medium text-tech transition-all hover:border-tech/40 hover:bg-tech/5 active:scale-[0.97]"
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              {thinking && (
-                <div className="flex items-center gap-2.5 rounded-3xl rounded-bl-lg border border-line/80 bg-white px-4 py-3.5 shadow-sm" style={{ width: "fit-content" }}>
-                  <span className="flex gap-1" aria-label="Homy está escribiendo">
-                    {[0, 1, 2].map((i) => (
-                      <span
-                        key={i}
-                        className="size-2 rounded-full bg-ai animate-dot-bounce"
-                        style={{ animationDelay: `${i * 0.16}s` }}
-                      />
-                    ))}
-                  </span>
-                  <span className="text-xs font-medium text-navy/45">
-                    Homy está interpretando…
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Entrada */}
-            <form
-              onSubmit={onSubmit}
-              className="border-t border-line/70 bg-white/70 p-3"
-            >
-              <div className="flex items-center gap-2 rounded-full border border-line bg-white pl-4 pr-1.5 py-1.5 shadow-[inset_0_2px_6px_rgba(10,37,64,0.05)] focus-within:border-tech/40">
-                <input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Escribile a Homy…"
-                  aria-label="Mensaje para Homy"
-                  maxLength={400}
-                  className="h-9 min-w-0 flex-1 bg-transparent text-[14px] text-navy outline-none placeholder:text-navy/35"
-                />
-                <button
-                  type="submit"
-                  disabled={thinking || input.trim().length === 0}
-                  aria-label="Enviar mensaje"
-                  className="grid size-9 shrink-0 place-items-center rounded-full bg-action text-white transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
-                >
-                  <Send className="size-4" aria-hidden />
-                </button>
-              </div>
-            </form>
+            <HomyConversacion
+              puerta="home_flotante"
+              autoFocus
+              bienvenida={
+                user
+                  ? `¡Hola, ${user.displayName.split(" ")[0]}! Contame qué necesita tu casa o qué querés hacer en HomIA y lo buscamos con datos reales.`
+                  : "¡Hola! Soy Homy. Contame qué necesita tu casa —con tus palabras— y te digo qué hace falta, quién lo tiene y a qué precio."
+              }
+              sugerenciasIniciales={SUGERENCIAS}
+              onNavegar={() => setOpen(false)}
+            />
           </motion.div>
         )}
       </AnimatePresence>

@@ -1,7 +1,8 @@
 'use client'
 // Búsqueda dual HomIA con superagente Homy (loop+graph+tools) + mapa de pines + radio de alcance
-// modo cliente → profesionales y problemas · modo profesional → materiales, comparables y bolsa de trabajos
-import { useCallback, useEffect, useRef, useState } from 'react'
+// modo cliente → profesionales y problemas · modo profesional → materiales y bolsa de trabajos
+// La tarjeta de Homy usa el súper agente (/api/homy/agent, puerta "buscar"): mismo agente que la home y el panel.
+import { useCallback, useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { navigate, useRoute } from '@/lib/router'
 import { useSession, useLocation, syncLocationToServer } from '@/lib/store'
@@ -11,7 +12,9 @@ import { formatARS } from '@/lib/format'
 import { formatDistance } from '@/lib/geo'
 import type { MapPin } from '@/components/app/map-view'
 import { toast } from 'sonner'
-import { Search, SearchX, MapPin as MapPinIcon, Compass, Sparkles, X, Lock, Home, Hammer, BadgeCheck, Store, Star, ArrowUpRight, HardHat, Package, Scale, Briefcase } from 'lucide-react'
+import { Search, SearchX, MapPin as MapPinIcon, Compass, Sparkles, X, Lock, Home, Hammer, BadgeCheck, Store, Star, ArrowUpRight, HardHat, Package, Briefcase, Loader2 } from 'lucide-react'
+import { AccionesHomy, TarjetasHomy } from '@/components/homy/homy-tarjetas'
+import { rutaActual, useDuenioHomy, useHomy } from '@/components/homy/homy-store'
 
 const MapView = dynamic(() => import('@/components/app/map-view'), { ssr: false, loading: () => <div className="h-[320px] sm:h-[420px] lg:h-[480px] rounded-2xl homy-skeleton" /> })
 
@@ -32,22 +35,6 @@ type MaterialResult = {
   description?: string | null; brand: string | null; price: number; quantity: number; status: string
   providerId: string; providerName: string; providerCity: string | null; providerRating: number; distanceKm?: number
 }
-type ElementResult = {
-  elementId: string; name: string; description: string; unit: string
-  categorySlug: string; categoryName: string
-}
-
-type AgentReply = {
-  ok: boolean
-  message: string
-  suggestions: string[]
-  question?: { pregunta: string; opciones: string[] }
-  results?: { professionals?: ProResult[]; jobs?: JobResult[]; materials?: MaterialResult[]; comparables?: MaterialResult[]; elements?: ElementResult[] }
-  steps?: { thought: string; action: string; found: number }[]
-  error?: string
-  needsLogin?: boolean
-}
-
 const CATEGORY_TABS = [
   { slug: '', name: 'Todo' }, { slug: 'plomeria', name: 'Plomería' },
   { slug: 'gasistas', name: 'Gas' }, { slug: 'electricistas', name: 'Electricidad' },
@@ -78,20 +65,15 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
   const [pros, setPros] = useState<ProResult[]>([])
   const [jobs, setJobs] = useState<JobResult[]>([])
   const [materials, setMaterials] = useState<MaterialResult[]>([])
-  const [comparables, setComparables] = useState<MaterialResult[]>([])
-  const [elements, setElements] = useState<ElementResult[]>([])
   const [loading, setLoading] = useState(true)
   const [aiBusy, setAiBusy] = useState(false)
   const [aiState, setAiState] = useState<'idle' | 'listening' | 'thinking' | 'happy'>('idle')
-  const [aiMessage, setAiMessage] = useState<string | null>(null)
-  const [question, setQuestion] = useState<{ pregunta: string; opciones: string[] } | null>(null)
-  const [suggestions, setSuggestions] = useState<string[]>([])
-  const [sessionId, setSessionId] = useState<string | null>(null)
-  const [steps, setSteps] = useState<{ thought: string; action: string; found: number }[]>([])
-  // la IA pidió login: se muestra el gate honesto (la búsqueda directa sigue funcionando)
-  const [loginGate, setLoginGate] = useState(false)
+  // turno de Homy abierto desde esta pantalla (misma conversación que la home y el panel)
+  const [turnoId, setTurnoId] = useState<string | null>(null)
+  useDuenioHomy()
+  const preguntar = useHomy((st) => st.preguntar)
+  const turno = useHomy((st) => (turnoId ? st.turnos.find((t) => t.id === turnoId) ?? null : null))
   const [showMap, setShowMap] = useState(true)
-  const convRef = useRef<{ role: 'user' | 'homy'; content: string }[]>([])
 
   useEffect(() => { refresh() /* sync sesión */ }, [refresh])
 
@@ -117,7 +99,6 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
         stockId: m.stockId ?? m.id ?? '',
         elementName: m.elementName ?? m.name ?? '',
       })))
-      setComparables([])
     } finally {
       setLoading(false)
     }
@@ -127,56 +108,18 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
     directSearch(query, cat)
   }, [directSearch, query, cat, location.radiusKm])
 
-  // Superagente: interpreta, pregunta y busca con herramientas reales
+  // Súper agente: interpreta, busca con herramientas reales y responde en streaming
   async function askAgent(text: string) {
-    if (!text.trim()) return
+    if (!text.trim() || useHomy.getState().ocupado) return
     setAiBusy(true)
     setAiState('thinking')
-    setQuestion(null)
     try {
-      const res = await fetch('/api/homy/agent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text, mode,
-          ...(sessionId ? { sessionId } : {}),
-          lat: location.lat ?? null, lng: location.lng ?? null,
-        }),
-      })
-      const data: AgentReply = await res.json()
-      if (res.status === 401 && data.needsLogin) {
-        // Homy (IA) es para usuarios registrados: gate honesto, sin inventar respuesta
-        setLoginGate(true)
-        setAiMessage('Para usar Homy creá tu cuenta gratis (1 minuto). Mientras tanto, abajo tenés los resultados reales de tu búsqueda.')
-        setSuggestions([])
-        setQuestion(null)
-        setSteps([])
-        setAiState('idle')
-        return
-      }
-      if (!data.ok) {
-        toast.error(data.error || 'El superagente no pudo responder')
-        return
-      }
-      setLoginGate(false)
-      setSessionId((data as unknown as { sessionId?: string }).sessionId || sessionId)
-      setAiMessage(data.message)
-      setSuggestions(data.suggestions || [])
-      setQuestion(data.question || null)
-      setSteps(data.steps || [])
-      if (data.results) {
-        setPros((prev) => data.results!.professionals?.length ? data.results!.professionals : prev)
-        setJobs((prev) => data.results!.jobs?.length ? data.results!.jobs : prev)
-        setMaterials((prev) => data.results!.materials?.length ? data.results!.materials : prev)
-        setComparables(data.results.comparables || [])
-        setElements(data.results.elements || [])
-      }
-      convRef.current.push({ role: 'user', content: text }, { role: 'homy', content: data.message })
+      const pendiente = preguntar(text, { puerta: 'buscar', pagina: rutaActual(), lat: location.lat, lng: location.lng })
+      const ultimo = useHomy.getState().turnos.at(-1)
+      if (ultimo?.rol === 'homy') setTurnoId(ultimo.id)
+      await pendiente
       setAiState('happy')
       setTimeout(() => setAiState('idle'), 1800)
-    } catch {
-      toast.error('Problema de conexión con el superagente')
-      setAiState('idle')
     } finally {
       setAiBusy(false)
     }
@@ -203,10 +146,7 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
     return [...pins, ...mapPins]
   }
 
-  const hasResults = pros.length + jobs.length + materials.length + comparables.length + elements.length > 0
-  // si el mensaje del agente ya ES la pregunta, no la repetimos en la tarjeta
-  const questionDuplicatesMessage = !!question && !!aiMessage && question.pregunta.trim().toLowerCase() === aiMessage.trim().toLowerCase()
-
+  const hasResults = pros.length + jobs.length + materials.length > 0
   return (
     <div className="min-h-screen">
       {/* Header de búsqueda — vidrio nocturno (fondo reforzado para que el
@@ -250,7 +190,7 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
             )}
           </div>
           <button
-            onClick={() => askAgent(query || aiMessage || '')}
+            onClick={() => askAgent(query)}
             disabled={aiBusy}
             className="homy-btn-primary homy-focus shrink-0 px-3.5 sm:px-5 py-2.5 sm:py-3 min-h-[44px] text-sm"
           >
@@ -324,74 +264,48 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
 
       <div className="max-w-7xl mx-auto px-4 py-6 sm:py-8">
         {/* Respuesta del superagente */}
-        {(aiMessage || question) && (
-          <div className="mb-6 sm:mb-8 rounded-3xl homy-glass homy-lift relative overflow-hidden p-5 sm:p-6">
+        {turno && (
+          <div className="mb-6 sm:mb-8 rounded-3xl homy-glass relative overflow-hidden p-5 sm:p-6" data-homy-buscar={turno.estado}>
             <span
               aria-hidden
               className="pointer-events-none absolute inset-x-0 top-0 h-24"
               style={{ background: 'radial-gradient(60% 100% at 50% 0%, rgba(0,196,255,0.12) 0%, transparent 72%)' }}
             />
             <div className="relative flex items-start gap-3 sm:gap-4">
-              <Homy size={56} state={aiBusy ? 'thinking' : 'happy'} />
+              <Homy size={56} state={turno.estado === 'streaming' ? 'thinking' : 'happy'} />
               <div className="flex-1 min-w-0">
-                <p className="homy-eyebrow mb-1.5">Superagente Homy</p>
-                {aiMessage && <p className="text-[#0A2540] leading-relaxed font-medium">{aiMessage}</p>}
-                {loginGate && (
-                  <div className="mt-3.5 flex flex-col gap-2 sm:flex-row">
-                    <button
-                      onClick={() => navigate(`/registrarse?volver=${encodeURIComponent(route.raw || '/buscar')}`)}
-                      className="homy-btn-primary homy-focus min-h-[44px] px-5 py-2.5 text-sm"
-                    >
-                      <Lock className="size-4" aria-hidden /> Crear cuenta gratis
-                    </button>
-                    <button
-                      onClick={() => navigate(`/ingresar?volver=${encodeURIComponent(route.raw || '/buscar')}`)}
-                      className="homy-btn-dark homy-focus min-h-[44px] px-5 py-2.5 text-sm"
-                    >
-                      Ya tengo cuenta
-                    </button>
-                  </div>
+                <p className="homy-eyebrow mb-1.5">Homy</p>
+                {turno.estado === 'streaming' && !turno.texto && (
+                  <ul className="space-y-1" aria-hidden>
+                    {(turno.pasos?.length ? turno.pasos.slice(-3) : ['Pensando tu pedido…']).map((p, i, arr) => (
+                      <li key={`${p}-${i}`} className="flex items-center gap-2 text-sm font-semibold text-slate-500">
+                        {i === arr.length - 1 ? <Loader2 className="size-3.5 animate-spin text-[#00C4FF]" /> : <span className="size-1.5 rounded-full bg-[#00C4FF]" />}
+                        {p}
+                      </li>
+                    ))}
+                  </ul>
                 )}
-                {question && !questionDuplicatesMessage && (
-                  <div className="mt-4">
-                    <p className="font-bold text-[#0A2540]">{question.pregunta}</p>
-                    <div className="flex flex-wrap gap-2 mt-2.5">
-                      {question.opciones.map((op) => (
-                        <button
-                          key={op}
-                          onClick={() => { askAgent(op) }}
-                          className="homy-focus rounded-full min-h-[44px] sm:min-h-[40px] border border-[#1D63B8]/30 bg-white/70 px-4 py-2 text-sm font-bold text-[#1D63B8] hover:bg-[#1D63B8] hover:border-[#1D63B8] hover:text-white transition"
-                        >
-                          {op}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                <div aria-live="polite" aria-busy={turno.estado === 'streaming'}>
+                  {turno.texto && <p className="whitespace-pre-line text-[#0A2540] leading-relaxed font-medium">{turno.texto}</p>}
+                </div>
+                {turno.pregunta && turno.estado === 'listo' && !turno.texto.includes(turno.pregunta) && (
+                  <p className="mt-2 font-bold text-[#0A2540]">{turno.pregunta}</p>
                 )}
-                {suggestions.length > 0 && !question && (
+                {turno.degradado && <p className="mt-1.5 text-xs text-slate-400">Respuesta armada sin IA (búsqueda directa en HomIA).</p>}
+                {turno.tarjetas && <div className="sm:max-w-2xl"><TarjetasHomy tarjetas={turno.tarjetas} /></div>}
+                {turno.acciones && <AccionesHomy acciones={turno.acciones} />}
+                {turno.estado === 'listo' && (turno.sugerencias?.length ?? 0) > 0 && (
                   <div className="flex flex-wrap gap-2 mt-3.5">
-                    {suggestions.map((s) => (
+                    {turno.sugerencias!.map((sug) => (
                       <button
-                        key={s}
-                        onClick={() => askAgent(s)}
+                        key={sug}
+                        onClick={() => askAgent(sug)}
                         className="homy-focus homy-glass-soft rounded-full min-h-[44px] sm:min-h-[38px] px-4 py-2 text-sm font-semibold text-slate-600 hover:text-[#1D63B8] transition"
                       >
-                        {s}
+                        {sug}
                       </button>
                     ))}
                   </div>
-                )}
-                {steps && steps.length > 0 && (
-                  <details className="mt-4">
-                    <summary className="homy-focus inline-flex items-center gap-1.5 rounded-lg text-xs font-semibold text-slate-400 cursor-pointer hover:text-slate-600 transition-colors">
-                      Ver razonamiento del agente ({steps.length} pasos)
-                    </summary>
-                    <ol className="mt-2.5 space-y-1.5 text-xs text-slate-500 border-l-2 border-[#00C4FF]/30 pl-3.5">
-                      {steps.map((st, i) => (
-                        <li key={i}><b className="text-[#0A2540]">{st.action}</b> → {st.found} resultados {st.thought && `· ${st.thought}`}</li>
-                      ))}
-                    </ol>
-                  </details>
                 )}
               </div>
             </div>
@@ -453,24 +367,6 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
               </Section>
             )}
 
-            {/* Recomendaciones del catálogo (agente IA interpreta la necesidad) */}
-            {elements.length > 0 && (
-              <Section title="Recomendaciones del catálogo" count={elements.length} icon={<Sparkles />} tone="homy-chip-ai">
-                <p className="homy-glass-soft rounded-2xl px-5 py-3.5 text-[13px] text-slate-600 leading-relaxed mb-4">
-                  Te interpretamos la necesidad y te recomendamos los elementos justos del catálogo estándar — cada uno con su explicación de qué es y para qué sirve. Tocá <strong>Ver precios</strong> para traer stock real de los proveedores.
-                </p>
-                <div className="homy-stagger grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {elements.map((el) => (
-                    <ElementCard
-                      key={el.elementId}
-                      el={el}
-                      onViewPrices={(name, slug) => { setQuery(name); setCat(slug); directSearch(name, slug) }}
-                    />
-                  ))}
-                </div>
-              </Section>
-            )}
-
             {/* Materiales — visible para ambos modos: el cliente también compra
                 insumos sin contratar a nadie (compra directa al proveedor) */}
             <Section
@@ -500,15 +396,6 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
                 </div>
               )}
             </Section>
-
-            {/* Comparables */}
-            {comparables.length > 0 && (
-              <Section title="Comparables: mejor precio por elemento" count={comparables.length} icon={<Scale />} tone="homy-chip-gold">
-                <div className="homy-stagger grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {comparables.map((m) => <MaterialCard key={m.stockId} m={m} logged={!!user} highlight />)}
-                </div>
-              </Section>
-            )}
 
             {/* Bolsa de trabajos */}
             <Section title="Trabajos publicados" count={jobs.length} icon={<Briefcase />} tone="homy-chip-orange">
@@ -593,38 +480,11 @@ function ProCard({ pro, logged }: { pro: ProResult; logged: boolean }) {
   )
 }
 
-/* Recomendación del catálogo maestro: nombre correcto + explicación natural.
-   "Ver precios" busca stock real de proveedores para ese elemento. */
-function ElementCard({ el, onViewPrices }: { el: ElementResult; onViewPrices: (name: string, cat: string) => void }) {
-  return (
-    <div className="homy-glass homy-lift homy-card-glow rounded-2xl p-5 flex flex-col">
-      <div className="flex items-start justify-between gap-2">
-        <p className="font-bold text-[#0A2540] leading-snug">{el.name}</p>
-        <span className="homy-pill shrink-0">
-          <span className="homy-pill-dot bg-[#00C4FF]" aria-hidden />
-          {el.categoryName}
-        </span>
-      </div>
-      <p className="text-sm text-slate-500 mt-2 leading-relaxed flex-1">{el.description}</p>
-      <div className="mt-3.5 flex items-center justify-between gap-3 border-t border-[#0A2540]/8 pt-3.5">
-        <span className="text-xs font-semibold text-slate-400">se vende por {el.unit}</span>
-        <button
-          onClick={() => onViewPrices(el.name, el.categorySlug)}
-          className="homy-btn-primary homy-focus min-h-[40px] px-4 py-2 text-[13px]"
-          aria-label={`Ver precios de ${el.name} en proveedores`}
-        >
-          Ver precios <ArrowUpRight className="size-3.5" aria-hidden />
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function MaterialCard({ m, logged, highlight }: { m: MaterialResult; logged: boolean; highlight?: boolean }) {
+function MaterialCard({ m, logged }: { m: MaterialResult; logged: boolean }) {
   return (
     <button
       onClick={() => logged ? navigate(`/proveedor/${m.providerId}`) : gate()}
-      className={`homy-focus text-left rounded-2xl homy-glass homy-lift p-5 ${highlight ? 'outline-2 outline-emerald-500/60' : 'homy-card-glow'}`}
+      className="homy-focus text-left rounded-2xl homy-glass homy-lift p-5 homy-card-glow"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -639,12 +499,6 @@ function MaterialCard({ m, logged, highlight }: { m: MaterialResult; logged: boo
       <p className="mt-3 text-2xl font-extrabold text-[#16A34A] tabular-nums">
         {formatARS(m.price)}<span className="text-xs font-semibold text-slate-400"> /{m.unit}</span>
       </p>
-      {highlight && (
-        <span className="homy-pill mt-2">
-          <span className="homy-pill-dot bg-emerald-500" aria-hidden />
-          Mejor precio
-        </span>
-      )}
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-[#0A2540]/8 pt-3 text-xs text-slate-400">
         <span className="flex min-w-0 items-center gap-1 truncate">
           <Store className="size-3.5 shrink-0 text-tech" aria-hidden />

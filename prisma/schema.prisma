@@ -58,6 +58,8 @@ model User {
   messagesSent      Message[]            @relation("MessageSender")
   purchases         Purchase[]           @relation("PurchaseClient")
   leftoverReturns   LeftoverReturn[]
+  cartItems         CartItem[]
+  orders            Order[]              @relation("OrderClient")
 }
 
 model IdentityDocument {
@@ -200,6 +202,7 @@ model ProviderStock {
   element      CatalogElement     @relation(fields: [elementId], references: [id])
   movements    StockMovement[]
   reservations StockReservation[]
+  cartItems    CartItem[]
 
   @@unique([providerId, elementId])
 }
@@ -341,6 +344,9 @@ model Invoice {
   paymentMethod  String? // mercadopago|efectivo (método elegido para liquidar)
   mpPreferenceId String?
   mpPaymentId    String?
+  // Cargo de servicio HomIA (1%): lo paga el cliente SOLO si paga por Mercado
+  // Pago; se fija al crear la preferencia de MP (efectivo → 0). No suma a `total`.
+  serviceFee     Float     @default(0)
   paidAt         DateTime?
   issuedAt       DateTime  @default(now())
 
@@ -368,6 +374,9 @@ model Payment {
   purchaseId     String? // Purchase (compra directa)
   method         String    @default("mercadopago") // mercadopago|efectivo
   mpPaymentId    String?   @unique
+  // quién cobró el pago de MP: "vendedor" (token OAuth del vendedor) | "plataforma" (token de HomIA, histórico).
+  // null = fila anterior al carrito: compras → vendedor; facturas y cobros → plataforma.
+  collector      String?
   refundedAmount Float     @default(0) // suma de reembolsos MP (sobrantes)
   status         String // approved|acordado|confirmado|rejected, etc.
   amount         Float
@@ -395,6 +404,7 @@ model ProviderCharge {
   method         String? // mercadopago|efectivo
   mpPreferenceId String?
   mpPaymentId    String?
+  serviceFee     Float     @default(0) // cargo de servicio HomIA (1%) si se paga por MP; no suma a `amount`
   paidAt         DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -461,17 +471,23 @@ model Review {
 // El cliente pide un producto desde el marketplace (panel Materiales), el
 // proveedor lo acepta/entrega y el pago corre por los mismos rieles que los
 // cobros de materiales (Mercado Pago o efectivo). Habilita reseña context=compra.
+// Desde el carrito (2026-09): un Purchase es el SUB-PEDIDO de un proveedor dentro
+// de un pedido (Order) y sus productos viven en `items` (PurchaseItem). Los campos
+// de ítem único (stockId, elementId, quantity, unitPrice) quedan solo para las filas
+// históricas; `elementName` guarda un resumen legible ("Cemento × 2 bolsa y 1 más").
 model Purchase {
   id                   String    @id @default(cuid())
+  orderId              String? // pedido del carrito al que pertenece (null = compra histórica)
   clientId             String
   providerId           String
-  stockId              String?
-  elementId            String
-  elementName          String
-  quantity             Float
+  stockId              String? // histórico (ítem único)
+  elementId            String? // histórico (ítem único)
+  elementName          String // resumen legible del sub-pedido
+  quantity             Float? // histórico (ítem único)
   unit                 String    @default("unidad")
-  unitPrice            Float
-  total                Float
+  unitPrice            Float? // histórico (ítem único)
+  total                Float // suma de los ítems (sin el cargo de servicio)
+  serviceFee           Float     @default(0) // cargo de servicio HomIA (1%) fijado al pagar por MP
   note                 String?
   type                 String    @default("compra") // "compra" | "reserva"
   status               String    @default("pendiente_aprobacion")
@@ -488,6 +504,81 @@ model Purchase {
 
   client   User            @relation("PurchaseClient", fields: [clientId], references: [id], onDelete: Cascade)
   provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  order    Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  items    PurchaseItem[]
+
+  @@index([orderId])
+}
+
+// Ítem de un sub-pedido: snapshot del producto al momento de pedir.
+model PurchaseItem {
+  id          String   @id @default(cuid())
+  purchaseId  String
+  stockId     String? // oferta del proveedor (puede borrarse después: el snapshot queda)
+  elementId   String
+  elementName String
+  unit        String   @default("unidad")
+  quantity    Float
+  unitPrice   Float
+  total       Float
+  createdAt   DateTime @default(now())
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseId])
+  @@index([elementId])
+}
+
+// ── CARRITO Y PEDIDOS ──
+// Carrito de un usuario logueado (el del visitante vive en localStorage y se
+// fusiona al iniciar sesión). Una fila por oferta (stock) con su cantidad.
+model CartItem {
+  id        String   @id @default(cuid())
+  userId    String
+  stockId   String
+  quantity  Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stock ProviderStock @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, stockId])
+  @@index([userId])
+}
+
+// Pedido confirmado desde el carrito: se fracciona en un Purchase por proveedor.
+model Order {
+  id        String   @id @default(cuid())
+  number    String   @unique // PED-AAAA-NNNNNN
+  clientId  String
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client    User       @relation("OrderClient", fields: [clientId], references: [id], onDelete: Cascade)
+  purchases Purchase[]
+
+  @@index([clientId])
+}
+
+// Línea de tiempo trazable (pedidos, sub-pedidos y proyectos): solo se agregan
+// filas; registrar un evento nunca rompe el flujo principal.
+model ActivityEvent {
+  id         String   @id @default(cuid())
+  orderId    String?
+  purchaseId String?
+  projectId  String?
+  actorId    String? // User que hizo la acción (null = sistema)
+  actorRole  String // cliente|profesional|proveedor|sistema
+  type       String // pedido_creado|aprobado|rechazado|cancelado|pago_mp_iniciado|pago_efectivo_acordado|pagado|entregado|vencido…
+  message    String
+  data       String? // JSON opcional
+  createdAt  DateTime @default(now())
+
+  @@index([orderId, createdAt])
+  @@index([purchaseId, createdAt])
+  @@index([projectId, createdAt])
 }
 
 // ─────────────────────────── CRM ───────────────────────────
@@ -582,14 +673,20 @@ model Notification {
 }
 
 model HomySession {
-  id        String   @id @default(cuid())
-  userId    String?
-  title     String   @default("Nueva conversación")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  userId      String?
+  title       String   @default("Nueva conversación")
+  // Súper agente Homy: puerta de entrada (home_buscador|home_flotante|panel|buscar)
+  puerta      String?
+  // Visitante sin cuenta: hash (sha256) del token que guarda su navegador. Nunca en claro.
+  visitorHash String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   user     User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages HomyMessage[]
+
+  @@index([visitorHash])
 }
 
 model HomyMessage {
@@ -598,9 +695,55 @@ model HomyMessage {
   role      String // user|homy|tool
   content   String
   intent    String? // JSON con categoría/urgencia/summary
+  // Súper agente: corrida que generó la respuesta y lo que se mostró (tarjetas, acciones) en JSON
+  runId     String?
+  payload   String?
   createdAt DateTime @default(now())
 
   session HomySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+// Cupo diario de consultas al súper agente Homy.
+// key = "ip:<hash>" (visitante, compartido home+flotante) | "user:<userId>" (logueado).
+// day = fecha de Argentina (YYYY-MM-DD). Se incrementa atómicamente justo antes de llamar al modelo.
+model AiUsage {
+  id        String   @id @default(cuid())
+  key       String
+  day       String
+  count     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([key, day])
+}
+
+// Registro de cada corrida del súper agente Homy (observabilidad, costos, auditoría).
+model HomyRun {
+  id              String   @id @default(cuid())
+  sessionId       String?
+  userId          String?
+  ipHash          String? // visitante: sha256(ip + AUTH_SECRET), nunca la IP en claro
+  puerta          String // home_buscador|home_flotante|panel|buscar
+  rol             String // visitante|cliente|profesional|proveedor
+  pregunta        String
+  pasos           String   @default("[]") // JSON [{herramienta, input, resumen, ms, estado}]
+  modelo          String
+  esfuerzo        String?
+  vueltas         Int      @default(0)
+  tokensEntrada   Int      @default(0)
+  tokensSalida    Int      @default(0)
+  tokensRazon     Int      @default(0)
+  tokensCache     Int      @default(0)
+  costoUsd        Float    @default(0) // estimado con el precio de lista del modelo
+  latenciaMs      Int      @default(0)
+  resultado       String // ok|limite|fallback_ia|agoto_vueltas|error
+  error           String?
+  respuesta       String? // mensaje final mostrado
+  createdAt       DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId])
+  @@index([resultado, createdAt])
 }
 
 model SearchEvent {
@@ -653,6 +796,11 @@ model LeftoverReturn {
   respondedAt   DateTime?
   receivedAt    DateTime?
   refundedAt    DateTime?
+  // reembolso en efectivo: el solicitante confirma que lo recibió (o se confirma solo a las 72 h)
+  refundConfirmedAt DateTime?
+  refundConfirmedBy String? // solicitante | automatico
+  // recordatorio al proveedor por una devolución sin responder hace más de 72 h (una sola vez)
+  reminderSentAt    DateTime?
   items         LeftoverItem[]
   requester     User            @relation(fields: [requesterId], references: [id])
   provider      ProviderProfile @relation(fields: [providerId], references: [id])
@@ -664,22 +812,23 @@ model LeftoverReturn {
 }
 
 model LeftoverItem {
-  id            String         @id @default(cuid())
-  returnId      String
-  elementId     String
-  materialId    String? // ProjectMaterial origen
-  purchaseId    String? // Purchase origen
-  qtyRequested  Float
-  qtyAccepted   Float?
-  qtyReceived   Float?
-  unitPricePaid Float
-  refundAmount  Float? // fijado por el proveedor al aceptar
-  condition     String // sin_abrir|abierto_sin_usar
-  photoUrl      String
-  note          String?
-  status        String         @default("propuesto") // propuesto|aceptado|rechazado
-  return        LeftoverReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
-  element       CatalogElement @relation(fields: [elementId], references: [id])
+  id             String         @id @default(cuid())
+  returnId       String
+  elementId      String
+  materialId     String? // ProjectMaterial origen
+  purchaseId     String? // Purchase origen
+  purchaseItemId String? // PurchaseItem origen (compras del carrito, multi-ítem)
+  qtyRequested   Float
+  qtyAccepted    Float?
+  qtyReceived    Float?
+  unitPricePaid  Float
+  refundAmount   Float? // fijado por el proveedor al aceptar
+  condition      String // sin_abrir|abierto_sin_usar
+  photoUrl       String
+  note           String?
+  status         String         @default("propuesto") // propuesto|aceptado|rechazado
+  return         LeftoverReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  element        CatalogElement @relation(fields: [elementId], references: [id])
 
   @@index([returnId])
 }

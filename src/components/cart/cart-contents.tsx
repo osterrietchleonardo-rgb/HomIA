@@ -1,0 +1,414 @@
+'use client'
+// Contenido del carrito — lo comparten el panel lateral/inferior (CartSheet) y la
+// pantalla /carrito. Ítems AGRUPADOS POR PROVEEDOR con cantidad editable (paso según
+// la unidad, tope en el stock), subtotal por proveedor, total general y el cargo de
+// servicio HomIA (1%) que se suma SOLO si pagás con Mercado Pago. Confirmar crea un
+// pedido con un sub-pedido por proveedor; el visitante primero crea su cuenta o ingresa.
+import { useEffect, useState } from 'react'
+import { navigate, useRoute } from '@/lib/router'
+import { useSession } from '@/lib/store'
+import { useCart, type CartLine, type CartGroup } from '@/lib/cart'
+import { formatARS, formatARSCents } from '@/lib/format'
+import { SERVICE_FEE_LABEL } from '@/lib/fees'
+import { UAvatar, Loading } from '@/components/app/ui-bits'
+import { toast } from 'sonner'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
+  ShoppingCart, Minus, Plus, Trash2, AlertTriangle, Store, Wallet, Banknote, Clock, ShoppingBag,
+  ArrowLeft, Send, Loader2, Package, UserPlus, LogIn,
+} from 'lucide-react'
+
+type Step = 'lista' | 'confirmar'
+
+/** Panel del comprador para las rutas de pedidos (cliente, o profesional si no es cliente). */
+export function useBuyerPanel(): 'cliente' | 'profesional' {
+  const route = useRoute()
+  const { user } = useSession()
+  const inPanel = route.segments[0] === 'panel' ? route.segments[1] : null
+  if (inPanel === 'cliente' || inPanel === 'profesional') return inPanel
+  return user?.roles.includes('cliente') ? 'cliente' : 'profesional'
+}
+
+export default function CartContents({ variant, onDone }: { variant: 'sheet' | 'page'; onDone?: () => void }) {
+  const { mode, view, loading, local, setQty, remove, clear, refresh } = useCart()
+  const { user } = useSession()
+  const panel = useBuyerPanel()
+  const [step, setStep] = useState<Step>('lista')
+  const [types, setTypes] = useState<Record<string, 'compra' | 'reserva'>>({})
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [askClear, setAskClear] = useState(false)
+
+  // al abrir, datos frescos (precio y stock pueden haber cambiado)
+  useEffect(() => { void refresh() }, [refresh])
+
+  if (mode === 'sin_carrito') {
+    return (
+      <Empty
+        title="El carrito es para clientes y profesionales"
+        hint="Con tu cuenta de proveedor vendés: tus ventas están en Cobros → Ventas."
+        action={null}
+      />
+    )
+  }
+  if (!view && loading) return <div className="py-10"><Loading text="Cargando tu carrito…" /></div>
+
+  const groups = view?.groups || []
+  const orphans = view?.orphans || []
+  const empty = groups.length === 0 && orphans.length === 0
+
+  if (empty) {
+    return (
+      <Empty
+        title="Tu carrito está vacío"
+        hint="Buscá materiales y tocá «Agregar al carrito». Podés sumar productos de varios proveedores y confirmarlos juntos."
+        action={
+          <button
+            onClick={() => { onDone?.(); navigate(user ? `/panel/${panel}/materiales` : '/materiales') }}
+            className="homy-btn-primary min-h-[44px] px-5 text-sm"
+          >
+            <Package className="size-4" aria-hidden /> Buscar materiales
+          </button>
+        }
+      />
+    )
+  }
+
+  async function confirmar() {
+    setBusy(true)
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ types, note: note.trim() || undefined }),
+      })
+      const d = (await res.json().catch(() => ({}))) as { error?: string; order?: { id: string; number: string } }
+      if (!res.ok || !d.order) {
+        toast.error(d.error || 'No pudimos confirmar el pedido')
+        void refresh()
+        setStep('lista')
+        return
+      }
+      toast.success(`Pedido ${d.order.number} enviado`, { description: 'Cada proveedor lo aprueba y después pagás a cada uno.' })
+      await refresh()
+      setStep('lista')
+      setNote('')
+      onDone?.()
+      navigate(`/panel/${panel}/pedidos/${d.order.id}`)
+    } catch {
+      toast.error('No pudimos conectar. Reintentá')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function doClear() {
+    const r = await clear()
+    setAskClear(false)
+    if (!r.ok) toast.error(r.error)
+    else toast.info('Vaciaste el carrito')
+  }
+
+  const blocked = !!view?.blocked
+  const providers = groups.length
+
+  return (
+    <div className={variant === 'page' ? 'space-y-4' : 'flex min-h-0 flex-1 flex-col'}>
+      <div className={variant === 'sheet' ? 'min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-3' : 'space-y-3'}>
+        {step === 'lista' ? (
+          <>
+            {groups.map((g) => (
+              <ProviderGroup key={g.provider.id} g={g} onQty={setQty} onRemove={remove} />
+            ))}
+            {orphans.length > 0 && (
+              <section className="homy-glass-soft rounded-2xl p-3.5" aria-label="Productos que ya no están disponibles">
+                <p className="text-[12px] font-extrabold uppercase tracking-wider text-red-600">Ya no disponibles</p>
+                <ul className="mt-2 space-y-2">
+                  {orphans.map((o) => (
+                    <li key={o.stockId} className="flex items-center justify-between gap-2 text-[13px]">
+                      <span className="min-w-0 text-slate-600">
+                        {local.find((l) => l.stockId === o.stockId)?.name || 'Producto'} · {o.problemText}
+                      </span>
+                      <RemoveBtn onClick={() => remove(o.stockId)} label="Sacar del carrito" />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </>
+        ) : (
+          <ConfirmStep groups={groups} types={types} setTypes={setTypes} note={note} setNote={setNote} />
+        )}
+      </div>
+
+      {/* resumen y acciones */}
+      <div className={variant === 'sheet' ? 'shrink-0 border-t border-[#0A2540]/10 bg-white px-4 pb-4 pt-3' : 'homy-glass rounded-3xl p-4'}>
+        <dl className="space-y-1 text-[13px]">
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-slate-500">Total ({providers} proveedor{providers === 1 ? '' : 'es'})</dt>
+            <dd className="homy-num-adapt font-extrabold text-[#0A2540] tabular-nums">{formatARS(view?.subtotal ?? 0)}</dd>
+          </div>
+          <div className="flex items-start justify-between gap-3">
+            <dt className="min-w-0 text-slate-500">{SERVICE_FEE_LABEL} — solo si pagás con Mercado Pago</dt>
+            <dd className="shrink-0 font-bold text-slate-600 tabular-nums">{formatARSCents(view?.serviceFee ?? 0)}</dd>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-slate-500">Total con Mercado Pago</dt>
+            <dd className="font-extrabold text-[#1D63B8] tabular-nums">{formatARSCents(view?.totalMp ?? 0)}</dd>
+          </div>
+          <p className="pt-0.5 text-[11.5px] leading-snug text-slate-400">En efectivo pagás {formatARS(view?.subtotal ?? 0)}, sin cargo. Elegís cómo pagarle a cada proveedor cuando apruebe su parte.</p>
+        </dl>
+
+        {blocked && step === 'lista' && (
+          <p className="mt-2 flex items-start gap-1.5 rounded-xl bg-red-500/8 px-3 py-2 text-[12px] font-semibold text-red-700" role="alert">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden /> Hay productos marcados en rojo: sacalos o ajustá la cantidad para poder confirmar.
+          </p>
+        )}
+
+        {step === 'lista' ? (
+          <div className="mt-3 flex flex-col gap-2">
+            <button
+              onClick={() => setStep('confirmar')}
+              disabled={blocked || loading}
+              className="homy-btn-primary min-h-[46px] w-full text-[15px] disabled:opacity-50"
+            >
+              <ShoppingBag className="size-4" aria-hidden /> Confirmar pedido
+            </button>
+            <button
+              onClick={() => setAskClear(true)}
+              className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-full text-[13px] font-bold text-slate-500 transition hover:text-red-600"
+            >
+              <Trash2 className="size-3.5" aria-hidden /> Vaciar carrito
+            </button>
+          </div>
+        ) : mode === 'visitante' ? (
+          <div className="mt-3 space-y-2">
+            <p className="text-[12.5px] leading-relaxed text-slate-600">
+              Para enviar el pedido necesitás una cuenta (es gratis y tarda un minuto). <b>Tu carrito se guarda</b> y lo encontrás al entrar.
+            </p>
+            <button onClick={() => { onDone?.(); navigate(`/registrarse?volver=${encodeURIComponent('/carrito')}`) }} className="homy-btn-primary min-h-[46px] w-full text-[15px]">
+              <UserPlus className="size-4" aria-hidden /> Crear cuenta y confirmar
+            </button>
+            <button onClick={() => { onDone?.(); navigate(`/ingresar?volver=${encodeURIComponent('/carrito')}`) }} className="homy-btn-dark min-h-[44px] w-full text-sm">
+              <LogIn className="size-4" aria-hidden /> Ya tengo cuenta
+            </button>
+            <BackBtn onClick={() => setStep('lista')} />
+          </div>
+        ) : (
+          <div className="mt-3 flex flex-col gap-2">
+            <button onClick={() => void confirmar()} disabled={busy} className="homy-btn-primary min-h-[46px] w-full text-[15px] disabled:opacity-60">
+              {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Send className="size-4" aria-hidden />}
+              {busy ? 'Enviando…' : `Enviar pedido a ${providers} proveedor${providers === 1 ? '' : 'es'}`}
+            </button>
+            <BackBtn onClick={() => setStep('lista')} disabled={busy} />
+          </div>
+        )}
+      </div>
+
+      <AlertDialog open={askClear} onOpenChange={setAskClear}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Vaciar el carrito?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se sacan los {view?.count ?? 0} producto{(view?.count ?? 0) === 1 ? '' : 's'} de tu carrito. No se envía nada a los proveedores.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Volver</AlertDialogCancel>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); void doClear() }} className="bg-red-600 text-white hover:bg-red-700">
+              Sí, vaciar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
+
+function Empty({ title, hint, action }: { title: string; hint: string; action: React.ReactNode }) {
+  return (
+    <div className="flex flex-col items-center px-6 py-10 text-center">
+      <span className="homy-icon-chip homy-chip-blue size-14"><ShoppingCart className="size-7" aria-hidden /></span>
+      <p className="mt-4 text-[17px] font-extrabold text-[#0A2540]">{title}</p>
+      <p className="mt-1.5 max-w-xs text-[13.5px] leading-relaxed text-slate-500">{hint}</p>
+      {action && <div className="mt-5">{action}</div>}
+    </div>
+  )
+}
+
+function BackBtn({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
+  return (
+    <button onClick={onClick} disabled={disabled} className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-full text-[13px] font-bold text-slate-500 transition hover:text-[#0A2540] disabled:opacity-50">
+      <ArrowLeft className="size-3.5" aria-hidden /> Volver al carrito
+    </button>
+  )
+}
+
+function RemoveBtn({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button onClick={onClick} aria-label={label} title={label} className="grid size-10 shrink-0 place-items-center rounded-full text-slate-400 transition hover:bg-red-50 hover:text-red-600">
+      <Trash2 className="size-4" aria-hidden />
+    </button>
+  )
+}
+
+function ProviderGroup({ g, onQty, onRemove }: {
+  g: CartGroup
+  onQty: (stockId: string, q: number) => Promise<{ ok: true } | { ok: false; error: string }>
+  onRemove: (stockId: string) => Promise<{ ok: true } | { ok: false; error: string }>
+}) {
+  return (
+    <section className="homy-glass rounded-2xl p-3.5" aria-label={`Productos de ${g.provider.businessName}`}>
+      <header className="flex items-center gap-2.5">
+        <UAvatar name={g.provider.businessName} url={g.provider.avatarUrl} size={34} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[14px] font-extrabold text-[#0A2540]" title={g.provider.businessName}>{g.provider.businessName}</p>
+          <p className="flex flex-wrap items-center gap-x-2 text-[11.5px] text-slate-500">
+            {g.provider.city && <span className="inline-flex items-center gap-1"><Store className="size-3" aria-hidden />{g.provider.city}</span>}
+            {g.provider.mpConnected
+              ? <span className="inline-flex items-center gap-1 font-semibold text-[#1D63B8]"><Wallet className="size-3" aria-hidden />Mercado Pago o efectivo</span>
+              : <span className="inline-flex items-center gap-1 font-semibold text-slate-500"><Banknote className="size-3" aria-hidden />Cobra solo en efectivo</span>}
+          </p>
+        </div>
+      </header>
+      <ul className="mt-2.5 divide-y divide-[#0A2540]/8">
+        {g.items.map((l) => <LineRow key={`${l.stockId}:${l.quantity}`} l={l} onQty={onQty} onRemove={onRemove} />)}
+      </ul>
+      <div className="mt-2 flex items-center justify-between border-t border-[#0A2540]/10 pt-2 text-[13px]">
+        <span className="font-bold text-slate-500">Subtotal {g.provider.businessName.length > 22 ? 'del proveedor' : g.provider.businessName}</span>
+        <span className="homy-num-adapt font-extrabold text-[#0A2540] tabular-nums">{formatARS(g.subtotal)}</span>
+      </div>
+    </section>
+  )
+}
+
+function LineRow({ l, onQty, onRemove }: {
+  l: CartLine
+  onQty: (stockId: string, q: number) => Promise<{ ok: true } | { ok: false; error: string }>
+  onRemove: (stockId: string) => Promise<{ ok: true } | { ok: false; error: string }>
+}) {
+  // el padre remonta la fila (key con la cantidad) cuando cambia la cantidad guardada
+  const [draft, setDraft] = useState(String(l.quantity))
+  const [busy, setBusy] = useState(false)
+  const unit = l.element?.unit || 'unidad'
+  const max = l.available
+
+  async function commit(q: number) {
+    if (!Number.isFinite(q) || q <= 0) { setDraft(String(l.quantity)); return }
+    const stepped = Math.round(q / l.step) * l.step
+    const clamped = Math.min(Math.max(stepped, l.step), Math.max(max, l.step))
+    if (clamped !== q) toast.info(q > max ? `Hay ${max} ${unit} disponibles` : `Se vende de a ${l.step} ${unit}`)
+    if (clamped === l.quantity) { setDraft(String(l.quantity)); return }
+    setBusy(true)
+    const r = await onQty(l.stockId, clamped)
+    setBusy(false)
+    if (!r.ok) { toast.error(r.error); setDraft(String(l.quantity)) }
+  }
+
+  return (
+    <li className="py-2.5">
+      <div className="flex items-start gap-2.5">
+        <div className="min-w-0 flex-1">
+          <p className="text-[13.5px] font-bold leading-snug text-[#0A2540]">{l.element?.name || 'Producto'}</p>
+          <p className="text-[11.5px] text-slate-500">
+            {formatARS(l.price)} por {unit}{l.brand ? ` · ${l.brand}` : ''} · stock {l.available}
+          </p>
+        </div>
+        <RemoveBtn onClick={() => { void onRemove(l.stockId).then((r) => { if (!r.ok) toast.error(r.error) }) }} label={`Sacar ${l.element?.name || 'producto'} del carrito`} />
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex items-center rounded-full bg-white/70 ring-1 ring-[#0A2540]/12" role="group" aria-label={`Cantidad de ${l.element?.name || 'producto'}`}>
+          <button
+            onClick={() => void commit(l.quantity - l.step)}
+            disabled={busy || l.quantity - l.step < l.step - 1e-9}
+            aria-label="Restar"
+            className="grid size-10 place-items-center rounded-full text-[#0A2540] transition hover:bg-white disabled:opacity-35"
+          >
+            <Minus className="size-4" aria-hidden />
+          </button>
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value.replace(',', '.'))}
+            onBlur={() => void commit(parseFloat(draft))}
+            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+            inputMode="decimal"
+            aria-label={`Cantidad (${unit})`}
+            className="w-14 bg-transparent text-center text-[14px] font-extrabold text-[#0A2540] tabular-nums outline-none"
+          />
+          <button
+            onClick={() => void commit(l.quantity + l.step)}
+            disabled={busy || l.quantity + l.step > max + 1e-9}
+            aria-label="Sumar"
+            className="grid size-10 place-items-center rounded-full text-[#0A2540] transition hover:bg-white disabled:opacity-35"
+          >
+            <Plus className="size-4" aria-hidden />
+          </button>
+        </div>
+        <span className="text-[11.5px] text-slate-400">{unit}</span>
+        <span className="homy-num-adapt ml-auto text-[14px] font-extrabold text-[#0A2540] tabular-nums">{formatARS(l.lineTotal)}</span>
+      </div>
+      {l.problem && (
+        <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-red-500/10 px-2.5 py-1.5 text-[12px] font-semibold text-red-700" role="alert">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden /> {l.problemText}
+        </p>
+      )}
+    </li>
+  )
+}
+
+function ConfirmStep({ groups, types, setTypes, note, setNote }: {
+  groups: CartGroup[]
+  types: Record<string, 'compra' | 'reserva'>
+  setTypes: (t: Record<string, 'compra' | 'reserva'>) => void
+  note: string
+  setNote: (v: string) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <p className="text-[13px] leading-relaxed text-slate-600">
+        Cada proveedor recibe <b>su parte</b> del pedido y la aprueba (ahí te reserva el stock). Después pagás a cada uno cuando quieras: con Mercado Pago o en efectivo al retirar.
+      </p>
+      {groups.map((g) => {
+        const t = types[g.provider.id] || 'compra'
+        return (
+          <section key={g.provider.id} className="homy-glass rounded-2xl p-3.5">
+            <p className="text-[14px] font-extrabold text-[#0A2540]">{g.provider.businessName}</p>
+            <p className="text-[12px] text-slate-500">{g.items.length} producto{g.items.length === 1 ? '' : 's'} · {formatARS(g.subtotal)}</p>
+            <div role="radiogroup" aria-label={`Tipo de pedido para ${g.provider.businessName}`} className="mt-2.5 grid grid-cols-2 gap-2">
+              {(['compra', 'reserva'] as const).map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  role="radio"
+                  aria-checked={t === opt}
+                  onClick={() => setTypes({ ...types, [g.provider.id]: opt })}
+                  className={`min-h-[56px] rounded-2xl px-3 py-2 text-left ring-1 transition ${t === opt ? 'bg-[#1D63B8]/10 ring-[#1D63B8]/45' : 'bg-white/50 ring-[#0A2540]/10 hover:bg-white/80'}`}
+                >
+                  <span className="flex items-center gap-1.5 text-[13px] font-extrabold text-[#0A2540]">
+                    {opt === 'compra' ? <ShoppingBag className="size-3.5 text-[#FF5A1F]" aria-hidden /> : <Clock className="size-3.5 text-[#1D63B8]" aria-hidden />}
+                    {opt === 'compra' ? 'Comprar' : 'Reservar'}
+                  </span>
+                  <span className="mt-0.5 block text-[11.5px] leading-snug text-slate-500">{opt === 'compra' ? '7 días para retirar' : 'Te lo guardan 48 h'}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )
+      })}
+      <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-400" htmlFor="cart-note">Aclaración para los proveedores (opcional)</label>
+      <textarea
+        id="cart-note"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        rows={2}
+        maxLength={500}
+        placeholder="Cuándo pasás a retirar, marca preferida…"
+        className="homy-glass-input w-full rounded-2xl px-4 py-3 text-sm"
+      />
+      <p className="text-[11.5px] leading-snug text-slate-400">El pedido le llega a cada proveedor por notificación y en el chat (vos iniciás la conversación).</p>
+    </div>
+  )
+}

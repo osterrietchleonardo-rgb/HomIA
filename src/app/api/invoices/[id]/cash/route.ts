@@ -42,7 +42,7 @@ export async function POST(
     await db.payment.create({
       data: { invoiceId: invoice.id, method: 'efectivo', status: 'acordado', amount: invoice.total },
     })
-    await db.invoice.update({ where: { id: invoice.id }, data: { paymentMethod: 'efectivo' } })
+    await db.invoice.update({ where: { id: invoice.id }, data: { paymentMethod: 'efectivo', serviceFee: 0 } })
     if (pro) {
       await db.notification.create({
         data: {
@@ -67,7 +67,7 @@ export async function POST(
     })
     await db.invoice.update({
       where: { id: invoice.id },
-      data: { status: 'pagada', paidAt: new Date(), paymentMethod: 'efectivo' },
+      data: { status: 'pagada', paidAt: new Date(), paymentMethod: 'efectivo', serviceFee: 0 },
     })
     await db.notification.create({
       data: {
@@ -86,7 +86,7 @@ export async function POST(
   if (yaPagada) return fail('La factura ya está pagada')
   if (!acuerdoPendiente) return fail('No hay acuerdo de efectivo activo')
   await db.payment.delete({ where: { id: acuerdoPendiente.id } })
-  await db.invoice.update({ where: { id: invoice.id }, data: { paymentMethod: null } })
+  await db.invoice.update({ where: { id: invoice.id }, data: { paymentMethod: null, serviceFee: 0 } })
   if (pro) {
     await db.notification.create({
       data: {

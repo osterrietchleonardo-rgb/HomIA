@@ -38,15 +38,10 @@ export async function GET(
     include: { author: { select: { id: true, displayName: true, avatarUrl: true, verificationStatus: true } } },
   })
 
-  // Regla de comunidad: los clientes escriben primero (si el espectador no es
-  // cliente y el perfil es de un cliente sin hilo previo, bloquear contacto).
-  const targetRoles = parseJson<string[]>(prov.user.roles, [])
-  let chatBlocked = false
-  if (viewer.id !== prov.userId && !viewer.roles.includes('cliente') && targetRoles.includes('cliente')) {
-    const pair = viewer.id < prov.userId ? { userAId: viewer.id, userBId: prov.userId } : { userAId: prov.userId, userBId: viewer.id }
-    const conv = await db.conversation.findUnique({ where: { userAId_userBId: pair } })
-    chatBlocked = !conv
-  }
+  // Regla de comunidad "el cliente inicia": las conversaciones nuevas se abren
+  // hacia quien ofrece algo. Este perfil ofrece (profesional/proveedor), así que
+  // contactarlo siempre está permitido (misma regla que /api/messages/conversations).
+  const chatBlocked = false
 
   return ok({
     profile: {

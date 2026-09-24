@@ -9,94 +9,20 @@ import {
   type FormEvent,
 } from "react";
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
-import { ArrowRight, BadgeCheck, Briefcase, Loader2, Lock, MapPin, Package, Sparkles, Star, Wrench, X } from "lucide-react";
+import { ArrowRight, BadgeCheck, Loader2, MessageCircle, Sparkles, X } from "lucide-react";
 import { Homy, type HomyState } from "@/components/homy/homy-character";
-import { formatARS } from "@/lib/format";
+import { AccionesHomy, TarjetasHomy } from "@/components/homy/homy-tarjetas";
+import { rutaActual, useDuenioHomy, useHomy } from "@/components/homy/homy-store";
 import { navigate } from "@/lib/router";
-import { useLocation, useSession } from "@/lib/store";
+import { useLocation } from "@/lib/store";
 import { cn } from "@/lib/utils";
-
-/* ------------------------------------------------------------------ */
-/*  Respuesta del superagente (loop + herramientas reales)             */
-/* ------------------------------------------------------------------ */
-type AgentIntent = "contratar" | "trabajar" | "materiales" | "ayuda";
-
-type AgentReply = {
-  ok: boolean;
-  message: string;
-  suggestions: string[];
-  intent?: AgentIntent;
-  question?: { pregunta: string; opciones: string[] };
-  results?: {
-    professionals?: { id: string; displayName: string; city: string | null; rating: number; reviewsCount: number; verified: boolean }[];
-    jobs?: { id: string; title: string; categorySlug: string; budgetMin: number | null; budgetMax: number | null; city: string | null }[];
-    materials?: { stockId: string; elementName: string; price: number; unit: string; providerName: string; providerId: string }[];
-    comparables?: { stockId: string; elementName: string; price: number; unit: string; providerName: string; providerId: string }[];
-  };
-  error?: string;
-  /** true cuando la IA pidió login: la respuesta vino del buscador sin IA */
-  needsLogin?: boolean;
-};
-
-const INTENT_CTA: Record<AgentIntent, { label: string; href: string; icon: typeof Wrench }> = {
-  contratar: { label: "Ver profesionales en el mapa", href: "/buscar?mode=cliente", icon: MapPin },
-  trabajar: { label: "Ver la bolsa de trabajos", href: "/buscar?mode=profesional", icon: Briefcase },
-  materiales: { label: "Comparar precios de materiales", href: "/materiales", icon: Package },
-  ayuda: { label: "Abrir el buscador inteligente", href: "/buscar", icon: Sparkles },
-};
-
-/** Ruta SPA actual (hash) para volver después de registrarse/ingresar. */
-function currentPath(): string {
-  if (typeof window === "undefined") return "/";
-  return window.location.hash.replace(/^#/, "") || "/";
-}
-
-/* Búsqueda SIN IA para anónimos: mismos resultados reales del directorio,
-   sin gastar modelo. Homy (IA) queda detrás del registro gratis. */
-async function searchWithoutAi(q: string, lat?: number | null, lng?: number | null): Promise<AgentReply> {
-  const sp = new URLSearchParams({ q, mode: "cliente" });
-  if (lat != null && lng != null) {
-    sp.set("lat", String(lat));
-    sp.set("lng", String(lng));
-    sp.set("radius", "25");
-  }
-  const res = await fetch(`/api/search?${sp.toString()}`);
-  if (!res.ok) throw new Error("search");
-  const data = (await res.json()) as {
-    professionals?: { id: string; displayName: string; city: string | null; rating: number; reviewsCount: number; verified: boolean }[];
-    jobs?: { id: string; title: string; categorySlug: string; budgetMin: number | null; budgetMax: number | null; city: string | null }[];
-    materials?: { id: string; name: string; price: number; unit: string; providerName: string; providerId: string }[];
-  };
-  const professionals = (data.professionals ?? []).slice(0, 4).map((p) => ({
-    id: p.id, displayName: p.displayName, city: p.city, rating: p.rating, reviewsCount: p.reviewsCount, verified: p.verified,
-  }));
-  const jobs = (data.jobs ?? []).slice(0, 4).map((j) => ({
-    id: j.id, title: j.title, categorySlug: j.categorySlug, budgetMin: j.budgetMin, budgetMax: j.budgetMax, city: j.city,
-  }));
-  const materials = (data.materials ?? []).slice(0, 4).map((m) => ({
-    stockId: m.id, elementName: m.name, price: m.price, unit: m.unit, providerName: m.providerName, providerId: m.providerId,
-  }));
-  const total = professionals.length + jobs.length + materials.length;
-  const intent: AgentIntent = materials.length > 0 && professionals.length === 0 ? "materiales" : "contratar";
-  return {
-    ok: true,
-    needsLogin: true,
-    intent,
-    message:
-      total > 0
-        ? `Esto es lo que encontré para «${q}» en HomIA. Para que Homy interprete tu pedido con IA y te arme el paso a paso, creá tu cuenta gratis (1 minuto).`
-        : `No encontré resultados para «${q}» en el directorio. Para que Homy interprete tu pedido con IA, creá tu cuenta gratis (1 minuto).`,
-    suggestions: [],
-    results: { professionals, jobs, materials },
-  };
-}
 
 /* ------------------------------------------------------------------ */
 /*  Ejemplos clickeables: demuestran el razonamiento de intención      */
 /* ------------------------------------------------------------------ */
 const EXAMPLES = [
-  "Necesito un plomero urgente",
-  "¿Qué hay para plomeros?",
+  "Se me gotea la canilla, ¿qué necesito?",
+  "Busco plomero en Palermo",
   "Precio del cemento de 50kg",
   "¿Cómo funcionan los pagos?",
 ];
@@ -206,9 +132,9 @@ export function HeroSearch() {
   const [value, setValue] = useState("");
   const [focused, setFocused] = useState(false);
   const [phase, setPhase] = useState<"idle" | "thinking" | "done">("idle");
-  const [reply, setReply] = useState<AgentReply | null>(null);
-  const [degraded, setDegraded] = useState(false);
-  const [lastQuery, setLastQuery] = useState("");
+  // turno de Homy que abrió ESTE buscador (la conversación es la misma del flotante)
+  const [turnoId, setTurnoId] = useState<string | null>(null);
+  const [cerrado, setCerrado] = useState(false);
   // Coreografía del pedido: la consulta entra por la izquierda (in), se acopla
   // al motor mientras piensa (think) y sale hacia la derecha con la respuesta (out)
   const [flight, setFlight] = useState<{ text: string; stage: "in" | "think" | "out" } | null>(null);
@@ -219,7 +145,10 @@ export function HeroSearch() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const happyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const location = useLocation();
-  const { user } = useSession();
+  useDuenioHomy();
+  const preguntar = useHomy((s) => s.preguntar);
+  const cupo = useHomy((s) => s.cupo);
+  const turno = useHomy((s) => (turnoId ? s.turnos.find((t) => t.id === turnoId) ?? null : null));
 
   // Geometría de la escena: la respuesta tiene que posarse afuera de la barra
   // y desvanecerse contra el borde REAL de la página → se mide la barra, el
@@ -259,53 +188,17 @@ export function HeroSearch() {
   const askHomy = useCallback(
     async (question: string, lat?: number | null, lng?: number | null) => {
       const trimmed = question.trim();
-      if (trimmed.length < 4) return;
+      if (trimmed.length < 4 || useHomy.getState().ocupado) return;
 
       setPhase("thinking");
-      setDegraded(false);
-      setLastQuery(trimmed);
+      setCerrado(false);
       setFlight({ text: trimmed, stage: "in" });
       try {
-        if (!user) {
-          // Anónimo: resultados reales sin IA + invitación honesta a registrarse
-          setReply(await searchWithoutAi(trimmed, lat, lng));
-          return;
-        }
-        const res = await fetch("/api/homy/agent", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: trimmed,
-            mode: "auto",
-            lat: lat ?? null,
-            lng: lng ?? null,
-          }),
-        });
-        const data = (await res.json()) as AgentReply;
-        if (res.status === 401 && data.needsLogin) {
-          // la sesión venció en el medio: mismo camino que un anónimo
-          setReply(await searchWithoutAi(trimmed, lat, lng));
-          return;
-        }
-        if (!res.ok || !data.ok) {
-          setReply({
-            ok: false,
-            message:
-              "El superagente tuvo un problema para razonar tu pedido. Probá de nuevo en unos segundos que sigo acá.",
-            suggestions: [],
-          });
-          setDegraded(true);
-        } else {
-          setReply(data);
-        }
-      } catch {
-        setReply({
-          ok: false,
-          message:
-            "No pude conectarme con el motor en este momento. Revisá tu conexión y volvé a intentar: sigo acá, cuidando tu hogar.",
-          suggestions: [],
-        });
-        setDegraded(true);
+        // mismo súper agente para visitantes y logueados (el cupo lo cuenta el servidor)
+        const pendiente = preguntar(trimmed, { puerta: "home_buscador", pagina: rutaActual(), lat, lng });
+        const ultimo = useHomy.getState().turnos.at(-1);
+        if (ultimo?.rol === "homy") setTurnoId(ultimo.id);
+        await pendiente;
       } finally {
         // el texto queda en la barra: el usuario puede releer y corregir su pedido
         setPhase("done");
@@ -315,7 +208,7 @@ export function HeroSearch() {
         happyTimer.current = setTimeout(() => setPhase("idle"), 1900);
       }
     },
-    [user]
+    [preguntar]
   );
 
   // Sin auto-envío: la consulta sale solo con Enter o el botón (nunca por
@@ -691,9 +584,9 @@ export function HeroSearch() {
         Escribí con tus palabras: Homy interpreta y arma tu pedido.
       </p>
 
-      {/* Panel de respuesta de Homy */}
+      {/* Panel de respuesta del súper agente (streaming: pasos, texto, tarjetas) */}
       <AnimatePresence>
-        {reply && (
+        {turno && !cerrado && (
           <motion.div
             key="homy-reply"
             initial={{ opacity: 0, x: 110, scale: 0.97 }}
@@ -701,13 +594,12 @@ export function HeroSearch() {
             exit={{ opacity: 0, x: 140, scale: 0.98 }}
             transition={{ type: "spring", stiffness: 260, damping: 24 }}
             className="relative z-10 mx-auto mt-7 w-[min(92vw,640px)]"
-            role="status"
-            aria-live="polite"
+            data-homy-hero-reply={turno.estado}
           >
-            <div className="homy-glass-strong rounded-[28px] p-5 sm:p-6">
+            <div className="homy-glass-strong rounded-[28px] p-5 text-left sm:p-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <Homy size={40} state={busy ? "thinking" : "idle"} />
+                  <Homy size={40} state={turno.estado === "streaming" ? "thinking" : "idle"} />
                   <div>
                     <p className="flex items-center gap-2 text-sm font-bold text-navy">
                       Homy
@@ -716,160 +608,87 @@ export function HeroSearch() {
                         Agente IA
                       </span>
                     </p>
-                    <p className="text-xs text-navy/45">
-                      Asistente de HomIA · interpreta tu pedido al instante
-                    </p>
+                    <p className="text-xs text-navy/45">Responde con datos reales de HomIA</p>
                   </div>
                 </div>
                 <button
-                  onClick={() => setReply(null)}
+                  onClick={() => setCerrado(true)}
                   aria-label="Cerrar respuesta"
-                  className="grid size-8 place-items-center rounded-full text-navy/40 transition-colors hover:bg-confort hover:text-navy"
+                  className="homy-focus grid size-9 place-items-center rounded-full text-navy/40 transition-colors hover:bg-confort hover:text-navy"
                 >
                   <X className="size-4" />
                 </button>
               </div>
 
-              <p className="mt-4 text-[15px] leading-relaxed text-navy/85">
-                {reply.message}
-              </p>
+              {/* pasos en vivo */}
+              {turno.estado === "streaming" && (turno.pasos?.length ?? 0) > 0 && (
+                <ul className="mt-4 space-y-1" aria-hidden>
+                  {turno.pasos!.slice(-3).map((p, i, arr) => (
+                    <li key={`${p}-${i}`} className="flex items-center gap-2 text-[13px] font-semibold text-navy/55">
+                      {i === arr.length - 1 && !turno.texto ? (
+                        <Loader2 className="size-3.5 animate-spin text-ai" />
+                      ) : (
+                        <span className="size-1.5 rounded-full bg-ai" />
+                      )}
+                      {p}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {turno.estado === "streaming" && !turno.texto && !(turno.pasos?.length) && (
+                <p className="mt-4 flex items-center gap-2 text-[13px] font-semibold text-navy/55">
+                  <Loader2 className="size-3.5 animate-spin text-ai" aria-hidden /> Pensando tu pedido…
+                </p>
+              )}
 
-              {/* Gate honesto: la IA de Homy es para usuarios registrados (gratis) */}
-              {reply.needsLogin && (
-                <div className="mt-4 rounded-2xl border border-tech/20 bg-white/70 p-4">
-                  <p className="flex items-center gap-2 text-sm font-bold text-navy">
-                    <Lock className="size-4 shrink-0 text-tech" aria-hidden />
-                    Para usar Homy creá tu cuenta gratis (1 minuto)
+              {/* el texto se escribe a medida que llega */}
+              <div aria-live="polite" aria-busy={turno.estado === "streaming"}>
+                {turno.texto && (
+                  <p className="mt-4 whitespace-pre-line text-[15px] leading-relaxed text-navy/85">
+                    {turno.texto}
+                    {turno.estado === "streaming" && <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-ai align-middle" aria-hidden />}
                   </p>
-                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                    <button
-                      onClick={() => navigate(`/registrarse?volver=${encodeURIComponent(currentPath())}`)}
-                      className="homy-btn-primary min-h-[44px] px-5 py-2.5 text-sm"
-                    >
-                      Crear cuenta gratis
-                      <ArrowRight className="size-4" aria-hidden />
-                    </button>
-                    <button
-                      onClick={() => navigate(`/ingresar?volver=${encodeURIComponent(currentPath())}`)}
-                      className="homy-btn-dark min-h-[44px] px-5 py-2.5 text-sm"
-                    >
-                      Ya tengo cuenta
-                    </button>
-                  </div>
-                </div>
+                )}
+              </div>
+              {turno.pregunta && turno.estado === "listo" && !turno.texto.includes(turno.pregunta) && (
+                <p className="mt-2 font-bold text-navy">{turno.pregunta}</p>
+              )}
+              {turno.degradado && (
+                <p className="mt-2 text-xs text-navy/40">Respuesta armada sin IA (búsqueda directa en HomIA).</p>
               )}
 
-              {/* Pregunta de aclaración del agente (loop de razonamiento) */}
-              {reply.question && reply.question.opciones.length > 0 && (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {reply.question.opciones.map((op) => (
-                    <button
-                      key={op}
-                      onClick={() => {
-                        setReply(null);
-                        void askHomy(op, location.lat, location.lng);
-                      }}
-                      className="rounded-full border border-ai/40 bg-white/80 px-3.5 py-1.5 text-[13px] font-semibold text-tech transition-all hover:border-ai hover:bg-ai/5 active:scale-[0.97]"
-                    >
-                      {op}
-                    </button>
-                  ))}
-                </div>
+              {turno.tarjetas && <TarjetasHomy tarjetas={turno.tarjetas} max={4} />}
+              {turno.acciones && <AccionesHomy acciones={turno.acciones} />}
+
+              {/* aviso de cupo (solo cuando quedan pocas) */}
+              {cupo && cupo.restantes > 0 && cupo.restantes <= 3 && turno.estado !== "streaming" && (
+                <p className="mt-4 rounded-2xl bg-action/8 px-3.5 py-2 text-[12.5px] font-semibold text-[#9a3412]" data-homy-cupo>
+                  Te queda{cupo.restantes === 1 ? "" : "n"} {cupo.restantes} consulta{cupo.restantes === 1 ? "" : "s"} hoy
+                  {cupo.tipo === "visitante" ? (
+                    <>
+                      {" "}sin cuenta.{" "}
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/registrarse?volver=${encodeURIComponent(rutaActual())}`)}
+                        className="font-extrabold underline"
+                      >
+                        Creá tu cuenta gratis
+                      </button>{" "}
+                      y tenés 60 por día.
+                    </>
+                  ) : "."}
+                </p>
               )}
 
-              {/* Resultados REALES de la base (chips compactos clickeables) */}
-              {reply.results && (
-                <div className="mt-4 space-y-1.5">
-                  {(reply.results.jobs ?? []).slice(0, 2).map((j) => (
-                    <button
-                      key={j.id}
-                      onClick={() => navigate(`/trabajo/${j.id}`)}
-                      className="flex w-full items-center gap-2.5 rounded-xl border border-line/70 bg-white/70 px-3.5 py-2.5 text-left transition hover:border-tech/40 hover:bg-white"
-                    >
-                      <Briefcase className="size-4 shrink-0 text-tech" aria-hidden />
-                      <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-navy">
-                        {j.title}
-                      </span>
-                      <span className="shrink-0 text-xs font-bold text-action">
-                        {j.budgetMin || j.budgetMax
-                          ? formatARS(j.budgetMin ?? j.budgetMax ?? 0)
-                          : "A presupuestar"}
-                      </span>
-                    </button>
-                  ))}
-                  {(reply.results.professionals ?? []).slice(0, 2).map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => navigate(`/profesional/${p.id}`)}
-                      className="flex w-full items-center gap-2.5 rounded-xl border border-line/70 bg-white/70 px-3.5 py-2.5 text-left transition hover:border-tech/40 hover:bg-white"
-                    >
-                      <Wrench className="size-4 shrink-0 text-tech" aria-hidden />
-                      <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-navy">
-                        {p.displayName}
-                        {p.verified && <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold text-tech"><BadgeCheck className="size-3" aria-hidden /> verificado</span>}
-                      </span>
-                      <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-[#B98A00]">
-                        <Star className="size-3.5 fill-[#FFC700] text-[#FFC700]" aria-hidden />
-                        {p.rating > 0 ? p.rating.toFixed(1) : "nuevo"}
-                      </span>
-                    </button>
-                  ))}
-                  {[...(reply.results.materials ?? []), ...(reply.results.comparables ?? [])]
-                    .slice(0, 2)
-                    .map((m) => (
-                    <button
-                      key={m.stockId}
-                      onClick={() => navigate(`/proveedor/${m.providerId}`)}
-                      className="flex w-full items-center gap-2.5 rounded-xl border border-line/70 bg-white/70 px-3.5 py-2.5 text-left transition hover:border-tech/40 hover:bg-white"
-                    >
-                      <Package className="size-4 shrink-0 text-tech" aria-hidden />
-                      <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-navy">
-                        {m.elementName}
-                        <span className="ml-1.5 text-xs font-normal text-navy/45">{m.providerName}</span>
-                      </span>
-                      <span className="shrink-0 text-xs font-bold text-action">
-                        {formatARS(m.price)}/{m.unit}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* CTA según la intención razonada por el agente */}
-              {(() => {
-                const intent = reply.intent ?? "ayuda";
-                const cta = INTENT_CTA[intent];
-                const href = cta.href.includes("?")
-                  ? `${cta.href}&q=${encodeURIComponent(lastQuery)}`
-                  : cta.href;
-                const CtaIcon = cta.icon;
-                return (
-                  <button
-                    onClick={() => navigate(href)}
-                    className="homy-btn-dark mt-4 w-full px-5 py-3 text-sm sm:w-auto"
-                  >
-                    <CtaIcon className="size-4" aria-hidden />
-                    {cta.label}
-                    <ArrowRight className="size-4" aria-hidden />
-                  </button>
-                );
-              })()}
-
-              {reply.suggestions.length > 0 && (
+              {turno.estado === "listo" && (turno.sugerencias?.length ?? 0) > 0 && (
                 <div className="mt-5 border-t border-line/70 pt-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">
-                    ¿Seguimos por acá?
-                  </p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">¿Seguimos por acá?</p>
                   <div className="mt-2.5 flex flex-wrap gap-2">
-                    {reply.suggestions.map((s) => (
+                    {turno.sugerencias!.map((s) => (
                       <button
                         key={s}
-                        onClick={() => {
-                          setReply(null);
-                          inputRef.current?.focus();
-                          void askHomy(s, location.lat, location.lng);
-                        }}
-                        className="rounded-full border border-tech/20 bg-white/70 px-3.5 py-1.5 text-[13px] font-medium text-tech transition-all hover:border-tech/40 hover:bg-tech/5 active:scale-[0.97]"
+                        onClick={() => void askHomy(s, location.lat, location.lng)}
+                        className="homy-focus rounded-full border border-tech/20 bg-white/70 px-3.5 py-1.5 text-[13px] font-medium text-tech transition-all hover:border-tech/40 hover:bg-tech/5 active:scale-[0.97]"
                       >
                         {s}
                       </button>
@@ -878,10 +697,15 @@ export function HeroSearch() {
                 </div>
               )}
 
-              {degraded && (
-                <p className="mt-4 text-xs text-navy/40">
-                  Nota: respondo con capacidad reducida en este momento.
-                </p>
+              {turno.estado !== "streaming" && (
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new CustomEvent("homy:open"))}
+                  className="homy-focus mt-4 inline-flex items-center gap-1.5 text-[13px] font-bold text-tech hover:underline"
+                >
+                  <MessageCircle className="size-4" aria-hidden /> Seguir la conversación en el chat
+                  <ArrowRight className="size-3.5" aria-hidden />
+                </button>
               )}
             </div>
           </motion.div>

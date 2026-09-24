@@ -78,10 +78,7 @@ export async function POST(req: NextRequest) {
   if (!d.targetUserId) return fail('Falta el destinatario')
   if (d.targetUserId === me) return fail('No podés iniciar una conversación con vos mismo')
 
-  const [target, meRow] = await Promise.all([
-    db.user.findUnique({ where: { id: d.targetUserId }, select: { id: true, roles: true } }),
-    db.user.findUnique({ where: { id: me }, select: { id: true, roles: true } }),
-  ])
+  const target = await db.user.findUnique({ where: { id: d.targetUserId }, select: { id: true, roles: true } })
   if (!target) return fail('Usuario no encontrado', 404)
 
   const key = pair(me, d.targetUserId)
@@ -89,13 +86,15 @@ export async function POST(req: NextRequest) {
   // ¿Ya existe el hilo? Reutilizar (responder siempre está permitido).
   const existing = await db.conversation.findUnique({ where: { userAId_userBId: key } })
 
-  // Regla de comunidad: un profesional/proveedor (sin rol cliente) no puede
-  // SER EL PRIMERO en escribirle a un usuario de rol cliente.
-  const myRoles = parseJson<string[]>(meRow?.roles, [])
+  // Regla de comunidad "el cliente inicia": una conversación NUEVA solo se abre
+  // hacia quien OFRECE algo (profesional o proveedor): quien escribe primero
+  // actúa como cliente. A un usuario que solo es cliente nadie le escribe
+  // primero; se le responde cuando él inicia. Se decide por el destinatario
+  // porque todo registro recibe el rol cliente (los roles de quien escribe no
+  // distinguen nada).
   const targetRoles = parseJson<string[]>(target.roles, [])
-  const iAmCliente = myRoles.includes('cliente')
-  const targetEsCliente = targetRoles.includes('cliente')
-  if (!iAmCliente && targetEsCliente && !existing) {
+  const targetOfrece = targetRoles.includes('profesional') || targetRoles.includes('proveedor')
+  if (!targetOfrece && !existing) {
     return fail('En HomIA los clientes escriben primero: cuando te contacte, vas a poder responderle sin problema.', 403, { clientesFirst: true })
   }
 

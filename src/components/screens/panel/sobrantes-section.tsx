@@ -21,7 +21,7 @@ import {
 } from 'lucide-react'
 
 export type EligibleItem = {
-  materialId: string | null; purchaseId: string | null; elementId: string; name: string; unit: string
+  materialId: string | null; purchaseId: string | null; purchaseItemId?: string | null; elementId: string; name: string; unit: string
   quantity: number; remaining: number; unitPrice: number
   providerId: string; providerName: string; paymentMethod: string | null; paidAt: string | null
 }
@@ -33,6 +33,7 @@ export type LeftoverItemRow = {
 export type LeftoverReturnRow = {
   id: string; status: string; paymentMethod: string | null; refundTotal: number; providerNote: string | null
   requestedAt: string; respondedAt: string | null; receivedAt: string | null; refundedAt: string | null
+  refundConfirmedAt?: string | null; refundConfirmedBy?: string | null
   mpRefundId: string | null; projectId: string | null; purchaseId: string | null
   items: LeftoverItemRow[]
   requester: { id: string; displayName: string; avatarUrl: string | null; verificationStatus?: string }
@@ -61,7 +62,9 @@ export function refundStatusText(r: LeftoverReturnRow): string {
   if (r.status === 'reembolsada') {
     return r.paymentMethod === 'mercadopago'
       ? `Reembolsado por Mercado Pago el ${formatDate(r.refundedAt)}: se acredita en tu medio de pago en 1 a 15 días.`
-      : `Reembolsado en efectivo el ${formatDate(r.refundedAt)}.`
+      : r.refundConfirmedAt
+        ? `Reembolsado en efectivo el ${formatDate(r.refundedAt)}. ${r.refundConfirmedBy === 'automatico' ? 'Se confirmó solo a las 72 h.' : 'Confirmaste que lo recibiste.'}`
+        : `El proveedor registró que te devolvió ${formatARS(r.refundTotal)} en efectivo el ${formatDate(r.refundedAt)}. Confirmá que lo recibiste (si no, se confirma solo a las 72 h).`
   }
   if (r.status === 'recibida') return `Recibido el ${formatDate(r.receivedAt)}. Te devuelven ${formatARS(r.refundTotal)} en efectivo en el mostrador.`
   if (r.status === 'reembolso_fallido') return `Recibido el ${formatDate(r.receivedAt)}. El reembolso de ${formatARS(r.refundTotal)} por Mercado Pago está en proceso.`
@@ -139,7 +142,7 @@ export default function SobrantesSection({ projectId, purchaseId, canRequest, ma
   useEffect(() => {
     if (!open || !eligible) return
     setDrafts((prev) => prev.length ? prev : eligible.map((src) => ({
-      key: src.materialId || src.purchaseId || src.elementId,
+      key: src.materialId || src.purchaseItemId || src.purchaseId || src.elementId,
       src, qty: '', condition: 'sin_abrir', photoUrl: '', note: '', uploading: false,
     })))
   }, [open, eligible])
@@ -188,6 +191,7 @@ export default function SobrantesSection({ projectId, purchaseId, canRequest, ma
           items: active.map((d) => ({
             materialId: d.src.materialId || undefined,
             purchaseId: d.src.purchaseId || undefined,
+            purchaseItemId: d.src.purchaseItemId || undefined,
             elementId: d.src.elementId,
             qty: parseFloat(d.qty),
             condition: d.condition,
@@ -201,6 +205,24 @@ export default function SobrantesSection({ projectId, purchaseId, canRequest, ma
       toast.success('Pedido de devolución enviado', { description: 'El proveedor lo revisa y te avisamos cuando responda.' })
       setOpen(false)
       setDrafts([])
+      await loadReturns()
+      onChanged?.()
+    } catch {
+      toast.error('No pudimos conectar. Reintentá')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function confirmRefund(r: LeftoverReturnRow) {
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/returns/${r.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'confirmar_reembolso' }),
+      })
+      const d = await readJson(res)
+      if (!res.ok) { toast.error(d.error || 'No pudimos confirmar el reembolso'); return }
+      toast.success('Listo: confirmaste que recibiste el reembolso')
       await loadReturns()
       onChanged?.()
     } catch {
@@ -254,7 +276,7 @@ export default function SobrantesSection({ projectId, purchaseId, canRequest, ma
       {!compact && (
         <p className="mt-1 text-[12.5px] leading-relaxed text-slate-500">
           ¿Te sobró material? Pedí devolverlo al proveedor que te lo vendió (hasta 30 días después del pago). Si pagaste con Mercado Pago,
-          el reembolso vuelve solo a tu medio de pago; si pagaste en efectivo, te lo devuelven en el mostrador.
+          el reembolso vuelve solo a tu medio de pago (se devuelve el precio de lo que devolvés; el cargo de servicio HomIA del 1% no se reembolsa); si pagaste en efectivo, te lo devuelven en el mostrador.
         </p>
       )}
 
@@ -294,6 +316,11 @@ export default function SobrantesSection({ projectId, purchaseId, canRequest, ma
                   ))}
                 </ul>
                 <p className="mt-2 text-[12px] text-slate-500">{refundStatusText(r)}</p>
+                {r.status === 'reembolsada' && r.paymentMethod !== 'mercadopago' && !r.refundConfirmedAt && (
+                  <button disabled={busy} onClick={() => void confirmRefund(r)} className="homy-btn-primary mt-2 inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-4 text-[12px] disabled:opacity-50">
+                    <CircleCheck className="size-3.5" aria-hidden /> Recibí el reembolso
+                  </button>
+                )}
                 {r.status === 'solicitada' && (
                   <button disabled={busy} onClick={() => setCancelTarget(r)} className="mt-2 inline-flex min-h-[34px] items-center gap-1 rounded-full px-3 text-[12px] font-bold text-slate-500 hover:text-red-600 disabled:opacity-50">
                     <Trash2 className="size-3.5" aria-hidden /> Cancelar pedido
@@ -397,6 +424,9 @@ export default function SobrantesSection({ projectId, purchaseId, canRequest, ma
               <p className="text-[13px] text-slate-600">
                 Reembolso estimado: <b className="text-[#0A2540] tabular-nums">{formatARS(estimated)}</b> <span className="text-slate-400">(lo confirma el proveedor)</span>
               </p>
+              {active.some((d) => d.src.paymentMethod === 'mercadopago') && (
+                <p className="mt-1 text-[11.5px] leading-snug text-slate-400">Se reembolsa el precio de lo que devolvés. El cargo de servicio HomIA (1%) que pagaste con Mercado Pago no se devuelve.</p>
+              )}
               <button
                 type="button"
                 disabled={busy || active.length === 0 || providers.length > 1 || (eligible?.length ?? 0) === 0}

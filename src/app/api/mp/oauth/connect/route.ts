@@ -10,12 +10,12 @@ import { createHash, randomBytes } from 'node:crypto'
 // valida en el callback contra el usuario logueado.
 export async function GET(req: NextRequest) {
   const base = appUrl()
+  const kind = req.nextUrl.searchParams.get('kind') || 'provider'
+  const panelPath = kind === 'professional' ? '/panel/profesional/perfil' : '/panel/proveedor/cobros'
   const user = await getSessionUser()
   if (!user) {
-    return NextResponse.redirect(`${base}/ingresar?volver=${encodeURIComponent('/panel/proveedor/cobros')}`)
+    return NextResponse.redirect(`${base}/ingresar?volver=${encodeURIComponent(panelPath)}`)
   }
-
-  const kind = req.nextUrl.searchParams.get('kind') || 'provider'
   let sellerId = ''
   let sellerKind = ''
 
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
   const clientId = process.env.MP_CLIENT_ID
   if (!clientId || !process.env.MP_CLIENT_SECRET) {
     console.error('[mp oauth] MP_CLIENT_ID / MP_CLIENT_SECRET no configurados')
-    return NextResponse.redirect(`${base}/panel/proveedor/cobros?mp=error`)
+    return NextResponse.redirect(`${base}${panelPath}?mp=error`)
   }
 
   const state = uuidv4()

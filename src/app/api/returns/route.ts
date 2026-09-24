@@ -7,6 +7,7 @@ import {
   alreadyReturnedQty, isHomiaUploadUrl, materialPaidOrigin, purchasePaidOrigin, withinReturnWindow, round2,
   RETURN_WINDOW_DAYS, type PaidOrigin,
 } from '@/lib/leftovers'
+import { purchaseLines } from '@/lib/orders'
 
 // ── SOBRANTES: devolución de materiales pagados al proveedor que los vendió ──
 // GET  ?role=solicitante|proveedor [&projectId=|&purchaseId=] → mis devoluciones
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
   const purchaseIds = [...new Set(rows.map((r) => r.purchaseId).filter((x): x is string => !!x))]
   const [projects, purchases] = await Promise.all([
     projectIds.length ? db.project.findMany({ where: { id: { in: projectIds } }, select: { id: true, title: true, clientId: true } }) : [],
-    purchaseIds.length ? db.purchase.findMany({ where: { id: { in: purchaseIds } }, select: { id: true, elementName: true, quantity: true, unit: true } }) : [],
+    purchaseIds.length ? db.purchase.findMany({ where: { id: { in: purchaseIds } }, select: { id: true, elementName: true, orderId: true } }) : [],
   ])
   const pMap = new Map(projects.map((p) => [p.id, p]))
   const cMap = new Map(purchases.map((p) => [p.id, p]))
@@ -65,7 +66,11 @@ export async function GET(req: NextRequest) {
               : `/panel/${pMap.get(r.projectId)?.clientId === user.id ? 'cliente' : 'profesional'}/proyectos/${r.projectId}`,
           }
         : r.purchaseId
-          ? { kind: 'compra', id: r.purchaseId, label: cMap.get(r.purchaseId) ? `Compra: ${cMap.get(r.purchaseId)!.elementName} × ${cMap.get(r.purchaseId)!.quantity} ${cMap.get(r.purchaseId)!.unit}` : 'Compra directa', href: '/panel/cliente/materiales?tab=compras' }
+          ? {
+              kind: 'compra', id: r.purchaseId,
+              label: cMap.get(r.purchaseId) ? `Compra: ${cMap.get(r.purchaseId)!.elementName}` : 'Compra directa',
+              href: role === 'proveedor' ? '/panel/proveedor/cobros?tab=ventas' : `/panel/${user.roles.includes('cliente') ? 'cliente' : 'profesional'}/pedidos/${cMap.get(r.purchaseId)?.orderId || `legacy-${r.purchaseId}`}`,
+            }
           : null,
     })),
   })
@@ -74,6 +79,7 @@ export async function GET(req: NextRequest) {
 const itemSchema = z.object({
   materialId: z.string().min(1).optional(),
   purchaseId: z.string().min(1).optional(),
+  purchaseItemId: z.string().min(1).optional(),
   elementId: z.string().min(1, 'Falta el elemento del catálogo'),
   qty: z.coerce.number().positive('La cantidad tiene que ser mayor a cero'),
   condition: z.enum(['sin_abrir', 'abierto_sin_usar'], { message: 'Indicá el estado: sin abrir o abierto sin usar' }),
@@ -98,7 +104,7 @@ export async function POST(req: NextRequest) {
   }
 
   type PreparedItem = {
-    elementId: string; materialId: string | null; purchaseId: string | null
+    elementId: string; materialId: string | null; purchaseId: string | null; purchaseItemId?: string | null
     qtyRequested: number; unitPricePaid: number; condition: string; photoUrl: string; note: string | null
   }
   let providerId: string
@@ -107,28 +113,33 @@ export async function POST(req: NextRequest) {
   const prepared: PreparedItem[] = []
 
   if (d.purchaseId) {
-    // ── origen: compra directa ──
-    const purchase = await db.purchase.findUnique({ where: { id: d.purchaseId } })
+    // ── origen: compra (sub-pedido de un proveedor, con uno o más ítems) ──
+    const purchase = await db.purchase.findUnique({ where: { id: d.purchaseId }, include: { items: { orderBy: { createdAt: 'asc' } } } })
     if (!purchase) return fail('Compra no encontrada', 404)
     if (purchase.clientId !== user.id) return fail('Solo quien hizo la compra puede devolver sobrantes', 403)
     if (purchase.status !== 'pagado') return fail('Solo se devuelven sobrantes de compras pagadas', 409)
     origin = await purchasePaidOrigin(purchase)
     if (!withinReturnWindow(origin.paidAt)) return fail(`Las devoluciones se piden hasta ${RETURN_WINDOW_DAYS} días después del pago`, 409)
     providerId = purchase.providerId
-    originLabel = `${purchase.elementName} × ${purchase.quantity} ${purchase.unit}`
-    // una compra = un elemento: se agrupan las cantidades pedidas
-    const total = d.items.reduce((a, i) => a + i.qty, 0)
+    originLabel = purchase.elementName
+    const lines = purchaseLines(purchase)
+    // cada ítem pedido se asigna a un ítem de la compra (por purchaseItemId o por elemento)
+    const sumByLine = new Map<string, number>()
     for (const it of d.items) {
-      if (it.elementId !== purchase.elementId) return fail('El ítem no corresponde al elemento de esta compra', 400)
       if (it.purchaseId && it.purchaseId !== purchase.id) return fail('El ítem no corresponde a esta compra', 400)
-    }
-    const ya = await alreadyReturnedQty({ purchaseId: purchase.id })
-    const restante = round2(purchase.quantity - ya)
-    if (total > restante + 1e-9) return fail(`Podés devolver hasta ${restante} ${purchase.unit} de esta compra`, 409, { remaining: restante })
-    for (const it of d.items) {
+      const line = it.purchaseItemId
+        ? lines.find((l) => l.id === it.purchaseItemId)
+        : lines.find((l) => l.elementId === it.elementId)
+      if (!line) return fail(it.purchaseItemId ? 'El ítem no corresponde a esta compra' : 'El ítem no corresponde al elemento de esta compra', 400)
+      if (line.elementId !== it.elementId) return fail('El elemento no coincide con el ítem de la compra', 400)
+      const acc = round2((sumByLine.get(line.id) || 0) + it.qty)
+      sumByLine.set(line.id, acc)
+      const ya = await alreadyReturnedQty(line.legacy ? { purchaseId: purchase.id } : { purchaseItemId: line.id })
+      const restante = round2(line.quantity - ya)
+      if (acc > restante + 1e-9) return fail(`Podés devolver hasta ${restante} ${line.unit} de "${line.elementName}"`, 409, { remaining: restante })
       prepared.push({
-        elementId: purchase.elementId, materialId: null, purchaseId: purchase.id,
-        qtyRequested: it.qty, unitPricePaid: purchase.unitPrice, condition: it.condition, photoUrl: it.photoUrl, note: it.note?.trim() || null,
+        elementId: line.elementId, materialId: null, purchaseId: purchase.id, purchaseItemId: line.legacy ? null : line.id,
+        qtyRequested: it.qty, unitPricePaid: line.unitPrice, condition: it.condition, photoUrl: it.photoUrl, note: it.note?.trim() || null,
       })
     }
   } else {

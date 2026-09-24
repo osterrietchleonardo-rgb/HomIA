@@ -39,7 +39,7 @@ export const TOURS: Record<TourRole, TourStep[]> = {
     {
       id: 'bienvenida',
       title: '¡Bienvenido a HomIA!',
-      body: 'Este recorrido te muestra cada sección, qué podés hacer en cada una y cómo no trabarte. Son 11 paradas de 15 segundos; podés repetirlo cuando quieras desde el botón de ayuda de abajo a la derecha.',
+      body: 'Este recorrido te muestra cada sección, qué podés hacer en cada una y cómo no trabarte. Son 12 paradas de 15 segundos; podés repetirlo cuando quieras desde el botón de ayuda de abajo a la derecha.',
       tip: 'Podés avanzar con las flechas ← → del teclado y salir con Esc.',
     },
     {
@@ -55,7 +55,7 @@ export const TOURS: Record<TourRole, TourStep[]> = {
       route: '/panel/cliente/publicar',
       target: 'nav-publicar',
       title: 'Publicar un trabajo (gratis)',
-      body: 'Contás qué necesitás con fotos, zona y presupuesto estimado, y tu publicación sale a la bolsa de trabajos. Los profesionales te mandan presupuestos y vos elegís. Publicar, recibir presupuestos y contratar no cuesta nada: HomIA solo cobra una comisión del 1% en las compras de materiales pagadas por Mercado Pago.',
+      body: 'Contás qué necesitás con fotos, zona y presupuesto estimado, y tu publicación sale a la bolsa de trabajos. Los profesionales te mandan presupuestos y vos elegís. Publicar, recibir presupuestos y contratar no cuesta nada. Solo cuando pagás con Mercado Pago se suma un cargo de servicio HomIA del 1% (en efectivo, sin cargo).',
       tip: 'Cuantas más fotos y detalle, mejores presupuestos recibís.',
     },
     {
@@ -79,8 +79,16 @@ export const TOURS: Record<TourRole, TourStep[]> = {
       route: '/panel/cliente/facturas',
       target: 'nav-facturas',
       title: 'Facturas: pagá como prefieras',
-      body: 'Elegís el método en cada factura: Mercado Pago (pagás al finalizar la obra y el dinero va directo al profesional) o efectivo (el acuerdo queda registrado y el profesional confirma cuando lo cobra). Todas se descargan en PDF con un botón.',
+      body: 'Elegís el método en cada factura: Mercado Pago (el dinero va directo al profesional y se suma el cargo de servicio HomIA del 1%) o efectivo sin cargo (el acuerdo queda registrado y el profesional confirma cuando lo cobra). Todas se descargan en PDF con un botón.',
       tip: 'Si acordás efectivo y te arrepentís, podés cancelar el acuerdo y volver a Mercado Pago.',
+    },
+    {
+      id: 'pedidos',
+      route: '/panel/cliente/pedidos',
+      target: 'nav-pedidos',
+      title: 'Carrito y Mis pedidos',
+      body: 'Sumá materiales de uno o varios proveedores al carrito (el ícono de arriba) y confirmalos en un solo pedido. Cada proveedor aprueba su parte y le pagás a cada uno cuando quieras: Mercado Pago (+1% de cargo de servicio) o efectivo al retirar. Acá seguís cada parte con su línea de tiempo.',
+      tip: 'El carrito se guarda en tu cuenta: lo ves igual desde el celu y la compu.',
     },
     {
       id: 'directorio',
@@ -158,7 +166,7 @@ export const TOURS: Record<TourRole, TourStep[]> = {
       route: '/panel/profesional/proyectos',
       target: 'nav-proyectos',
       title: 'Proyectos: gestioná cada obra',
-      body: 'El corazón de tu trabajo: etapas de la obra, materiales que proponés (con precios reales comparados entre proveedores), el acuerdo de quién paga los materiales, y las facturas. Emitís factura cuando corresponde y cobrás por Mercado Pago o en efectivo (el cliente elige; vos confirmás el efectivo al recibirlo). Sin comisión sobre tus facturas.',
+      body: 'El corazón de tu trabajo: etapas de la obra, materiales que proponés (con precios reales comparados entre proveedores), el acuerdo de quién paga los materiales, y las facturas. Emitís factura cuando corresponde y cobrás por Mercado Pago o en efectivo (el cliente elige; vos confirmás el efectivo al recibirlo). Para cobrar por Mercado Pago conectá tu cuenta en Mi perfil: la plata entra directo y cobrás el 100%; el cargo de servicio HomIA del 1% lo paga el cliente.',
       tip: 'Si el cliente paga los materiales directo al proveedor, tu factura va solo con mano de obra: queda escrito para los dos.',
     },
     {
@@ -166,7 +174,7 @@ export const TOURS: Record<TourRole, TourStep[]> = {
       route: '/panel/profesional/materiales',
       target: 'nav-materiales',
       title: 'Materiales: compará antes de comprar',
-      body: 'El catálogo de todos los proveedores en un solo lugar: precio, stock y distancia. Comparás, elegís el mejor y lo proponés en tu proyecto con un toque. Comprar más barato sube tu margen sin tocar el precio del cliente.',
+      body: 'El catálogo de todos los proveedores en un solo lugar: precio, stock y distancia. Comparás, elegís el mejor y lo proponés en tu proyecto con un toque, o lo sumás al carrito (de varios proveedores a la vez) y seguís el pedido en Mis pedidos. Comprar más barato sube tu margen sin tocar el precio del cliente.',
       tip: 'Chequeá el stock antes de prometer plazos: está actualizado por cada proveedor.',
     },
     {

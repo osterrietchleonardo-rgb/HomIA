@@ -29,11 +29,18 @@ export async function GET(req: NextRequest) {
   const days = Number.isFinite(rawDays) ? Math.min(365, Math.max(1, rawDays)) : 30
   const since = new Date(Date.now() - days * 86400000)
 
-  // ── 1. Elementos más pedidos (compras directas + materiales de obras) ──
-  const [purchaseAgg, materialAgg] = await Promise.all([
+  // ── 1. Elementos más pedidos (ítems de pedidos del carrito + compras históricas + materiales de obras) ──
+  const [itemAgg, purchaseAgg, materialAgg] = await Promise.all([
+    db.purchaseItem.groupBy({
+      by: ['elementName'],
+      where: { purchase: { providerId: prov.id, createdAt: { gte: since }, status: { not: 'cancelado' } } },
+      _count: { _all: true },
+      _sum: { quantity: true, total: true },
+    }),
+    // compras anteriores al carrito (un solo ítem, sin PurchaseItem)
     db.purchase.groupBy({
       by: ['elementName'],
-      where: { providerId: prov.id, createdAt: { gte: since }, status: { not: 'cancelado' } },
+      where: { providerId: prov.id, createdAt: { gte: since }, status: { not: 'cancelado' }, items: { none: {} } },
       _count: { _all: true },
       _sum: { quantity: true, total: true },
     }),
@@ -46,7 +53,7 @@ export async function GET(req: NextRequest) {
   ])
 
   const demand = new Map<string, { name: string; pedidos: number; cantidad: number; ventas: number }>()
-  for (const p of purchaseAgg) {
+  for (const p of [...itemAgg, ...purchaseAgg]) {
     const acc = demand.get(p.elementName) || { name: p.elementName, pedidos: 0, cantidad: 0, ventas: 0 }
     acc.pedidos += p._count._all
     acc.cantidad += p._sum.quantity || 0

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
-import { ok, fail, parseBody } from '@/lib/api'
+import { ok, fail, parseBody, parseJson } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
 import { refundPayment, ensureFreshSellerToken } from '@/lib/mercadopago'
@@ -12,9 +12,12 @@ import { round2 } from '@/lib/leftovers'
 //       ├─rechazar(prov)──▶ rechazada                                  reembolsar_efectivo(prov) ─▶ reembolsada   reintentar_reembolso(prov)
 //       └─cancelar(solicitante)──▶ cancelada
 // Sin retroceso desde `recibida`.
+// Reembolso en efectivo (`reembolsada` sin MP): el solicitante confirma que lo recibió
+// (confirmar_reembolso) o el cron lo confirma solo a las 72 h (refundConfirmedBy = automatico).
+// Si el proveedor no responde una devolución en 72 h, el cron le manda UN recordatorio.
 
 const schema = z.object({
-  action: z.enum(['aceptar', 'rechazar', 'cancelar', 'recibir', 'reembolsar_efectivo', 'reintentar_reembolso']),
+  action: z.enum(['aceptar', 'rechazar', 'cancelar', 'recibir', 'reembolsar_efectivo', 'reintentar_reembolso', 'confirmar_reembolso']),
   note: z.string().max(500).optional(),
   items: z.array(z.object({
     id: z.string().min(1),
@@ -47,11 +50,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const st = ret.status
   // el solicitante puede ser el cliente o el PROFESIONAL del proyecto: el aviso lo
   // lleva a SU panel (antes siempre iba al panel de cliente, que el pro no tiene)
+  // (en compras, el comprador puede ser un profesional sin rol cliente: va a SU panel de pedidos)
+  const originPurchase = ret.purchaseId
+    ? await db.purchase.findUnique({ where: { id: ret.purchaseId }, select: { orderId: true, client: { select: { roles: true } } } })
+    : null
   const requesterPanel: 'cliente' | 'profesional' = ret.projectId
     ? (await db.project.findUnique({ where: { id: ret.projectId }, select: { clientId: true } }))?.clientId === ret.requesterId ? 'cliente' : 'profesional'
-    : 'cliente'
+    : parseJson<string[]>(originPurchase?.client.roles, []).includes('cliente') || !originPurchase ? 'cliente' : 'profesional'
   const notifyRequester = (type: string, title: string, body: string) =>
-    db.notification.create({ data: { userId: ret.requesterId, type, title, body, link: originLink(ret, requesterPanel) } })
+    db.notification.create({ data: { userId: ret.requesterId, type, title, body, link: originLink(ret, requesterPanel, originPurchase?.orderId) } })
   const notifyProvider = (type: string, title: string, body: string) =>
     db.notification.create({ data: { userId: ret.provider.userId, type, title, body, link: '#/panel/proveedor/cobros?tab=devoluciones' } })
   const label = `${ret.items.length} ítem${ret.items.length === 1 ? '' : 's'}`
@@ -63,6 +70,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await db.leftoverReturn.update({ where: { id }, data: { status: 'cancelada' } })
     await notifyProvider('devolucion_cancelada', 'Devolución cancelada', `${user.displayName} canceló su pedido de devolución (${label}).`)
     return ok({ success: true, status: 'cancelada' })
+  }
+
+  // ─────────────── CONFIRMAR REEMBOLSO EN EFECTIVO (solicitante) ───────────────
+  // El proveedor marca "reembolsado en efectivo"; el solicitante confirma que lo recibió.
+  // Si no confirma, el cron lo da por confirmado a las 72 h (queda "automatico").
+  if (d.action === 'confirmar_reembolso') {
+    if (!isRequester) return fail('Solo quien pidió la devolución confirma que recibió el reembolso', 403)
+    if (st !== 'reembolsada' || ret.paymentMethod === 'mercadopago') {
+      return fail('Solo se confirma un reembolso en efectivo ya registrado por el proveedor', 409)
+    }
+    if (ret.refundConfirmedAt) return fail('Ya confirmaste este reembolso', 409)
+    const upd = await db.leftoverReturn.updateMany({
+      where: { id, refundConfirmedAt: null },
+      data: { refundConfirmedAt: new Date(), refundConfirmedBy: 'solicitante' },
+    })
+    if (upd.count === 0) return fail('Ya confirmaste este reembolso', 409)
+    await notifyProvider('devolucion_reembolso_confirmado', 'El cliente confirmó el reembolso', `${user.displayName} confirmó que recibió ${formatARS(ret.refundTotal)} en efectivo por sus sobrantes. La devolución quedó cerrada.`)
+    return ok({ success: true, status: 'reembolsada', refundConfirmedBy: 'solicitante' })
   }
 
   if (!isProvider) return fail('Solo el proveedor gestiona la devolución', 403)
@@ -163,7 +188,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (d.action === 'reembolsar_efectivo') {
     if (st !== 'recibida') return fail(st === 'reembolsada' ? 'Esta devolución ya está reembolsada' : 'Primero marcá los sobrantes como recibidos', 409)
     await db.leftoverReturn.update({ where: { id }, data: { status: 'reembolsada', refundedAt: new Date(), providerNote: d.note?.trim() || ret.providerNote } })
-    await notifyRequester('devolucion_reembolsada', 'Reembolso en efectivo registrado', `${ret.provider.businessName} registró que te devolvió ${formatARS(ret.refundTotal)} en efectivo por tus sobrantes.`)
+    await notifyRequester('devolucion_reembolsada', 'Reembolso en efectivo registrado: confirmá que lo recibiste', `${ret.provider.businessName} registró que te devolvió ${formatARS(ret.refundTotal)} en efectivo por tus sobrantes. Confirmalo en la app (si no, se confirma solo a las 72 h).`)
     return ok({ success: true, status: 'reembolsada' })
   }
 
@@ -190,17 +215,41 @@ type RetForRefund = {
   provider: { id: string; mpOauthAccessToken: string | null; mpOauthRefreshToken: string | null; mpOauthExpiresAt: Date | null; mpOauthStatus: string }
 }
 
-/** Reembolso por MP con el mismo token que cobró: OAuth del proveedor si fue venta directa (split), plataforma si no. */
+/** Cargo de servicio HomIA (1%) incluido en el pago original: no se reembolsa. */
+async function feeOf(ret: { purchaseId: string | null; chargeId: string | null; invoiceId: string | null }): Promise<number> {
+  if (ret.purchaseId) return (await db.purchase.findUnique({ where: { id: ret.purchaseId }, select: { serviceFee: true } }))?.serviceFee ?? 0
+  if (ret.chargeId) return (await db.providerCharge.findUnique({ where: { id: ret.chargeId }, select: { serviceFee: true } }))?.serviceFee ?? 0
+  if (ret.invoiceId) return (await db.invoice.findUnique({ where: { id: ret.invoiceId }, select: { serviceFee: true } }))?.serviceFee ?? 0
+  return 0
+}
+
+/**
+ * Reembolso por MP con el MISMO token que cobró el pago:
+ *  · Payment.collector = 'vendedor' (desde el carrito, 2026-09): el del vendedor →
+ *    proveedor en compras y cobros, profesional en facturas;
+ *  · sin collector (pagos anteriores): compras → proveedor; facturas y cobros → plataforma.
+ * Solo se reembolsa el precio de los ítems devueltos: el cargo de servicio no.
+ */
 async function doRefund(ret: RetForRefund, amount: number): Promise<{ ok: true; refundId: string } | { ok: false; error: string }> {
   if (!ret.mpPaymentId) return { ok: false, error: 'Sin id de pago de Mercado Pago' }
   if (amount <= 0) return { ok: false, error: 'Monto a reembolsar en cero' }
   try {
     const payment = await db.payment.findUnique({ where: { mpPaymentId: ret.mpPaymentId } })
-    if (payment && amount > round2(payment.amount - payment.refundedAmount) + 1e-9) {
-      return { ok: false, error: `El reembolso (${formatARS(amount)}) supera lo que queda del pago (${formatARS(round2(payment.amount - payment.refundedAmount))})` }
+    if (payment) {
+      const cap = round2(payment.amount - (await feeOf(ret)) - payment.refundedAmount)
+      if (amount > cap + 1e-9) {
+        return { ok: false, error: `El reembolso (${formatARS(amount)}) supera lo que queda del pago sin el cargo de servicio (${formatARS(cap)})` }
+      }
     }
+    const bySeller = payment?.collector === 'vendedor' || (!payment?.collector && !!ret.purchaseId)
     let accessToken: string | null = null
-    if (ret.purchaseId) {
+    if (bySeller && ret.invoiceId) {
+      // factura cobrada por el profesional: se reembolsa desde su cuenta
+      const inv = await db.invoice.findUnique({ where: { id: ret.invoiceId }, select: { professionalId: true } })
+      const pro = inv ? await db.professionalProfile.findUnique({ where: { id: inv.professionalId } }) : null
+      try { accessToken = pro ? await ensureFreshSellerToken(pro, 'professional') : null } catch { accessToken = null }
+      if (!accessToken) return { ok: false, error: 'El profesional que cobró la factura no tiene Mercado Pago conectado: coordiná el reembolso con él y reintentá' }
+    } else if (bySeller) {
       try { accessToken = await ensureFreshSellerToken(ret.provider) } catch { accessToken = null }
       if (!accessToken) return { ok: false, error: 'Tu cuenta de Mercado Pago no está conectada: reconectala en Cobros y reintentá' }
     }
@@ -216,11 +265,11 @@ async function doRefund(ret: RetForRefund, amount: number): Promise<{ ok: true; 
   }
 }
 
-/** Tope de reembolso: lo pagado menos lo ya reembolsado de ese mismo pago. */
+/** Tope de reembolso: lo pagado sin el cargo de servicio, menos lo ya reembolsado de ese mismo pago. */
 async function refundCap(ret: { mpPaymentId: string | null; chargeId: string | null; invoiceId: string | null; purchaseId: string | null }): Promise<number> {
   if (ret.mpPaymentId) {
     const p = await db.payment.findUnique({ where: { mpPaymentId: ret.mpPaymentId } })
-    if (p) return round2(p.amount - p.refundedAmount)
+    if (p) return round2(p.amount - (await feeOf(ret)) - p.refundedAmount)
   }
   if (ret.chargeId) {
     const c = await db.providerCharge.findUnique({ where: { id: ret.chargeId }, select: { amount: true } })
@@ -249,8 +298,9 @@ async function restock(providerId: string, elementId: string, qty: number, note:
   })
 }
 
-function originLink(ret: { projectId: string | null; purchaseId: string | null }, panel: 'cliente' | 'profesional') {
-  return ret.projectId ? `#/panel/${panel}/proyectos/${ret.projectId}` : '#/panel/cliente/materiales?tab=compras'
+function originLink(ret: { projectId: string | null; purchaseId: string | null }, panel: 'cliente' | 'profesional', purchaseOrderId?: string | null) {
+  if (ret.projectId) return `#/panel/${panel}/proyectos/${ret.projectId}`
+  return `#/panel/${panel}/pedidos/${purchaseOrderId || (ret.purchaseId ? `legacy-${ret.purchaseId}` : '')}`.replace(/\/$/, '')
 }
 
 function formatARS(n: number) {

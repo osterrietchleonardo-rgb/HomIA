@@ -1,15 +1,17 @@
 'use client'
 // Marketplace público de materiales: todas las ofertas con stock real de proveedores
-// operativos, con distancia si el usuario comparte su ubicación. Comprar/Reservar
-// lleva al panel del cliente (deep link ?stock=) o al registro si no hay sesión.
+// operativos, con distancia si el usuario comparte su ubicación. "Agregar al carrito"
+// funciona también sin cuenta (carrito del visitante en este dispositivo): la cuenta
+// se pide recién al confirmar el pedido, y el carrito se conserva al entrar.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { navigate, Link } from '@/lib/router'
+import { Link } from '@/lib/router'
 import { useSession, useLocation, syncLocationToServer } from '@/lib/store'
 import { Loading, EmptyState, UAvatar, VerifyBadge } from '@/components/app/ui-bits'
 import { formatARS } from '@/lib/format'
 import { formatDistance } from '@/lib/geo'
 import { toast } from 'sonner'
-import { Search, MapPin, Package, Navigation, ChevronDown, ChevronUp } from 'lucide-react'
+import { Search, MapPin, Package, Navigation, ChevronDown, ChevronUp, ShoppingCart, Loader2 } from 'lucide-react'
+import { addToCart } from '@/lib/cart'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 type Offer = {
@@ -100,19 +102,14 @@ export default function MarketplaceScreen({ embedded = false }: { embedded?: boo
     setLoading(true)
   }
 
-  function handleAction(o: Offer, r: ElementResult, action: 'comprar' | 'reservar') {
-    if (!user) {
-      toast.info(`Creá tu cuenta gratis para ${action}`, { description: 'Te traemos de vuelta a esta búsqueda.' })
-      navigate(`/registrarse?volver=${encodeURIComponent('/materiales')}`)
-      return
+  const [adding, setAdding] = useState<string | null>(null)
+  async function agregar(o: Offer, r: ElementResult) {
+    setAdding(o.stockId)
+    try {
+      await addToCart(o.stockId, 1, r.name)
+    } finally {
+      setAdding(null)
     }
-    if (user.roles.includes('cliente')) {
-      const sp = new URLSearchParams({ stock: o.stockId, q: r.name, tipo: action === 'reservar' ? 'reserva' : 'compra' })
-      navigate(`/panel/cliente/materiales?${sp.toString()}`)
-      return
-    }
-    // profesional / proveedor sin rol cliente: ver la ficha del proveedor
-    navigate(`/proveedor/${o.providerId}`)
   }
 
   function toggleExpanded(id: string) {
@@ -133,7 +130,7 @@ export default function MarketplaceScreen({ embedded = false }: { embedded?: boo
           Materiales al mejor precio
         </h1>
         <p className={`max-w-2xl text-[15px] leading-relaxed text-slate-500 ${embedded ? 'mt-1.5' : 'mt-3'}`}>
-          Compará precio, stock y distancia de los proveedores de la comunidad. Comprás directo al local: pagás con Mercado Pago o en efectivo al retirar.
+          Compará precio, stock y distancia de los proveedores de la comunidad. Sumá al carrito productos de uno o varios locales y pagale a cada uno con Mercado Pago (+1% de cargo de servicio) o en efectivo al retirar.
         </p>
       </div>
 
@@ -276,11 +273,12 @@ export default function MarketplaceScreen({ embedded = false }: { embedded?: boo
                                 {o.distanceKm != null ? formatDistance(o.distanceKm) : (o.providerCity || 'Argentina')}
                               </span>
                               <div className="flex items-center gap-2">
-                                <button onClick={() => handleAction(o, r, 'reservar')} className="homy-glass-soft inline-flex min-h-[36px] items-center rounded-full px-3 text-[11.5px] font-bold text-tech transition hover:bg-white">
-                                  Reservar
-                                </button>
-                                <button onClick={() => handleAction(o, r, 'comprar')} className="homy-btn-primary min-h-[36px] rounded-full px-3 text-[11.5px]">
-                                  Comprar
+                                <button
+                                  onClick={() => void agregar(o, r)}
+                                  disabled={adding === o.stockId}
+                                  className="homy-btn-primary inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-3.5 text-[12px] disabled:opacity-60"
+                                >
+                                  {adding === o.stockId ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <ShoppingCart className="size-3.5" aria-hidden />} Agregar al carrito
                                 </button>
                               </div>
                             </div>

@@ -57,7 +57,8 @@ export async function GET(
   const links = providerIds.length
     ? await db.providerLink.findMany({
         where: { professionalId: project.professionalId, providerId: { in: providerIds }, active: true },
-        include: { provider: { include: { user: { select: { displayName: true } } } } },
+        // solo datos públicos del proveedor: nunca los tokens OAuth de Mercado Pago
+        include: { provider: { select: { id: true, businessName: true, city: true, kind: true, user: { select: { displayName: true } } } } },
       })
     : []
 
@@ -98,6 +99,8 @@ export async function GET(
         companyName: project.pro.companyName,
         phone: project.pro.user.phone,
         email: project.pro.user.email,
+        // ¿cobra la factura por Mercado Pago? (solo el estado; el token nunca sale)
+        mpConnected: project.pro.mpOauthStatus === 'connected' && !!project.pro.mpOauthAccessToken,
       },
     },
     role: isClient ? 'cliente' : 'profesional',
@@ -126,10 +129,15 @@ export async function GET(
       number: c.number,
       description: c.description,
       amount: c.amount,
+      serviceFee: c.serviceFee,
       status: c.status,
       method: c.method,
       createdAt: c.createdAt,
       providerName: project.materials.find((m) => m.providerId === c.providerId)?.provider?.businessName || null,
+      providerMpConnected: (() => {
+        const pv = project.materials.find((m) => m.providerId === c.providerId)?.provider
+        return !!pv && pv.mpOauthStatus === 'connected' && !!pv.mpOauthAccessToken
+      })(),
     })),
   })
 }
