@@ -56,8 +56,10 @@
    - Cliente: "Buscar un servicio".
    - Profesional: "Quiero recibir licitaciones".
    - Proveedor: "Quiero vender en HomIA".
-5. **Cinta de sponsors:** logos de proveedores con plan PRO. Pasa sola y se frena si le pasás el
-   mouse por encima. Si todavía no hay ningún proveedor PRO, esta cinta no aparece.
+5. **Cinta de sponsors:** una banda azul oscuro de punta a punta con el logo y el nombre de cada
+   proveedor con plan PRO, en tono suave. Pasa sola, **cada proveedor aparece una sola vez por
+   vuelta** (nunca se ve el mismo dos veces a la vez) y se frena si le pasás el mouse por encima.
+   Si todavía no hay ningún proveedor PRO, esta cinta no aparece.
 6. **Cierre:** "Crear cuenta gratis" y "Hablar con Homy".
 
 **El buscador y Homy, sin cuenta:**

@@ -31,9 +31,12 @@ export function navigate(to: string, opts?: { replace?: boolean }) {
   // Navegación real al catch-all ([[...slug]]), que arranca la SPA y hace el
   // redirect pathname→hash. Aplica a CTAs del header/footer/hero de la home.
   // (La SPA nunca corre con pathname '/': esa ruta es de page.tsx.)
-  if (typeof window !== 'undefined' && window.location.pathname === '/' && !window.location.hash && !opts?.replace) {
-    // Navigating from home to a hash for the first time
-    window.location.assign(to.startsWith('/') ? to : `/${to}`)
+  // Aunque la URL ya tenga un #…, en '/' no hay SPA escuchando: si solo se cambiara
+  // el hash, la URL mostraría la ruta nueva y la pantalla quedaría igual.
+  if (typeof window !== 'undefined' && window.location.pathname === '/') {
+    const dest = to.startsWith('/') ? to : `/${to}`
+    if (opts?.replace) window.location.replace(dest)
+    else window.location.assign(dest)
     return
   }
   const target = `#${to.startsWith('/') ? to : `/${to}`}`

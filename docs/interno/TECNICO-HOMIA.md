@@ -49,8 +49,10 @@ Dependencias declaradas pero sin uso verificado en `src/`: `next-auth`, `next-in
   Todo lo demás cae en el catch-all `src/app/[...slug]/page.tsx:12`, que monta `<AppRoot />`.
 - **Router propio por hash.** `src/lib/router.tsx:13-26` parsea `window.location.hash`
   (`#/panel/cliente/proyectos/abc?tab=x`) en `segments` y `query`. `navigate()`
-  (`src/lib/router.tsx:28`) empuja `/#/ruta`; desde la home estática hace una navegación real al
-  catch-all (`router.tsx:34-37`).
+  (`src/lib/router.tsx:28`) empuja `/#/ruta`; desde la home estática (`pathname === '/'`) hace
+  SIEMPRE una navegación real al catch-all, aunque la URL ya tenga un `#` (en `/` no hay SPA
+  escuchando: cambiar solo el hash dejaba la URL en `#/registrarse` con la home en pantalla;
+  corregido el 24/09/2026).
 - **Rutas sin `#` también funcionan.** `AppRoot` convierte `pathname` → hash al montar
   (`src/components/app/app-root.tsx:78-84`), y `SpaRedirect` en la home hace lo inverso para
   deep-links `#/...` que caen en `/` (`src/components/home/spa-redirect.tsx`). Por eso las

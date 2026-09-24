@@ -304,8 +304,8 @@ export default function ProviderProfile() {
               {/* vista previa: así se ve en la cinta */}
               <div className="mt-4">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Vista previa en la cinta</p>
-                <div className={`relative mt-2 overflow-hidden rounded-2xl bg-gradient-to-r from-[#0A2540]/5 via-[#FFC700]/10 to-[#0A2540]/5 px-3 py-3 ${esProActivo ? '' : 'opacity-60 grayscale'}`} aria-hidden>
-                  <div className="flex gap-3">
+                <div className={`relative mt-2 overflow-hidden rounded-2xl bg-[#0A2540] px-3 py-4 ${esProActivo ? '' : 'opacity-60 grayscale'}`} aria-hidden>
+                  <div className="flex items-center gap-10">
                     <SponsorChip s={preview} showTagline="always" />
                     <span className="hidden sm:block"><SponsorChip s={{ ...preview, id: 'preview-2' }} showTagline="always" /></span>
                   </div>

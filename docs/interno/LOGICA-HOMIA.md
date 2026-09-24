@@ -341,7 +341,8 @@ profesionales" (`pro/subscription/route.ts`).
   apareció, y resumen de ventas. Básico y prueba reciben 403 `needsPro`.
 - **Cinta de sponsors** (`GET /api/sponsors`): proveedores con PRO activo, primero los que cargaron
   logo propio, después por rating y reseñas; máximo 40; sin logo se usa la foto de perfil
-  (`sponsors/route.ts:10-58`).
+  (`sponsors/route.ts:10-58`). En la home cada sponsor aparece **una vez por vuelta**: cada copia
+  de la cinta mide al menos el ancho de la pantalla más un logo (`sponsors.tsx`, `.homy-marquee-copy`).
 
 **Transiciones de plan** (`planTransicion`, `plans.ts:115-190`, aplicada por webhook y cron):
 
