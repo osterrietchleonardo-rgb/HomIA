@@ -16,8 +16,9 @@
 ## Lo básico para todos
 
 - **Cómo se entra:** la portada es `www.somoshomia.com`. Arriba están **Ingresar**, **Crear cuenta**
-  y el **carrito**. En pantallas de 1280 px o más se ve el menú completo; en pantallas más chicas
-  (celular, tablet, notebook chica) el menú está en el botón de tres rayitas.
+  y el **carrito**. En pantallas de 1280 px o más, arriba se ven solo Directorio, Materiales, Cómo
+  funciona y Ayuda (el resto de las secciones de la portada está en el pie de página); en pantallas
+  más chicas (celular, tablet, notebook chica) todo el menú está en el botón de tres rayitas.
 - **Tu panel:** al entrar, cada rol tiene su panel con un menú.
   - En la computadora, el menú está a la izquierda.
   - En el celular, hay una barra abajo con 4 accesos fijos y un botón **Más** que abre el resto de

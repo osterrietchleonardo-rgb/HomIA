@@ -98,7 +98,7 @@ Convenciones de UI (no inventar otras):
 - Clases utilitarias del design system: `.homy-page`, `.homy-glass`, `.homy-glass-strong`, `.homy-glass-soft`, `.homy-eyebrow` (glass morphism).
 - Layout tipo app-shell (Gmail/Notion): viewport anclado, scroll interno del contenido (`h-screen overflow-hidden` + área scrolleable) en TODOS los listados. En móvil el contenido del panel termina con `pb-44` para que el botón flotante de Homy no tape lo último.
 - App móvil 390px: nada se desborda; los números largos (precios) deben reflowear la tarjeta (tarjeta se adapta al número, nunca al revés).
-- Header público de la home: menú completo desde 1280 px (`xl`); por debajo, menú hamburguesa. Textos sin partir.
+- Header público de la home: desde 1280 px (`xl`) solo Directorio, Materiales, Cómo funciona y Ayuda (el resto en el menú hamburguesa y el footer); por debajo, menú hamburguesa. Textos sin partir.
 - Badges de verificación DNI: "verificado" / "en revisión" / "no verificado" — nunca ocultar el estado.
 - Mensajería estilo WhatsApp: **el cliente inicia**. Se decide por el destinatario: una conversación nueva solo se abre hacia quien ofrece algo (profesional o proveedor); a un usuario que solo es cliente nadie le escribe primero.
 - Todo total que se paga por Mercado Pago muestra el desglose con `MpFeeBreakdown` (subtotal + "Cargo de servicio HomIA (1%)" = total con MP; "En efectivo pagás $X, sin cargo").

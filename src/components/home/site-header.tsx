@@ -27,6 +27,9 @@ const NAV_ITEMS = [
   { label: "Comunidad", href: "#comunidad" },
   { label: "Ayuda", href: "#/ayuda", route: "/ayuda" },
 ];
+// En el header de escritorio van solo estas (el resto son secciones de la home:
+// quedan en el menú del celular y en el footer, para que el header respire).
+const NAV_DESKTOP = NAV_ITEMS.filter((i) => ["Directorio", "Materiales", "Cómo funciona", "Ayuda"].includes(i.label));
 
 // Los items con `route` viven en el router SPA (#/...): next/link hace pushState
 // y no dispara hashchange, así que interceptamos el click y navegamos por el router propio.
@@ -84,27 +87,28 @@ export function SiteHeader() {
 
         {/* Navegación desktop */}
         <nav
-          className="hidden min-w-0 items-center gap-0.5 xl:flex"
+          className="hidden min-w-0 items-center gap-2 xl:flex"
           aria-label="Navegación principal"
         >
-          {NAV_ITEMS.map((item) => (
+          {NAV_DESKTOP.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               onClick={(e) => goRoute(e, item)}
-              className="homy-nav-link whitespace-nowrap rounded-full px-3 py-2 text-[14.5px] font-semibold text-navy/70 transition-colors hover:text-navy 2xl:px-4 2xl:text-[15px]"
+              className="homy-nav-link whitespace-nowrap rounded-full px-4 py-2 text-[15px] font-semibold text-navy/70 transition-colors hover:text-navy"
             >
               {item.label}
             </Link>
           ))}
         </nav>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-3">
         {/* Carrito (visitantes, clientes y profesionales; el proveedor puro no lo ve) */}
         <CartButton tone="light" />
+        <span aria-hidden className="hidden h-7 w-px bg-navy/10 xl:block" />
 
         {/* Acciones */}
-        <div className="hidden items-center gap-2 xl:flex">
+        <div className="hidden items-center gap-3 xl:flex">
           {!loading && user ? (
             <Button
               className="rounded-full bg-navy font-semibold text-white shadow-[0_10px_24px_-10px_rgba(10,37,64,0.6)] transition-all hover:bg-[#123455] active:scale-[0.98]"

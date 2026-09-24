@@ -67,9 +67,10 @@ Dependencias declaradas pero sin uso verificado en `src/`: `next-auth`, `next-in
   botón flotante de Homy no tape lo último (`src/components/screens/panel/panel-layout.tsx:295`,
   cambio del 24/09 sin commitear). El botón flotante del panel es **uno solo** (`help-dock.tsx`) con
   dos vistas: "Homy" y "Guías y tour".
-- **Header público** (`src/components/home/site-header.tsx`): el menú completo se muestra desde
-  1280 px (`xl`); por debajo, menú hamburguesa. Los textos no se parten (`whitespace-nowrap`)
-  (cambio del 24/09 sin commitear).
+- **Header público** (`src/components/home/site-header.tsx`): desde 1280 px (`xl`) muestra solo
+  `NAV_DESKTOP` (Directorio, Materiales, Cómo funciona, Ayuda); "Motor IA", "Beneficios" y
+  "Comunidad" quedan en el menú hamburguesa (`NAV_ITEMS`, por debajo de `xl`) y en el footer. Carrito
+  separado de Ingresar/Crear cuenta por una línea; textos sin partir (`whitespace-nowrap`). 24/09/2026.
 - **Rutas nuevas de la SPA:** `/carrito` (pública y dentro del panel), `/panel/cliente/pedidos[/<id>]`
   y `/panel/profesional/pedidos[/<id>]` (`app-root.tsx`). El carrito se sincroniza con la sesión con
   `useCartSync()` (`src/lib/cart.ts`).
