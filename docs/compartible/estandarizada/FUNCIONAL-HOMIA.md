@@ -1,0 +1,1110 @@
+# HomIA — Guía de uso por rol
+
+> **Para qué sirve:** explica en lenguaje llano qué ve y qué puede hacer cada persona en HomIA
+> (visitante, cliente, profesional y proveedor), paso a paso, qué pasa después de cada acción y qué
+> hacer si algo sale mal. Sirve para el dueño y como base de guías de uso.
+>
+> Describe lo que la app **hace hoy** (versión del 24/09/2026, con carrito y pedidos, cargo de
+> servicio del 1% con Mercado Pago, cobro directo a la cuenta de quien vende y el nuevo Homy). Al pie
+> de cada parte hay una línea "Fuente" con la pantalla de donde sale, para quien necesite
+> verificarlo.
+>
+> Las reglas de negocio completas están en `docs/interno/LOGICA-HOMIA.md`.
+
+---
+
+## Lo básico para todos
+
+- **Cómo se entra:** la portada es `www.somoshomia.com`. Arriba están **Ingresar**, **Crear cuenta**
+  y el **carrito**. En pantallas de 1280 px o más se ve el menú completo; en pantallas más chicas
+  (celular, tablet, notebook chica) el menú está en el botón de tres rayitas.
+- **Tu panel:** al entrar, cada rol tiene su panel con un menú.
+  - En la computadora, el menú está a la izquierda.
+  - En el celular, hay una barra abajo con 4 accesos fijos y un botón **Más** que abre el resto de
+    las secciones, además de "Ir a la home" y "Cerrar sesión".
+- **Campana (arriba):** tus avisos. Tocar un aviso te lleva a lo que pasó. Se actualiza sola cada
+  15 segundos.
+- **Mensajes:** chat uno a uno, estilo WhatsApp. La bandeja se actualiza sola.
+- **Si tu cuenta tiene más de un perfil** (por ejemplo, profesional y también cliente), arriba
+  aparece **"Perfil: …"** para cambiar de panel.
+- **Homy y ayuda (botón flotante abajo a la derecha, dentro del panel):** es un solo botón con dos
+  pestañas: **Homy** (el asistente con inteligencia artificial: 60 consultas por día con cuenta) y
+  **Guías y tour** (recorrido guiado, "¿Cómo hago?" paso a paso, "Me trabé" y videos). En el
+  celular, el final de cada pantalla deja espacio para que el botón no tape el último contenido.
+  También está la página **Ayuda**.
+- **Carrito:** clientes y profesionales tienen el ícono del carrito arriba en su panel.
+- **Etiqueta de identidad:** junto a cada nombre se ve siempre si la persona está **verificada**
+  (validó su DNI), **en revisión** o **no verificada**.
+- **Si no hay conexión:** la app avisa "No pudimos conectar. Reintentá en unos segundos". Nunca
+  muestra datos inventados.
+
+*Fuente: `src/components/screens/panel/panel-layout.tsx`, `src/components/help/help-dock.tsx`.*
+
+---
+
+## 1. Visitante (sin cuenta)
+
+### 1.1 Portada (home)
+
+**Qué muestra, de arriba hacia abajo:**
+
+1. **Buscador principal:** escribís qué necesitás (por ejemplo "Necesito un plomero urgente") y
+   tocás Enter o el botón.
+2. **Cómo funciona:** tres pasos.
+3. **Motor IA** y **Beneficios.**
+4. **Comunidad:** una tarjeta por rol.
+   - Cliente: "Buscar un servicio".
+   - Profesional: "Quiero recibir licitaciones".
+   - Proveedor: "Quiero vender en HomIA".
+5. **Cinta de sponsors:** logos de proveedores con plan PRO. Pasa sola y se frena si le pasás el
+   mouse por encima. Si todavía no hay ningún proveedor PRO, esta cinta no aparece.
+6. **Cierre:** "Crear cuenta gratis" y "Hablar con Homy".
+
+**El buscador y Homy, sin cuenta:**
+
+- El buscador de la portada y la burbuja de Homy (abajo a la derecha) **responden con inteligencia
+  artificial también sin cuenta**, con un límite de **8 consultas por día** (compartidas entre los
+  dos). Cuando te quedan 3 o menos, aparece "Te quedan N consultas hoy".
+- Homy te muestra cómo va buscando ("pasos"), escribe la respuesta y agrega **tarjetas** con datos
+  reales: profesionales, proveedores con precio y stock, materiales y trabajos. En las tarjetas de
+  materiales hay **Agregar al carrito**.
+- Si llegás al límite: "Llegaste al límite de consultas de hoy sin cuenta: creá tu cuenta gratis y
+  seguimos." Con cuenta el límite es de 60 por día.
+- Si la inteligencia artificial no responde, Homy igual te muestra resultados reales de una
+  búsqueda directa y lo dice. Nunca inventa precios, nombres ni datos.
+
+*Fuente: `src/components/home/hero-search.tsx`, `src/components/home/homy-widget.tsx`,
+`src/app/api/homy/agent/route.ts`.*
+
+### 1.2 Buscador con mapa ("Buscar")
+
+**Qué hace:**
+
+- Al entrar, te pide permiso para usar tu ubicación, una sola vez.
+- Tiene dos modos:
+  - **"Busco un pro":** muestra profesionales, materiales y trabajos.
+  - **"Trabajo y materiales":** muestra materiales en proveedores y trabajos publicados.
+- Podés filtrar por rubro (Plomería, Gas, Electricidad, etc.).
+- Con la barra **Radio** elegís la distancia, de 1 a 100 km. Solo filtra si compartiste tu
+  ubicación.
+
+**El mapa:**
+
+- Muestra puntos de colores: azul para profesionales, naranja para trabajos, celeste para
+  materiales (con precio) y tu posición.
+- Se puede ocultar con **"Ocultar mapa"**.
+
+**Sin cuenta:**
+
+- Ves las tarjetas, pero para abrirlas aparece "Registrate para ver esta tarjeta".
+- **"Preguntale a Homy"** responde con inteligencia artificial, con el mismo límite de consultas
+  que en la portada (ver 1.1).
+
+*Fuente: `src/components/screens/search-screen.tsx`.*
+
+### 1.3 Directorio
+
+**Qué muestra:** todos los profesionales y los proveedores activos.
+
+**Pestañas:** Todos, Profesionales o Proveedores.
+
+**Filtros:**
+
+- **Rubro.**
+- **Ordenar:**
+  - "Más reseñas positivas" (es el orden de entrada).
+  - "Mejor puntuación".
+  - "Más experiencia".
+  - "Más recientes".
+- **Puntaje mínimo:** 3, 4 o 4,5 estrellas. Ojo: al elegirlo, se ocultan quienes todavía no tienen
+  reseñas.
+- **Precio promedio:** solo aparece en las pestañas Profesionales o Proveedores.
+
+**Proveedores Recomendados:** los que tienen plan PRO aparecen **siempre primero**, con la etiqueta
+dorada **"★ Recomendado"**.
+
+**Qué muestra cada tarjeta:**
+
+- Nombre, etiqueta de verificación, ciudad, estrellas y cantidad de reseñas.
+- Si es un profesional: sus oficios, cuántas obras publicó, sus años de experiencia y el promedio
+  de sus presupuestos.
+- Si es un proveedor: cuántos materiales tiene publicados y su precio promedio.
+
+**Sin cuenta:**
+
+- Ves la lista completa.
+- Al tocar una tarjeta aparece el aviso "Ingresá para ver este profesional" (o "este proveedor").
+- **Contratar** y el corazón de favoritos te piden registrarte.
+
+*Fuente: `src/components/screens/directory-screen.tsx`.*
+
+### 1.4 Materiales
+
+**Qué muestra:** catálogo de materiales con el precio y el stock de cada proveedor.
+
+**Filtros:** búsqueda por nombre, marca o proveedor, rubro del negocio, categoría y distancia (esta
+última solo si compartiste tu ubicación).
+
+**Cada material:**
+
+- Muestra "N proveedores con stock", el precio "desde $X" y la etiqueta **"★ Recomendado"** si lo
+  vende un proveedor PRO.
+- Se ven 3 ofertas y un botón **"Ver N ofertas más"**.
+
+**Sin cuenta:** podés armar el carrito (ver abajo); para confirmar el pedido hay que crear la
+cuenta.
+
+**El carrito, también sin cuenta:**
+
+- En cada oferta hay un botón **Agregar al carrito**. Arriba, en el menú, está el ícono del
+  **carrito** con la cantidad de productos.
+- Podés sumar productos de **varios proveedores**. Sin cuenta, el carrito se guarda en tu
+  celular o computadora.
+- Al tocar **Confirmar pedido** te pide crear tu cuenta o ingresar ("**Tu carrito se guarda** y lo
+  encontrás al entrar"). Después de crear la cuenta o ingresar, volvés al carrito con todo lo que
+  habías cargado.
+
+*Fuente: `src/components/screens/marketplace-screen.tsx`, `src/components/cart/*`, `src/lib/cart.ts`.*
+*Fuente: `src/components/screens/marketplace-screen.tsx`.*
+
+### 1.5 Perfiles de profesionales y proveedores
+
+- **Sin cuenta:** no se ven. Aparece "Ingresá para ver este profesional", con los botones
+  "Crear cuenta gratis" y "Ya tengo cuenta".
+- **Con cuenta:** ver los puntos 2.10 (profesional) y 4.12 (proveedor).
+
+*Fuente: `src/components/app/profile-gate.tsx`.*
+
+### 1.6 Detalle de un trabajo publicado
+
+- Cualquiera lo puede ver: título, rubro, urgencia, presupuesto orientativo, descripción y fotos.
+- Sin cuenta **no** se ve la dirección exacta, y la ubicación es aproximada.
+- Para dejar un presupuesto hay que registrarse como profesional.
+
+*Fuente: `src/components/screens/job-detail.tsx`.*
+
+### 1.7 Crear cuenta e ingresar
+
+**Crear cuenta, en 3 pasos:**
+
+1. **Cómo vas a usar HomIA:** "Soy cliente", "Soy profesional" o "Soy proveedor".
+2. **Tus datos:**
+   - Obligatorios: nombre, email y contraseña (mínimo 8 caracteres, con letras y números).
+   - Opcionales: celular, fecha de nacimiento, dirección y ciudad.
+   - "¿Cómo nos encontraste?" y compartir ubicación.
+3. **Datos del rol:**
+   - Todos pueden subir su DNI (frente y dorso) para verificarse, de forma opcional.
+   - Profesional: persona o empresa, oficios (obligatorio), habilidades, experiencia y radio de
+     trabajo.
+   - Proveedor: nombre del local (obligatorio), CUIT y descripción. Se muestra el aviso "14 días
+     gratis para probar. Después: Básico $50.000/mes o PRO $100.000/mes".
+
+**Cosas a saber:**
+
+- Toda cuenta queda también como **cliente**: un profesional o un proveedor puede contratar y
+  comprar con la misma cuenta.
+- No se puede ser profesional y proveedor con la misma cuenta.
+- Hoy **no hay forma de sumar un perfil después**, aunque el texto de la pantalla diga "después
+  podés sumar otros".
+- Al terminar te lleva a tu panel, o de vuelta a donde estabas (por ejemplo, al carrito que armaste
+  sin cuenta).
+
+**Ingresar:** email y contraseña.
+
+- **No hay opción de "olvidé mi contraseña".**
+- Después de 10 intentos fallidos seguidos hay que esperar unos minutos.
+
+*Fuente: `src/components/screens/auth-register.tsx`, `auth-login.tsx`.*
+
+### 1.8 Ayuda
+
+- **Página Ayuda:**
+  - Guías por rol.
+  - Tabla "qué hago / dónde".
+  - 11 preguntas frecuentes.
+  - Videos. El visitante también los puede ver.
+- **Recorrido guiado:** requiere cuenta y no arranca solo. Se inicia desde el botón **?**, la
+  página de Ayuda o la tarjeta "Tus primeros pasos".
+
+*Fuente: `src/components/screens/help-screen.tsx`, `src/components/help/*`.*
+
+---
+
+## 2. Cliente
+
+### Menú del cliente
+
+| Sección | En el celular | Para qué |
+|---|---|---|
+| **Inicio** | Barra de abajo | Resumen y primeros pasos |
+| **Mis trabajos** ("Trabajos") | Barra de abajo | Tus publicaciones y los presupuestos que te mandaron |
+| **Proyectos** | Barra de abajo | Obras en curso con un profesional |
+| **Mensajes** | Barra de abajo | Chats |
+| **Publicar trabajo** | Más | Pedir presupuestos |
+| **Materiales** | Más | Buscar materiales y agregarlos al carrito |
+| **Mis pedidos** | Más | Seguir y pagar los pedidos de materiales |
+| **Facturas** | Más | Lo que tenés que pagar y lo pagado |
+| **Directorio** | Más | Buscar profesionales y proveedores |
+| **Verificación** | Más | Validar tu DNI |
+| **Mi perfil** | Más | Tus datos y ubicación |
+| **Ayuda** | Más | Guías |
+
+*Fuente: `src/components/screens/panel/panel-layout.tsx:43-55`.*
+
+### 2.1 Inicio
+
+**Qué muestra:**
+
+- **"Tus primeros pasos en HomIA"**, cuatro tareas que se tildan solas:
+  1. Verificá tu identidad.
+  2. Publicá tu primer trabajo.
+  3. Escribí por chat a un profesional.
+  4. Dejá tu reseña de la obra.
+- **Cuatro cifras:** trabajos abiertos, presupuestos a revisar, proyectos activos y proyectos
+  finalizados.
+- **Tus publicaciones** y **tus proyectos:** los últimos 5 de cada uno.
+
+*Fuente: `src/components/screens/panel/cliente/dashboard.tsx`.*
+
+### 2.2 Publicar un trabajo
+
+1. Tocá **Publicar trabajo**.
+2. Completá **título**, **descripción** y **rubro** (los tres son obligatorios).
+3. Elegí la **urgencia**: Tranquilo, Normal, Urgente o Muy urgente.
+4. Si querés, poné un **presupuesto orientativo** mínimo y máximo.
+5. Poné **dónde** (dirección y ciudad) y hasta **4 fotos** del problema.
+6. Tocá **Publicar trabajo**.
+
+**Qué pasa después:**
+
+- Ves "¡Trabajo publicado!".
+- A los profesionales de ese rubro les llega el aviso "Nuevo trabajo en tu rubro".
+- Los presupuestos te llegan por la campana y los ves en **Mis trabajos**.
+
+*Fuente: `cliente/publicar.tsx`.*
+
+### 2.3 Mis trabajos: ver presupuestos y elegir uno
+
+- Cada publicación muestra su estado: **abierto**, **en proyecto**, **cerrado** o **cancelado**.
+  También muestra la cantidad de presupuestos que recibió.
+- **Cada presupuesto** trae:
+  - El profesional, con su verificación, estrellas y obras.
+  - Su mensaje, el monto y el plazo en días.
+- **Aceptar:**
+  - Se crea el proyecto con ese profesional y te lleva directo al proyecto.
+  - Los demás presupuestos quedan rechazados y a cada profesional le avisamos.
+- **Rechazar:** le avisamos al profesional.
+- **Cerrar** una publicación abierta: deja de recibir presupuestos. La podés **reabrir** solo si
+  nunca aceptaste un presupuesto.
+
+Para chatear con quien te ofertó, tocá su nombre, entrá a su perfil y usá **Contactar**. En la
+tarjeta del presupuesto no hay botón de chat.
+
+*Fuente: `cliente/trabajos.tsx`; reglas en `LOGICA-HOMIA.md` §2.*
+
+### 2.4 Contratar directo con el asistente paso a paso
+
+Desde el **Directorio** o el perfil de un profesional, tocá **Contratar**.
+
+1. **Qué necesitás:** título, detalles, rubro y hasta 4 fotos del lugar.
+2. **Cuándo y dónde:**
+   - Urgencia: "Lo antes posible", "Próximas semanas" o "Fecha flexible".
+   - Fecha deseada, localidad y dirección.
+3. **Presupuesto:** un rango estimado, opcional. Es solo una referencia. Podés dejarle un
+   **mensaje al profesional**; si lo escribís, se abre el chat con ese mensaje.
+4. **Confirmar:** revisás el resumen y tocás **Confirmar contratación**.
+
+**Qué pasa después:**
+
+- El profesional recibe "Te contrataron: cotizá la mano de obra para arrancar".
+- El proyecto aparece en **Proyectos**, en la etapa **Presupuesto**, esperando que el profesional
+  ponga el precio de su trabajo.
+- Si no dejaste mensaje, conviene abrir el chat: **el profesional no puede escribirte primero**.
+
+*Fuente: `src/components/app/hire-wizard.tsx`.*
+
+### 2.5 Seguir un proyecto
+
+**Etapas:** Presupuesto → Materiales → Ejecución → Revisión → Finalizado. Siempre avanzan, nunca
+vuelven atrás.
+
+**Qué ves en el proyecto:**
+
+- Qué pediste.
+- Cuándo y dónde.
+- Las etapas, con cuatro cifras: tu presupuesto estimado, la mano de obra cotizada, los materiales
+  aprobados y el total.
+- **¿Quién paga los materiales?** Lo elige el profesional y vos lo ves acá:
+  - **Modo A — "los adelanta tu profesional":** él compra los materiales y te los cobra en su
+    factura, junto con la mano de obra.
+  - **Modo B — "los pagás directamente al proveedor":** cada proveedor te manda un cobro aparte y
+    la factura del profesional es solo por la mano de obra.
+- Contacto: **Abrir chat**, llamar o mandar un email.
+
+**Materiales por aprobar:**
+
+- El profesional te propone cada material con su cantidad, precio y proveedor.
+- **Aprobar:** si el material es de un proveedor, ese stock queda reservado para tu obra.
+- **Rechazar:** podés poner el motivo. El profesional puede proponerte una alternativa.
+- Un material ya aprobado lo podés rechazar más tarde, siempre que todavía no esté facturado.
+
+**Modo B — pagos a proveedores:**
+
+- Cuando el proveedor te emite el cobro, lo ves en **"Pagos a proveedores (materiales)"**.
+- Lo pagás con **Mercado Pago** o acordás **efectivo**. En el caso del efectivo, el proveedor
+  confirma cuando lo recibe.
+
+**Cancelar el proyecto:** solo en las etapas Presupuesto o Materiales, y contando el motivo.
+
+- Le llega al profesional por aviso y, si ya hay chat, también por chat.
+- Los materiales reservados vuelven al proveedor.
+
+**Finalizar la obra:** en Ejecución o Revisión, tocá **Finalizar obra**. **Solo vos podés hacerlo.**
+
+- Si todavía no hay factura, te avisa: "¿finalizás igual?".
+- Al finalizar se habilitan las reseñas y ya no se puede deshacer.
+
+*Fuente: `cliente/proyecto-detalle.tsx`; reglas en `LOGICA-HOMIA.md` §3.*
+
+### 2.6 Facturas: pagar
+
+La sección **Facturas** junta las facturas de todos tus proyectos.
+
+**Qué muestra:**
+
+- Arriba, el **total por pagar**.
+- Por cada factura: número, proyecto, fecha, el detalle de mano de obra y materiales, el total y un
+  botón **PDF** para descargarla.
+
+**Cómo pagar:**
+
+- **Pagar con Mercado Pago:** te lleva a Mercado Pago. Cuando volvés, la app dice "Estamos
+  confirmando tu pago". La factura pasa sola a **pagada** cuando Mercado Pago avisa.
+- **Efectivo:** acordás pagar en efectivo y queda "Efectivo acordado — esperando confirmación del
+  profesional". Cuando el profesional confirma que cobró, la factura queda pagada. Mientras tanto
+  podés **Cancelar acuerdo** y elegir Mercado Pago.
+
+**Si algo sale mal:**
+
+- Si el pago online no está disponible, la app muestra "El pago online no está disponible por
+  ahora: podés acordar efectivo".
+- Si el pago no se completó, dice "El pago no se completó. Podés intentar de nuevo…".
+
+**El cargo de servicio (solo con Mercado Pago):**
+
+- Al lado de cada factura por pagar ves el desglose: **Subtotal**, **Cargo de servicio HomIA (1%)**
+  y **Total con Mercado Pago**, con la aclaración "En efectivo pagás $X, sin cargo". El botón dice
+  **Pagar $Y con Mercado Pago**.
+- La plata va directo a la cuenta de Mercado Pago **del profesional**. Si el profesional no conectó
+  su Mercado Pago, ves "‹Profesional› todavía no conectó Mercado Pago: podés pagar en efectivo".
+- En las facturas ya pagadas por Mercado Pago aparece "+ Cargo de servicio HomIA (1%): $X · pagaste
+  $Y con Mercado Pago". El PDF también lo muestra.
+- Lo mismo vale para los **cobros de materiales del proveedor** (modo B) dentro del proyecto.
+*Fuente: `cliente/facturas.tsx`.*
+
+### 2.7 Materiales: carrito y pedidos
+
+**Pestañas de Materiales:** **Buscar materiales** y **Mis pedidos** (los profesionales tienen además
+**Comparables**). "Mis pedidos" también está en el menú.
+
+**Armar el carrito:**
+
+1. Buscá el producto; por ejemplo, "caño". Vas a ver las ofertas de todos los proveedores con
+   stock.
+2. En la oferta que te convenga, tocá **Agregar al carrito**. Podés sumar productos de **varios
+   proveedores** (hasta 60 productos).
+3. Abrí el **carrito** (ícono de arriba). Ahí ves todo **agrupado por proveedor**, con:
+   - la cantidad de cada producto (de a 1, o de a medio en metros, kilos, litros, etc.) y el botón
+     para sacarlo;
+   - **Total**, **"Cargo de servicio HomIA (1%) — solo si pagás con Mercado Pago"** y **Total con
+     Mercado Pago**. En efectivo pagás el total, sin cargo.
+   - Si un producto se quedó sin stock o el proveedor dejó de operar, aparece en rojo: sacalo o
+     ajustá la cantidad para poder confirmar.
+   - **Vaciar carrito** pide confirmación.
+4. Tocá **Confirmar pedido**. Para **cada proveedor** elegí:
+   - **Comprar:** tenés 7 días para retirar.
+   - **Reservar:** te lo guardan 48 horas.
+
+   Podés dejar una aclaración para los proveedores (cuándo pasás, marca preferida…).
+5. Tocá **Enviar pedido a N proveedores**.
+
+**Qué pasa después:**
+
+- Se crea tu **pedido** (número PED-2026-…). Cada proveedor recibe **su parte** por aviso y por
+  chat (el chat lo iniciás vos) y la aprueba o la rechaza.
+- **Aprobar** significa que te reservó **todos** los productos de su parte.
+
+**Mis pedidos (seguimiento):**
+
+- Cada pedido muestra algo como **"1 de 2 proveedores pagados · Falta pagar $Z"** y una barra de
+  avance. Le pagás a **cada proveedor por separado**, en el orden que quieras.
+- Cada parte de proveedor muestra su estado:
+  - **Esperando aprobación.**
+  - **Aprobado: falta el pago** — con "Te lo guardan hasta el…" o "Pagalo y retiralo antes del…".
+  - **Pagado: falta retirar** / **Pagado.**
+  - **Entregado: falta el pago** (si retiraste sin pagar).
+  - **Rechazado** (con el motivo) o **Cancelado.**
+- **Cómo pagar cada parte:**
+  - **Pagar $X con Mercado Pago:** muestra el desglose (subtotal, cargo de servicio 1% y total).
+    Solo aparece si ese proveedor conectó su Mercado Pago; si no, ves "‹Proveedor› todavía no
+    conectó Mercado Pago: podés pagar en efectivo".
+  - **Efectivo al retirar:** sin cargo. El proveedor confirma cuando recibe la plata.
+  - Al volver de Mercado Pago, la app dice "Mercado Pago está confirmando tu pago…" y la parte pasa
+    sola a **Pagado**.
+- **Cancelar esta parte:** mientras no esté pagada. Si ya estaba aprobada, el stock vuelve al
+  proveedor.
+- **Calificar** al proveedor cuando la parte está entregada o pagada, **Chatear** con él y, si está
+  pagada, **Devolver sobrantes**.
+- **Línea de tiempo:** abajo queda registrado todo lo que pasó (quién hizo qué y cuándo).
+- **Si no pagás a tiempo**, esa parte se cancela sola y te avisamos.
+
+*Fuente: `src/components/cart/cart-contents.tsx`, `src/components/screens/panel/pedidos.tsx`,
+`src/components/screens/panel/pedido-detalle.tsx`.*
+
+### 2.8 Devolver sobrantes
+
+Si te sobró material **pagado**, podés devolverlo al proveedor que te lo vendió dentro de los
+**30 días** desde el pago. Se hace desde el proyecto (sección **Sobrantes**) o desde la compra, con
+el botón **Devolver sobrantes**.
+
+1. Por cada material indicá:
+   - la cantidad,
+   - el estado ("Sin abrir" o "Abierto, sin usar"),
+   - una **foto (obligatoria)**,
+   - una nota, si querés.
+2. Mirá el **reembolso estimado**. El monto final lo confirma el proveedor.
+3. Tocá **Enviar pedido de devolución**.
+
+**Qué pasa después:**
+
+1. El proveedor acepta todo, acepta una parte (y puede ajustar el monto) o rechaza, explicando el
+   motivo.
+2. Si acepta, acercás los sobrantes al local.
+3. Cuando el proveedor marca que los recibió, te devuelve la plata:
+   - **Si pagaste con Mercado Pago:** el reembolso vuelve solo a tu medio de pago, en 1 a 15 días.
+     Se devuelve el precio de lo que devolvés; **el cargo de servicio del 1% no se devuelve**.
+   - **Si pagaste en efectivo:** te lo devuelven en el mostrador. Después tocá **Recibí el
+     reembolso** para confirmarlo; si no lo confirmás, se confirma solo a las 72 horas.
+
+**Reglas a tener en cuenta:**
+
+- Cada pedido de devolución va a **un solo proveedor**.
+- Mientras el proveedor no responda, podés **cancelar** el pedido.
+
+*Fuente: `src/components/screens/panel/sobrantes-section.tsx`.*
+
+### 2.9 Reseñas
+
+**Cuándo se habilitan:**
+
+- **Obras:** al finalizar el proyecto. Calificás a tu profesional y a cada proveedor que te vendió
+  materiales. Una reseña por persona.
+- **Compras:** cuando el pedido está entregado o pagado.
+
+**Cómo se hace:**
+
+- Elegís de 1 a 5 estrellas, escribís un comentario (obligatorio) y podés subir hasta 4 fotos.
+- **No se pueden editar** después de publicarlas.
+- El profesional también te califica a vos.
+
+*Fuente: `src/components/screens/panel/review-form.tsx`.*
+
+### 2.10 Mensajes
+
+- **Los chats nuevos se abren hacia quien ofrece algo:** podés escribirle a cualquier profesional
+  o proveedor. A alguien que **solo es cliente** nadie le puede escribir primero: si lo intentan,
+  ven "En HomIA los clientes escriben primero…". Cuando el chat ya existe, cualquiera responde.
+- Se abre un chat desde:
+  - **Contactar** en un perfil.
+  - **Abrir chat** en un proyecto.
+  - **Preguntarle** o **Chatear** en Materiales.
+  - El mensaje inicial del asistente de contratación.
+- Se ve el doble tilde de leído.
+
+*Fuente: `src/components/screens/messages-screen.tsx`.*
+
+### 2.11 Verificar tu identidad (DNI)
+
+1. Andá a **Verificación**. Subí el **frente** y el **dorso** del DNI, con buena luz y sin brillos.
+2. Tocá **Enviar a verificación con IA**.
+
+**Resultados posibles:**
+
+- **"¡Tu identidad quedó verificada!":** se muestra el tilde verde junto a tu nombre.
+- **"El documento fue rechazado":** con el motivo.
+- **"El documento quedó en revisión":** por ejemplo, si la foto no se lee bien.
+
+**Datos a tener en cuenta:**
+
+- Hay **3 intentos por día**.
+- Las fotos quedan privadas: solo las ves vos.
+
+*Fuente: `src/components/screens/panel/verificacion.tsx`.*
+
+### 2.12 Mi perfil
+
+- Podés cambiar tu foto, nombre, celular, dirección, ciudad y cumpleaños.
+- Podés compartir tu ubicación y elegir el **radio de búsqueda** (1 a 100 km).
+- El email no se puede cambiar.
+
+*Fuente: `cliente/perfil.tsx`.*
+
+---
+
+## 3. Profesional
+
+**Usar HomIA es gratis para el profesional.** No hay plan de pago.
+
+### Menú del profesional
+
+| Sección | En el celular | Para qué |
+|---|---|---|
+| **Inicio** | Barra de abajo | Tu centro de mando |
+| **Bolsa de trabajos** ("Bolsa") | Barra de abajo | Trabajos publicados para ofertar |
+| **Proyectos** | Barra de abajo | Obras en curso |
+| **Mensajes** | Barra de abajo | Chats |
+| **Materiales** | Más | Buscar materiales, carrito y comparar precios |
+| **Mis pedidos** | Más | Seguir y pagar los pedidos de materiales |
+| **Mis ofertas** | Más | Presupuestos que mandaste |
+| **CRM clientes** | Más | Tu tablero de oportunidades |
+| **Mis obras** | Más | Tu portafolio con fotos |
+| **Cuentas de retiro** | Más | Vínculos con proveedores |
+| **Directorio / Verificación / Mi perfil / Ayuda** | Más | — |
+
+*Fuente: `panel-layout.tsx:57-72`.*
+
+### 3.1 Inicio
+
+**Qué muestra:**
+
+- **Primeros pasos:**
+  1. Verificá tu identidad.
+  2. Completá tu perfil.
+  3. Mostrá tus obras.
+  4. Enviá tu primer presupuesto.
+- **Cuatro cifras:** presupuestos enviados, proyectos activos, trabajos en tu rubro y tu puntaje.
+- **Próximas acciones:** proyectos que esperan algo de vos.
+- **Oportunidades para vos:** trabajos abiertos de tu rubro.
+
+*Fuente: `profesional/dashboard.tsx`.*
+
+### 3.2 Bolsa de trabajos y ofertar
+
+1. En **Bolsa de trabajos**, filtrá por oficio, urgencia y distancia (de 1 a 100 km).
+2. En el trabajo que te interese, tocá **Ofertar**. Vas a ver el detalle: presupuesto del cliente,
+   descripción y fotos.
+3. En **Dejar presupuesto**, poné:
+   - **Monto** (obligatorio).
+   - **Plazo en días** (7 por defecto).
+   - **Mensaje** contando cómo lo vas a hacer.
+4. Tocá **Enviar presupuesto**.
+
+**Qué pasa después:**
+
+- Al cliente le llega "Nuevo presupuesto en tu trabajo".
+- Mientras esté pendiente, podés **actualizarlo** o **retirarlo**.
+- **Si te eligen:** te llega "¡Aceptaron tu presupuesto!" y se crea el proyecto con tu monto como
+  mano de obra.
+- **Si eligen a otro:** te llega "El cliente eligió otra oferta".
+
+**Cosas a saber:**
+
+- Si una oferta tuya fue **rechazada** o la **retiraste**, podés volver a ofertar desde el mismo
+  trabajo mientras siga abierto.
+
+*Fuente: `src/components/screens/job-detail.tsx`, `profesional/presupuestos.tsx`.*
+
+### 3.3 Mis ofertas
+
+- Arriba hay cuatro cifras: pendientes, valor cotizado, aceptadas y mano de obra ganada.
+- Podés filtrar por Todas, Pendientes, Aceptadas, Rechazadas o Retiradas.
+- Desde cada oferta podés **Ver trabajo**, **Retirar** (si está pendiente) o **Ver proyecto** (si
+  fue aceptada).
+
+*Fuente: `profesional/presupuestos.tsx`.*
+
+### 3.4 Cuando un cliente te contrata directo: cotizar
+
+1. Te llega el aviso "Te contrataron: cotizá la mano de obra para arrancar".
+2. En el proyecto ves **qué pidió el cliente**, **cuándo y dónde**, y su presupuesto de referencia.
+3. En **Cotizá la mano de obra**, poné el precio cerrado de tu trabajo, sin materiales, y tocá
+   **Enviar cotización**.
+   - Al cliente le llega "Te cotizaron la mano de obra".
+   - Podés cambiar el precio mientras el proyecto siga en la etapa Presupuesto.
+4. Si no podés tomar el trabajo, tocá **No puedo tomar este trabajo** y contá el motivo. El
+   proyecto se cancela y le avisamos al cliente.
+
+*Fuente: `profesional/proyecto-detalle.tsx`.*
+
+### 3.5 Llevar el proyecto por etapas
+
+- **Avanzar etapa:** con el botón **"Avanzar a …"**.
+  - Para salir de Presupuesto, primero tenés que cotizar.
+  - En cada avance le avisamos al cliente.
+- **Finalizar:** no podés finalizar la obra vos. Cuando termines, pasala a **Revisión**; el cliente
+  revisa y la da por finalizada.
+- **Cancelar:** se puede solo en Presupuesto o Materiales.
+- **Contacto con el cliente:**
+  - **Abrir chat:** si el cliente todavía no te escribió, ves "El cliente todavía no abrió el chat".
+  - **Ver reputación:** te muestra con quién vas a trabajar (sus reseñas de otros profesionales,
+    sus obras terminadas y sus compras).
+
+*Fuente: `profesional/proyecto-detalle.tsx`, `src/components/app/client-summary.tsx`.*
+
+### 3.6 ¿Quién paga los materiales? (modos A y B)
+
+En el proyecto, elegí una de estas opciones:
+
+- **"Los adelanto yo y los cobro en la factura" (modo A):** comprás vos los materiales y los cobrás
+  junto con tu mano de obra.
+- **"El cliente paga los materiales al proveedor" (modo B):** el proveedor le cobra los materiales
+  al cliente directamente y tu factura es solo por la mano de obra.
+
+El cliente ve el modo que elijas. Una vez que emitís una factura, el modo **queda fijo**.
+
+*Fuente: `profesional/proyecto-detalle.tsx:532-568`.*
+
+### 3.7 Proponer materiales
+
+1. En **Proponer material al cliente**, buscá el material en el catálogo (por ejemplo "caño",
+   "cable" o "cemento").
+2. Si un proveedor **vinculado a vos** lo tiene en stock, la app completa el mejor precio. Si no,
+   elegí "Sin proveedor (compro por mi cuenta)".
+3. Poné la cantidad, el precio unitario y una nota para el cliente, si querés.
+4. Tocá **Proponer al cliente**. Al cliente le llega "Nuevos materiales por aprobar".
+
+**Qué pasa después:**
+
+- **Si el cliente aprueba:** el stock del proveedor queda reservado.
+- **Si rechaza:** podés **Sugerir alternativa**.
+- **Mientras no decida:** podés **Eliminar** tu propuesta.
+
+**Si algo sale mal:**
+
+- "Necesitás una cuenta de retiro activa con …": primero vinculate con ese proveedor (punto 3.11).
+- "… no alcanza": el proveedor no tiene stock suficiente.
+
+*Fuente: `profesional/proyecto-detalle.tsx:571-818`.*
+
+### 3.8 Facturar y cobrar
+
+**Emitir la factura:**
+
+1. En el proyecto, tocá **Emitir factura**. No hay que completar nada: la app arma la factura sola.
+   - **Modo A:** incluye los materiales aprobados que todavía no facturaste, más la mano de obra.
+   - **Modo B:** incluye solo la mano de obra.
+   - La mano de obra se factura **una sola vez**.
+2. Te llega "Factura HOM-2026-… emitida" y al cliente, "Nueva factura". Cada factura se puede bajar
+   en **PDF**.
+3. Solo puede haber **una factura pendiente a la vez**: para emitir la siguiente, esperá a que el
+   cliente pague la anterior.
+
+**Conectar tu Mercado Pago (para cobrar):**
+
+1. En **Mi perfil**, en la tarjeta **"Cobrá con tu Mercado Pago"**, tocá **Conectar Mercado Pago** y
+   autorizá en Mercado Pago.
+2. Al volver: "Mercado Pago conectado — Tus clientes ya pueden pagarte las facturas por Mercado Pago:
+   la plata entra en tu cuenta."
+3. Estados: conectado (con fecha), "Vencido: volvé a conectar" o "No conectado". Podés
+   **desconectar** cuando quieras.
+
+**Cómo cobrás (el cliente elige cómo pagar):**
+
+- **Mercado Pago:** solo si conectaste tu Mercado Pago. La plata entra a **tu** cuenta y cobrás el
+  **100%** de la factura; el cliente paga aparte el cargo de servicio HomIA del 1%. Cuando se
+  acredita, la factura pasa sola a pagada.
+- **Efectivo:** sin cargo. Te llega "Pago en efectivo acordado". Cuando recibís la plata, tocá
+  **Confirmar cobro en efectivo** en el proyecto.
+- **Si no conectaste Mercado Pago,** el cliente solo puede pagarte en efectivo.
+
+**Si algo sale mal:**
+
+- "Todavía no cotizaste la mano de obra…": cotizá primero.
+- "Ya hay una factura pendiente de pago": esperá el pago de la anterior.
+
+**Devoluciones de materiales que facturaste (modo A):** si el cliente pagó la factura por Mercado
+Pago y después devuelve sobrantes al proveedor, el reembolso sale de **tu** cuenta de Mercado Pago
+(fuiste quien cobró). Es un punto pendiente de decisión.
+
+*Fuente: `profesional/proyecto-detalle.tsx`, `profesional/perfil.tsx`, `src/components/app/mp-connect-card.tsx`.*
+
+### 3.9 Materiales para vos
+
+- Es la misma pantalla que la del cliente (punto 2.7): **carrito** y **Mis pedidos** (también en el
+  menú). Tiene una pestaña extra, **Comparables**, con el mejor precio de cada material.
+- **Mis pedidos** y **Devolver sobrantes** funcionan igual que para el cliente.
+- En los proyectos, **el profesional también puede pedir devolver sobrantes** de los materiales
+  pagados.
+
+*Fuente: `cliente/materiales.tsx` (con perfil profesional), `src/components/screens/panel/pedidos.tsx`.*
+
+### 3.10 Mis obras (portafolio)
+
+1. Tocá **Publicar obra**.
+2. Poné título, descripción, categoría y hasta 4 fotos.
+3. Tocá **Publicar obra**: aparece en tu perfil público.
+
+**Cosas a saber:**
+
+- Si alguna foto no sube, la obra **no se publica**, para que no quede incompleta.
+- Cuando borrás una obra, deja de verse, pero las reseñas no se tocan.
+
+*Fuente: `profesional/obras.tsx`.*
+
+### 3.11 Cuentas de retiro (vincularte con proveedores)
+
+Una cuenta de retiro te habilita a retirar materiales en el local de un proveedor a cuenta de tus
+proyectos. **No es una cuenta bancaria ni guarda plata.**
+
+1. Tocá **Vincularme**.
+2. Poné el email del proveedor, un nombre para la cuenta y notas, si querés.
+3. Tocá **Enviar solicitud**. La cuenta queda **pendiente** hasta que el proveedor la active.
+
+**Qué pasa después:**
+
+- Cuando el proveedor la activa, te llega "Cuenta de retiro activa".
+- Vos solo podés **pausarla**. Para reactivarla, se lo tenés que pedir al proveedor.
+- El proveedor también puede vincularte directamente. En ese caso la cuenta nace activa.
+
+*Fuente: `profesional/vinculaciones.tsx`.*
+
+### 3.12 CRM clientes
+
+- Es un tablero con las columnas Consultas, Presupuesto enviado, En negociación, En obra y
+  Cerrado / Facturado.
+- Con **+ Nuevo trato** cargás un título y un valor estimado.
+- Movés cada trato con las flechas ◀ ▶ y lo borrás con el tacho.
+- **Los tratos se cargan a mano**: el tablero no se llena solo.
+- Borrar un trato no pide confirmación.
+
+*Fuente: `profesional/crm.tsx`.*
+
+### 3.13 Reseñas, verificación y perfil
+
+- **Reseñar al cliente:** se hace al finalizar el proyecto. El formulario es igual que el del
+  cliente.
+- **Tus reseñas:** se ven en tu perfil público. Hoy no hay forma de responderlas.
+- **Verificación:** igual que la del cliente (punto 2.11). Si en tu perfil cargaste un DNI/CUIL
+  distinto al de la foto, la verificación se rechaza.
+- **Mi perfil:**
+  - Datos de contacto, persona o empresa, oficios (al menos uno), habilidades, experiencia y bio.
+  - **Radio de servicio:** a qué distancia aceptás trabajar.
+  - **"Cobrá con tu Mercado Pago"** (ver 3.8).
+  - Un aviso: usar HomIA es gratis; cuando alguien paga por Mercado Pago se suma un cargo de
+    servicio del 1% que paga quien compra (vos cobrás el 100% de tu factura).
+
+*Fuente: `profesional/perfil.tsx`, `src/components/screens/pro-profile.tsx`.*
+
+---
+
+## 4. Proveedor
+
+El proveedor es **el único rol que paga**. Tiene 14 días gratis desde el alta y después elige un
+plan: **Básico, $50.000 por mes**, o **PRO, $100.000 por mes**.
+
+### Menú del proveedor
+
+| Sección | En el celular | Para qué |
+|---|---|---|
+| **Inicio** | Barra de abajo | Resumen, alertas de stock, analítica PRO |
+| **Stock** | Barra de abajo | Tus materiales, precios y cantidades |
+| **Cobros** | Barra de abajo | Tres pestañas: Cobros de proyectos, **Ventas (pedidos)** y **Devoluciones**; y el recuadro para conectar tu Mercado Pago |
+| **Mensajes** | Barra de abajo | Chats |
+| **Mi plan** | Más | Prueba, Básico o PRO |
+| **CRM** | Más | Tablero de tratos |
+| **Vinculaciones** | Más | Cuentas de retiro de profesionales |
+| **Directorio / Verificación / Mi perfil / Ayuda** | Más | — |
+
+Arriba de todo se ve el estado del plan:
+
+- **"Prueba: quedan N días"** mientras dura la prueba.
+- **"Plan vencido → Elegí tu plan"** cuando terminó la prueba sin plan.
+
+*Fuente: `panel-layout.tsx:70-82`, `:188-205`.*
+
+### 4.1 Inicio
+
+**Qué muestra:**
+
+- **Aviso del plan** mientras dura la prueba o cuando está vencida.
+- **Primeros pasos:**
+  1. Verificá tu identidad.
+  2. Completá tu perfil de negocio.
+  3. **Conectá Mercado Pago.**
+  4. Publicá tu catálogo de stock.
+  5. Vinculate con profesionales.
+- **Cuatro cifras:** elementos publicados, valor del stock, por agotar y agotados.
+- **Alertas de stock:** "Crítico" o "Reponer pronto", con el botón **Reponer**.
+- **Analítica del negocio:** solo con PRO (ver 4.9).
+- **Vinculaciones activas** y **accesos rápidos.**
+
+*Fuente: `proveedor/dashboard.tsx`.*
+
+### 4.2 Stock: publicar un material
+
+1. En **Stock**, tocá **Publicar elemento**.
+2. Buscá el material en el catálogo. Con 2 letras ya aparecen resultados, y encuentra aunque lo
+   escribas sin acento o con otro nombre.
+3. **Si no está en el catálogo:** tocá **"Agregar «X» al catálogo con IA"**.
+   1. Poné el nombre técnico, la categoría y la unidad de venta.
+   2. La IA escribe la explicación y los otros nombres con que lo busca la gente.
+   3. Si ya existía algo parecido, lo selecciona y no lo duplica.
+4. Poné el **precio**, la **cantidad**, el **stock mínimo** (5 si no ponés nada) y la **marca**, si
+   querés.
+5. Tocá **Publicar elemento**.
+
+**Editar después:** desde la tarjeta del material podés cambiar la foto, la marca, el precio, la
+cantidad (con los botones − y +) y el stock mínimo. También podés **Eliminar** el material.
+
+**Estado del material (se calcula solo):**
+
+- **Por agotar:** cuando la cantidad llega al mínimo.
+- **Agotado:** cuando la cantidad llega a 0.
+
+**Si algo sale mal:**
+
+- "Ya tenés ese elemento": editá la entrada que ya existe.
+- "Tu prueba gratis terminó…": elegí un plan para volver a gestionar el stock.
+
+*Fuente: `proveedor/stock.tsx`.*
+
+### 4.3 Ventas (pestaña "Ventas (pedidos)" dentro de Cobros)
+
+Acá llega **tu parte** de cada pedido: uno o más productos tuyos que un cliente o profesional sumó a
+su carrito. Te llega por chat y con el aviso **"Nuevo pedido de un cliente"**. Solo ves tu parte:
+no ves lo que ese cliente le pidió a otros proveedores.
+
+| Estado | Qué ves | Qué podés hacer |
+|---|---|---|
+| **Pedido nuevo** | Número de pedido, productos y cantidades, cliente, si es reserva 48 h o compra, nota, **Reputación del cliente** | **Aprobar** o **Rechazar el pedido entero** (con motivo) |
+| **Aprobado: esperando pago y retiro** | Cómo va a pagar y hasta cuándo tiene | **Entregado**, **Cancelar** (si no está pagado), **Confirmar cobro en efectivo** (si acordó efectivo) |
+| **Entregado: falta el pago** | — | **Confirmar cobro en efectivo** si acordó efectivo |
+| **Pagado** | "Venta cobrada — el cliente puede calificarte" | — |
+| **Rechazado / Cancelado** | Motivo | — |
+
+**Cómo aprobar:**
+
+1. Tocá **Aprobar**. Vas a ver cada producto con el stock que tenés.
+2. Tocá **Aprobar y reservar todo**. Se reservan **todos los productos juntos** y se emite el cobro.
+   **Si alguno no alcanza, no se reserva nada:** actualizá tu stock o rechazá con un motivo.
+3. Al cliente le llega el aviso para que pague.
+
+**Qué pasa después:**
+
+- En cada venta dice: "Cobrás $X (el 100% de tu precio). El cliente paga aparte el cargo de
+  servicio HomIA (1%)".
+- **Si el cliente paga con Mercado Pago:** la plata entra a **tu** cuenta de Mercado Pago y te llega
+  "Cobro acreditado por Mercado Pago". El 1% lo paga el cliente, no vos.
+- **Si acordó efectivo:** tocá **Confirmar cobro en efectivo** cuando recibas la plata.
+- **Si no tenés Mercado Pago conectado:** el cliente solo puede pagarte en efectivo.
+- **Si no paga a tiempo** (48 horas para una reserva, 7 días para una compra): se cancela sola y el
+  stock vuelve a tu inventario.
+- Cada acción queda en la **línea de tiempo** de la venta.
+
+*Fuente: `src/components/screens/panel/proveedor/cobros.tsx`.*
+
+### 4.4 Cobros de proyectos (pestaña dentro de Cobros)
+
+Aparecen cuando un profesional usa tus materiales en un proyecto con el modo **"el cliente paga al
+proveedor"** y el cliente los aprueba.
+
+1. En **Materiales por cobrar** ves los materiales de cada proyecto y el total.
+2. Tocá **Emitir cobro al cliente**. Se crea un cobro con número PRV-2026-… y al cliente le llega el
+   aviso.
+3. El cliente paga con **Mercado Pago**, o acuerda **efectivo** y vos tocás **Confirmar cobro en
+   efectivo** cuando lo recibís.
+
+**Cosas a saber:**
+
+- Solo puede haber **un cobro abierto por proyecto** a la vez.
+- No existe un cobro "libre" ni un link de pago para compartir.
+- Si el cliente paga con **Mercado Pago**, la plata entra a **tu** cuenta (cobrás el 100%; el
+  cliente paga aparte el cargo de servicio del 1%). Si no conectaste tu Mercado Pago, solo puede
+  pagarte en efectivo.
+
+*Fuente: `proveedor/cobros.tsx`, `src/app/api/charges/[id]/route.ts`.*
+
+### 4.5 Devoluciones de sobrantes (pestaña dentro de Cobros)
+
+Cuando alguien te quiere devolver material que le sobró, te llega el aviso **"Te pidieron devolver
+sobrantes"**. El pedido trae fotos, cantidades y el estado de cada ítem.
+
+| Estado | Qué podés hacer |
+|---|---|
+| **Nueva: respondé** | **Aceptar todo**, **Aceptar algunos** (podés ajustar la cantidad y el monto de cada ítem, por ejemplo con un descuento por manipulación, y el cliente lo ve) o **Rechazar** (el motivo es obligatorio) |
+| **Aceptada: esperando que la acerquen** | Cuando te traen los sobrantes, **Marcar recibido** y confirmás cuánto recibiste |
+| **Recibida: reembolsá en efectivo** | Devolvés la plata en el mostrador y tocás **Ya lo reembolsé en efectivo** |
+| **Reembolsada** (efectivo) | Esperás que el cliente confirme: "Esperando que el cliente confirme que recibió el efectivo (se confirma solo a las 72 h)" |
+| **Falló el reembolso** | **Reintentar reembolso** |
+| **Rechazada / Cancelada** | — |
+
+**Qué pasa cuando marcás "recibido":**
+
+- Lo que recibiste **vuelve solo a tu stock**.
+- Si el cliente pagó con **Mercado Pago**, el reembolso sale **automáticamente** de la cuenta que
+  cobró la venta (la tuya, si el pago se hizo con tu Mercado Pago). Se reembolsa el precio de lo
+  devuelto; el cargo de servicio del 1% no se devuelve.
+- **Si falla el reembolso:** revisá que tu Mercado Pago siga conectado y reintentá.
+
+**Si no respondés una devolución en 72 horas,** te llega **un** recordatorio: "Tenés una devolución
+sin responder".
+
+*Fuente: `proveedor/devoluciones-tab.tsx`, `src/lib/leftovers-cron.ts`.*
+
+### 4.6 Conectar Mercado Pago
+
+En **Cobros**, en el recuadro **"Cobrá con tu Mercado Pago"**, tocá **Conectar Mercado Pago**.
+
+1. Te lleva a Mercado Pago para autorizar.
+2. Al volver, la app dice "Mercado Pago conectado".
+
+**Estados posibles del recuadro:**
+
+- **Conectado hasta [fecha].**
+- **Vencido: volvé a conectar.**
+- **No conectado.**
+
+**Qué pasa según el estado:**
+
+- **Sin conexión:** tus clientes solo pueden pagarte **en efectivo** (ventas y cobros de
+  proyectos).
+- **Conectado:** "La plata de tus ventas y cobros entra en tu cuenta: cobrás el 100% de tu precio (el
+  cliente paga aparte el cargo de servicio HomIA del 1%)."
+- **Desconectar:** los pagos que ya estaban iniciados no se ven afectados.
+
+**Si algo sale mal:** si aparece "No pudimos conectar tu Mercado Pago", probá de nuevo en un rato.
+Mientras tanto, tus clientes te pagan en efectivo.
+
+*Fuente: `proveedor/cobros.tsx`, `src/components/app/mp-connect-card.tsx`.*
+
+### 4.7 Vinculaciones (cuentas de retiro)
+
+Sirven para habilitar a un profesional a retirar materiales en tu local a cuenta de sus proyectos.
+No mueven plata.
+
+**Hay dos formas de crear una vinculación:**
+
+- **Vos lo vinculás:**
+  1. Andá a **Vincular un profesional** y poné su email (tiene que estar registrado como
+     profesional), un nombre para la cuenta y notas.
+  2. La vinculación **nace activa** y al profesional le llega el aviso.
+- **Te lo pide el profesional:**
+  1. Te llega "Un profesional pide cuenta de retiro".
+  2. La activás con el interruptor.
+
+**Pausar y reactivar:** podés pausar la cuenta y reactivarla cuando quieras.
+
+**Por qué importa:** sin una cuenta activa con vos, el profesional **no puede proponer tus
+materiales** en sus proyectos.
+
+*Fuente: `proveedor/vinculaciones.tsx`.*
+
+### 4.8 CRM
+
+Es un tablero de tratos que se cargan a mano, con las columnas Nuevos contactos, Cotizando, Compra
+en curso y Cliente recurrente.
+
+- **Nuevo trato:** cargás título, etapa, valor y contraparte (la contraparte es un texto libre).
+- **Mover o eliminar:** podés mover el trato entre columnas o eliminarlo, con confirmación.
+
+*Fuente: `proveedor/crm.tsx`.*
+
+### 4.9 Mi plan: Básico o PRO
+
+**Qué incluye cada plan:**
+
+| | Prueba (14 días) | Básico — $50.000/mes | PRO — $100.000/mes |
+|---|---|---|---|
+| Stock, ventas, cobros, CRM, vinculaciones | Sí | Sí | Sí |
+| Aparecer en materiales, directorio y búsquedas | Sí | Sí | Sí, **primero y como "★ Recomendado"** |
+| Tu logo y tu marca en la **cinta de sponsors** de la portada | No | No | **Sí** |
+| **Analítica del negocio** | No | No | **Sí** |
+
+**Suscribirte:**
+
+1. Tocá **Elegir Básico** o **Pasarme a PRO**.
+2. Te lleva a Mercado Pago para autorizar el cobro mensual en pesos.
+3. Al volver, la app dice "Estamos confirmando tu pago con Mercado Pago…". Esto puede tardar hasta
+   un minuto; si no llega la confirmación, tocá **Volver a verificar**.
+
+**Qué pasa después:**
+
+- Al subir a PRO te llega "¡Subiste al plan PRO!".
+- Al bajar a Básico, dejás de ser Recomendado y salís de la cinta de sponsors.
+
+**Cambiar de plan:** tocá el botón del otro plan. La suscripción anterior se cancela sola recién
+cuando se confirma la nueva; si abandonás el pago, seguís con el plan que tenías.
+
+**Cancelar:** **no hay botón en la app.** Se cancela desde tu cuenta de Mercado Pago.
+
+**Qué pasa si vence la prueba, cancelás o dejás de pagar:**
+
+- **Si no pagás:** si pasan 35 días sin cobro, el plan se cancela.
+- **Desaparecés** de materiales, directorio, búsquedas, mapa y de las respuestas de Homy.
+- **No podés** tocar el stock, gestionar pedidos, emitir cobros ni ver la analítica.
+- **Sí podés** entrar a tu panel y mirar.
+- **Tus datos, reseñas y vinculaciones se conservan.**
+- Te llega el aviso "Tu plan se canceló…". Para volver, elegí un plan.
+
+**Tu marca en la portada (solo PRO):**
+
+1. En **Mi perfil**, en la sección **Tu marca en la home**, subí tu logo (PNG, WEBP o JPG) y, si
+   querés, una frase de hasta 60 caracteres y un color.
+2. Tocá **Guardar mi marca**. Si no subís logo, se usa tu foto de perfil.
+
+En la cinta de sponsors aparecen primero los proveedores que cargaron logo propio.
+
+**Analítica del negocio (PRO, se ve en Inicio):** resume los últimos 30 días.
+
+- Ventas cobradas y pedidos.
+- Los 8 **elementos más pedidos**.
+- **Consultas de tu rubro:** las búsquedas relacionadas con lo que vendés.
+- **Te encontraron en:** las búsquedas donde apareció tu negocio.
+
+*Fuente: `proveedor/plan.tsx`, `proveedor/perfil.tsx`, `src/lib/plans.ts`.*
+
+### 4.10 Mi perfil
+
+- **Datos del negocio:** nombre (obligatorio), tipo de negocio (18 rubros), CUIT, descripción,
+  dirección y ciudad.
+- **Foto, plan y verificación:** foto del negocio, el estado de tu plan y el acceso a la
+  verificación.
+- **Marca en la portada:** solo PRO (ver 4.9).
+
+*Fuente: `proveedor/perfil.tsx`.*
+
+### 4.11 Reseñas
+
+- **Quién te califica:** los clientes, cuando **les entregaste o cobraste una compra**, o al
+  **finalizar una obra** en la que se usaron tus materiales.
+- **Vos no reseñás a nadie.**
+- **Dónde se ven:** en tu perfil público.
+
+### 4.12 Tu perfil público (lo que ven los demás)
+
+- **Datos:** nombre del negocio, verificación, rubro y **"★ Recomendado"** si tenés PRO.
+- **Ubicación y reputación:** ciudad, puntaje y cantidad de elementos publicados.
+- **Catálogo con stock:** con un botón **Pedir** por cada material.
+- **Reseñas:** con fotos.
+- **Contactar:** los clientes te escriben con el botón **Contactar**.
+
+*Fuente: `src/components/screens/provider-profile.tsx`.*
+
+---
+
+## 5. Cosas que hoy la app promete distinto de lo que hace
+
+Estas diferencias salen de comparar los textos de la app con lo que realmente hace. No se
+corrigieron; quedan anotadas para decidir.
+
+| Qué dice la app | Qué hace | Dónde |
+|---|---|---|
+| El CRM del proveedor es un "historial" de compras de profesionales (tour) | Es un tablero manual de tratos | `tour-content.ts:280` |
+| "Después podés sumar otros perfiles" (registro) | No hay forma de sumar un perfil después | `auth-register.tsx:258` |
+| El recorrido guiado "se arranca solo en tu primer ingreso" | No arranca solo | `help-screen.tsx:203`; `tour-overlay.tsx:4-6` |
+| Botón "Conectá Mercado Pago" (ayuda y tour del proveedor) | El botón dice "Conectar Mercado Pago" | `help-screen.tsx:87`; `tour-content.ts:264` |
+| Al volver de pagar un cobro de materiales del proyecto con Mercado Pago | No aparece aviso de "confirmando pago" (sí en Facturas y en Mis pedidos) | `cliente/proyecto-detalle.tsx` |
+
+Corregido el 24/09 (commit `2eed864`): el pago de facturas ahora sí va a la cuenta del profesional;
+la regla de chat ya se decide por el destinatario; el perfil del cliente muestra "Tu DNI está en
+revisión"; "Volver a ofertar" muestra el formulario; Mis pedidos avisa al volver de Mercado Pago.
