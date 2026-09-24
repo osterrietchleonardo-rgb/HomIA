@@ -56,8 +56,17 @@ src/
     dni-ai.ts          # verificación de DNI con IA (visión)
     search-match.ts    # búsqueda difusa: NFD + lowercase + sin diacríticos + similitud + singular/plural
 supabase/migrations/   # 18 migraciones SQL de referencia (espejo Postgres del esquema)
-scripts/               # seeds, E2E, auditoría de seguridad
+scripts/               # ver scripts/README.md
+  catalogo/            # catálogo maestro (datos + seeder idempotente)
+  demo/                # seed demo + assets (DNI, fotos de reseñas)
+  base/                # utilidades de la base (RLS)
+  e2e/                 # pruebas vivas (sec-audit.sh)
+  limpieza/            # purgas de usuarios/datos de prueba
+  medios/              # generadores de imágenes, videos y favicon
+  historico/           # scripts de un solo uso y E2E del sandbox viejo (no se corren)
 prisma/schema.prisma   # 31 modelos
+docs/                  # auditoría, plan de lanzamiento, guía de deploy
+  historico/           # worklog, contratos y guías viejas (solo consulta)
 ```
 
 Convenciones de UI (no inventar otras):
@@ -72,7 +81,7 @@ Convenciones de UI (no inventar otras):
 
 - bcrypt (hash) + JWT en cookie httpOnly. `AUTH_SECRET` obligatorio en producción (fail-fast con mensaje claro).
 - Cabeceras de seguridad en `next.config.ts` (nosniff, referrer-policy, permissions-policy; uploads con CSP sandbox).
-- Auditoría de seguridad: `bash scripts/sec-audit.sh` (29 checks: sesión, 401/403 en todos los endpoints, IDOR, XSS uploads, etc.).
+- Auditoría de seguridad: `bash scripts/e2e/sec-audit.sh` (29 checks: sesión, 401/403 en todos los endpoints, IDOR, XSS uploads, etc.).
 - Validación: `parseBody(req, zodSchema)` de `src/lib/api.ts` en las rutas de dinero y estado (purchases, projects, materials, invoice, plan, verification, profiles/me, returns, bids); el resto todavía castea `body<T>()` (deuda). `fail()` para errores.
 - Rate limit: `src/lib/rate-limit.ts` (memoria) NO sirve en Vercel; el límite real va en Vercel Firewall (login 10/15 min, registro 8/h, homy 30/h, uploads 60/h por IP). `/api/homy*` exige sesión.
 - `next.config.ts` con `ignoreBuildErrors: false` y `tsconfig` con `noImplicitAny: true`: el build tiene que compilar limpio.
@@ -133,8 +142,8 @@ Notas de esquema: SQLite → sin enums (String), sin arrays (JSON como string), 
 ## 8. Catálogo de elementos
 
 - 1247 elementos, 20 categorías, 100% con descripción natural (español rioplatense) + aliases + unidad de venta.
-- Seeder **idempotente**: `node scripts/seed-catalog-maestro.mjs` (upsert por nombre+categoría; NO rompe ProviderStock existente). Los datos viven en `scripts/catalog-maestro.mjs`, `catalog-expansion.mjs`, `catalog-exp2-{a,b,c,d}.mjs`.
-- Datos demo completos (3 usuarios demo, stock, proyectos, reseñas): `node scripts/demo-seed.mjs` (+ `demo-seed-lib.mjs`). Credenciales demo: `cliente@homia.test` / `profesional@homia.test` / `proveedor@homia.test`, pass `Homy2026!`.
+- Seeder **idempotente**: `node scripts/catalogo/seed-catalog-maestro.mjs` (upsert por nombre+categoría; NO rompe ProviderStock existente). Los datos viven en `scripts/catalogo/catalog-maestro.mjs`, `catalog-expansion.mjs`, `catalog-exp2-{a,b,c,d}.mjs`.
+- Datos demo completos (3 usuarios demo, stock, proyectos, reseñas): `node scripts/demo/demo-seed.mjs` (+ `demo-seed-lib.mjs`). Credenciales demo: `cliente@homia.test` / `profesional@homia.test` / `proveedor@homia.test`, pass `Homy2026!`.
 - Búsqueda difusa obligatoria: usar `src/lib/search-match.ts` (NFD, lowercase, strip diacríticos, similitud, singular/plural). Nunca `String.includes` pelado.
 
 ## 9. IA
@@ -156,9 +165,9 @@ Notas de esquema: SQLite → sin enums (String), sin arrays (JSON como string), 
 ## 11. Estado actual (23 de septiembre de 2026)
 
 ✔ Migración a Vercel + Supabase hecha (Postgres, Storage con dos buckets, IA vía `ai.ts`, variables en Vercel).
-✔ Plan de lanzamiento (`PLAN-LANZAMIENTO-48H.md`), Día 1: compra directa completa (reserva de stock, cobro, pago), OAuth MP del proveedor, plan en pesos con trial real, máquina de estados de proyecto con cotización del profesional, factura única, webhook con firma e idempotente, DNI por Supabase, IDORs cerrados, copy honesto. E2E de proyectos 44/44 contra la base real.
+✔ Plan de lanzamiento (`docs/PLAN-LANZAMIENTO-48H.md`), Día 1: compra directa completa (reserva de stock, cobro, pago), OAuth MP del proveedor, plan en pesos con trial real, máquina de estados de proyecto con cotización del profesional, factura única, webhook con firma e idempotente, DNI por Supabase, IDORs cerrados, copy honesto. E2E de proyectos 44/44 contra la base real.
 ◻ Antes de lanzar: smokes B9 del plan (MP de prueba, OAuth real, suscripción, sobrantes, móvil), purga de datos de prueba, rate limit en Vercel Firewall (manual), `MP_WEBHOOK_SECRET` y `MP_SUB_WEBHOOK_SECRET` cargados.
-◻ Deuda priorizada: `AUDITORIA-INTEGRAL.md` §9 y `PLAN-LANZAMIENTO-48H.md` §4.
+◻ Deuda priorizada: `docs/AUDITORIA-INTEGRAL.md` §9 y `docs/PLAN-LANZAMIENTO-48H.md` §4.
 
 ## 12. Variables de entorno (nombres exactos que lee el código)
 

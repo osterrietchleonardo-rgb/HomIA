@@ -1,5 +1,5 @@
 // Videoteca HomIA — videitos cortos con locución que explican cada sección,
-// cada acción posible de cada rol. Los MP4 se generan con scripts/gen-videos.py
+// cada acción posible de cada rol. Los MP4 se generan con scripts/medios/gen-videos.py
 // y viven en /public/videos. Duración real la reporta el propio <video>.
 export type VideoRole = 'cliente' | 'profesional' | 'proveedor'
 

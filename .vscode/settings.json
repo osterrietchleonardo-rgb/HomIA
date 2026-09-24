@@ -1,0 +1,16 @@
+{
+  // Oculta de la barra lateral lo que se genera solo (siguen existiendo en disco)
+  "files.exclude": {
+    "**/.git": true,
+    ".next": true,
+    "node_modules": true,
+    "tsconfig.tsbuildinfo": true,
+    "next-env.d.ts": true,
+    ".playwright": true,
+    ".playwright-cli": true
+  },
+  "search.exclude": {
+    "docs/historico": true,
+    "scripts/historico": true
+  }
+}

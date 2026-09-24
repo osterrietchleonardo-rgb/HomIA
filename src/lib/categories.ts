@@ -2,7 +2,7 @@
 // Categorías (rubros) de HomIA — fuente única para bolsa, publicar y obras.
 // Se leen de `GET /api/directory` (→ `categories`, 20 rubros de la DB, mismas
 // que el catálogo maestro). Si la red falla se usa la lista espejo de
-// scripts/catalog-maestro.mjs para que los formularios nunca queden vacíos.
+// scripts/catalogo/catalog-maestro.mjs para que los formularios nunca queden vacíos.
 import { useEffect, useState } from 'react'
 import {
   BrickWall, PanelsTopLeft, Droplets, Flame, Zap, Lightbulb, PaintRoller, Wrench, Hammer,
@@ -12,7 +12,7 @@ import {
 
 export type Category = { slug: string; name: string; icon: string }
 
-/** Espejo de las 20 categorías de scripts/catalog-maestro.mjs (fallback offline). */
+/** Espejo de las 20 categorías de scripts/catalogo/catalog-maestro.mjs (fallback offline). */
 export const CATEGORIES_FALLBACK: Category[] = [
   { slug: 'albanileria', name: 'Corralón · Albañilería', icon: 'brick-wall' },
   { slug: 'durlock', name: 'Durlock · Chapa seca', icon: 'panels-top-left' },
