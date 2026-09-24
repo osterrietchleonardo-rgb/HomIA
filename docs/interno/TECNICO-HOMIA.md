@@ -380,8 +380,10 @@ GET privados de N.
   cada consulta de Prisma son ~4 idas y vueltas, y cada una cruzaba el continente. Medido en
   producción antes del cambio: `/api/auth/me` 1,4-1,5 s, bandeja de mensajes 4,9 s, Mis proyectos
   4,9 s, búsqueda de materiales 5,4 s.
-- **Región:** `vercel.json` → `"regions": ["gru1"]` (San Pablo, misma región que la base). Se aplica
-  con el próximo deploy; hay que re-medir en producción después de publicar.
+- **Región:** `vercel.json` → `"regions": ["gru1"]` (San Pablo, misma región que la base). Desplegado
+  en `b4665fb` (24/09/2026); `x-vercel-id` confirma `gru1`. Medido en producción después:
+  `/api/auth/me` 0,23-0,36 s (antes 1,4-1,5), bandeja de mensajes 0,21-0,26 s (antes 4,9), Mis
+  proyectos 0,39 s (antes 4,9), búsqueda de materiales 0,49 s (antes 5,4).
 - **Sesión en una consulta:** `getSessionUser` (`src/lib/auth.ts`) pasó de `findUnique` + `include`
   de 2 relaciones (3 consultas) a un `$queryRaw` con `EXISTS` para los perfiles. Corre en cada pedido
   autenticado. Medido en dev: ~0,49 s → ~0,36 s por pedido.
