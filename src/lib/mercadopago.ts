@@ -72,9 +72,9 @@ export async function createInvoicePreference(input: {
       payer: { email: input.payerEmail },
       external_reference: input.invoiceId,
       back_urls: {
-        success: `${input.baseUrl}/#/panel/cliente/facturas?estado=pagado`,
-        pending: `${input.baseUrl}/#/panel/cliente/facturas?estado=pendiente`,
-        failure: `${input.baseUrl}/#/panel/cliente/facturas?estado=fallo`,
+        success: `${input.baseUrl}/panel/cliente/facturas?estado=pagado`,
+        pending: `${input.baseUrl}/panel/cliente/facturas?estado=pendiente`,
+        failure: `${input.baseUrl}/panel/cliente/facturas?estado=fallo`,
       },
       notification_url: `${input.baseUrl}/api/payments/webhook`,
       statement_descriptor: 'HOMIA',
@@ -146,9 +146,9 @@ export async function createChargePreference(input: {
       payer: { email: input.payerEmail },
       external_reference: `charge:${input.chargeId}`,
       back_urls: {
-        success: `${input.baseUrl}/#/panel/cliente/proyectos?cobro=pagado`,
-        pending: `${input.baseUrl}/#/panel/cliente/proyectos?cobro=pendiente`,
-        failure: `${input.baseUrl}/#/panel/cliente/proyectos?cobro=fallo`,
+        success: `${input.baseUrl}/panel/cliente/proyectos?cobro=pagado`,
+        pending: `${input.baseUrl}/panel/cliente/proyectos?cobro=pendiente`,
+        failure: `${input.baseUrl}/panel/cliente/proyectos?cobro=fallo`,
       },
       notification_url: `${input.baseUrl}/api/payments/webhook`,
       statement_descriptor: 'HOMIA',
@@ -189,9 +189,9 @@ export async function createPurchasePreference(input: {
     payer: { email: input.payerEmail },
     external_reference: `purchase:${input.purchaseId}`,
     back_urls: {
-      success: `${input.baseUrl}/#/panel/cliente/materiales?compra=pagado`,
-      pending: `${input.baseUrl}/#/panel/cliente/materiales?compra=pendiente`,
-      failure: `${input.baseUrl}/#/panel/cliente/materiales?compra=fallo`,
+      success: `${input.baseUrl}/panel/cliente/materiales?compra=pagado`,
+      pending: `${input.baseUrl}/panel/cliente/materiales?compra=pendiente`,
+      failure: `${input.baseUrl}/panel/cliente/materiales?compra=fallo`,
     },
     notification_url: `${input.baseUrl}/api/payments/webhook`,
     statement_descriptor: 'HOMIA',
@@ -225,8 +225,8 @@ export async function createProviderPlanPreapproval(input: {
     body: {
       reason:
         input.plan === 'pro'
-          ? 'Plan PRO HomIA — analítica del negocio, tarjeta Recomendado y sponsor en la home'
-          : 'Plan Básico HomIA — uso completo de la plataforma para tu negocio',
+          ? 'HomIA Plan PRO: sponsor en la home y Recomendado' // MP: máx. 60 caracteres
+          : 'HomIA Plan Básico: uso completo de la app',
       auto_recurring: {
         frequency: 1,
         frequency_type: 'months',
@@ -235,7 +235,7 @@ export async function createProviderPlanPreapproval(input: {
       },
       payer_email: input.payerEmail,
       external_reference: `plan:provider:${input.profileId}:${input.plan}`,
-      back_url: `${input.baseUrl}/#/panel/proveedor/plan?plan=ok`,
+      back_url: `${input.baseUrl}/panel/proveedor/plan?plan=ok`,
     },
   })
   return { id: res.id || '', initPoint: (res.init_point || '') as string, priceArs }
