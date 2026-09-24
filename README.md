@@ -14,19 +14,24 @@ Ecosistema digital de servicios del hogar para Argentina — **freemium, 3 roles
 
 ## Arranque rápido (desarrollo)
 
+> ⚠️ Hay **una sola base**: el `.env` local apunta al Postgres de Supabase de **producción**.
+> Todo lo que se escribe desde local (scripts, seeds, pruebas) queda en producción.
+
 ```bash
 npm install
-cp .env.example .env          # completar DATABASE_URL (SQLite local) y AUTH_SECRET
-npx prisma db push
-node scripts/catalogo/seed-catalog-maestro.mjs   # catálogo: 1247 elementos, 20 categorías (idempotente)
-node scripts/demo/demo-seed.mjs            # opcional: datos demo (usuario@homia.test / Homy2026!)
-npm run dev                    # http://localhost:3000
+cp .env.example .env          # completar DATABASE_URL + DIRECT_URL (Supabase) y AUTH_SECRET
+npm run dev                   # http://localhost:3000
 ```
+
+- **Cambios de esquema**: nunca `prisma db push` contra producción. Se genera el SQL con `prisma migrate diff --script`, se revisa y se aplica con `prisma db execute` (copia en `supabase/migrations/`). Ver `AGENTS.md` §2.
+- **Catálogo** (1247 elementos, 20 categorías, idempotente): `node scripts/catalogo/seed-catalog-maestro.mjs`.
+- **Datos demo** (`cliente@homia.test` / `profesional@homia.test` / `proveedor@homia.test`, pass `Homy2026!`): `node scripts/demo/demo-seed.mjs`. Ojo: borra y recrea los datos demo en la base de producción.
+- Resto de los scripts: [`scripts/README.md`](./scripts/README.md).
 
 ## Roles
 
-- **Cliente**: directorio por reseñas, contratación guiada con escrow, facturas PDF, compra directa de materiales, reseñas con foto.
+- **Cliente**: directorio por reseñas, contratación guiada, facturas PDF, compra directa de materiales, reseñas con foto. Paga al finalizar (facturas de proyecto) o al retirar (compras), con Mercado Pago o efectivo; sin escrow ni retención de pago.
 - **Profesional**: ofertas de trabajo, proyectos, facturación, cobros.
-- **Proveedor** (suscripción Básico US$50/mes con trial 14 días, o PRO US$100/mes con analítica + sponsor): stock sobre un catálogo maestro de 1247 elementos con alta asistida por IA.
+- **Proveedor** (suscripción en pesos con trial de 14 días: Básico $50.000/mes para usar la app completa, o PRO $100.000/mes que suma logo y marca en la home, tarjeta "Recomendado" y analítica de demanda): stock sobre un catálogo maestro de 1247 elementos con alta asistida por IA; cobra por Mercado Pago (OAuth) o efectivo.
 
 Stack: bcrypt + JWT httpOnly · pdf-lib · leaflet · Mercado Pago · IA vía endpoint OpenAI-compatible (`src/lib/ai.ts`).
