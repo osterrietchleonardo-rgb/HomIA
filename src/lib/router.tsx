@@ -25,15 +25,18 @@ function parseHash(): RouteState {
   return { path, segments, query, raw }
 }
 
+// ¿Está montada la SPA (AppRoot)? La marca AppRoot al renderizar. OJO: no se puede
+// deducir de la URL: dentro de la SPA la dirección es '/#/panel/...' (pathname '/'),
+// igual que en la home estática. Deducirlo del pathname hacía que cada clic dentro
+// del panel recargara la página entera ("Verificando tu sesión…").
+let spaMounted = false
+export function markSpaMounted() { spaMounted = true }
+
 export function navigate(to: string, opts?: { replace?: boolean }) {
-  // En la home estática (pathname '/') la SPA no está montada: setear el hash
-  // cambia la URL pero NO re-renderiza nada (no hay AppRoot escuchando).
-  // Navegación real al catch-all ([[...slug]]), que arranca la SPA y hace el
-  // redirect pathname→hash. Aplica a CTAs del header/footer/hero de la home.
-  // (La SPA nunca corre con pathname '/': esa ruta es de page.tsx.)
-  // Aunque la URL ya tenga un #…, en '/' no hay SPA escuchando: si solo se cambiara
-  // el hash, la URL mostraría la ruta nueva y la pantalla quedaría igual.
-  if (typeof window !== 'undefined' && window.location.pathname === '/') {
+  // En la home estática (page.tsx, sin AppRoot) no hay nadie escuchando el hash:
+  // cambiarlo dejaría la URL en la ruta nueva con la home en pantalla. Ahí se hace
+  // una navegación real al catch-all, que arranca la SPA y convierte pathname → hash.
+  if (typeof window !== 'undefined' && !spaMounted) {
     const dest = to.startsWith('/') ? to : `/${to}`
     if (opts?.replace) window.location.replace(dest)
     else window.location.assign(dest)

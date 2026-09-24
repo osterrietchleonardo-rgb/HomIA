@@ -2,7 +2,7 @@
 // AppRoot HomIA — router SPA por hash con todas las pantallas
 import { useEffect } from 'react'
 import dynamic from 'next/dynamic'
-import { useRoute, navigate, Link } from '@/lib/router'
+import { useRoute, navigate, Link, markSpaMounted } from '@/lib/router'
 import { useSession, useLocation, syncLocationToServer } from '@/lib/store'
 import { useCartSync } from '@/lib/cart'
 import { Loading } from '@/components/app/ui-bits'
@@ -77,6 +77,9 @@ export default function AppRoot() {
   const route = useRoute()
   const { user, loading, refresh } = useSession()
   const location = useLocation()
+  // la SPA está montada: desde acá navigate() cambia el hash sin recargar la página
+  markSpaMounted()
+
   // carrito: se sincroniza con la sesión (y fusiona el del visitante al ingresar)
   useCartSync()
 
