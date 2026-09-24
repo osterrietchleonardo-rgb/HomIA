@@ -30,11 +30,13 @@ export function timeAgo(d: string | Date): string {
 
 export function initials(name: string): string {
   if (!name) return ''
+  // solo letras/números: "[Taller] Juan" → "TJ" (no "[J"), "  ana  " → "A"
   return name
-    .split(' ')
+    .split(/\s+/)
+    .map((p) => p.replace(/[^\p{L}\p{N}]/gu, ''))
     .filter(Boolean)
     .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
+    .map((p) => p[0].toUpperCase())
     .join('')
 }
 

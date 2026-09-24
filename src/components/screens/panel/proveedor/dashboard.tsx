@@ -188,7 +188,8 @@ export default function ProviderDashboard() {
           <div className="homy-stagger space-y-2">
             {alerts.map((s) => (
               <div key={s.id} className="homy-row p-3.5 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0 flex-1">
+                {/* base 13rem: en el celu "Reponer" baja de línea en vez de aplastar el nombre */}
+                <div className="flex items-center gap-3 min-w-0 flex-[1_1_13rem]">
                   <span
                     aria-hidden
                     className={`homy-icon-chip size-9 shrink-0 [&_svg]:size-4 ${s.status === 'agotado' ? '' : 'homy-chip-orange'}`}
@@ -491,7 +492,7 @@ function AnalyticsSection({ plan }: { plan: PlanState | null }) {
       <span aria-hidden className="pointer-events-none absolute -top-16 right-[-8%] size-48 rounded-full bg-[#FFC700]/15 blur-3xl" />
       <div className="relative flex flex-wrap items-center gap-3">
         <span aria-hidden className="homy-icon-chip homy-chip-gold size-11 shrink-0 [&_svg]:size-5"><Lock /></span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-[1_1_14rem]">
           <p className="flex items-center gap-2 text-[15px] font-extrabold text-[#0A2540]">
             Analítica del negocio <span className="rounded-full bg-gradient-to-r from-[#FFC700] to-[#ffd84d] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-[#6b4d00]">Plan PRO</span>
           </p>

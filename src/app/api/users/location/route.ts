@@ -1,14 +1,20 @@
 import { NextRequest } from 'next/server'
-import { ok, requireAuth, body } from '@/lib/api'
+import { z } from 'zod'
+import { ok, requireAuth, parseBody } from '@/lib/api'
 import { db } from '@/lib/db'
 
 // Guarda ubicación compartida por el usuario (mapa de pines)
 export async function PUT(req: NextRequest) {
   const auth = await requireAuth()
   if ('response' in auth) return auth.response
-  const { lat, lng, radiusKm, locationShared } = await body<{
-    lat?: number; lng?: number; radiusKm?: number; locationShared?: boolean
-  }>(req)
+  const parsed = await parseBody(req, z.object({
+    lat: z.number().finite().min(-90).max(90).optional(),
+    lng: z.number().finite().min(-180).max(180).optional(),
+    radiusKm: z.number().finite().min(1).max(500).optional(),
+    locationShared: z.boolean().optional(),
+  }))
+  if (parsed.error) return parsed.error
+  const { lat, lng, radiusKm, locationShared } = parsed.data
 
   const data: Record<string, unknown> = {}
   if (lat !== undefined && lng !== undefined) { data.lat = lat; data.lng = lng }

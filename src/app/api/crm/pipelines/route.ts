@@ -48,7 +48,9 @@ export async function POST(req: NextRequest) {
   const user = await getSessionUser()
   if (!user) return fail('Necesitás iniciar sesión', 401)
   const { name, ownerRole } = await body<{ name: string; ownerRole?: string }>(req)
-  if (!name) return fail('El nombre es obligatorio')
+  if (typeof name !== 'string' || !name.trim()) return fail('El nombre es obligatorio')
+  if (name.length > 80) return fail('El nombre puede tener hasta 80 caracteres')
+  if (ownerRole !== undefined && ownerRole !== 'profesional' && ownerRole !== 'proveedor') return fail('Rol del pipeline inválido')
   const pipeline = await db.crmPipeline.create({
     data: { ownerId: user.id, ownerRole: ownerRole || (user.hasProvider ? 'proveedor' : 'profesional'), name },
   })

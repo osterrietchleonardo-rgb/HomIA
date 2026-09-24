@@ -25,7 +25,10 @@ export async function POST(
   if (!isClient && !isPro) return fail('Sin permiso sobre esta factura', 403)
 
   const d = await body<{ action?: 'acordar' | 'confirmar' | 'cancelar' }>(req)
-  if (!d.action) return fail('Falta la acción (acordar | confirmar | cancelar)')
+  // cualquier otra acción caía en "cancelar" y borraba el acuerdo de efectivo
+  if (d.action !== 'acordar' && d.action !== 'confirmar' && d.action !== 'cancelar') {
+    return fail('Acción inválida (acordar | confirmar | cancelar)')
+  }
 
   const acuerdoPendiente = await db.payment.findFirst({
     where: { invoiceId: invoice.id, method: 'efectivo', status: 'acordado' },

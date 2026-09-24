@@ -74,7 +74,7 @@ export async function GET(
       verificationStatus: pro.user.verificationStatus,
       subscription: pro.subscription,
       rating: Math.round(avgRating * 10) / 10,
-      reviewsCount: reviews.length,
+      reviewsCount: Math.max(pro.user.reviewsCount, reviews.length), // la lista trae 20: el total real es el del usuario
       worksCount: pro.worksCount,
       memberSince: pro.user.createdAt,
     },

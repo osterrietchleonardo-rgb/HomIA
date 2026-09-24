@@ -3,6 +3,7 @@ import { ok, requireAuth, body, fail } from '@/lib/api'
 import { db } from '@/lib/db'
 import { withinRadius } from '@/lib/geo'
 import { parseJson } from '@/lib/api'
+import { isHomiaUploadUrl } from '@/lib/leftovers'
 
 // GET: bolsa de trabajos (abiertos) con filtros + los míos si mine=1
 export async function GET(req: NextRequest) {
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
         bids: {
           include: {
             professional: {
-              include: { user: { select: { displayName: true, avatarUrl: true } } },
+              include: { user: { select: { displayName: true, avatarUrl: true, verificationStatus: true } } },
             },
           },
           orderBy: { createdAt: 'desc' },
@@ -104,6 +105,18 @@ export async function POST(req: NextRequest) {
     return fail('El presupuesto no puede ser negativo')
   }
   if (bMin !== null && bMax !== null && bMin > bMax) return fail('El mínimo no puede ser mayor que el máximo')
+  if (typeof d.title !== 'string' || typeof d.description !== 'string' || d.title.trim().length > 160 || d.description.length > 4000) {
+    return fail('El título (hasta 160 caracteres) y la descripción (hasta 4000) tienen que ser texto')
+  }
+  // el rubro tiene que ser una de las categorías reales (si no, el trabajo no le llega a nadie)
+  const category = typeof d.categorySlug === 'string' ? await db.category.findUnique({ where: { slug: d.categorySlug }, select: { id: true } }) : null
+  if (!category) return fail('Elegí un rubro de la lista')
+  if (d.urgency !== undefined && !['baja', 'normal', 'alta', 'urgente'].includes(d.urgency)) return fail('Urgencia inválida')
+  const isCoord = (v: unknown, max: number) => v === undefined || v === null || (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= max)
+  if (!isCoord(d.lat, 90) || !isCoord(d.lng, 180)) return fail('Ubicación inválida')
+  if (d.photos !== undefined && !Array.isArray(d.photos)) return fail('Fotos inválidas')
+  // fotos: solo subidas reales de HomIA (máx 6)
+  const photos = (d.photos || []).filter((p): p is string => typeof p === 'string' && isHomiaUploadUrl(p)).slice(0, 6)
 
   const user = await db.user.findUnique({ where: { id: auth.user.id } })
   const job = await db.jobPost.create({
@@ -119,7 +132,7 @@ export async function POST(req: NextRequest) {
       city: d.city || user?.city || null,
       lat: d.lat ?? user?.lat ?? null,
       lng: d.lng ?? user?.lng ?? null,
-      photos: JSON.stringify(d.photos || []),
+      photos: JSON.stringify(photos),
     },
   })
 

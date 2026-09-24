@@ -3,6 +3,17 @@ import { ok, fail, body } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
 
+/** Valida los campos libres de un trato (antes un valor no numérico o una
+ *  contraparte inexistente terminaban en 500). */
+function dealFieldsError(d: { value?: unknown; note?: unknown; counterpartyId?: unknown }): string | null {
+  if (d.value !== undefined && d.value !== null && (typeof d.value !== 'number' || !Number.isFinite(d.value) || d.value < 0 || d.value > 1_000_000_000)) {
+    return 'El valor del trato tiene que ser un número positivo'
+  }
+  if (d.note !== undefined && d.note !== null && (typeof d.note !== 'string' || d.note.length > 2000)) return 'La nota puede tener hasta 2000 caracteres'
+  if (d.counterpartyId !== undefined && d.counterpartyId !== null && typeof d.counterpartyId !== 'string') return 'Contraparte inválida'
+  return null
+}
+
 // POST: crear trato en el pipeline
 export async function POST(req: NextRequest) {
   const user = await getSessionUser()
@@ -17,10 +28,17 @@ export async function POST(req: NextRequest) {
     jobId?: string
     projectId?: string
   }>(req)
-  if (!d.stageId || !d.title) return fail('Faltan datos del trato')
+  if (!d.stageId || typeof d.title !== 'string' || !d.title.trim()) return fail('Faltan datos del trato')
+  if (d.title.length > 160) return fail('El título puede tener hasta 160 caracteres')
+  const invalid = dealFieldsError(d)
+  if (invalid) return fail(invalid)
 
   const stage = await db.crmStage.findUnique({ where: { id: d.stageId }, include: { pipeline: true } })
   if (!stage || stage.pipeline.ownerId !== user.id) return fail('Etapa inválida', 403)
+  if (d.counterpartyId) {
+    const cp = await db.user.findUnique({ where: { id: d.counterpartyId }, select: { id: true } })
+    if (!cp) return fail('La contraparte del trato no existe')
+  }
 
   const maxPos = await db.crmDeal.aggregate({ where: { stageId: d.stageId }, _max: { position: true } })
   const deal = await db.crmDeal.create({
@@ -48,6 +66,9 @@ export async function PATCH(req: NextRequest) {
   if (!user) return fail('Necesitás iniciar sesión', 401)
   const d = await body<{ id: string; stageId?: string; value?: number; note?: string; title?: string }>(req)
   if (!d.id) return fail('Falta el id del trato')
+  const invalid = dealFieldsError(d)
+  if (invalid) return fail(invalid)
+  if (d.title !== undefined && (typeof d.title !== 'string' || !d.title.trim() || d.title.length > 160)) return fail('Título inválido')
 
   const deal = await db.crmDeal.findUnique({ where: { id: d.id }, include: { pipeline: true } })
   if (!deal || deal.pipeline.ownerId !== user.id) return fail('Trato no encontrado', 404)
@@ -60,7 +81,7 @@ export async function PATCH(req: NextRequest) {
     const maxPos = await db.crmDeal.aggregate({ where: { stageId: d.stageId }, _max: { position: true } })
     data.position = (maxPos._max.position ?? -1) + 1
   }
-  if (d.value !== undefined) data.value = d.value
+  if (d.value !== undefined && d.value !== null) data.value = d.value
   if (d.note !== undefined) data.note = d.note
   if (d.title !== undefined) data.title = d.title
 

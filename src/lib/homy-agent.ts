@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 import { parseJson } from '@/lib/api'
 import { withinRadius } from '@/lib/geo'
 import { matchTerms, matchScore, expandNeedQuery, canonicalCategoria } from '@/lib/search-match'
-import { puedeOperar } from '@/lib/plans'
+import { puedeOperar, esProActivo } from '@/lib/plans'
 
 // ─────────────────────────────────────────────────────────────
 // SUPERAGENTE HOMY — loop de razonamiento + grafo de acciones + herramientas reales
@@ -71,6 +71,8 @@ export type MaterialResult = {
   providerName: string
   providerCity: string | null
   providerRating: number
+  /** proveedor con Plan PRO activo → "Recomendado" (va primero) */
+  recommended: boolean
   distanceKm?: number
 }
 
@@ -128,14 +130,15 @@ REGLAS DEL LOOP:
 5. Cuando tengas suficiente info, "responder": message en español rioplatense, cálido y directo, máximo 3 frases + hasta 3 suggestions (frases cortas que el usuario podría querer después). Si encontraste resultados, en el mensaje resumí lo más notable con datos reales (nombres, precios, cantidades).
 6. Máximo ${MAX_ITERATIONS} pasos. Si agotás pasos, respondé con lo que tengas.
 7. "categoria" acepta sinónimos: "plomero"→plomeria, "gasista"→gasistas, "electricista"→electricistas, "albañil"→albanileria, "pintor"→pintura, "carpintero"→carpinteria.
-8. radio_km default 25; si te pasan ubicación implícita (barrio/ciudad), igual buscá sin radio y aclará en el mensaje.`
+8. radio_km default 25; si te pasan ubicación implícita (barrio/ciudad), igual buscá sin radio y aclará en el mensaje.
+9. Los materiales que vienen con "recomendado": true son de proveedores Recomendados de HomIA: ya llegan primero; mencionalos primero y decí que son "Recomendado". No marques como recomendado a nadie más.`
 }
 
 // ── Herramientas reales ──────────────────────────────────────
 
 async function toolBuscarProfesionales(args: { q?: string; categoria?: string; radio_km?: number; lat?: number; lng?: number }) {
   const pros = await db.professionalProfile.findMany({
-    include: { user: { select: { displayName: true, avatarUrl: true, rating: true, reviewsCount: true, city: true } } },
+    include: { user: { select: { displayName: true, avatarUrl: true, rating: true, reviewsCount: true, city: true, verificationStatus: true } } },
   })
   const q = (args.q || '').toLowerCase().trim()
   const catSlug = canonicalCategoria(args.categoria)
@@ -162,7 +165,7 @@ async function toolBuscarProfesionales(args: { q?: string; categoria?: string; r
     rating: p.rating || p.user.rating,
     reviewsCount: p.reviewsCount || p.user.reviewsCount,
     worksCount: p.worksCount,
-    verified: p.verified,
+    verified: p.user.verificationStatus === 'verificado',
     distanceKm: p.distanceKm,
   })) as ProfessionalResult[]
 }
@@ -244,6 +247,9 @@ async function toolBuscarMateriales(args: { q?: string; categoria?: string; radi
     matched.map((s) => ({ ...s, lat: s.provider.lat, lng: s.provider.lng })),
     args.lat, args.lng, args.radio_km || 25
   )
+  // Recomendados (Plan PRO activo) primero; entre sí se respeta el orden previo
+  // (distancia si hay ubicación, precio si no).
+  geo.sort((a, b) => Number(esProActivo(b.provider)) - Number(esProActivo(a.provider)))
   return geo.slice(0, 12).map((s) => ({
     stockId: s.id,
     elementId: s.elementId,
@@ -259,6 +265,7 @@ async function toolBuscarMateriales(args: { q?: string; categoria?: string; radi
     providerName: s.provider.businessName,
     providerCity: s.provider.city || s.provider.user.city,
     providerRating: s.provider.rating,
+    recommended: esProActivo(s.provider),
     distanceKm: s.distanceKm,
   })) as MaterialResult[]
 }
@@ -311,10 +318,18 @@ async function toolCompararPrecios(args: { q: string; radio_km?: number; lat?: n
   }
   const out: MaterialResult[] = []
   for (const [, arr] of byElement) {
+    // las 3 más baratas, pero si un Recomendado (PRO activo) vende el elemento,
+    // entra siempre en la comparación
     arr.sort((a, b) => a.price - b.price)
-    out.push(...arr.slice(0, 3))
+    const top = arr.slice(0, 3)
+    const reco = arr.find((m) => m.recommended)
+    if (reco && !top.includes(reco)) top[top.length - 1] = reco
+    out.push(...top)
   }
-  out.sort((a, b) => a.elementName.localeCompare(b.elementName) || a.price - b.price)
+  // por elemento; dentro de cada uno, el Recomendado primero y después por precio
+  out.sort((a, b) =>
+    a.elementName.localeCompare(b.elementName) || Number(b.recommended) - Number(a.recommended) || a.price - b.price
+  )
   return out.slice(0, 12)
 }
 
@@ -514,7 +529,7 @@ export async function runHomyAgent(input: {
       if (arr?.length) {
         summary = JSON.stringify(arr.slice(0, 5).map((m) => ({
           elemento: m.elementName, precio: m.price, unidad: m.unit, marca: m.brand,
-          proveedor: m.providerName, stock: m.quantity, estado: m.status, km: m.distanceKm,
+          proveedor: m.providerName, recomendado: m.recommended, stock: m.quantity, estado: m.status, km: m.distanceKm,
         })))
       }
     } else if (action === 'recomendar_elementos' && results.elements?.length) {

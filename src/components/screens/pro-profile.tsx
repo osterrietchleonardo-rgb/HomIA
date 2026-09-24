@@ -147,7 +147,7 @@ export default function ProProfileScreen({ id }: { id: string }) {
               <div className="flex items-center gap-2 mt-2.5">
                 <Star className="size-4 shrink-0 fill-[#FFC700] text-[#FFC700]" aria-hidden />
                 <span className="text-sm text-white font-bold tabular-nums">{p.rating > 0 ? p.rating : 'Nuevo en HomIA'}</span>
-                {p.rating > 0 && <span className="text-sm text-slate-300">· {p.reviewsCount} reseñas</span>}
+                {p.rating > 0 && <span className="text-sm text-slate-300">· {p.reviewsCount} reseña{p.reviewsCount === 1 ? '' : 's'}</span>}
               </div>
               <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1 flex-wrap">
                 <MapPin aria-hidden className="size-3 shrink-0" /> {p.city || '—'} · radio {p.serviceRadiusKm} km · miembro desde {formatDate(p.memberSince)}

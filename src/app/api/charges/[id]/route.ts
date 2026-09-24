@@ -65,7 +65,7 @@ export async function POST(
   const titulo = charge.project ? `Materiales — ${charge.project.title}` : 'Compra de materiales — HomIA'
 
   const d = await body<{ method?: 'mercadopago' | 'efectivo' }>(req)
-  if (!d.method) return fail('Elegí el método de pago: mercadopago o efectivo')
+  if (d.method !== 'mercadopago' && d.method !== 'efectivo') return fail('Elegí el método de pago: mercadopago o efectivo')
 
   if (d.method === 'efectivo') {
     await db.providerCharge.update({
@@ -86,17 +86,23 @@ export async function POST(
 
   // Mercado Pago
   if (!mpConfigured()) {
-    return fail('Mercado Pago no está configurado. Agregá MP_ACCESS_TOKEN en el archivo .env del servidor.', 503, { needsConfig: true })
+    return fail('El pago con Mercado Pago no está disponible por ahora. Podés pagar en efectivo o reintentar más tarde.', 503, { needsConfig: true })
   }
   const baseUrl = appUrl()
-  const preference = await createChargePreference({
-    chargeId: charge.id,
-    chargeNumber: charge.number,
-    title: titulo,
-    total: charge.amount,
-    payerEmail: user.email,
-    baseUrl,
-  })
+  let preference: { id: string; initPoint: string }
+  try {
+    preference = await createChargePreference({
+      chargeId: charge.id,
+      chargeNumber: charge.number,
+      title: titulo,
+      total: charge.amount,
+      payerEmail: user.email,
+      baseUrl,
+    })
+  } catch (e) {
+    console.error('[charges] createChargePreference', e)
+    return fail('Mercado Pago no respondió. Probá de nuevo en un rato o acordá efectivo con el proveedor.', 503)
+  }
   await db.providerCharge.update({
     where: { id: charge.id },
     data: { mpPreferenceId: preference.id, method: 'mercadopago' },

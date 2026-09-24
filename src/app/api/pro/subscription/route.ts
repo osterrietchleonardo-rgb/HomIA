@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
 
 // LEGADO: HomIA dejó de vender suscripciones a profesionales.
-// Solo los proveedores tienen planes de pago (Básico US$50/mes o PRO US$100/mes).
+// Solo los proveedores tienen planes de pago.
 // Las preapprovals ya existentes siguen gestionándose por el webhook.
 export async function POST(_req: NextRequest) {
   const user = await getSessionUser()
@@ -13,7 +13,7 @@ export async function POST(_req: NextRequest) {
   const pro = await db.professionalProfile.findUnique({ where: { userId: user.id } })
   if (!pro) return fail('Solo los profesionales tienen perfil PRO', 403)
 
-  return fail('HomIA es gratis para profesionales: los planes de pago son solo para proveedores (Básico US$50/mes o PRO US$100/mes)', 403, { soloProveedores: true })
+  return fail('HomIA es gratis para profesionales: los planes de pago son solo para proveedores', 403, { soloProveedores: true })
 }
 
 export async function GET() {

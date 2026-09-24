@@ -3,10 +3,11 @@ import { z } from 'zod'
 import { ok, fail, parseBody } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
+import { isHomiaUploadUrl } from '@/lib/leftovers'
 
 function sanitizeWorkPhotos(list: unknown): string[] {
   return Array.isArray(list)
-    ? list.filter((p): p is string => typeof p === 'string' && p.length < 500 && /^(https?:\/\/.+|\/uploads\/.+)\.(jpg|jpeg|png|webp)$/i.test(p)).slice(0, 4)
+    ? list.filter((p): p is string => typeof p === 'string' && p.length < 500 && isHomiaUploadUrl(p) && /\.(jpg|jpeg|png|webp)$/i.test(p)).slice(0, 4)
     : []
 }
 

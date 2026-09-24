@@ -5,11 +5,12 @@ import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
 import { planState } from '@/lib/plans'
 import { createPurchasePreference, ensureFreshSellerToken } from '@/lib/mercadopago'
+import { createWithChargeNumber } from '@/lib/charge-number'
 
 // ── Máquina de estados de una compra directa ──
 //   pendiente_aprobacion ─aprobar(prov)──▶ aprobado ─entregar(prov)──▶ entregado | pagado
 //          │                                  │
-//          ├─rechazar(prov)──▶ rechazado      ├─pagar_efectivo(cli): charge acordada_efectivo
+//          ├─rechazar(prov)──▶ rechazado      ├─pagar_efectivo(cli): charge acordada_efectivo (también desde entregado)
 //          └─cancelar(ambos)─▶ cancelado      ├─pagar_mp(cli): preferencia MP del proveedor
 //                                             └─cancelar(ambos, si el cobro no está pagado) ─▶ cancelado (+ devuelve stock)
 // El cobro (ProviderCharge) nace al aprobar: pendiente → acordada_efectivo/pagada → confirma el proveedor
@@ -28,11 +29,6 @@ function round2(n: number) {
   return Math.round(n * 100) / 100
 }
 
-async function nextChargeNumber() {
-  const year = new Date().getFullYear()
-  const count = await db.providerCharge.count()
-  return `PRV-${year}-${String(count + 1).padStart(6, '0')}`
-}
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -91,7 +87,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // ─────────────── ACCIONES DEL CLIENTE ───────────────
   if (d.action === 'pagar_efectivo' || d.action === 'pagar_mp') {
     if (!isClient) return fail('Solo el cliente paga su pedido', 403)
-    if (st !== 'aprobado') {
+    // se paga desde `aprobado` o, si el proveedor entregó antes de cobrar, desde `entregado`
+    // (si no, el pedido entregado sin pago quedaba sin forma de pagarse)
+    if (st !== 'aprobado' && st !== 'entregado') {
       return fail(
         st === 'pendiente_aprobacion' ? 'El proveedor todavía no aprobó tu pedido'
           : st === 'pagado' ? 'Este pedido ya está pagado'
@@ -183,18 +181,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     })
     await refreshStockStatus(purchase.stockId)
 
-    const newCharge = await db.providerCharge.create({
-      data: {
-        number: await nextChargeNumber(),
-        providerId: purchase.providerId,
-        clientId: purchase.clientId,
-        projectId: null,
-        amount: total,
-        status: 'pendiente',
-        materialIds: '[]',
-        description: `Compra directa: ${purchase.elementName} x ${purchase.quantity}`,
-      },
-    })
+    const newCharge = await createWithChargeNumber((number) =>
+      db.providerCharge.create({
+        data: {
+          number,
+          providerId: purchase.providerId,
+          clientId: purchase.clientId,
+          projectId: null,
+          amount: total,
+          status: 'pendiente',
+          materialIds: '[]',
+          description: `Compra directa: ${purchase.elementName} x ${purchase.quantity}`,
+        },
+      })
+    )
+    if (!newCharge) {
+      // no quedó cobro: se devuelve la reserva para no dejar stock colgado
+      await liberarStock(purchase.stockId, purchase.quantity, `Aprobación fallida del pedido ${purchase.id}`)
+      return fail('No pudimos emitir el cobro del pedido: probá aprobarlo de nuevo en unos segundos', 503)
+    }
     const expiresAt = new Date(Date.now() + (purchase.type === 'reserva' ? RESERVA_MS : COMPRA_MS))
     await db.purchase.update({
       where: { id },

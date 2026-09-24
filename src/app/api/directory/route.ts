@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { ok, parseJson } from '@/lib/api'
 import { db } from '@/lib/db'
 import { PROVIDER_KINDS } from '@/lib/search-match'
-import { puedeOperar } from '@/lib/plans'
+import { puedeOperar, esProActivo } from '@/lib/plans'
 
 // Directorio HomIA: todos los profesionales y proveedores registrados,
 // ordenables por reseñas/rating/trabajos y filtrables por rubro, rating
@@ -144,7 +144,8 @@ export async function GET(req: NextRequest) {
         // la verificación la define el DNI + IA (quien no subió DNI = no verificado)
         verified: p.user.verificationStatus === 'verificado',
         verificationStatus: p.user.verificationStatus,
-        isPro: p.subscription === 'pro',
+        // Plan PRO ACTIVO → "Recomendado" y primero en la lista
+        isPro: esProActivo(p),
         rating: p.user.rating,
         reviewsCount: p.user.reviewsCount,
         businessName: p.businessName,

@@ -1,12 +1,13 @@
 'use client'
 // Perfil del proveedor — datos del negocio, reputación, plan y acceso a la verificación de identidad
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Loading, AvatarUploader, UStars, VerifyBadge } from '@/components/app/ui-bits'
+import { SponsorChip } from '@/components/home/sponsors'
 import { formatARS } from '@/lib/format'
 import { toast } from 'sonner'
 import { useSession } from '@/lib/store'
 import { navigate } from '@/lib/router'
-import { ShieldCheck, Store, Star, Crown, ArrowRight, Clock, CircleAlert } from 'lucide-react'
+import { ShieldCheck, Store, Star, Crown, ArrowRight, Clock, CircleAlert, Lock, ImagePlus, Loader2, Megaphone } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 type MeUser = {
@@ -17,8 +18,12 @@ type MeUser = {
     businessName: string; kind?: string; cuit: string | null; description: string | null
     address: string | null; city: string | null; rating: number; reviewsCount: number
     subscription?: string; proSince?: string | null
+    brandLogoUrl?: string | null; brandTagline?: string | null; brandColor?: string | null
   } | null
 }
+
+const TAGLINE_MAX = 60
+const HEX_RE = /^#[0-9a-fA-F]{6}$/
 type PlanState = {
   plan: 'trial' | 'basic' | 'pro'
   activo: boolean
@@ -70,6 +75,14 @@ export default function ProviderProfile() {
   const [city, setCity] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // marca en la home (Plan PRO)
+  const [brandLogoUrl, setBrandLogoUrl] = useState('')
+  const [brandTagline, setBrandTagline] = useState('')
+  const [brandColor, setBrandColor] = useState('')
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [brandBusy, setBrandBusy] = useState(false)
+  const logoInputRef = useRef<HTMLInputElement>(null)
+
   async function load() {
     try {
       const [resMe, resPlan] = await Promise.all([fetch('/api/profiles/me'), fetch('/api/provider/plan')])
@@ -84,6 +97,9 @@ export default function ProviderProfile() {
           setDescription(u.provider?.description || '')
           setAddress(u.provider?.address || '')
           setCity(u.provider?.city || '')
+          setBrandLogoUrl(u.provider?.brandLogoUrl || '')
+          setBrandTagline(u.provider?.brandTagline || '')
+          setBrandColor(u.provider?.brandColor || '')
         }
       } else {
         toast.error(dMe.error || 'No pudimos cargar tu perfil')
@@ -118,6 +134,45 @@ export default function ProviderProfile() {
     } catch {
       toast.error('No pudimos conectar. Reintentá')
     } finally { setBusy(false) }
+  }
+
+  async function uploadLogo(files: FileList | null) {
+    const file = files?.[0]
+    if (!file) return
+    if (!['image/png', 'image/webp', 'image/jpeg'].includes(file.type)) { toast.error('Subí el logo en PNG, WEBP o JPG'); return }
+    setLogoUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('folder', 'marca')
+      const res = await fetch('/api/uploads', { method: 'POST', body: fd })
+      const d = await readJson(res)
+      if (!res.ok || !d.url) { toast.error(d.error || 'No pudimos subir el logo'); return }
+      setBrandLogoUrl(String(d.url))
+      toast.success('Logo subido. Guardá tu marca para publicarlo en la home')
+    } catch {
+      toast.error('No pudimos conectar. Reintentá')
+    } finally {
+      setLogoUploading(false)
+      if (logoInputRef.current) logoInputRef.current.value = ''
+    }
+  }
+
+  async function saveBrand(e: React.FormEvent) {
+    e.preventDefault()
+    if (brandColor && !HEX_RE.test(brandColor)) { toast.error('El color tiene que ser un hex tipo #1D63B8'); return }
+    setBrandBusy(true)
+    try {
+      const res = await fetch('/api/profiles/me', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandLogoUrl, brandTagline: brandTagline.trim(), brandColor }),
+      })
+      if (!res.ok) { toast.error((await readJson(res)).error || 'No pudimos guardar tu marca'); return }
+      await load()
+      toast.success('Tu marca quedó publicada en la cinta de la home')
+    } catch {
+      toast.error('No pudimos conectar. Reintentá')
+    } finally { setBrandBusy(false) }
   }
 
   if (!loaded) return <Loading />
@@ -217,6 +272,113 @@ export default function ProviderProfile() {
             </button>
           </div>
         </section>
+
+        {/* tu marca en la home (Plan PRO) */}
+        {(() => {
+          const esProActivo = !!plan && plan.esPro && plan.activo
+          const businessLabel = businessName.trim() || me?.provider?.businessName || 'Tu negocio'
+          const preview = {
+            id: 'preview', href: '#', businessName: businessLabel,
+            logoUrl: esProActivo ? (brandLogoUrl || me?.avatarUrl || null) : null,
+            tagline: esProActivo ? (brandTagline.trim() || null) : 'Tu frase de marca acá',
+            color: esProActivo && HEX_RE.test(brandColor) ? brandColor : null,
+            verified: verificationStatus === 'verificado',
+          }
+          return (
+            <section aria-labelledby="pf-brand-title" className={`homy-glass rounded-3xl p-5 sm:p-6 ${esProActivo ? 'ring-1 ring-[#FFC700]/50' : ''}`}>
+              <div className="flex items-start gap-3">
+                <span aria-hidden className="homy-icon-chip homy-chip-gold size-10 shrink-0 [&_svg]:size-5">{esProActivo ? <Megaphone /> : <Lock />}</span>
+                <div className="min-w-0">
+                  <h2 id="pf-brand-title" className="homy-section-title flex flex-wrap items-center gap-2">
+                    Tu marca en la home
+                    <span className="rounded-full bg-gradient-to-r from-[#FFC700] to-[#ffd84d] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-[#6b4d00]">PRO</span>
+                  </h2>
+                  <p className="text-sm text-slate-500 mt-0.5">
+                    {esProActivo
+                      ? 'Tu logo y tu marca pasan en la cinta de sponsors de la home de HomIA. Si dejás el plan PRO, salís de la cinta.'
+                      : 'El logo y la marca en la home son parte del plan PRO.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* vista previa: así se ve en la cinta */}
+              <div className="mt-4">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Vista previa en la cinta</p>
+                <div className={`relative mt-2 overflow-hidden rounded-2xl bg-gradient-to-r from-[#0A2540]/5 via-[#FFC700]/10 to-[#0A2540]/5 px-3 py-3 ${esProActivo ? '' : 'opacity-60 grayscale'}`} aria-hidden>
+                  <div className="flex gap-3">
+                    <SponsorChip s={preview} showTagline="always" />
+                    <span className="hidden sm:block"><SponsorChip s={{ ...preview, id: 'preview-2' }} showTagline="always" /></span>
+                  </div>
+                </div>
+                {esProActivo && <p className="text-xs text-slate-400 mt-1.5">En celulares la cinta muestra logo y nombre; la frase se ve en pantallas grandes.</p>}
+              </div>
+
+              {esProActivo ? (
+                <form onSubmit={saveBrand} className="mt-4 space-y-4">
+                  <div>
+                    <span className="text-[13px] font-bold text-[#0A2540]">Logo</span>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-3">
+                      <span className="grid size-16 shrink-0 place-items-center overflow-hidden rounded-2xl bg-white ring-1 ring-[#0A2540]/10">
+                        {brandLogoUrl
+                          ? <img src={brandLogoUrl} alt="Tu logo" className="max-h-full max-w-full object-contain p-1.5" />
+                          : <ImagePlus className="size-6 text-slate-300" aria-hidden />}
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" disabled={logoUploading} onClick={() => logoInputRef.current?.click()}
+                          className="homy-glass-soft homy-focus min-h-[44px] rounded-full px-4 text-sm font-bold text-[#1D63B8] disabled:opacity-60">
+                          {logoUploading ? <><Loader2 className="mr-1.5 inline size-4 animate-spin" aria-hidden />Subiendo…</> : brandLogoUrl ? 'Cambiar logo' : 'Subir logo'}
+                        </button>
+                        {brandLogoUrl && (
+                          <button type="button" onClick={() => setBrandLogoUrl('')} className="homy-focus min-h-[44px] rounded-full px-4 text-sm font-bold text-slate-500 hover:text-[#FF5A1F]">
+                            Quitar
+                          </button>
+                        )}
+                      </div>
+                      <input ref={logoInputRef} type="file" accept="image/png,image/webp,image/jpeg" className="hidden" aria-label="Subir logo" onChange={(e) => uploadLogo(e.target.files)} />
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1.5">Recomendado: logo cuadrado o apaisado, PNG o WEBP con fondo transparente, de al menos 256 px. Hasta 8 MB. Sin logo usamos tu foto de perfil.</p>
+                  </div>
+
+                  <div>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <label htmlFor="pf-brand-tagline" className="text-[13px] font-bold text-[#0A2540]">Frase de marca <span className="text-slate-400 font-semibold">(opcional)</span></label>
+                      <span className={`text-xs tabular-nums ${brandTagline.length > TAGLINE_MAX ? 'text-[#FF5A1F]' : 'text-slate-400'}`} aria-live="polite">{brandTagline.length}/{TAGLINE_MAX}</span>
+                    </div>
+                    <input id="pf-brand-tagline" value={brandTagline} maxLength={TAGLINE_MAX} onChange={(e) => setBrandTagline(e.target.value.slice(0, TAGLINE_MAX))}
+                      placeholder="Ej: Todo para tu obra, entrega en el día"
+                      className="homy-glass-input mt-1.5 w-full rounded-xl px-4 py-3 min-h-[44px] text-sm" />
+                  </div>
+
+                  <div>
+                    <label htmlFor="pf-brand-color" className="text-[13px] font-bold text-[#0A2540]">Color de marca <span className="text-slate-400 font-semibold">(opcional)</span></label>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      <input id="pf-brand-color" type="color" value={HEX_RE.test(brandColor) ? brandColor : '#FFC700'} onChange={(e) => setBrandColor(e.target.value.toUpperCase())}
+                        className="h-11 w-14 cursor-pointer rounded-xl border-0 bg-transparent p-0.5" aria-label="Elegir color de marca" />
+                      <input value={brandColor} onChange={(e) => setBrandColor(e.target.value.trim().slice(0, 7))} placeholder="#1D63B8" aria-label="Color de marca en hex"
+                        className="homy-glass-input w-28 rounded-xl px-3 py-2.5 min-h-[44px] font-mono text-sm uppercase" />
+                      {brandColor && (
+                        <button type="button" onClick={() => setBrandColor('')} className="homy-focus min-h-[44px] rounded-full px-3 text-sm font-bold text-slate-500">Sin color</button>
+                      )}
+                    </div>
+                  </div>
+
+                  <button type="submit" disabled={brandBusy || logoUploading} className="homy-btn-primary homy-focus w-full min-h-[48px] disabled:opacity-60">
+                    {brandBusy ? 'Guardando…' : 'Guardar mi marca'}
+                  </button>
+                </form>
+              ) : (
+                <div className="mt-4 rounded-2xl bg-[#FFC700]/10 p-4 ring-1 ring-[#FFC700]/35">
+                  <p className="text-sm text-[#0A2540]">
+                    Con el plan PRO ({formatARS(preciosArs?.pro ?? 100000)}/mes) tu logo y tu marca pasan en la cinta de sponsors de la home, y salís primero como <b>Recomendado</b> en el directorio, el marketplace de materiales y las búsquedas.
+                  </p>
+                  <button type="button" onClick={() => navigate('/panel/proveedor/plan')} className="homy-btn-primary homy-focus mt-3 min-h-[44px] w-full px-5 text-sm sm:w-auto">
+                    Ver plan PRO <ArrowRight className="size-4" aria-hidden />
+                  </button>
+                </div>
+              )}
+            </section>
+          )
+        })()}
 
         {/* datos del negocio */}
         <form onSubmit={save} className="homy-glass rounded-3xl p-5 sm:p-6 space-y-4">

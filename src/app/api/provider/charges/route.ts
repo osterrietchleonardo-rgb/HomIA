@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { ok, fail, body } from '@/lib/api'
 import { db } from '@/lib/db'
 import { planState } from '@/lib/plans'
+import { createWithChargeNumber } from '@/lib/charge-number'
 
 // ── Cobros de materiales del proveedor al cliente ──
 // Válidos solo en proyectos con materialsPaymentMode = "cliente_paga_proveedor".
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
   if (!provider) return fail('Solo los proveedores pueden emitir cobros de materiales', 403)
   const st = planState(provider)
   if (!st.activo) {
-    return fail('Tu prueba gratis terminó: elegí un plan (Básico US$50/mes o PRO US$100/mes) para seguir emitiendo cobros', 403, { needsPlan: true })
+    return fail('Tu prueba gratis terminó: elegí un plan (Básico o PRO) desde "Mi plan" para seguir emitiendo cobros', 403, { needsPlan: true })
   }
 
   const d = await body<{ projectId?: string }>(req)
@@ -126,22 +127,21 @@ export async function POST(req: NextRequest) {
     .join(', ')
   const materialIds = materials.map((m) => m.id)
 
-  // número secuencial PRV-2026-000001
-  const year = new Date().getFullYear()
-  const count = await db.providerCharge.count()
-  const number = `PRV-${year}-${String(count + 1).padStart(6, '0')}`
-
-  const charge = await db.providerCharge.create({
-    data: {
-      projectId: project.id,
-      providerId: provider.id,
-      clientId: project.clientId,
-      number,
-      description,
-      materialIds: JSON.stringify(materialIds),
-      amount,
-    },
-  })
+  // número secuencial PRV-2026-000001 (con reintento ante colisión)
+  const charge = await createWithChargeNumber((number) =>
+    db.providerCharge.create({
+      data: {
+        projectId: project.id,
+        providerId: provider.id,
+        clientId: project.clientId,
+        number,
+        description,
+        materialIds: JSON.stringify(materialIds),
+        amount,
+      },
+    })
+  )
+  if (!charge) return fail('No pudimos numerar el cobro: probá de nuevo en unos segundos', 503)
 
   await db.notification.create({
     data: {

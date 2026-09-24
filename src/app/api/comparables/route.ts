@@ -3,7 +3,8 @@ import { ok } from '@/lib/api'
 import { db } from '@/lib/db'
 import { parseJson } from '@/lib/api'
 import { withinRadius } from '@/lib/geo'
-import { puedeOperar } from '@/lib/plans'
+import { puedeOperar, esProActivo } from '@/lib/plans'
+import { matchTerms } from '@/lib/search-match'
 
 // Comparables de materiales: mismo elemento entre todos los proveedores, ordenado por precio
 export async function GET(req: NextRequest) {
@@ -27,9 +28,10 @@ export async function GET(req: NextRequest) {
   // proveedores con prueba vencida / sin plan no aparecen en los comparables
   let matched = stock.filter((s) => puedeOperar(s.provider))
   if (!elementId && q) {
-    matched = stock.filter((s) => {
-      const hay = [s.element.name, ...parseJson<string[]>(s.element.aliases, []), s.brand || ''].join(' ').toLowerCase()
-      return hay.includes(q) || q.split(/\s+/).some((t) => t && hay.includes(t))
+    // ojo: filtra sobre `matched` (solo proveedores operativos), no sobre todo el stock
+    matched = matched.filter((s) => {
+      const hay = [s.element.name, ...parseJson<string[]>(s.element.aliases, []), s.brand || ''].join(' ')
+      return matchTerms(q, hay)
     })
   }
 
@@ -48,6 +50,9 @@ export async function GET(req: NextRequest) {
       providerCity: s.provider.city || s.provider.user.city,
       providerRating: s.provider.rating,
       providerVerified: s.provider.verified,
+      // comparables = "mejor precio": el orden sigue siendo por precio, pero el
+      // proveedor con Plan PRO activo viene marcado como Recomendado
+      recommended: esProActivo(s.provider),
       lat: s.provider.lat,
       lng: s.provider.lng,
     })),

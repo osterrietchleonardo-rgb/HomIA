@@ -6,8 +6,8 @@
 //   · Uso completo de la plataforma: stock, ventas directas, cobros, CRM, vinculaciones
 // ── Plan PRO: $100.000/mes ──
 //   · Todo lo del Básico, más:
-//   · Logo y marca en la home como proveedor sponsor
-//   · Tarjeta destacada "Recomendado" en marketplace y directorio
+//   · Logo y marca en la home (cinta de sponsors)
+//   · "Recomendado" y primero en directorio, marketplace, búsquedas y agente Homy
 //   · Analítica de demanda de tu zona (elementos más pedidos, consultas del rubro)
 
 export type ProviderPlan = 'trial' | 'basic' | 'pro'
@@ -77,4 +77,114 @@ export function puedeOperar(prov: { subscription: string; trialEndsAt?: Date | n
 
 export function esPlanPago(prov: { subscription: string }): boolean {
   return prov.subscription === 'basic' || prov.subscription === 'pro'
+}
+
+/**
+ * ¿El proveedor tiene el Plan PRO ACTIVO? Única fuente de verdad para todo lo
+ * que da el PRO: tarjeta "Recomendado", primero en directorio / marketplace /
+ * búsquedas / agente Homy, y la cinta de sponsors de la home. Si deja de pagar
+ * o baja a Básico, deja de cumplirse en el acto.
+ */
+export function esProActivo(prov: { subscription: string; trialEndsAt?: Date | null; createdAt: Date | string }): boolean {
+  return prov.subscription === 'pro' && puedeOperar(prov)
+}
+
+// ── Transiciones de plan (webhook de Mercado Pago + reconciliación diaria) ──
+// Función pura: dice QUÉ hacer con el perfil a partir del estado de una
+// suscripción (preapproval). La aplican el webhook y el cron con la base.
+
+export type PlanNotificacion = { type: string; title: string; body: string; link: string }
+
+export type PlanTransicion =
+  | { kind: 'ignorar'; motivo: string }
+  | {
+      kind: 'activar'
+      /** suscripción anterior a cancelar en MP (cambio de plan) */
+      cancelarAnterior: string | null
+      data: { subscription: 'basic' | 'pro'; mpPreapprovalId: string; proSince?: Date | null }
+      notificacion: PlanNotificacion | null
+    }
+  | {
+      kind: 'degradar'
+      data: { subscription: 'trial'; trialEndsAt: Date; proSince: null }
+      notificacion: PlanNotificacion
+    }
+
+const LINK_PLAN = '#/panel/proveedor/plan'
+
+export function planTransicion(
+  prov: { subscription: string; mpPreapprovalId: string | null },
+  pre: { id: string; status: string },
+  planNuevo: 'basic' | 'pro',
+  motivo: 'webhook' | 'impago' = 'webhook'
+): PlanTransicion {
+  const anterior = prov.subscription
+
+  if (pre.status === 'authorized' && motivo !== 'impago') {
+    const yaActivo = anterior === planNuevo && prov.mpPreapprovalId === pre.id
+    if (yaActivo) return { kind: 'ignorar', motivo: 'la suscripción ya estaba activa' }
+    // Cambio de plan: la suscripción vieja se cancela recién AHORA que la nueva
+    // está autorizada (si el proveedor abandona el checkout, sigue con la vieja).
+    const cancelarAnterior =
+      prov.mpPreapprovalId && prov.mpPreapprovalId !== pre.id && esPlanPago(prov) ? prov.mpPreapprovalId : null
+    const data: { subscription: 'basic' | 'pro'; mpPreapprovalId: string; proSince?: Date | null } = {
+      subscription: planNuevo,
+      mpPreapprovalId: pre.id,
+    }
+    if (planNuevo === 'pro' && anterior !== 'pro') data.proSince = new Date()
+    if (planNuevo === 'basic' && anterior === 'pro') data.proSince = null
+
+    let notificacion: PlanNotificacion | null
+    if (planNuevo === 'pro' && anterior !== 'pro') {
+      notificacion = {
+        type: 'pro_activa',
+        title: '¡Subiste al plan PRO!',
+        body: 'Ya aparecés como Recomendado y primero en el directorio, el marketplace de materiales y las búsquedas. Cargá tu logo y tu marca en Mi perfil para salir en la cinta de sponsors de la home.',
+        link: '#/panel/proveedor/perfil',
+      }
+    } else if (planNuevo === 'basic' && anterior === 'pro') {
+      notificacion = {
+        type: 'plan_basico',
+        title: 'Pasaste al plan Básico',
+        body: 'Tu plan Básico está activo: seguís usando stock, ventas, cobros, CRM y vinculaciones. Dejaste de aparecer como Recomendado y en la cinta de sponsors de la home.',
+        link: LINK_PLAN,
+      }
+    } else if (planNuevo === 'basic') {
+      notificacion = {
+        type: 'plan_basico',
+        title: 'Plan Básico activo',
+        body: 'Tu plan Básico está activo: usá la plataforma completa (stock, ventas, cobros, CRM y vinculaciones).',
+        link: LINK_PLAN,
+      }
+    } else {
+      notificacion = null // PRO → PRO con otra suscripción: nada nuevo que contar
+    }
+    return { kind: 'activar', cancelarAnterior, data, notificacion }
+  }
+
+  if (pre.status === 'cancelled' || pre.status === 'paused' || motivo === 'impago') {
+    // Solo degrada la suscripción VIGENTE: la vieja de un cambio de plan (o una
+    // que el proveedor abandonó en el checkout) no pisa el plan actual.
+    if (!prov.mpPreapprovalId || prov.mpPreapprovalId !== pre.id) {
+      return { kind: 'ignorar', motivo: 'no es la suscripción vigente' }
+    }
+    if (!esPlanPago(prov)) return { kind: 'ignorar', motivo: 'el plan ya estaba inactivo' }
+    const title =
+      motivo === 'impago' ? 'Tu plan se canceló por falta de pago'
+        : pre.status === 'paused' ? 'Tu suscripción quedó pausada'
+          : 'Tu plan se canceló'
+    return {
+      kind: 'degradar',
+      // sin plan de pago vuelve a "trial" ya consumido → se le pide elegir plan
+      data: { subscription: 'trial', trialEndsAt: new Date(0), proSince: null },
+      notificacion: {
+        type: 'plan_cancelado',
+        title,
+        body: 'Tu plan se canceló: dejaste de aparecer en marketplace y sponsors. Elegí un plan para volver a vender en HomIA.',
+        link: LINK_PLAN,
+      },
+    }
+  }
+
+  return { kind: 'ignorar', motivo: `estado ${pre.status || 'desconocido'} sin acción` }
 }

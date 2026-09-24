@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { ok, requireAuth, fail, parseBody } from '@/lib/api'
 import { db } from '@/lib/db'
+import { isHomiaUploadUrl } from '@/lib/leftovers'
 
 const userSelect = { id: true, displayName: true, avatarUrl: true, verificationStatus: true } as const
 const listInclude = {
@@ -164,7 +165,8 @@ const createSchema = z.object({
   address: z.string().trim().max(200).optional(),
   city: z.string().trim().max(120).optional(),
   deadline: z.string().optional(), // ISO
-  photos: z.array(z.string().url().or(z.string().startsWith('/'))).max(4).optional(),
+  // fotos del trabajo: solo subidas reales de HomIA (bucket público o legado /uploads)
+  photos: z.array(z.string().max(600).refine(isHomiaUploadUrl, 'Las fotos tienen que subirse desde HomIA')).max(4).optional(),
   firstMessage: z.string().trim().max(2000).optional(), // opcional: abre chat cliente→profesional con el brief
 })
 

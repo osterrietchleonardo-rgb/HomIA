@@ -254,8 +254,10 @@ export default function ClientInvoices() {
               </div>
               <div className="space-y-2.5 homy-stagger">
                 {pagadas.map((inv) => (
-                  <div key={inv.id} className="homy-row flex items-center justify-between gap-3 p-4">
-                    <div className="min-w-0">
+                  // flex-wrap + base 11rem: en el celu monto/PDF/estado bajan de línea en vez de
+                  // partir el número de factura en tres renglones
+                  <div key={inv.id} className="homy-row flex flex-wrap items-center justify-between gap-3 p-4">
+                    <div className="min-w-0 flex-[1_1_11rem]">
                       <p className="font-bold text-[#0A2540]">{inv.number}</p>
                       {inv.project.title && <p className="line-clamp-1 text-xs font-semibold text-slate-500">{inv.project.title}</p>}
                       <p className="text-xs text-slate-400">{formatDate(inv.issuedAt)}{inv.paymentMethod ? ` · ${inv.paymentMethod === 'mercadopago' ? 'Mercado Pago' : 'efectivo'}` : ''}</p>

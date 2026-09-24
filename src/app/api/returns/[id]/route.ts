@@ -45,8 +45,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!isRequester && !isProvider) return fail('No tenés acceso a esta devolución', 403)
 
   const st = ret.status
+  // el solicitante puede ser el cliente o el PROFESIONAL del proyecto: el aviso lo
+  // lleva a SU panel (antes siempre iba al panel de cliente, que el pro no tiene)
+  const requesterPanel: 'cliente' | 'profesional' = ret.projectId
+    ? (await db.project.findUnique({ where: { id: ret.projectId }, select: { clientId: true } }))?.clientId === ret.requesterId ? 'cliente' : 'profesional'
+    : 'cliente'
   const notifyRequester = (type: string, title: string, body: string) =>
-    db.notification.create({ data: { userId: ret.requesterId, type, title, body, link: originLink(ret) } })
+    db.notification.create({ data: { userId: ret.requesterId, type, title, body, link: originLink(ret, requesterPanel) } })
   const notifyProvider = (type: string, title: string, body: string) =>
     db.notification.create({ data: { userId: ret.provider.userId, type, title, body, link: '#/panel/proveedor/cobros?tab=devoluciones' } })
   const label = `${ret.items.length} ítem${ret.items.length === 1 ? '' : 's'}`
@@ -244,8 +249,8 @@ async function restock(providerId: string, elementId: string, qty: number, note:
   })
 }
 
-function originLink(ret: { projectId: string | null; purchaseId: string | null }) {
-  return ret.projectId ? `#/panel/cliente/proyectos/${ret.projectId}` : '#/panel/cliente/materiales?tab=compras'
+function originLink(ret: { projectId: string | null; purchaseId: string | null }, panel: 'cliente' | 'profesional') {
+  return ret.projectId ? `#/panel/${panel}/proyectos/${ret.projectId}` : '#/panel/cliente/materiales?tab=compras'
 }
 
 function formatARS(n: number) {

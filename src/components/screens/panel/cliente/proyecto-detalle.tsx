@@ -495,8 +495,9 @@ export default function ClientProjectDetail({ id }: { id: string }) {
             {decided.map((m) => {
               const counts = m.status === 'aprobado'
               return (
-                <div key={m.id} className="flex items-center justify-between gap-2 py-2.5">
-                  <div className="min-w-0 flex-1">
+                // flex-wrap + base 11rem: con "facturado" + precio + Rechazar el texto quedaba en una columna de 50px
+                <div key={m.id} className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 py-2.5">
+                  <div className="min-w-0 flex-[1_1_11rem]">
                     <p className={`line-clamp-1 text-sm font-semibold ${counts ? 'text-[#0A2540]' : 'text-slate-400 line-through'}`}>{m.name}</p>
                     <p className="text-xs text-slate-400">{m.quantity} {m.unit} × {formatARS(m.unitPrice)}{m.providerName ? ` · ${m.providerName}` : ''}</p>
                     {m.status === 'rechazado' && m.note && <p className="mt-0.5 text-xs text-slate-400">{m.note}</p>}

@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 import { parseJson } from '@/lib/api'
 import { withinRadius, type WithGeo } from '@/lib/geo'
 import { matchTerms, canonicalCategoria } from '@/lib/search-match'
-import { puedeOperar } from '@/lib/plans'
+import { puedeOperar, esProActivo } from '@/lib/plans'
 
 // Búsqueda dual HomIA
 // mode=cliente    → profesionales + trabajos abiertos + MATERIALES en proveedores
@@ -50,8 +50,8 @@ export async function GET(req: NextRequest) {
   const materialResults = withinRadius(
     matched
       .sort((a, b) => {
-        const pa = a.provider.subscription === 'pro' ? 1 : 0
-        const pb = b.provider.subscription === 'pro' ? 1 : 0
+        const pa = esProActivo(a.provider) ? 1 : 0
+        const pb = esProActivo(b.provider) ? 1 : 0
         if (pa !== pb) return pb - pa // proveedores Recomendados primero
         return a.price - b.price
       })
@@ -72,17 +72,21 @@ export async function GET(req: NextRequest) {
       providerName: s.provider.businessName,
       providerCity: s.provider.city || s.provider.user.city,
       providerRating: s.provider.rating,
+      recommended: esProActivo(s.provider), // Plan PRO activo → "Recomendado"
       lat: s.provider.lat,
       lng: s.provider.lng,
     })),
     lat, lng, radius
   )
+    // con ubicación withinRadius ordena por distancia: los Recomendados (PRO
+    // activo) vuelven a encabezar, manteniendo el orden por cercanía entre sí
+    .sort((a, b) => Number(b.recommended) - Number(a.recommended))
 
   if (mode === 'cliente') {
     // ── Profesionales ──
     const pros = await db.professionalProfile.findMany({
       include: {
-        user: { select: { id: true, displayName: true, avatarUrl: true, rating: true, reviewsCount: true, city: true } },
+        user: { select: { id: true, displayName: true, avatarUrl: true, rating: true, reviewsCount: true, city: true, verificationStatus: true } },
       },
     })
     let filtered = pros
@@ -110,7 +114,7 @@ export async function GET(req: NextRequest) {
         rating: p.rating || p.user.rating,
         reviewsCount: p.reviewsCount || p.user.reviewsCount,
         worksCount: p.worksCount,
-        verified: p.verified,
+        verified: p.user.verificationStatus === 'verificado',
         subscription: p.subscription,
         lat: p.lat,
         lng: p.lng,

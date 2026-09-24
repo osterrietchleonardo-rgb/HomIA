@@ -44,27 +44,31 @@ export async function POST(
   if (invoice.clientId !== user.id) return fail('Solo el cliente paga la factura', 403)
   if (invoice.status === 'pagada') return fail('La factura ya está pagada')
 
-  // si el cliente había acordado pagar en efectivo y ahora elige Mercado Pago,
-  // el acuerdo de efectivo se cancela (solo puede liquidarse por un método)
-  const acuerdoEfectivo = await db.payment.findFirst({
-    where: { invoiceId: invoice.id, method: 'efectivo', status: 'acordado' },
-  })
-  if (acuerdoEfectivo) {
-    await db.payment.delete({ where: { id: acuerdoEfectivo.id } })
-  }
-
   if (!mpConfigured()) {
-    return fail('Mercado Pago no está configurado. Agregá MP_ACCESS_TOKEN en el archivo .env del servidor.', 503, { needsConfig: true })
+    return fail('El pago con Mercado Pago no está disponible por ahora. Podés pagar en efectivo o reintentar más tarde.', 503, { needsConfig: true })
   }
 
   const baseUrl = appUrl()
-  const preference = await createInvoicePreference({
-    invoiceId: invoice.id,
-    invoiceNumber: invoice.number,
-    title: `Factura ${invoice.number} — ${invoice.items.length > 0 ? 'Proyecto HomIA' : 'HomIA'}`,
-    total: invoice.total,
-    payerEmail: user.email,
-    baseUrl,
+  let preference: { id: string; initPoint: string }
+  try {
+    preference = await createInvoicePreference({
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.number,
+      title: `Factura ${invoice.number} — ${invoice.items.length > 0 ? 'Proyecto HomIA' : 'HomIA'}`,
+      total: invoice.total,
+      payerEmail: user.email,
+      baseUrl,
+    })
+  } catch (e) {
+    console.error('[invoices] createInvoicePreference', e)
+    return fail('Mercado Pago no respondió. Probá de nuevo en un rato o pagá en efectivo.', 503)
+  }
+
+  // si el cliente había acordado pagar en efectivo y ahora elige Mercado Pago,
+  // el acuerdo de efectivo se cancela (solo puede liquidarse por un método).
+  // Recién acá: si MP no está disponible, el acuerdo de efectivo sigue en pie.
+  await db.payment.deleteMany({
+    where: { invoiceId: invoice.id, method: 'efectivo', status: 'acordado' },
   })
 
   await db.invoice.update({ where: { id }, data: { mpPreferenceId: preference.id, paymentMethod: 'mercadopago' } })

@@ -58,7 +58,17 @@ export async function GET(
   })
 }
 
-// PATCH: cerrar/cancelar/reabrir trabajo (solo dueño)
+// PATCH: cerrar/cancelar/reabrir trabajo (solo dueño).
+// Transiciones: abierto → cerrado|cancelado · cerrado|cancelado → abierto (solo si nunca se
+// aceptó una oferta) · en_proceso → cerrado (la obra sigue por el proyecto). Un trabajo con
+// oferta aceptada NO se reabre: se aceptaría otra oferta y quedarían dos proyectos.
+const JOB_TRANSITIONS: Record<string, string[]> = {
+  abierto: ['cerrado', 'cancelado'],
+  cerrado: ['abierto'],
+  cancelado: ['abierto'],
+  en_proceso: ['cerrado'],
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -70,7 +80,19 @@ export async function PATCH(
   const job = await db.jobPost.findUnique({ where: { id } })
   if (!job) return fail('Trabajo no encontrado', 404)
   if (job.userId !== user.id) return fail('No es tu publicación', 403)
-  if (!['cerrado', 'cancelado', 'abierto'].includes(status)) return fail('Estado inválido')
+  if (typeof status !== 'string' || !['cerrado', 'cancelado', 'abierto'].includes(status)) return fail('Estado inválido')
+  if (status === job.status) return ok({ success: true, unchanged: true })
+  if (!(JOB_TRANSITIONS[job.status] || []).includes(status)) {
+    return fail(
+      job.status === 'en_proceso'
+        ? 'Este trabajo ya tiene una oferta aceptada: seguilo desde el proyecto'
+        : `No se puede pasar de ${job.status} a ${status}`,
+      409
+    )
+  }
+  if (status === 'abierto' && job.selectedBidId) {
+    return fail('Este trabajo ya tuvo una oferta aceptada: publicá uno nuevo', 409)
+  }
   await db.jobPost.update({ where: { id }, data: { status } })
   return ok({ success: true })
 }

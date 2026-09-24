@@ -156,7 +156,7 @@ export async function POST(req: NextRequest) {
       body: analysis.status === 'verificado'
         ? 'La IA validó tu DNI: tu cuenta ya muestra la insignia de verificado.'
         : analysis.notes,
-      link: `/panel/${user.roles[0] || 'cliente'}/verificacion`,
+      link: `#/panel/${user.roles[0] || 'cliente'}/verificacion`,
     },
   })
 

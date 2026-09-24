@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { ok, fail, parseBody, appUrl } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
-import { createProviderPlanPreapproval, cancelPreapproval, mpSubConfigured } from '@/lib/mercadopago'
+import { createProviderPlanPreapproval, mpSubConfigured } from '@/lib/mercadopago'
 import { planState, PLAN_PRICE_ARS, PLAN_FEATURES, TRIAL_DAYS } from '@/lib/plans'
 
 // ── Plan del proveedor — el único rol con suscripción de pago ──
@@ -47,15 +47,11 @@ export async function POST(req: NextRequest) {
     return fail('Las suscripciones por Mercado Pago no están disponibles por ahora. Escribinos desde Ayuda y lo resolvemos.', 503, { needsConfig: true })
   }
 
-  // cambio de plan con una suscripción vigente: cancelar la anterior antes de crear la nueva
-  if (prov.mpPreapprovalId && (prov.subscription === 'basic' || prov.subscription === 'pro')) {
-    try {
-      await cancelPreapproval(prov.mpPreapprovalId)
-    } catch (e) {
-      console.error('[provider/plan] cancelPreapproval', e)
-      return fail('No pudimos cancelar tu suscripción actual en Mercado Pago. Probá de nuevo en un rato.', 503)
-    }
-  }
+  // Cambio de plan SIN bloqueo: la suscripción vigente NO se cancela acá. Si la
+  // cancelábamos antes de que el proveedor autorizara la nueva, el webhook
+  // recibía `cancelled` de la vigente y lo degradaba mientras pagaba (o para
+  // siempre si abandonaba el checkout). Ahora el webhook cancela la vieja recién
+  // cuando llega `authorized` de la nueva.
 
   // back_url: `${appUrl()}/panel/proveedor/plan?plan=ok` (lo arma mercadopago.ts a partir de baseUrl)
   let pre: { id: string; initPoint: string; priceArs: number }
@@ -71,10 +67,9 @@ export async function POST(req: NextRequest) {
     return fail('Mercado Pago no respondió. Probá de nuevo en un rato.', 503)
   }
 
-  await db.providerProfile.update({
-    where: { id: prov.id },
-    data: { mpPreapprovalId: pre.id },
-  })
+  // `mpPreapprovalId` sigue apuntando a la suscripción VIGENTE hasta que la nueva
+  // se autorice (lo actualiza el webhook). El webhook identifica al proveedor y al
+  // plan por external_reference, así que no hace falta guardar la pendiente.
 
   return ok({ initPoint: pre.initPoint, init_point: pre.initPoint, preapprovalId: pre.id, plan, priceArs: PLAN_PRICE_ARS[plan] }, 201)
 }

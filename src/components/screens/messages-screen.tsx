@@ -252,8 +252,9 @@ export default function MessagesScreen({ embedded = false }: { embedded?: boolea
                 </button>
                 <UAvatar name={thread.conv.otherName} url={thread.conv.otherAvatarUrl} size={40} />
                 <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-1.5 truncate text-sm font-extrabold text-[#0A2540]">
-                    {thread.conv.otherName}
+                  {/* el nombre se corta con "…" y la insignia de verificación queda siempre entera */}
+                  <p className="flex min-w-0 items-center gap-1.5 text-sm font-extrabold text-[#0A2540]">
+                    <span className="truncate">{thread.conv.otherName}</span>
                     <VerifyBadge status={thread.conv.otherVerification} />
                   </p>
                   <p className="truncate text-[11px] font-bold uppercase tracking-wider text-slate-400">

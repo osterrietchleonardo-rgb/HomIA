@@ -76,15 +76,38 @@ export async function PATCH(
         title: bid.job.title,
         description: bid.job.description,
         laborCost: bid.amount,
+        // el brief del trabajo publicado pasa al proyecto (antes el detalle decía "Sin estimar")
+        budgetMin: bid.job.budgetMin,
+        budgetMax: bid.job.budgetMax,
+        address: bid.job.address,
+        lat: bid.job.lat,
+        lng: bid.job.lng,
+        photos: bid.job.photos && bid.job.photos !== '[]' ? bid.job.photos : null,
         status: 'activo',
         stage: 'presupuesto',
       },
     })
     await tx.jobBid.update({ where: { id }, data: { status: 'aceptado' } })
+    // el resto de las ofertas pendientes queda rechazado… y cada profesional se entera
+    const others = await tx.jobBid.findMany({
+      where: { jobId: bid.jobId, id: { not: id }, status: 'pendiente' },
+      select: { professional: { select: { userId: true } } },
+    })
     await tx.jobBid.updateMany({
       where: { jobId: bid.jobId, id: { not: id }, status: 'pendiente' },
       data: { status: 'rechazado' },
     })
+    if (others.length) {
+      await tx.notification.createMany({
+        data: others.map((o) => ({
+          userId: o.professional.userId,
+          type: 'presupuesto_rechazado',
+          title: 'El cliente eligió otra oferta',
+          body: `"${bid.job.title}" ya tiene profesional. Tu oferta quedó rechazada: seguí buscando en la bolsa.`,
+          link: '#/panel/profesional/presupuestos',
+        })),
+      })
+    }
     await tx.jobPost.update({
       where: { id: bid.jobId },
       data: { status: 'en_proceso', selectedBidId: id },

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getPayment, getPreapproval, verifyWebhookSignature, type MpPaymentInfo } from '@/lib/mercadopago'
+import { getPayment, getPreapproval, cancelPreapproval, verifyWebhookSignature, type MpPaymentInfo } from '@/lib/mercadopago'
+import { planTransicion } from '@/lib/plans'
 
 // Webhook de Mercado Pago (Checkout Pro + Suscripciones).
 // Confirma pagos de facturas de proyecto (external_reference = <invoiceId>),
@@ -359,50 +360,50 @@ async function handlePreapproval(preapprovalId: string, live: boolean) {
   })
   if (!prov) return
 
-  if (pre.status === 'authorized') {
-    const yaActivo = prov.subscription === planRef.plan && prov.mpPreapprovalId === pre.id
-    await db.providerProfile.update({
-      where: { id: prov.id },
-      data: {
-        subscription: planRef.plan,
-        mpPreapprovalId: pre.id,
-        ...(planRef.plan === 'pro' && !yaActivo ? { proSince: new Date() } : {}),
+  // Qué hacer lo decide `planTransicion` (lib/plans, pura y compartida con el
+  // cron de reconciliación). Acá solo se aplica contra la base y Mercado Pago.
+  const t = planTransicion(prov, pre, planRef.plan)
+  if (t.kind === 'ignorar') return
+
+  if (t.kind === 'activar') {
+    // Update condicional (idempotente ante avisos duplicados/concurrentes): si
+    // otro aviso ya dejó este plan con esta suscripción, no se notifica de nuevo.
+    const upd = await db.providerProfile.updateMany({
+      where: {
+        id: prov.id,
+        OR: [
+          { subscription: { not: t.data.subscription } },
+          { mpPreapprovalId: { not: t.data.mpPreapprovalId } },
+          { mpPreapprovalId: null },
+        ],
       },
+      data: t.data,
     })
-    if (!yaActivo) {
-      await db.notification.create({
-        data: {
-          userId: prov.userId,
-          type: 'pro_activa',
-          title: planRef.plan === 'pro' ? 'Plan PRO activo' : 'Plan Básico activo',
-          body:
-            planRef.plan === 'pro'
-              ? 'Tu Plan PRO está activo: analítica del negocio, tarjeta Recomendado y sponsor en la home.'
-              : 'Tu Plan Básico está activo: usá la plataforma sin límites.',
-          link: '#/panel/proveedor/plan',
-        },
-      })
+    // Cambio de plan: recién ahora que la nueva está autorizada se cancela la
+    // vieja. Se hace DESPUÉS de guardar la nueva como vigente: así el aviso
+    // `cancelled` de la vieja (que MP manda enseguida) ya no coincide con la
+    // vigente y no degrada al proveedor mientras paga.
+    if (t.cancelarAnterior) {
+      try {
+        await cancelPreapproval(t.cancelarAnterior)
+        console.info('[mp webhook] suscripción anterior cancelada por cambio de plan', { vieja: t.cancelarAnterior, nueva: pre.id })
+      } catch (e) {
+        console.error('[mp webhook] no se pudo cancelar la suscripción anterior', t.cancelarAnterior, e)
+      }
+    }
+    if (upd.count > 0 && t.notificacion) {
+      await db.notification.create({ data: { userId: prov.userId, ...t.notificacion } })
     }
     return
   }
 
-  if (pre.status === 'cancelled' || pre.status === 'paused') {
-    // Solo si la suscripción cancelada es la vigente (un cambio de plan cancela la
-    // anterior y NO debe pisar el plan nuevo).
-    if (prov.mpPreapprovalId && prov.mpPreapprovalId !== pre.id) return
-    // Sin plan de pago vuelve a "trial" ya consumido → se le pide elegir plan
-    await db.providerProfile.update({
-      where: { id: prov.id },
-      data: { subscription: 'trial', trialEndsAt: new Date(0) },
-    })
-    await db.notification.create({
-      data: {
-        userId: prov.userId,
-        type: 'plan_cancelado',
-        title: pre.status === 'paused' ? 'Suscripción pausada' : 'Suscripción cancelada',
-        body: 'Tu plan dejó de estar activo. Para seguir operando en HomIA, elegí un plan.',
-        link: '#/panel/proveedor/plan',
-      },
-    })
+  // degradar: solo si la suscripción cancelada/pausada es la VIGENTE y el plan
+  // sigue siendo de pago (condición en el WHERE → idempotente)
+  const upd = await db.providerProfile.updateMany({
+    where: { id: prov.id, mpPreapprovalId: pre.id, subscription: { in: ['basic', 'pro'] } },
+    data: t.data,
+  })
+  if (upd.count > 0) {
+    await db.notification.create({ data: { userId: prov.userId, ...t.notificacion } })
   }
 }

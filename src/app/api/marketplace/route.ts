@@ -6,7 +6,7 @@ import { parseJson } from '@/lib/api'
 import { withinRadius } from '@/lib/geo'
 import { matchScore, canonicalCategoria } from '@/lib/search-match'
 import { matchTerms } from '@/lib/search-match'
-import { puedeOperar } from '@/lib/plans'
+import { puedeOperar, esProActivo } from '@/lib/plans'
 
 // ── MARKETPLACE DE MATERIALES ──
 // El cliente (o cualquier usuario) busca lo que necesita comprar — sin
@@ -53,7 +53,9 @@ export async function GET(req: NextRequest) {
       const stockOperativo = e.stock.filter((s) => puedeOperar(s.provider))
       // marcas y nombres de proveedores que publican este elemento
       const brandsProvs = norm(stockOperativo.map((s) => `${s.brand || ''} ${s.provider.businessName}`).join(' · '))
-      const hasStock = stockOperativo.some((s) => s.quantity > 0 && s.status === 'disponible')
+      const hasStock = stockOperativo.some((s) => s.quantity > 0 && s.status !== 'agotado')
+      // algún proveedor Recomendado (PRO activo) lo tiene disponible
+      const hasProStock = stockOperativo.some((s) => s.quantity > 0 && s.status !== 'agotado' && esProActivo(s.provider))
       let score = 0
       if (!qn) {
         // navegación sin búsqueda: todos los elementos con stock disponible
@@ -68,12 +70,14 @@ export async function GET(req: NextRequest) {
         }
         if (score > 0 && hasStock) score += 3
       }
-      return { e, score, hasStock }
+      return { e, score, hasStock, hasProStock }
     })
     .filter((x) => x.score > 0)
     .sort((a, b) => {
       if (a.score !== b.score) return b.score - a.score
       if (a.hasStock !== b.hasStock) return a.hasStock ? -1 : 1
+      // a igual relevancia, primero lo que venden los proveedores Recomendados
+      if (a.hasProStock !== b.hasProStock) return a.hasProStock ? -1 : 1
       return a.e.name.localeCompare(b.e.name, 'es')
     })
     .slice(0, 120)
@@ -83,7 +87,7 @@ export async function GET(req: NextRequest) {
   // ── 2. Ofertas reales de esos elementos (stock de todos los proveedores) ──
   const stocks = elementIds.length
     ? await db.providerStock.findMany({
-        where: { elementId: { in: elementIds }, quantity: { gt: 0 }, status: 'disponible' },
+        where: { elementId: { in: elementIds }, quantity: { gt: 0 }, status: { not: 'agotado' } },
         include: {
           provider: {
             include: {
@@ -125,7 +129,7 @@ export async function GET(req: NextRequest) {
       providerRating: s.provider.rating || s.provider.user.rating,
       providerReviews: s.provider.reviewsCount || s.provider.user.reviewsCount,
       providerVerified: s.provider.user.verificationStatus === 'verificado',
-      planPro: s.provider.subscription === 'pro',
+      planPro: esProActivo(s.provider), // Plan PRO ACTIVO → "Recomendado" y primero
       lat: s.provider.lat,
       lng: s.provider.lng,
     }

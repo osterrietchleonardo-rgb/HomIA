@@ -131,12 +131,14 @@ export default function ProviderPlan() {
   return (
     <div className="homy-page">
       <header className="homy-page-head">
-        <p className="homy-eyebrow">Mi plan</p>
-        <h1 className="homy-page-title mt-1.5">Tu suscripción HomIA</h1>
-        <p className="homy-page-sub">
-          Los clientes y profesionales usan HomIA gratis — la suscripción es solo para proveedores:
-          financia la plataforma, la IA y las búsquedas que traen clientes a tu negocio.
-        </p>
+        <div className="min-w-0">
+          <p className="homy-eyebrow">Mi plan</p>
+          <h1 className="homy-page-title mt-1.5">Tu suscripción HomIA</h1>
+          <p className="homy-page-sub">
+            Los clientes y profesionales usan HomIA gratis — la suscripción es solo para proveedores:
+            financia la plataforma, la IA y las búsquedas que traen clientes a tu negocio.
+          </p>
+        </div>
       </header>
 
       {/* confirmación del pago al volver de Mercado Pago */}
@@ -151,7 +153,7 @@ export default function ProviderPlan() {
       {confirmTimedOut && !(plan.plan === 'basic' || plan.plan === 'pro') && (
         <section className="homy-glass rounded-2xl p-4 mb-5 flex flex-wrap items-center gap-3 ring-1 ring-[#FFC700]/45">
           <CircleAlert className="size-5 shrink-0 text-[#B98A00]" aria-hidden />
-          <p className="min-w-0 flex-1 text-[13.5px] leading-relaxed text-slate-600">
+          <p className="min-w-0 flex-[1_1_14rem] text-[13.5px] leading-relaxed text-slate-600">
             Todavía no nos llegó la confirmación de Mercado Pago. Si el pago se aprobó, el plan se activa solo en unos minutos.
           </p>
           <button onClick={() => { setConfirmTimedOut(false); setConfirming(true) }} className="homy-glass-soft min-h-[40px] rounded-full px-4 text-sm font-bold text-[#1D63B8]">
@@ -340,7 +342,7 @@ export function TrialExpiredBanner({ daysLeft, preciosArs }: { daysLeft: number 
     return (
       <section className="homy-glass rounded-2xl p-4 mb-5 flex flex-wrap items-center gap-3 ring-1 ring-[#FFC700]/45">
         <span aria-hidden className="homy-icon-chip homy-chip-gold size-10 shrink-0 [&_svg]:size-5"><Clock /></span>
-        <p className="min-w-0 flex-1 text-[13.5px] leading-relaxed text-slate-600">
+        <p className="min-w-0 flex-[1_1_14rem] text-[13.5px] leading-relaxed text-slate-600">
           <b>Prueba gratis:</b> te quedan <b>{daysLeft} día{daysLeft === 1 ? '' : 's'}</b> con todos los beneficios. Después elegí el
           Básico ({basic}/mes) o el PRO ({pro}/mes) para seguir vendiendo.
         </p>
@@ -353,7 +355,7 @@ export function TrialExpiredBanner({ daysLeft, preciosArs }: { daysLeft: number 
   return (
     <section className="homy-glass rounded-2xl p-4 mb-5 flex flex-wrap items-center gap-3 ring-2 ring-[#FF5A1F]/40">
       <span aria-hidden className="homy-icon-chip size-10 shrink-0 [&_svg]:size-5" style={{ background: 'linear-gradient(140deg, #ffedd5 0%, #fed7aa 100%)', color: '#c2410c' }}><CircleAlert /></span>
-      <p className="min-w-0 flex-1 text-[13.5px] leading-relaxed text-slate-600">
+      <p className="min-w-0 flex-[1_1_14rem] text-[13.5px] leading-relaxed text-slate-600">
         <b>Tu prueba gratis terminó.</b> Para volver a gestionar stock, pedidos y cobros elegí tu plan:
         Básico <b>{basic}/mes</b> o PRO <b>{pro}/mes</b>.
       </p>

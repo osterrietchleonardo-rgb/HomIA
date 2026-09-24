@@ -4,6 +4,7 @@ import { ok, fail, requireAuth, parseBody } from '@/lib/api'
 import { db } from '@/lib/db'
 import { canonicalProviderKind } from '@/lib/search-match'
 import { signDniDocUrl, DNI_BUCKET } from '@/lib/dni-ai'
+import { esProActivo } from '@/lib/plans'
 
 // GET: mi perfil completo (usuario + perfiles + stock + documentos).
 // Los documentos de DNI viven en un bucket privado: acá se devuelven como
@@ -94,6 +95,19 @@ const PutSchema = z.object({
   kind: optionalText(40),
   cuit: optionalText(20),
   description: optionalText(1500),
+  // marca del proveedor en la cinta de sponsors (solo Plan PRO activo). '' = borrar
+  brandLogoUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((v) => v === '' || v.startsWith(publicUploadPrefix()), 'El logo tiene que subirse desde HomIA')
+    .optional(),
+  brandTagline: z.string().trim().max(60, 'La frase de marca puede tener hasta 60 caracteres').optional(),
+  brandColor: z
+    .string()
+    .trim()
+    .regex(/^(#[0-9a-fA-F]{6})?$/, 'El color tiene que ser un hex tipo #1D63B8')
+    .optional(),
 })
 
 // PUT: actualiza usuario y, si existen y el rol está en user.roles, los perfiles.
@@ -105,6 +119,22 @@ export async function PUT(req: NextRequest) {
   if (parsed.error) return parsed.error
   const d = parsed.data
   const roles = auth.user.roles
+
+  // La marca en la home es un beneficio del Plan PRO: se valida ANTES de tocar
+  // nada, así un 403 no deja cambios a medias.
+  const touchesBrand = d.brandLogoUrl !== undefined || d.brandTagline !== undefined || d.brandColor !== undefined
+  if (touchesBrand) {
+    const prov = roles.includes('proveedor')
+      ? await db.providerProfile.findUnique({
+          where: { userId: auth.user.id },
+          select: { subscription: true, trialEndsAt: true, createdAt: true },
+        })
+      : null
+    if (!prov) return fail('No tenés perfil de proveedor para editar', 403, { needsRole: 'proveedor' })
+    if (!esProActivo(prov)) {
+      return fail('El logo y la marca en la home son parte del plan PRO', 403, { needsPro: true })
+    }
+  }
 
   const userData: Record<string, unknown> = {}
   if (d.displayName !== undefined) userData.displayName = d.displayName
@@ -118,10 +148,9 @@ export async function PUT(req: NextRequest) {
   if (d.searchRadiusKm !== undefined) userData.searchRadiusKm = d.searchRadiusKm
   if (d.howFoundUs !== undefined) userData.howFoundUs = d.howFoundUs || null
   if (d.avatarUrl !== undefined) userData.avatarUrl = d.avatarUrl || null
-  if (Object.keys(userData).length > 0) {
-    await db.user.update({ where: { id: auth.user.id }, data: userData })
-  }
 
+  let writePro = false
+  let writeProv = false
   const proData: Record<string, unknown> = {}
   if (d.bio !== undefined) proData.bio = d.bio || null
   if (d.professions !== undefined) proData.professions = JSON.stringify(d.professions)
@@ -142,11 +171,10 @@ export async function PUT(req: NextRequest) {
     const existing = roles.includes('profesional')
       ? await db.professionalProfile.findUnique({ where: { userId: auth.user.id }, select: { id: true } })
       : null
-    if (existing) {
-      await db.professionalProfile.update({ where: { userId: auth.user.id }, data: proData })
-    } else if (touchesPro) {
+    if (!existing && touchesPro) {
       return fail('No tenés perfil de profesional para editar', 403, { needsRole: 'profesional' })
     }
+    writePro = !!existing
   }
 
   const provData: Record<string, unknown> = {}
@@ -162,17 +190,26 @@ export async function PUT(req: NextRequest) {
   if (d.city !== undefined) provData.city = d.city || null
   if (d.lat !== undefined) provData.lat = d.lat
   if (d.lng !== undefined) provData.lng = d.lng
+  if (d.brandLogoUrl !== undefined) provData.brandLogoUrl = d.brandLogoUrl || null
+  if (d.brandTagline !== undefined) provData.brandTagline = d.brandTagline || null
+  if (d.brandColor !== undefined) provData.brandColor = d.brandColor ? d.brandColor.toUpperCase() : null
   const touchesProv = Object.keys(provData).some((k) => !['address', 'city', 'lat', 'lng'].includes(k))
   if (Object.keys(provData).length > 0) {
     const existing = roles.includes('proveedor')
       ? await db.providerProfile.findUnique({ where: { userId: auth.user.id }, select: { id: true } })
       : null
-    if (existing) {
-      await db.providerProfile.update({ where: { userId: auth.user.id }, data: provData })
-    } else if (touchesProv) {
+    if (!existing && touchesProv) {
       return fail('No tenés perfil de proveedor para editar', 403, { needsRole: 'proveedor' })
     }
+    writeProv = !!existing
   }
+
+  // Todos los chequeos pasaron: recién ahora se escribe, todo junto (un 403 no deja cambios a medias)
+  const ops = []
+  if (Object.keys(userData).length > 0) ops.push(db.user.update({ where: { id: auth.user.id }, data: userData }))
+  if (writePro) ops.push(db.professionalProfile.update({ where: { userId: auth.user.id }, data: proData }))
+  if (writeProv) ops.push(db.providerProfile.update({ where: { userId: auth.user.id }, data: provData }))
+  if (ops.length > 0) await db.$transaction(ops)
 
   return ok({ success: true })
 }

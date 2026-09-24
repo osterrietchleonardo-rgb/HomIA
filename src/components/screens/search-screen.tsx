@@ -109,7 +109,14 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
       const data = await res.json()
       setPros(data.professionals || [])
       setJobs(data.jobs || [])
-      setMaterials(data.materials || [])
+      // /api/search devuelve cada oferta como { id, name }; la tarjeta (igual que el
+      // superagente) usa { stockId, elementName }: sin esto las tarjetas salían sin
+      // nombre y con keys repetidas
+      setMaterials(((data.materials || []) as (MaterialResult & { id?: string; name?: string })[]).map((m) => ({
+        ...m,
+        stockId: m.stockId ?? m.id ?? '',
+        elementName: m.elementName ?? m.name ?? '',
+      })))
       setComparables([])
     } finally {
       setLoading(false)

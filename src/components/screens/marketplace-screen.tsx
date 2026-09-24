@@ -253,10 +253,18 @@ export default function MarketplaceScreen({ embedded = false }: { embedded?: boo
                                   <p className="flex flex-wrap items-center gap-1 text-[12.5px] font-bold text-navy">
                                     <Link to={`/proveedor/${o.providerId}`} className="truncate hover:underline" title={o.businessName}>{o.businessName}</Link>
                                     <VerifyBadge status={o.providerVerified ? 'verificado' : 'none'} />
+                                    {/* planPro = Plan PRO ACTIVO (lo calcula la API con esProActivo) */}
+                                    {o.planPro && (
+                                      <span
+                                        className="shrink-0 rounded-full bg-gradient-to-r from-[#FFC700] to-[#ffd84d] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-[#6b4d00] shadow-sm"
+                                        title="Proveedor Recomendado de HomIA"
+                                      >
+                                        ★ Recomendado
+                                      </span>
+                                    )}
                                   </p>
                                   <p className="text-[11px] text-slate-500 truncate">
                                     {o.brand || 'Sin marca'} · stock {o.quantity}
-                                    {o.planPro && <span className="ml-1 rounded-full bg-gold/25 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-[#6b4d00]">Recomendado</span>}
                                   </p>
                                 </div>
                               </div>

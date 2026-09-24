@@ -49,11 +49,14 @@ export default function JobDetailScreen({ id }: { id: string }) {
     setLoading(true)
     try {
       const res = await fetch(`/api/jobs/${id}`)
+      let ownerId: string | null = null
       if (res.ok) {
         const data = await res.json()
         setJob(data.job)
+        ownerId = data.job?.client?.id ?? null
       }
-      if (user) {
+      // las ofertas solo las ven el dueño y los profesionales (para el resto la API responde 403)
+      if (user && (user.roles.includes('profesional') || ownerId === user.id)) {
         const resBids = await fetch(`/api/jobs/${id}/bids`)
         if (resBids.ok) {
           const data = await resBids.json()

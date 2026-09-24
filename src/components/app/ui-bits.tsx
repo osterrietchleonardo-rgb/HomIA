@@ -73,11 +73,12 @@ export function UAvatar({ name, url, size = 40 }: { name: string; url?: string |
       style={{ width: size + 4, height: size + 4, background: 'linear-gradient(135deg, #1d63b8 0%, #00c4ff 100%)', padding: 2 }}
       aria-hidden
     >
-      <ShadAvatar className="border-0 bg-white" style={{ width: size, height: size }}>
+      {/* items/justify-center: sin foto, las iniciales quedaban pegadas arriba a la izquierda y cortadas */}
+      <ShadAvatar className="items-center justify-center border-0 bg-white" style={{ width: size, height: size }}>
         {url ? (
           <img src={url} alt={name} className="object-cover w-full h-full" />
         ) : (
-          <span className="text-xs font-bold text-[#0A2540]">{initials(name)}</span>
+          <span className="font-bold leading-none text-[#0A2540]" style={{ fontSize: Math.max(12, Math.round(size * 0.36)) }}>{initials(name)}</span>
         )}
       </ShadAvatar>
     </span>

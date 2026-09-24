@@ -1,13 +1,15 @@
 import { NextRequest } from 'next/server'
 import { ok, fail, body } from '@/lib/api'
 import { db } from '@/lib/db'
+import { isHomiaUploadUrl } from '@/lib/leftovers'
 
-/** Fotos de reseña: máx 4, solo subidas reales de HomIA (bucket de Supabase
- *  `https://…` o legado `/uploads/…`), extensión de imagen. */
+/** Fotos de reseña: máx 4, solo subidas reales de HomIA (bucket público de
+ *  Supabase o legado `/uploads/…`), extensión de imagen. Una URL de un sitio
+ *  cualquiera (pixel de rastreo, imagen ajena) se descarta. */
 function sanitizePhotos(arr: unknown): string[] {
   if (!Array.isArray(arr)) return []
   return arr
-    .filter((p): p is string => typeof p === 'string' && p.length < 500 && /^(https?:\/\/.+|\/uploads\/.+)\.(jpg|jpeg|png|webp)$/i.test(p))
+    .filter((p): p is string => typeof p === 'string' && p.length < 500 && isHomiaUploadUrl(p) && /\.(jpg|jpeg|png|webp)$/i.test(p))
     .slice(0, 4)
 }
 
@@ -29,10 +31,16 @@ export async function POST(req: NextRequest) {
     workId?: string
     purchaseId?: string // reseña de una compra directa de insumos
   }>(req)
-  if (!d.targetUserId || !d.rating || !d.comment) {
+  if (!d.targetUserId || !d.rating || typeof d.comment !== 'string' || !d.comment.trim()) {
     return fail('Faltan puntaje o comentario')
   }
-  if (d.rating < 1 || d.rating > 5) return fail('El puntaje va de 1 a 5')
+  // estrellas enteras (el modelo es Int: 4.5 o "5" terminaban en error de base)
+  if (typeof d.rating !== 'number' || !Number.isInteger(d.rating) || d.rating < 1 || d.rating > 5) {
+    return fail('El puntaje va de 1 a 5 estrellas (enteras)')
+  }
+  if (typeof d.targetUserId !== 'string') return fail('Destinatario inválido')
+  d.comment = d.comment.trim()
+  if (d.comment.length > 2000) return fail('El comentario puede tener hasta 2000 caracteres')
   if (d.targetUserId === user.id) return fail('No podés reseñarte a vos mismo')
 
   // ── Regla 0: reseña por compra directa de insumos ──

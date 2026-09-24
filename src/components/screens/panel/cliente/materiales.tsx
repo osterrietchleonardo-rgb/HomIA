@@ -338,12 +338,14 @@ export default function ClientMaterials({ role = 'cliente' }: { role?: 'cliente'
   return (
     <div className="homy-page">
       <header className="homy-page-head" style={{ position: 'relative' }}>
-        <p className="homy-eyebrow">Materiales</p>
-        <h1 className="homy-page-title mt-1.5">Comprá insumos directo a proveedores</h1>
-        <p className="homy-page-sub">
-          Buscá lo que necesitás — con o sin obra de por medio — y comprá a la ferretería, corralón o casa
-          de tu rubro que mejor te convenga: precio, stock real, reseñas y distancia de cada uno.
-        </p>
+        <div className="min-w-0">
+          <p className="homy-eyebrow">Materiales</p>
+          <h1 className="homy-page-title mt-1.5">Comprá insumos directo a proveedores</h1>
+          <p className="homy-page-sub">
+            Buscá lo que necesitás — con o sin obra de por medio — y comprá a la ferretería, corralón o casa
+            de tu rubro que mejor te convenga: precio, stock real, reseñas y distancia de cada uno.
+          </p>
+        </div>
       </header>
 
       {/* tabs buscar / comparables / compras */}
@@ -428,14 +430,15 @@ export default function ClientMaterials({ role = 'cliente' }: { role?: 'cliente'
                           {r.offers.map((o) => (
                             <li key={o.stockId} className={`rounded-2xl p-3.5 ring-1 transition ${o.planPro ? 'bg-[#FFC700]/8 ring-[#FFC700]/45' : 'bg-[#0A2540]/3 ring-[#0A2540]/8'}`}>
                               <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div className="flex min-w-0 flex-1 items-start gap-3">
+                                {/* base 14rem: en el celu el precio baja de línea y el proveedor no queda en una columna de 100px */}
+                                <div className="flex min-w-0 flex-[1_1_14rem] items-start gap-3">
                                   <UAvatar name={o.businessName} url={o.providerAvatar} size={40} />
                                   <div className="min-w-0">
                                     <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm font-extrabold text-[#0A2540] leading-snug">
                                       {o.businessName}
                                       <VerifyBadge status={o.providerVerified ? 'verificado' : 'none'} />
                                       {o.planPro && (
-                                        <span className="rounded-full bg-gradient-to-r from-[#FFC700] to-[#ffd84d] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-[#6b4d00]">Recomendado</span>
+                                        <span className="rounded-full bg-gradient-to-r from-[#FFC700] to-[#ffd84d] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-[#6b4d00] shadow-sm" title="Proveedor Recomendado de HomIA (Plan PRO activo)">★ Recomendado</span>
                                       )}
                                     </p>
                                     <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
@@ -792,7 +795,7 @@ function PurchaseCard({ p, busy, mpHidden, onCancel, onPayMP, onPayCash, onRevie
       )}
       {p.status === 'entregado' && (
         <p className="mt-1.5 text-[12px] text-slate-500">
-          {cashAgreed ? 'Acordaste efectivo: el proveedor confirma el cobro cuando recibe el dinero.' : 'Coordiná el pago con el proveedor por chat.'}
+          {cashAgreed ? 'Acordaste efectivo: el proveedor confirma el cobro cuando recibe el dinero.' : 'Ya lo retiraste: pagalo acá abajo para cerrar la compra.'}
         </p>
       )}
 
@@ -802,7 +805,7 @@ function PurchaseCard({ p, busy, mpHidden, onCancel, onPayMP, onPayCash, onRevie
             <Undo2 className="size-3.5" aria-hidden /> Cancelar
           </button>
         )}
-        {p.status === 'aprobado' && !cashAgreed && !chargePaid && (
+        {(p.status === 'aprobado' || p.status === 'entregado') && !cashAgreed && !chargePaid && (
           <>
             {mpConnected ? (
               <button disabled={busy} onClick={onPayMP} className="homy-btn-primary inline-flex min-h-[38px] items-center gap-1.5 rounded-full px-4 text-xs disabled:opacity-50">

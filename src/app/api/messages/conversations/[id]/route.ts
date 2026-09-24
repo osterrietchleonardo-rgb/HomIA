@@ -98,7 +98,7 @@ export async function POST(
       type: 'message',
       title: `Nuevo mensaje de ${meUser?.displayName || 'un usuario de HomIA'}`,
       body: text.length > 90 ? `${text.slice(0, 90)}…` : text,
-      link: `/mensajes?c=${id}`,
+      link: `#/mensajes?c=${id}`,
     },
   })
 

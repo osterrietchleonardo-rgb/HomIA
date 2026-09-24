@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { ok, fail, parseJson } from '@/lib/api'
 import { db } from '@/lib/db'
+import { esProActivo } from '@/lib/plans'
 import { getSessionUser } from '@/lib/auth'
 
 // Perfil de proveedor (requiere sesión): catálogo visible + reseñas
@@ -65,9 +66,10 @@ export async function GET(
       verified: prov.user.verificationStatus === 'verificado',
       verificationStatus: prov.user.verificationStatus,
       subscription: prov.subscription,
+      recommended: esProActivo(prov),
       proSince: prov.proSince,
       rating: prov.rating,
-      reviewsCount: reviews.length,
+      reviewsCount: Math.max(prov.reviewsCount, reviews.length), // la lista trae 20: el total real es el del perfil
       memberSince: prov.user.createdAt,
     },
     chatBlocked,

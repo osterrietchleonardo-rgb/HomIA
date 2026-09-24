@@ -136,6 +136,10 @@ model ProviderProfile {
   trialEndsAt         DateTime? // fin de la prueba gratis de 14 días (null → se calcula desde createdAt)
   mpPreapprovalId     String? // id de preapproval de Mercado Pago (plan basic o pro)
   proSince            DateTime? // desde cuándo está activo el plan de pago
+  // Marca del proveedor en la cinta de sponsors de la home (solo Plan PRO activo)
+  brandLogoUrl        String? // logo en el bucket público homia-uploads (folder "marca")
+  brandTagline        String? // frase de marca, máx. 60 caracteres
+  brandColor          String? // color de marca en hex (#RRGGBB), opcional
   // OAuth Mercado Pago — cobro directo al proveedor
   mpOauthAccessToken  String?
   mpOauthRefreshToken String?

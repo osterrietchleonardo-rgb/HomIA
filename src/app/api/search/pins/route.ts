@@ -3,7 +3,7 @@ import { ok } from '@/lib/api'
 import { db } from '@/lib/db'
 import { parseJson } from '@/lib/api'
 import { withinRadius } from '@/lib/geo'
-import { puedeOperar } from '@/lib/plans'
+import { puedeOperar, esProActivo } from '@/lib/plans'
 
 // Pines para el mapa de búsqueda: profesionales, trabajos y materiales con coords reales
 export async function GET(req: NextRequest) {
@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
   type Pin = {
     id: string; lat: number; lng: number; label: string; sub?: string
     kind: 'profesional' | 'trabajo' | 'material'; href?: string; price?: string
+    recommended?: boolean
   }
 
   const pins: Pin[] = []
@@ -70,7 +71,9 @@ export async function GET(req: NextRequest) {
         .map((s) => ({ ...s, lat: s.provider.lat as number, lng: s.provider.lng as number })),
       lat, lng, radius
     )
-    for (const s of geo.slice(0, 40)) {
+    // Recomendados (Plan PRO activo) primero: nunca quedan afuera del tope de 40
+    const ordered = [...geo].sort((a, b) => Number(esProActivo(b.provider)) - Number(esProActivo(a.provider)))
+    for (const s of ordered.slice(0, 40)) {
       pins.push({
         id: s.id, lat: s.lat, lng: s.lng,
         label: s.element.name,
@@ -78,6 +81,7 @@ export async function GET(req: NextRequest) {
         kind: 'material',
         price: `$${s.price >= 1000 ? Math.round(s.price / 1000) + 'k' : s.price}`,
         href: `/proveedor/${s.provider.id}`,
+        recommended: esProActivo(s.provider),
       })
     }
   }

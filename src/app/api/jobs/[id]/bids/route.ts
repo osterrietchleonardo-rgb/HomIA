@@ -22,7 +22,7 @@ export async function GET(
     where: { jobId: id, ...(isOwner ? {} : { professionalId: pro!.id }) },
     include: {
       professional: {
-        include: { user: { select: { id: true, displayName: true, avatarUrl: true, rating: true, reviewsCount: true } } },
+        include: { user: { select: { id: true, displayName: true, avatarUrl: true, rating: true, reviewsCount: true, verificationStatus: true } } },
       },
     },
     orderBy: { createdAt: 'desc' },
@@ -47,7 +47,9 @@ export async function GET(
         rating: b.professional.rating || b.professional.user.rating,
         reviewsCount: b.professional.reviewsCount || b.professional.user.reviewsCount,
         worksCount: b.professional.worksCount,
-        verified: b.professional.verified,
+        // la verificación la define el DNI + IA del usuario (el flag del perfil es legado)
+        verified: b.professional.user.verificationStatus === 'verificado',
+        verificationStatus: b.professional.user.verificationStatus,
         subscription: b.professional.subscription,
       },
     })),
@@ -73,7 +75,17 @@ export async function POST(
   if (job.userId === user.id) return fail('No podés ofertar en tu propio trabajo')
 
   const d = await body<{ amount: number; timelineDays?: number; message?: string }>(req)
-  if (!d.amount || d.amount <= 0) return fail('Indicá un monto válido')
+  // números reales: un monto o un plazo en texto terminaban en error de base (500)
+  if (typeof d.amount !== 'number' || !Number.isFinite(d.amount) || d.amount <= 0 || d.amount > 1_000_000_000) {
+    return fail('Indicá un monto válido')
+  }
+  if (d.timelineDays !== undefined && d.timelineDays !== null &&
+      (typeof d.timelineDays !== 'number' || !Number.isInteger(d.timelineDays) || d.timelineDays < 1 || d.timelineDays > 365)) {
+    return fail('El plazo tiene que ser una cantidad de días entre 1 y 365')
+  }
+  if (d.message !== undefined && d.message !== null && (typeof d.message !== 'string' || d.message.length > 2000)) {
+    return fail('El mensaje puede tener hasta 2000 caracteres')
+  }
 
   const existing = await db.jobBid.findFirst({
     where: { jobId: id, professionalId: pro.id },

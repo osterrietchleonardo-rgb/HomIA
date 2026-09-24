@@ -64,3 +64,5 @@ scripts/videos-work/
 /upload/
 
 !.env.example
+# Playwright CLI output (may contain credentials)
+.playwright-cli/

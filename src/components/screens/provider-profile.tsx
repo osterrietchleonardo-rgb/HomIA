@@ -16,6 +16,14 @@ type Profile = {
   businessName: string; kind?: string; cuit: string | null; description: string | null
   address: string | null; city: string | null; verified: boolean; verificationStatus?: string; rating: number
   reviewsCount: number; memberSince: string; subscription?: string; proSince?: string | null
+  /** Plan PRO ACTIVO (esProActivo del backend). Si la API aún no lo manda, se deriva del plan. */
+  recommended?: boolean
+}
+
+/** ¿Mostrar el badge "Recomendado"? Solo con Plan PRO activo. */
+function esRecomendado(p: Profile): boolean {
+  // Un plan 'pro' siempre está activo (si deja de pagar, el webhook/cron lo pasa a 'trial').
+  return p.recommended ?? p.subscription === 'pro'
 }
 
 // Etiqueta legible del rubro del negocio (mismo vocabulario que el editor de perfil)
@@ -158,7 +166,7 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
                     {PROVIDER_KIND_LABELS[p.kind]}
                   </span>
                 )}
-                {p.subscription === 'pro' && (
+                {esRecomendado(p) && (
                   <span
                     className="inline-flex items-center gap-1 rounded-full border border-[#FFC700]/40 bg-gradient-to-r from-[#FFC700]/25 to-[#ffd84d]/15 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-widest text-[#FFC700]"
                     title="Proveedor sponsor de confianza: destacado Recomendado en directorio y materiales"
@@ -209,7 +217,7 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 -mt-8 pb-16 space-y-7">
+      <div className="relative z-10 max-w-4xl mx-auto px-4 -mt-8 pb-16 space-y-7">
         {p.description && (
           <div className="homy-glass rounded-3xl p-5 sm:p-7">
             <p className="text-slate-600 leading-relaxed">{p.description}</p>

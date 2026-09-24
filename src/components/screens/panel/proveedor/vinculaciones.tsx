@@ -131,7 +131,8 @@ export default function ProviderLinks() {
           <div className="homy-stagger space-y-3">
             {links.map((l) => (
               <article key={l.id} className="homy-glass homy-lift homy-card-glow rounded-2xl p-4 sm:p-5 flex flex-wrap items-start justify-between gap-4">
-                <div className="flex gap-3.5 min-w-0 flex-1">
+                {/* base 15rem: en el celu el switch baja de línea en vez de aplastar los datos */}
+                <div className="flex gap-3.5 min-w-0 flex-[1_1_15rem]">
                   <UAvatar name={l.professional.companyName || l.professional.displayName} url={l.professional.avatarUrl} size={48} />
                   <div className="min-w-0">
                     <p className="font-extrabold text-[#0A2540] leading-snug">{l.professional.companyName || l.professional.displayName}</p>

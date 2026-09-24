@@ -1,8 +1,37 @@
 import { NextRequest } from 'next/server'
-import { ok, fail, body, parseJson } from '@/lib/api'
+import { z } from 'zod'
+import { ok, fail, parseBody, parseJson } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
 import { planState } from '@/lib/plans'
+import { matchTerms } from '@/lib/search-match'
+
+const PLAN_VENCIDO = 'Tu prueba gratis terminó: elegí un plan (Básico o PRO) desde "Mi plan" para seguir gestionando tu stock'
+
+// números reales y finitos (nada de strings, negativos ni Infinity en precios/cantidades)
+const money = z.number({ message: 'El precio tiene que ser un número' }).finite().positive('El precio tiene que ser mayor a 0').max(1_000_000_000)
+const qty = z.number({ message: 'La cantidad tiene que ser un número' }).finite().min(0, 'La cantidad no puede ser negativa').max(10_000_000)
+const brand = z.string().trim().max(80, 'La marca puede tener hasta 80 caracteres')
+const imageUrl = z.string().trim().max(500)
+
+const createSchema = z.object({
+  elementId: z.string().min(1, 'Elegí el elemento del catálogo'),
+  price: money,
+  quantity: qty.optional(),
+  minStock: qty.optional(),
+  brand: brand.optional(),
+  imageUrl: imageUrl.optional(),
+})
+
+const patchSchema = z.object({
+  id: z.string().min(1, 'Falta el id'),
+  price: money.optional(),
+  quantity: qty.optional(),
+  minStock: qty.optional(),
+  brand: brand.optional(),
+  imageUrl: imageUrl.optional(),
+  movementType: z.enum(['entrada', 'salida', 'ajuste']).optional(),
+})
 
 async function deriveStatus(stockId: string) {
   const s = await db.providerStock.findUnique({ where: { id: stockId } })
@@ -23,7 +52,7 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams
   const status = sp.get('status') // disponible|por_agotar|agotado
   const cat = sp.get('cat')
-  const q = (sp.get('q') || '').toLowerCase()
+  const q = (sp.get('q') || '').trim()
 
   const stock = await db.providerStock.findMany({
     where: { providerId: prov.id, ...(status ? { status } : {}) },
@@ -34,8 +63,9 @@ export async function GET(req: NextRequest) {
   const filtered = stock.filter((s) => {
     if (cat && s.element.category.slug !== cat) return false
     if (q) {
-      const hay = [s.element.name, ...parseJson<string[]>(s.element.aliases, []), s.brand || ''].join(' ').toLowerCase()
-      if (!hay.includes(q)) return false
+      // búsqueda difusa (sin acentos, singular/plural, por alias y marca): "cano" encuentra "Caño"
+      const hay = [s.element.name, ...parseJson<string[]>(s.element.aliases, []), s.brand || ''].join(' ')
+      if (!matchTerms(q, hay)) return false
     }
     return true
   })
@@ -70,11 +100,12 @@ export async function POST(req: NextRequest) {
   if (!prov) return fail('Solo proveedores gestionan stock', 403)
   const st = planState(prov)
   if (!st.activo) {
-    return fail('Tu prueba gratis terminó: elegí un plan (Básico US$50/mes o PRO US$100/mes) para seguir gestionando tu stock', 403, { needsPlan: true })
+    return fail(PLAN_VENCIDO, 403, { needsPlan: true })
   }
 
-  const d = await body<{ elementId: string; price: number; quantity: number; minStock?: number; brand?: string; imageUrl?: string }>(req)
-  if (!d.elementId || d.price === undefined) return fail('Elemento y precio son obligatorios')
+  const parsed = await parseBody(req, createSchema)
+  if (parsed.error) return parsed.error
+  const d = parsed.data
 
   const el = await db.catalogElement.findUnique({ where: { id: d.elementId } })
   if (!el) return fail('Elemento no encontrado en el catálogo estándar', 404)
@@ -110,19 +141,12 @@ export async function PATCH(req: NextRequest) {
   if (!prov) return fail('Solo proveedores gestionan stock', 403)
   const st = planState(prov)
   if (!st.activo) {
-    return fail('Tu prueba gratis terminó: elegí un plan (Básico US$50/mes o PRO US$100/mes) para seguir gestionando tu stock', 403, { needsPlan: true })
+    return fail(PLAN_VENCIDO, 403, { needsPlan: true })
   }
 
-  const d = await body<{
-    id: string
-    price?: number
-    quantity?: number
-    minStock?: number
-    brand?: string
-    imageUrl?: string
-    movementType?: 'entrada' | 'salida' | 'ajuste'
-  }>(req)
-  if (!d.id) return fail('Falta el id')
+  const parsed = await parseBody(req, patchSchema)
+  if (parsed.error) return parsed.error
+  const d = parsed.data
 
   const stock = await db.providerStock.findUnique({ where: { id: d.id } })
   if (!stock || stock.providerId !== prov.id) return fail('Entrada no encontrada', 404)
@@ -158,7 +182,7 @@ export async function DELETE(req: NextRequest) {
   if (!prov) return fail('Solo proveedores gestionan stock', 403)
   const st = planState(prov)
   if (!st.activo) {
-    return fail('Tu prueba gratis terminó: elegí un plan (Básico US$50/mes o PRO US$100/mes) para seguir gestionando tu stock', 403, { needsPlan: true })
+    return fail(PLAN_VENCIDO, 403, { needsPlan: true })
   }
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return fail('Falta el id')

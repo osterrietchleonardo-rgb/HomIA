@@ -290,7 +290,9 @@ export default function ProviderCharges() {
       <section className={`homy-glass rounded-3xl p-4 sm:p-5 mb-5 ${mp?.status === 'connected' ? 'ring-1 ring-[#0e9f6e]/30' : 'ring-1 ring-[#FFC700]/40'}`}>
         <div className="flex flex-wrap items-center gap-3">
           <span aria-hidden className={`homy-icon-chip size-11 shrink-0 [&_svg]:size-5 ${mp?.status === 'connected' ? 'homy-chip-mint' : 'homy-chip-gold'}`}><CreditCard /></span>
-          <div className="min-w-0 flex-1">
+          {/* base 14rem: en el celu el botón baja a su propia línea en vez de
+              aplastar el texto a una palabra por renglón */}
+          <div className="min-w-0 flex-[1_1_14rem]">
             <h2 className="text-[15px] font-extrabold text-[#0A2540]">Cobrá con tu Mercado Pago</h2>
             <p className="mt-0.5 text-[13px] leading-relaxed text-slate-600">
               {mp?.status === 'connected' ? (

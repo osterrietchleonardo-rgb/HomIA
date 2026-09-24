@@ -14,7 +14,7 @@ type Bid = {
   professional: {
     id: string; professions: string[]
     personType: string; companyName: string | null; rating: number; reviewsCount: number; worksCount: number; verified: boolean; subscription: string
-    user?: { displayName?: string | null; avatarUrl?: string | null }
+    user?: { displayName?: string | null; avatarUrl?: string | null; verificationStatus?: string }
   }
 }
 type Job = {
@@ -164,7 +164,7 @@ export default function MyJobs({ highlightId }: { highlightId?: string }) {
               const highlighted = highlightId === job.id
               return (
               <article key={job.id} id={`job-${job.id}`}
-                className={`homy-glass homy-card-glow overflow-hidden rounded-3xl scroll-mt-4 ${highlighted ? 'ring-2 ring-[#00C4FF] ring-offset-2 ring-offset-transparent' : ''}`}>
+                className={`homy-glass homy-card-glow overflow-hidden rounded-3xl scroll-mt-52 sm:scroll-mt-40 ${highlighted ? 'ring-2 ring-[#00C4FF] ring-offset-2 ring-offset-transparent' : ''}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#0A2540]/5 p-5 sm:p-6">
                   <div className="min-w-0 flex-1">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -191,7 +191,7 @@ export default function MyJobs({ highlightId }: { highlightId?: string }) {
                       <XCircle className="size-3.5" aria-hidden /> {closingId === job.id ? 'Cerrando…' : 'Cerrar'}
                     </button>
                   )}
-                  {job.status === 'cerrado' && (
+                  {job.status === 'cerrado' && !job.selectedBidId && (
                     <button onClick={() => closeJob(job.id, 'abierto')} disabled={closingId === job.id}
                       className="homy-glass-soft homy-focus inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold text-[#1D63B8] transition hover:text-[#0A2540] disabled:opacity-50">
                       <RotateCcw className="size-3.5" aria-hidden /> {closingId === job.id ? 'Reabriendo…' : 'Reabrir'}
@@ -227,12 +227,7 @@ export default function MyJobs({ highlightId }: { highlightId?: string }) {
                             <button onClick={() => navigate(`/profesional/${b.professional.id}`)} className="homy-focus rounded-lg font-bold text-[#0A2540] transition-colors hover:text-[#1D63B8]">
                               {b.professional.companyName || b.professional.user?.displayName}
                             </button>
-                            {b.professional.subscription === 'pro' && (
-                              <span className="homy-pill text-[#b98a00]" aria-label="Profesional Pro">
-                                <Star className="size-3 fill-[#FFC700] text-[#FFC700]" aria-hidden /> Pro
-                              </span>
-                            )}
-                            {b.professional.verified && <BadgeCheck className="size-4 shrink-0 text-[#00A8E0]" aria-label="Verificado" />}
+                            {b.professional.user?.verificationStatus === 'verificado' && <BadgeCheck className="size-4 shrink-0 text-[#00A8E0]" aria-label="Verificado" />}
                           </div>
                           <div className="mt-0.5 flex flex-wrap items-center gap-2">
                             <UStars rating={b.professional.rating} />

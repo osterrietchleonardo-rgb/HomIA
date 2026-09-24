@@ -100,7 +100,8 @@ export async function POST(req: NextRequest) {
 
   if (provider.userId === user.id) return fail('No podés pedirte productos a vos mismo')
   if (!puedeOperar(provider)) return fail('Este proveedor no está operando por ahora', 409)
-  if (stock.status !== 'disponible' || stock.quantity <= 0) return fail('Ese producto está sin stock en este momento', 409)
+  // "por_agotar" es un aviso de stock bajo para el proveedor: todavía se vende
+  if (stock.status === 'agotado' || stock.quantity <= 0) return fail('Ese producto está sin stock en este momento', 409)
   if (stock.quantity < d.quantity) {
     return fail(`Solo quedan ${stock.quantity} ${element.unit} disponibles`, 409, { available: stock.quantity })
   }
