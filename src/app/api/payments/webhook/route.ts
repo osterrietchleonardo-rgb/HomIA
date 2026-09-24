@@ -345,7 +345,11 @@ function parsePlanReference(ref: string): { profileId: string; plan: 'basic' | '
 }
 
 async function handlePreapproval(preapprovalId: string, live: boolean) {
-  const pre = await mpCall(() => getPreapproval(preapprovalId, { live }))
+  // Igual que en pagos: si no aparece en el entorno supuesto, se busca en el otro.
+  const pre = await mpCall(() => getPreapproval(preapprovalId, { live })).catch(async (e) => {
+    if (!process.env.MP_SUB_TEST_ACCESS_TOKEN) throw e
+    return mpCall(() => getPreapproval(preapprovalId, { live: !live }))
+  })
   const planRef = parsePlanReference(pre.externalReference || '')
   if (!planRef) return
 
