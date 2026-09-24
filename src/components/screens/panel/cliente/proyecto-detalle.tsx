@@ -589,8 +589,16 @@ export default function ClientProjectDetail({ id }: { id: string }) {
         </section>
       )}
 
-      {/* sobrantes: devolución al proveedor con reembolso */}
-      <div className="mb-5"><SobrantesSection projectId={id} canRequest /></div>
+      {/* sobrantes (D14): la devolución es con quien te cobró los materiales */}
+      <div className="mb-5">
+        <SobrantesSection
+          projectId={id}
+          canRequest
+          sellerNote={clientePagaMateriales
+            ? 'Los materiales se los pagaste a cada proveedor: la devolución es con ellos.'
+            : `Los materiales te los vendió ${proName} en su factura: la devolución es con él.`}
+        />
+      </div>
       {/* facturas */}
       <section className="homy-glass mb-5 rounded-3xl p-5">
         <div className="homy-section-head">

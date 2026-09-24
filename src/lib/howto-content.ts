@@ -226,6 +226,19 @@ export const HOWTOS: Record<TourRole, HowTo[]> = {
       cta: 'Ir a proyectos',
     },
     {
+      id: 'devoluciones-pro',
+      title: 'Devoluciones de sobrantes (clientes y proveedores)',
+      time: '3 min',
+      steps: [
+        'Si le cobraste los materiales al cliente en tu factura, sus devoluciones de sobrantes te llegan a vos: Panel → Devoluciones → De mis clientes.',
+        'Aceptá todo o algunos ítems (con el monto a devolver) o rechazá con un motivo. Cuando te los entregue, marcá recibido.',
+        'Si te pagó la factura con Mercado Pago, el reembolso sale solo de tu cuenta; si fue en efectivo, se lo devolvés en mano y tocás "Ya lo reembolsé en efectivo".',
+        'Si querés devolverle esos materiales (o los que te sobraron) a tu proveedor: en el proyecto, Sobrantes → Pedir devolución a …. Como le pagaste por fuera de HomIA, te devuelve la plata por fuera y vos confirmás que la recibiste.',
+      ],
+      href: '/panel/profesional/devoluciones',
+      cta: 'Ir a Devoluciones',
+    },
+    {
       id: 'facturar-cobrar',
       title: 'Emitir factura y cobrar',
       time: '3 min',

@@ -56,6 +56,7 @@ const ProBids = dynamic(() => import('@/components/screens/panel/profesional/pre
 const ProCRM = dynamic(() => import('@/components/screens/panel/profesional/crm'), { ssr: false, loading: () => <Loading /> })
 const ProWorks = dynamic(() => import('@/components/screens/panel/profesional/obras'), { ssr: false, loading: () => <Loading /> })
 const ProLinks = dynamic(() => import('@/components/screens/panel/profesional/vinculaciones'), { ssr: false, loading: () => <Loading /> })
+const ProReturns = dynamic(() => import('@/components/screens/panel/profesional/devoluciones'), { ssr: false, loading: () => <Loading /> })
 const ProProfileEdit = dynamic(() => import('@/components/screens/panel/profesional/perfil'), { ssr: false, loading: () => <Loading /> })
 
 // Panel proveedor
@@ -209,6 +210,7 @@ function panelScreen(route: ReturnType<typeof useRoute>) {
     if (page === 'crm') return <ProCRM />
     if (page === 'obras') return <ProWorks />
     if (page === 'vinculaciones') return <ProLinks />
+    if (page === 'devoluciones') return <ProReturns />
     if (page === 'perfil') return <ProProfileEdit />
     return <NotFound />
   }

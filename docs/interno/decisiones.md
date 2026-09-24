@@ -10,6 +10,7 @@
 
 | # | Fecha | Decisión | Quién | Por qué | Dónde impacta | Estado en el código |
 |---|---|---|---|---|---|---|
+| D14 | 2026-09-24 | **Sobrantes: "Devuelve la plata quien la cobró, y los materiales vuelven a quien se los vendió al cliente."** Compra directa y proyecto modo `cliente_paga_proveedor` → la devolución es con el proveedor (como antes). Proyecto modo `pro_adelanta` (materiales en la factura del profesional) → la devolución del cliente es con el **profesional**: él acepta, recibe y reembolsa (MP desde su cuenta si la factura se pagó por MP, o efectivo con confirmación del cliente o automática a las 72 h); los materiales no vuelven al stock de ningún proveedor. Nuevo y opcional: el profesional puede pedirle la devolución a su proveedor (misma lógica de aceptar/recibir con stock que vuelve; reembolso **por fuera de HomIA** —efectivo, transferencia o saldo a favor— que el proveedor marca y el profesional confirma). El 1% no se reembolsa | Leonardo | El profesional perdía plata: reembolsaba desde su cuenta mientras el proveedor se quedaba con el pago y los materiales (el pago profesional → proveedor ocurre fuera de HomIA) | `LeftoverReturn` (migración `0024`), `src/lib/leftovers.ts`, `leftovers-cron.ts`, `returns/*`, Devoluciones del profesional, proyecto del profesional y del cliente, Cobros → Devoluciones del proveedor | Implementada en `feat/carrito-homy` (sin commit todavía). **Resuelve el pendiente del reembolso de sobrantes en modo A** |
 | D13 | 2026-09-24 | **"El cliente inicia" se decide por el destinatario:** una conversación nueva solo se abre hacia quien ofrece algo (profesional o proveedor); a un usuario que solo es cliente nadie le escribe primero. Los perfiles públicos de profesionales y proveedores siempre se pueden contactar | Claude (aplicando la regla ya definida por Leonardo en AGENTS.md) | Todo registro recibe rol cliente, así que el chequeo por roles de quien escribe nunca frenaba a nadie | `src/app/api/messages/conversations/route.ts`, `profiles/professional/[id]`, `profiles/provider/[id]` | Implementada en `feat/carrito-homy` |
 | D12 | 2026-09-24 | **Regla de los tres documentos:** toda modificación y toda decisión se registra en el documento funcional, el de lógica y el técnico, en la misma rama y antes de mergear; más una línea en la bitácora | Leonardo | Él no lee código: los documentos son su forma de saber qué hace el sistema y la fuente para cualquier agente que continúe. Un cambio sin registrar se pierde | `docs/` completo | Aplicada desde esta rama (`docs/README.md`) |
 | D11 | 2026-09-24 | **Una sola base, sin staging:** local, Preview y Producción usan el mismo Supabase | Leonardo | Recursos limitados; se acepta el riesgo con disciplina (todo lo que escribe necesita OK, pruebas con cuentas demo y purga) | Scripts, E2E, migraciones | Vigente (`TECNICO-HOMIA.md` §5) |
@@ -26,12 +27,10 @@
 
 ## Pendientes de decidir (hallazgos anotados, no son propuestas)
 
-- **Reembolso de sobrantes de materiales facturados por el profesional (modo A) y pagados por
-  Mercado Pago** (anotado el 24/09/2026): hoy se reembolsa **desde la cuenta del profesional**
-  (quien cobró la factura), aunque los sobrantes los recibe el proveedor. Si el profesional no tiene
-  Mercado Pago conectado, el reembolso falla con "El profesional que cobró la factura no tiene
-  Mercado Pago conectado…". Falta decidir quién devuelve la plata en ese caso y cómo se compensa
-  entre profesional y proveedor. Fuente: `src/app/api/returns/[id]/route.ts` (`doRefund`).
+- ~~**Reembolso de sobrantes de materiales facturados por el profesional (modo A) y pagados por
+  Mercado Pago**~~ — **Resuelto el 24/09/2026 por D14** (Leonardo): la devolución del cliente es con
+  el profesional, que reembolsa lo que cobró; y el profesional puede devolverle los materiales a su
+  proveedor con reembolso por fuera de HomIA.
 
 - Textos de ayuda y tour que prometen cosas distintas de lo que hace el código
   (`FUNCIONAL-HOMIA.md` §5).

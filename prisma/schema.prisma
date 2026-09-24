@@ -112,10 +112,12 @@ model ProfessionalProfile {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bids          JobBid[]       @relation("BidProfessional")
-  proProjects   Project[]      @relation("ProjectPro")
-  providerLinks ProviderLink[]
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bids            JobBid[]         @relation("BidProfessional")
+  proProjects     Project[]        @relation("ProjectPro")
+  providerLinks   ProviderLink[]
+  // devoluciones de sobrantes donde el profesional es el vendedor (materiales cobrados en su factura)
+  leftoverReturns LeftoverReturn[]
 }
 
 model ProviderProfile {
@@ -779,33 +781,51 @@ model OAuthState {
 
 // ── Sobrantes: devolución de materiales al proveedor con reembolso ──
 model LeftoverReturn {
-  id            String          @id @default(cuid())
-  requesterId   String // User que pide (cliente o profesional del proyecto)
-  providerId    String // ProviderProfile que vendió
-  projectId     String? // origen: proyecto…
-  purchaseId    String? // …o compra directa
-  chargeId      String? // ProviderCharge del pago original
-  invoiceId     String? // Invoice del pago original (materiales facturados en proyecto)
-  status        String          @default("solicitada") // solicitada|aceptada|aceptada_parcial|rechazada|cancelada|recibida|reembolsada|reembolso_fallido
-  paymentMethod String? // mercadopago|efectivo (del pago original)
-  mpPaymentId   String? // pago a reembolsar
-  mpRefundId    String?
-  refundTotal   Float           @default(0)
-  providerNote  String?
-  requestedAt   DateTime        @default(now())
-  respondedAt   DateTime?
-  receivedAt    DateTime?
-  refundedAt    DateTime?
+  id                String               @id @default(cuid())
+  requesterId       String // User que pide (cliente o profesional del proyecto)
+  // Pata de la devolución (D14, 24/09/2026):
+  //   cliente                 = el comprador (cliente, o profesional en modo B/compra) devuelve a quien le vendió;
+  //   profesional_a_proveedor = el profesional devuelve al proveedor lo que le compró por fuera de HomIA (modo pro_adelanta).
+  tipo              String               @default("cliente")
+  // Quién vendió y por eso acepta, recibe y reembolsa: proveedor | profesional (materiales cobrados en la factura del profesional)
+  sellerKind        String               @default("proveedor")
+  providerId        String? // ProviderProfile que vendió (null cuando el vendedor es el profesional)
+  professionalId    String? // ProfessionalProfile vendedor cuando sellerKind = profesional
+  parentReturnId    String? // devolución del cliente que originó esta devolución profesional → proveedor (trazabilidad)
+  projectId         String? // origen: proyecto…
+  purchaseId        String? // …o compra directa
+  chargeId          String? // ProviderCharge del pago original
+  invoiceId         String? // Invoice del pago original (materiales facturados en proyecto)
+  status            String               @default("solicitada") // solicitada|aceptada|aceptada_parcial|rechazada|cancelada|recibida|reembolsada|reembolso_fallido
+  paymentMethod     String? // mercadopago|efectivo (del pago original)
+  mpPaymentId       String? // pago a reembolsar
+  mpRefundId        String?
+  refundTotal       Float                @default(0)
+  providerNote      String?
+  requestedAt       DateTime             @default(now())
+  respondedAt       DateTime?
+  receivedAt        DateTime?
+  refundedAt        DateTime?
   // reembolso en efectivo: el solicitante confirma que lo recibió (o se confirma solo a las 72 h)
   refundConfirmedAt DateTime?
   refundConfirmedBy String? // solicitante | automatico
   // recordatorio al proveedor por una devolución sin responder hace más de 72 h (una sola vez)
   reminderSentAt    DateTime?
-  items         LeftoverItem[]
-  requester     User            @relation(fields: [requesterId], references: [id])
-  provider      ProviderProfile @relation(fields: [providerId], references: [id])
+  // cómo se reembolsó: mercadopago | efectivo | fuera_de_homia (profesional → proveedor)
+  refundChannel     String?
+  // reembolso por fuera de HomIA: efectivo | transferencia | saldo_a_favor, y la nota del proveedor
+  refundMethod      String?
+  refundMethodNote  String?
+  items             LeftoverItem[]
+  requester         User                 @relation(fields: [requesterId], references: [id])
+  provider          ProviderProfile?     @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  professional      ProfessionalProfile? @relation(fields: [professionalId], references: [id], onDelete: Restrict)
+  parent            LeftoverReturn?      @relation("LeftoverParent", fields: [parentReturnId], references: [id], onDelete: SetNull)
+  children          LeftoverReturn[]     @relation("LeftoverParent")
 
   @@index([providerId, status])
+  @@index([professionalId, status])
+  @@index([parentReturnId])
   @@index([requesterId])
   @@index([projectId])
   @@index([purchaseId])

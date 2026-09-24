@@ -92,7 +92,7 @@ const NUCLEO: Entrada[] = [
     titulo: 'Qué pasa con los materiales que sobran',
     roles: ['todos', 'cliente', 'profesional', 'proveedor'],
     texto:
-      'Los sobrantes se devuelven al local del proveedor. Desde el detalle del proyecto (o desde Mis pedidos si fue una compra directa) cargás cada sobrante con foto y cantidad (sin abrir o abierto sin usar). El proveedor acepta todos o algunos, los acercás al local y él confirma la recepción. Si pagaste con Mercado Pago el reembolso vuelve solo a tu medio de pago; si pagaste en efectivo te lo devuelven en el mostrador. Hay hasta 30 días desde el pago. El proveedor los gestiona en Panel → Cobros → Devoluciones.',
+      'Los sobrantes se devuelven a quien los cobró: al proveedor si el cliente se los pagó a él (compra directa o cobro del proveedor), o al profesional si los cobró en su factura (él los recibe y reembolsa; los gestiona en Panel → Devoluciones). Desde el detalle del proyecto (o desde Mis pedidos si fue una compra directa) cargás cada sobrante con foto y cantidad (sin abrir o abierto sin usar). Quien vendió acepta todos o algunos, se los entregás y confirma la recepción. Si pagaste con Mercado Pago el reembolso vuelve solo a tu medio de pago; si pagaste en efectivo te lo devuelven en efectivo. Hay hasta 30 días desde el pago. El profesional, además, puede pedirle la devolución a su proveedor desde el proyecto (Sobrantes → Pedir devolución a …): como le pagó por fuera de HomIA, el proveedor le devuelve la plata por fuera (efectivo, transferencia o saldo a favor) y lo marca. El proveedor los gestiona en Panel → Cobros → Devoluciones.',
     ruta: '/panel/cliente/proyectos',
     claves: 'sobra sobrante devolver devolucion reembolso material que sobro me sobraron',
   },

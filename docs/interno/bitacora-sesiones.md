@@ -26,6 +26,12 @@
 
 ---
 
+## 2026-09-24 (noche) — Sobrantes: devuelve la plata quien la cobró (D14) (Leonardo)
+
+Decisión D14 implementada en `feat/carrito-homy` (sin commit): en modo `pro_adelanta` la devolución del cliente es con el profesional (acepta, recibe, reembolsa por MP desde su cuenta o en efectivo; sin stock de proveedor) y pata nueva opcional profesional → proveedor con reembolso por fuera de HomIA. Migración `0024_sobrantes_profesional.sql` aplicada (solo aditiva, diff vacío). Suite E2E completa 785/785 (G: 124/124), recorrido visual 390×844 y 1280×800 81/82 (la X de 16 px del `Dialog` global de shadcn), purga verificada. Detalle en `decisiones.md` (D14), `LOGICA-HOMIA.md` §12.2, `TECNICO-HOMIA.md` §4.2, `FUNCIONAL-HOMIA.md` 2.8/3.14/4.5 y `AGENTS.md` §7.6.
+
+---
+
 ## 2026-09-24 (tarde) — Carrito multiproveedor, cargo 1% al cliente, cobro a la cuenta del vendedor y súper agente Homy; documentos completados (Leonardo)
 
 **El pedido:** cerrar las decisiones D6–D10 y D13 (carrito, 1% lo paga el cliente solo por MP,

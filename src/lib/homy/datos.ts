@@ -221,16 +221,18 @@ export const fuenteDatosPrisma: FuenteDatos = {
     } else if (rol === 'profesional') {
       const prof = await db.professionalProfile.findUnique({ where: { userId }, select: { id: true, mpOauthStatus: true } })
       if (!prof) return out
-      const [ofertas, proyectos, facturas, efectivo] = await Promise.all([
+      const [ofertas, proyectos, facturas, efectivo, devolucionesPro] = await Promise.all([
         db.jobBid.count({ where: { professionalId: prof.id, status: 'pendiente' } }),
         db.project.count({ where: { professionalId: prof.id, status: 'activo' } }),
         db.invoice.count({ where: { professionalId: prof.id, status: 'pendiente' } }),
         db.invoice.count({ where: { professionalId: prof.id, status: 'pendiente', paymentMethod: 'efectivo' } }),
+        db.leftoverReturn.count({ where: { professionalId: prof.id, sellerKind: 'profesional', status: 'solicitada' } }),
       ])
       add(ofertas, 'presupuesto(s) enviado(s) esperando respuesta del cliente', '/panel/profesional/presupuestos')
       add(proyectos, 'proyecto(s) activo(s)', '/panel/profesional/proyectos')
       add(facturas - efectivo, 'factura(s) emitida(s) pendiente(s) de pago', '/panel/profesional/proyectos')
-      add(efectivo, 'factura(s) con pago en efectivo acordado: confirmá el cobro cuando lo recibas', '/panel/profesional/proyectos')    } else {
+      add(efectivo, 'factura(s) con pago en efectivo acordado: confirmá el cobro cuando lo recibas', '/panel/profesional/proyectos')
+      add(devolucionesPro, 'devolución(es) de sobrantes de tus clientes para responder', '/panel/profesional/devoluciones')    } else {
       const prov = await db.providerProfile.findUnique({
         where: { userId },
         select: { id: true, subscription: true, trialEndsAt: true, createdAt: true, mpOauthStatus: true },
@@ -241,7 +243,7 @@ export const fuenteDatosPrisma: FuenteDatos = {
         db.purchase.count({ where: { providerId: prov.id, status: 'aprobado' } }),
         db.providerCharge.count({ where: { providerId: prov.id, status: 'pendiente' } }),
         db.providerCharge.count({ where: { providerId: prov.id, status: 'acordada_efectivo' } }),
-        db.leftoverReturn.count({ where: { providerId: prov.id, status: 'solicitada' } }),
+        db.leftoverReturn.count({ where: { providerId: prov.id, sellerKind: 'proveedor', status: 'solicitada' } }),
         db.providerStock.count({ where: { providerId: prov.id, status: 'agotado' } }),
         db.providerStock.count({ where: { providerId: prov.id, status: 'por_agotar' } }),
       ])

@@ -458,39 +458,85 @@ bucket de HomIA y extensión de imagen) (`reviews/route.ts:9-44`). No se puede r
 
 ### 12.2 Sobrantes (`LeftoverReturn`)
 
-Reglas (`src/lib/leftovers.ts`, `src/lib/leftovers-cron.ts`, `returns/*`):
+Reglas (`src/lib/leftovers.ts`, `src/lib/leftovers-cron.ts`, `returns/*`).
 
-- **Quién pide:** el comprador de un sub-pedido `pagado` (por ítem: `purchaseItemId`), o el cliente
-  **o el profesional** de un proyecto, sobre materiales `aprobado` **con proveedor** y **ya pagados**
-  (cobro del proveedor pagado en modo B, o factura pagada que los incluyó en modo A).
-- **Plazo:** hasta **30 días** desde el pago.
-- **Un pedido = un solo proveedor y un solo pago de origen** (misma factura, cobro o compra).
+**D14 (24/09/2026, Leonardo): "Devuelve la plata quien la cobró, y los materiales vuelven a quien se
+los vendió al cliente."** Cada devolución tiene una **pata** (`tipo`) y un **vendedor**
+(`sellerKind`), que es quien acepta, recibe y reembolsa:
+
+| Pata (`tipo`) | Origen | Vendedor (`sellerKind`) | Stock | Reembolso |
+|---|---|---|---|---|
+| `cliente` | Compra directa (sub-pedido) | `proveedor` | Vuelve al stock del proveedor | MP con el token que cobró, o efectivo |
+| `cliente` | Proyecto modo B (`cliente_paga_proveedor`, cobro del proveedor pagado) | `proveedor` | Vuelve al stock del proveedor | MP (token del proveedor) o efectivo |
+| `cliente` | Proyecto modo A (`pro_adelanta`, factura del profesional pagada) | `profesional` (`professionalId`, `providerId = null`) | **No vuelve a ningún stock** | MP **desde la cuenta del profesional** (su OAuth; si falla → `reembolso_fallido` con reintento) o efectivo |
+| `profesional_a_proveedor` (opcional) | Proyecto: materiales que el profesional le compró al proveedor | `proveedor` | Vuelve al stock del proveedor | **Por fuera de HomIA** (`reembolsar_fuera`): efectivo, transferencia o saldo a favor + nota. Nunca MP |
+
+El vendedor se resuelve por el pago de origen (`materialPaidOrigin`): factura → profesional,
+cobro o compra → proveedor (`sellerKindOf`). Las devoluciones anteriores a D14 quedaron
+`tipo = cliente`, `sellerKind = proveedor` (sin migrar datos).
+
+- **Quién pide (pata cliente):** el comprador de un sub-pedido `pagado` (por ítem: `purchaseItemId`),
+  o el cliente de un proyecto, sobre materiales `aprobado` **con proveedor** y **ya pagados**. El
+  **profesional** también pide como comprador en **modo B** (como antes); en modo A no puede (él es
+  el vendedor: 409 "se lo cobraste al cliente en tu factura…") y `GET /returns/eligible` no le
+  ofrece esos materiales.
+- **Quién pide (pata profesional → proveedor):** solo el profesional del proyecto, sobre materiales
+  `aprobado` con proveedor y elemento que **no** pagó el cliente con un cobro del proveedor, en un
+  proyecto `pro_adelanta` (o ya facturados). Puede vincularla (`parentReturnId`) a una devolución de
+  su cliente de ese mismo proyecto donde él es el vendedor (si no, 400); el diálogo precarga lo
+  recibido (`prefill` de `/returns/eligible?tipo=profesional_a_proveedor`).
+- **Plazo:** hasta **30 días** desde el pago. En la pata profesional → proveedor (sin pago en
+  HomIA): 30 días desde que el material se facturó al cliente o, si todavía no, desde su última
+  actualización (aprobación).
+- **Un pedido = un solo vendedor y un solo pago de origen** (misma factura, cobro o compra). Con
+  vendedor profesional, un pedido puede traer materiales de varios proveedores (todos de su factura);
+  en la pata profesional → proveedor, un pedido = un proveedor.
+- **Cantidades por pata:** cada pata lleva su propia cuenta (`alreadyReturnedQty(..., tipo)`). Pata
+  cliente: ≤ lo comprado menos lo ya devuelto por el cliente. Pata profesional → proveedor: ≤ la
+  cantidad del `ProjectMaterial` aprobado (lo que ese proveedor le vendió) menos lo ya pedido en
+  devoluciones profesional → proveedor activas (409 si se pasa). Lo que el profesional le pide al
+  proveedor no descuenta lo que el cliente puede devolver, ni al revés.
 - Por ítem: cantidad ≤ lo comprado menos lo ya devuelto; estado `sin_abrir` / `abierto_sin_usar`;
   **foto obligatoria**; nota opcional.
 - **Monto a reembolsar:** precio pagado de lo devuelto. **El cargo de servicio del 1% no se
-  reembolsa**: el tope es lo pagado − cargo − lo ya reembolsado (`refundableOf`).
+  reembolsa**: el tope es lo pagado − cargo − lo ya reembolsado (`refundableOf`). Pata profesional →
+  proveedor: tope por ítem = precio unitario del material × cantidad aceptada (no hay pago en HomIA).
+- **Permisos (IDOR):** solo el solicitante y el vendedor ven y actúan (403 al resto). El proveedor
+  no ve ni puede actuar sobre una devolución cuyo vendedor es el profesional; el cliente no ve la
+  pata profesional → proveedor.
 
 | Transición | Quién | Efecto |
 |---|---|---|
-| (alta) → `solicitada` | Solicitante | Notifica "Te pidieron devolver sobrantes"; mensaje en el chat si ya existe |
-| `solicitada` sin respuesta **72 h** | Cron horario | **Un solo recordatorio** al proveedor: "Tenés una devolución sin responder" (`reminderSentAt`) |
-| `solicitada` → `cancelada` | Solicitante | Notifica al proveedor |
-| `solicitada` → `rechazada` | Proveedor (con motivo) | Ítems rechazados; notifica |
-| `solicitada` → `aceptada` / `aceptada_parcial` | Proveedor | Puede aceptar menos y fijar un reembolso ≤ lo pagado por ítem; el total no puede superar lo reembolsable del pago original |
-| `aceptada*` → `reembolsada` | Proveedor marca "recibido" y el pago fue por **MP** | Stock vuelve (`devolucion`); **reembolso automático por MP con el mismo token que cobró** (ver abajo); notifica "1 a 15 días" |
-| `aceptada*` → `reembolso_fallido` | Idem, si MP falla | `reintentar_reembolso` |
-| `aceptada*` → `recibida` | Proveedor marca recibido y el pago fue en **efectivo** | Stock vuelve; el proveedor devuelve en el mostrador |
-| `recibida` → `reembolsada` | Proveedor "Ya lo reembolsé en efectivo" | Notifica "confirmá que lo recibiste" |
-| Confirmación del efectivo | **Solicitante** (`confirmar_reembolso`: "Recibí el reembolso") o **cron a las 72 h** (`refundConfirmedBy = automatico`) | Notifica a ambos; la devolución queda cerrada |
+"Vendedor" = proveedor o profesional según la tabla de arriba. Toda acción notifica a la otra parte
+con link válido (vendedor proveedor → `#/panel/proveedor/cobros?tab=devoluciones`; vendedor
+profesional → `#/panel/profesional/devoluciones?tab=clientes`; solicitante de la pata profesional →
+`#/panel/profesional/devoluciones?tab=proveedores`; resto → su proyecto o pedido) y queda un
+`ActivityEvent` (`devolucion_*`, con `returnId`, `tipo` y `sellerKind` en `data`) sobre el proyecto o
+la compra.
+
+| Transición | Quién | Efecto |
+|---|---|---|
+| (alta) → `solicitada` | Solicitante | Notifica al vendedor ("Te pidieron devolver sobrantes" / "Un profesional te pide devolver materiales"); mensaje en el chat si ya existe |
+| `solicitada` sin respuesta **72 h** | Cron horario | **Un solo recordatorio** al vendedor: "Tenés una devolución sin responder" (`reminderSentAt`) |
+| `solicitada` → `cancelada` | Solicitante | Notifica al vendedor |
+| `solicitada` → `rechazada` | Vendedor (con motivo) | Ítems rechazados; notifica |
+| `solicitada` → `aceptada` / `aceptada_parcial` | Vendedor | Puede aceptar menos y fijar un reembolso ≤ lo pagado por ítem; el total no puede superar lo reembolsable del pago original |
+| `aceptada*` → `reembolsada` | Vendedor marca "recibido" y el pago fue por **MP** (pata cliente) | Stock vuelve solo si el vendedor es proveedor (`devolucion`); **reembolso automático por MP con el mismo token que cobró** (`refundChannel = mercadopago`); notifica "1 a 15 días" |
+| `aceptada*` → `reembolso_fallido` | Idem, si MP falla | `reintentar_reembolso` (vendedor) |
+| `aceptada*` → `recibida` | Vendedor marca recibido y el pago fue en **efectivo** o es la pata profesional → proveedor | Stock vuelve solo si el vendedor es proveedor |
+| `recibida` → `reembolsada` | Vendedor "Ya lo reembolsé en efectivo" (`reembolsar_efectivo`, solo pata cliente; `refundChannel = efectivo`) | Notifica "confirmá que lo recibiste" |
+| `recibida` → `reembolsada` | Proveedor `reembolsar_fuera` { `metodo`: efectivo \| transferencia \| saldo_a_favor, `nota` } (solo pata profesional → proveedor; `refundChannel = fuera_de_homia`, `refundMethod`, `refundMethodNote`) | Notifica al profesional "confirmá que lo recibiste". En la otra pata → 409 |
+| Confirmación del efectivo / por fuera | **Solicitante** (`confirmar_reembolso`: "Recibí el reembolso") o **cron a las 72 h** (`refundConfirmedBy = automatico`) | Notifica a ambos; la devolución queda cerrada. No aplica a reembolsos por MP (409) |
 
 **Con qué cuenta se reembolsa por MP** (`returns/[id]/route.ts`, `doRefund`): con la que cobró.
 `Payment.collector = vendedor` (o compra histórica) → token del vendedor: **proveedor** en compras y
-cobros, **profesional** en facturas (si no tiene MP conectado: "El profesional que cobró la factura
-no tiene Mercado Pago conectado…"); pagos históricos de facturas y cobros → token de la plataforma.
+cobros, **profesional** en facturas (si no tiene MP conectado: "Tu cuenta de Mercado Pago no está
+conectada: reconectala en Mi perfil y reintentá" → `reembolso_fallido`); pagos históricos de
+facturas y cobros → token de la plataforma.
 
-> **Pendiente de decidir (hallazgo del 24/09):** en modo A, una devolución de materiales
-> **facturados por el profesional y pagados por MP** se reembolsa desde la **cuenta del
-> profesional** (quien cobró), aunque los sobrantes los recibe el proveedor. Ver `decisiones.md`.
+> **Resuelto por D14 (24/09/2026):** en modo A el profesional es el vendedor de la devolución:
+> recibe los sobrantes y reembolsa desde su cuenta (o en efectivo). Si quiere, después se los
+> devuelve a su proveedor por la pata profesional → proveedor (reembolso por fuera de HomIA).
 
 ### 12.3 Vinculaciones / cuentas de retiro (`ProviderLink`)
 
@@ -508,7 +554,7 @@ Acuerdo proveedor ↔ profesional para retirar materiales a cuenta de proyectos;
 
 | Cron | Frecuencia | Qué hace | Fuente |
 |---|---|---|---|
-| `/api/cron/reservations` | Cada hora | Cancela sub-pedidos `aprobado` vencidos (48 h reserva / 7 días compra) sin pago; devuelve el stock de todos sus ítems; anula el cobro; avisa a ambos; evento `vencido`. **Además** corre las tareas de sobrantes: confirma solo los reembolsos en efectivo no confirmados en 72 h y manda un recordatorio único al proveedor por devoluciones sin responder hace 72 h (`src/lib/leftovers-cron.ts`) | `cron/reservations/route.ts` |
+| `/api/cron/reservations` | Cada hora | Cancela sub-pedidos `aprobado` vencidos (48 h reserva / 7 días compra) sin pago; devuelve el stock de todos sus ítems; anula el cobro; avisa a ambos; evento `vencido`. **Además** corre las tareas de sobrantes (ambas patas): confirma solos los reembolsos en efectivo o por fuera de HomIA no confirmados en 72 h y manda un recordatorio único al vendedor (proveedor o profesional) por devoluciones sin responder hace 72 h (`src/lib/leftovers-cron.ts`) | `cron/reservations/route.ts` |
 | `/api/cron/subscriptions` | Diario 09:30 UTC | Re-consulta a MP cada suscripción de pago con `mpPreapprovalId`; degrada si `cancelled`/`paused` o si lleva más de 35 días sin cobro; nunca degrada por error de MP; no toca planes sin `mpPreapprovalId` (demo/alta manual) | `cron/subscriptions/route.ts` |
 
 Ambos exigen `Authorization: Bearer <CRON_SECRET>`.
@@ -604,10 +650,10 @@ externo no disponible. Rutas relativas a `src/app/api/`. Cualquier `/api/*` que 
 | `PATCH /charges/[id]` | Proveedor dueño | Confirmar efectivo acordado | 403 |
 | `GET /provider/charges` | Perfil proveedor | Cobros emitidos + materiales por cobrar agrupados por proyecto | 403 |
 | `POST /provider/charges` | Perfil proveedor, plan activo | §5 | 403 `needsPlan`, 503 |
-| `GET /returns` | Sesión (`role=proveedor` exige perfil) | Mis devoluciones, con origen | 403 |
-| `POST /returns` | Solicitante válido | zod; §12.2 | 403, 409 |
-| `GET /returns/eligible` | Partes del proyecto o cliente de la compra | Qué se puede devolver y cuánto | 403 |
-| `PATCH /returns/[id]` | Solicitante (`cancelar`, `confirmar_reembolso`) o proveedor (resto) | zod; §12.2 | 403, 409, 503 |
+| `GET /returns` | Sesión; `role=solicitante` (default) \| `proveedor` (exige perfil; solo vendedor proveedor) \| `profesional` (exige perfil; solo vendedor profesional); filtros `tipo`, `projectId`, `purchaseId` | Devoluciones con origen, `sellerName` y `sellerUserId` | 403 |
+| `POST /returns` | Solicitante válido; `tipo` = `cliente` (default) \| `profesional_a_proveedor` (solo el pro del proyecto; `parentReturnId` opcional) | zod; §12.2 | 400, 403, 404, 409 |
+| `GET /returns/eligible` | Partes del proyecto o cliente de la compra; `tipo=profesional_a_proveedor` solo el pro | Qué se puede devolver, a quién (`sellerKind`, `sellerName`) y cuánto; en la pata pro → proveedor además `prefill` | 403 |
+| `PATCH /returns/[id]` | Solicitante (`cancelar`, `confirmar_reembolso`) o vendedor (`aceptar`, `rechazar`, `recibir`, `reembolsar_efectivo`, `reembolsar_fuera`, `reintentar_reembolso`) | zod; §12.2 | 400, 403, 409, 503 |
 
 ### Proveedor
 

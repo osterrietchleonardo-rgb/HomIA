@@ -43,7 +43,8 @@ const PURGE_ONLY = argv.includes('--purge-only')
 const ONLY = (argVal('--only') || '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
 const TS = Date.now()
 const MARK = '[E2E]'
-const EMAIL_PREFIX = 'e2e-q-'
+// prefijo de los usuarios descartables (E2E_EMAIL_PREFIX=e2e-s- → purga los del recorrido visual)
+const EMAIL_PREFIX = process.env.E2E_EMAIL_PREFIX || 'e2e-q-'
 const EMAIL_DOMAIN = '@homia.test'
 const PASSWORD = 'E2eTest2026'
 const CABA = { lat: -34.6037, lng: -58.3816 }
@@ -150,7 +151,7 @@ const manifest = { ts: TS, base: BASE, catalogElementIds: [], identityDocIdsInse
 // Rutas SPA válidas (espejo de src/components/app/app-root.tsx → panelScreen)
 const PANEL_PAGES = {
   cliente: ['', 'publicar', 'trabajos', 'materiales', 'pedidos', 'proyectos', 'facturas', 'perfil'],
-  profesional: ['', 'bolsa', 'materiales', 'pedidos', 'proyectos', 'presupuestos', 'crm', 'obras', 'vinculaciones', 'perfil'],
+  profesional: ['', 'bolsa', 'materiales', 'pedidos', 'proyectos', 'presupuestos', 'crm', 'obras', 'vinculaciones', 'devoluciones', 'perfil'],
   proveedor: ['', 'stock', 'cobros', 'plan', 'crm', 'vinculaciones', 'perfil'],
 }
 const PANEL_COMMON = ['directorio', 'mensajes', 'verificacion', 'ayuda']
@@ -967,67 +968,177 @@ async function flowG() {
   const elA2 = await get(C, `/api/returns/eligible?purchaseId=${S.purchaseA}`)
   check(F, 'lo devuelto se descuenta de lo elegible (quedan 3)', elA2.data?.items?.[0]?.remaining === 3, brief(elA2))
 
-  // materiales de proyecto pagados
-  const e1 = await get(P, `/api/returns/eligible?projectId=${S.project1}`)
+  // ── materiales de proyecto (D14, 24/09/2026: devuelve la plata quien la cobró) ──
+  // (a) modo pro_adelanta (proyecto 1, materiales en la factura del pro): la contraparte del cliente es el PROFESIONAL
+  const e1 = await get(C, `/api/returns/eligible?projectId=${S.project1}`)
   const e1m = (e1.data?.items || []).find((i) => i.materialId === S.m1)
-  check(F, 'elegibles del proyecto (factura pagada en efectivo)', e1m?.remaining === 10 && e1m?.invoiceId === S.inv1, brief(e1))
+  check(F, 'elegibles del cliente (factura pagada en efectivo): vendedor = profesional', e1m?.remaining === 10 && e1m?.invoiceId === S.inv1 && e1m?.sellerKind === 'profesional', brief(e1))
   check(F, 'material sin proveedor no es elegible', !(e1.data?.items || []).some((i) => i.materialId === S.mAlt))
+  const e1p = await get(P, `/api/returns/eligible?projectId=${S.project1}`)
+  check(F, 'el pro no se devuelve a sí mismo lo que cobró en su factura', e1p.status === 200 && !(e1p.data?.items || []).some((i) => i.materialId === S.m1) && /Pedir devolución/.test(e1p.data?.notEligibleReason || ''), brief(e1p))
   const e2 = await get(C, `/api/returns/eligible?projectId=${S.project2}`)
-  check(F, 'elegibles del proyecto modo B (cobro del proveedor pagado)', (e2.data?.items || []).some((i) => i.materialId === S.m6 && i.chargeId === S.charge2), brief(e2))
+  check(F, 'elegibles del proyecto modo B (cobro del proveedor pagado): vendedor = proveedor', (e2.data?.items || []).some((i) => i.materialId === S.m6 && i.chargeId === S.charge2 && i.sellerKind === 'proveedor'), brief(e2))
   st(F, 'elegibles de proyecto ajeno', await get(P2, `/api/returns/eligible?projectId=${S.project1}`), 403)
   const mItem = { materialId: S.m1, elementId: S.E3.id, condition: 'sin_abrir', photoUrl: photoP }
   st(F, 'devolución de material no pagado (proyecto 3 cancelado)', await post(C, '/api/returns', { projectId: S.project3, items: [{ ...mItem, materialId: 'x', qty: 1 }] }), 404)
-  const rp = await post(P, '/api/returns', { projectId: S.project1, items: [{ ...mItem, qty: 3 }] })
-  st(F, 'el profesional pide devolver sobrantes del proyecto', rp, 201)
-  S.retP = rp.data?.return?.id
-  st(F, 'proveedor rechaza con motivo', await patch(V, `/api/returns/${S.retP}`, { action: 'rechazar', note: `${MARK} Material abierto` }), 200)
-  const nP = await db.notification.findFirst({ where: { userId: P.id, type: 'devolucion_rechazada' } })
-  check(F, 'el pro (solicitante) recibe aviso con link a SU panel', !!nP && !linkProblem(nP.link, ['profesional']), `link=${nP?.link}`)
-  const rc = await post(C, '/api/returns', { projectId: S.project1, items: [{ ...mItem, photoUrl: photo, qty: 2 }] })
-  st(F, 'el cliente pide devolver sobrantes del proyecto', rc, 201)
+  st(F, 'el pro no pide como comprador lo que cobró en su factura', await post(P, '/api/returns', { projectId: S.project1, items: [{ ...mItem, qty: 3 }] }), 409)
+  const s3a = (await db.providerStock.findUnique({ where: { id: S.stock3 } })).quantity
+  const nVSolic = await db.notification.count({ where: { userId: V.id, type: 'devolucion_solicitada' } })
+  const rc = await post(C, '/api/returns', { projectId: S.project1, items: [{ ...mItem, photoUrl: photo, qty: 3 }] })
+  st(F, 'el cliente pide devolver sobrantes del proyecto (modo pro_adelanta)', rc, 201)
   S.retC = rc.data?.return?.id
-  st(F, 'proveedor acepta todo', await patch(V, `/api/returns/${S.retC}`, { action: 'aceptar' }), 200)
+  const dbRc = S.retC ? await db.leftoverReturn.findUnique({ where: { id: S.retC } }) : null
+  check(F, 'la devolución es con el PROFESIONAL (sin proveedor, con su factura)', dbRc?.tipo === 'cliente' && dbRc?.sellerKind === 'profesional' && dbRc?.professionalId === P.proId && dbRc?.providerId === null && dbRc?.invoiceId === S.inv1, JSON.stringify(dbRc)?.slice(0, 240))
+  const nPSolic = await db.notification.findFirst({ where: { userId: P.id, type: 'devolucion_solicitada' }, orderBy: { createdAt: 'desc' } })
+  check(F, 'le llega al profesional con link a SU panel de devoluciones', !!nPSolic && !linkProblem(nPSolic.link, ['profesional']) && nPSolic.link.includes('/panel/profesional/devoluciones'), `link=${nPSolic?.link}`)
+  check(F, 'al proveedor NO le llega', (await db.notification.count({ where: { userId: V.id, type: 'devolucion_solicitada' } })) === nVSolic)
+  const lvC = await get(V, '/api/returns?role=proveedor')
+  check(F, 'el proveedor no la ve en sus devoluciones', lvC.status === 200 && !(lvC.data?.returns || []).some((r) => r.id === S.retC), brief(lvC))
+  st(F, 'el proveedor no puede aceptarla', await patch(V, `/api/returns/${S.retC}`, { action: 'aceptar' }), 403)
+  st(F, 'el proveedor no puede marcarla recibida', await patch(V, `/api/returns/${S.retC}`, { action: 'recibir' }), 403)
+  st(F, 'el cliente no acepta su propia devolución', await patch(C, `/api/returns/${S.retC}`, { action: 'aceptar' }), 403)
+  st(F, 'un tercero no actúa sobre ella', await patch(P2, `/api/returns/${S.retC}`, { action: 'rechazar', note: 'x' }), 403)
+  const lpC = await get(P, '/api/returns?role=profesional')
+  check(F, 'el profesional la ve en "De mis clientes" con su nombre como vendedor', (lpC.data?.returns || []).some((r) => r.id === S.retC && r.sellerKind === 'profesional' && !!r.sellerName && !linkProblem(`#${r.origin?.href}`, ['profesional'])), brief(lpC))
+  st(F, 'devoluciones como profesional sin serlo', await get(V, '/api/returns?role=profesional'), 403)
+  const itC = rc.data?.return?.items?.[0]?.id
+  st(F, 'el pro no acepta más de lo pedido', await patch(P, `/api/returns/${S.retC}`, { action: 'aceptar', items: [{ id: itC, qtyAccepted: 4 }] }), 400)
+  const accC = await patch(P, `/api/returns/${S.retC}`, { action: 'aceptar', items: [{ id: itC, qtyAccepted: 2 }] })
+  check(F, 'el profesional acepta en parte (2 de 3)', accC.status === 200 && accC.data?.status === 'aceptada_parcial' && accC.data?.refundTotal === 4000, brief(accC))
+  const nCAcc = await db.notification.findFirst({ where: { userId: C.id, type: 'devolucion_aceptada' }, orderBy: { createdAt: 'desc' } })
+  check(F, 'el cliente recibe el aviso de aceptación con link a su proyecto', !!nCAcc && !linkProblem(nCAcc.link, ['cliente']) && /entregale los sobrantes/.test(nCAcc.title), `${nCAcc?.title} ${nCAcc?.link}`)
+  const recC = await patch(P, `/api/returns/${S.retC}`, { action: 'recibir' })
+  check(F, 'el profesional recibe → recibida (efectivo)', recC.status === 200 && recC.data?.status === 'recibida' && recC.data?.refundTotal === 4000, brief(recC))
+  check(F, 'el stock del proveedor NO cambia (los materiales los recibe el profesional)', (await db.providerStock.findUnique({ where: { id: S.stock3 } })).quantity === s3a)
+  check(F, 'sin movimiento de stock por esta devolución', (await db.stockMovement.count({ where: { note: { contains: S.retC || 'x' } } })) === 0)
+  st(F, '"reembolsar por fuera" no aplica a la devolución del cliente', await patch(P, `/api/returns/${S.retC}`, { action: 'reembolsar_fuera', metodo: 'efectivo' }), 409)
+  const rfC = await patch(P, `/api/returns/${S.retC}`, { action: 'reembolsar_efectivo' })
+  check(F, 'el profesional registra el reembolso en efectivo', rfC.status === 200 && rfC.data?.status === 'reembolsada' && (await db.leftoverReturn.findUnique({ where: { id: S.retC } }))?.refundChannel === 'efectivo', brief(rfC))
+  st(F, 'el profesional no confirma por el cliente', await patch(P, `/api/returns/${S.retC}`, { action: 'confirmar_reembolso' }), 403)
+  const cfC = await patch(C, `/api/returns/${S.retC}`, { action: 'confirmar_reembolso' })
+  check(F, 'el cliente confirma que recibió el reembolso del profesional', cfC.status === 200 && (await db.leftoverReturn.findUnique({ where: { id: S.retC } }))?.refundConfirmedBy === 'solicitante', brief(cfC))
+  check(F, 'el profesional recibe el aviso de la confirmación', !!(await db.notification.findFirst({ where: { userId: P.id, type: 'devolucion_reembolso_confirmado' } })))
+  check(F, 'queda en la línea de tiempo del proyecto', (await db.activityEvent.count({ where: { projectId: S.project1, type: { startsWith: 'devolucion_' } } })) >= 5)
+
+  // (b) pata profesional → proveedor (pago por fuera de HomIA), precargada con lo que devolvió el cliente
+  const ep = await get(P, `/api/returns/eligible?tipo=profesional_a_proveedor&projectId=${S.project1}`)
+  const epm = (ep.data?.items || []).find((i) => i.materialId === S.m1)
+  check(F, 'elegibles al proveedor: lo que le vendió (10 u.) y la precarga con lo recibido del cliente (2 u.)', epm?.remaining === 10 && epm?.providerId === V.provId && (ep.data?.prefill || []).some((x) => x.returnId === S.retC && x.materialId === S.m1 && x.qty === 2), brief(ep))
+  st(F, 'el cliente no ve los elegibles al proveedor', await get(C, `/api/returns/eligible?tipo=profesional_a_proveedor&projectId=${S.project1}`), 403)
+  const ep2 = await get(P, `/api/returns/eligible?tipo=profesional_a_proveedor&projectId=${S.project2}`)
+  check(F, 'modo B: lo pagó el cliente al proveedor → no hay devolución del pro al proveedor', ep2.status === 200 && !(ep2.data?.items || []).some((i) => i.materialId === S.m6), brief(ep2))
+  const proLeg = (extra) => ({ tipo: 'profesional_a_proveedor', projectId: S.project1, items: [{ ...mItem, photoUrl: photo, qty: 2, note: `${MARK} devuelto por el cliente` }], ...extra })
+  st(F, 'el cliente no puede pedir la devolución al proveedor', await post(C, '/api/returns', proLeg()), 403)
+  st(F, 'un tercero no puede pedirla', await post(P2, '/api/returns', proLeg()), 403)
+  st(F, 'vincular una devolución de otro origen', await post(P, '/api/returns', proLeg({ parentReturnId: S.ret1 })), 400)
+  st(F, 'pedirle al proveedor más de lo que le vendió → 409', await post(P, '/api/returns', proLeg({ items: [{ ...mItem, qty: 11 }] })), 409)
+  st(F, 'modo B: el pro no le pide al proveedor lo que pagó el cliente', await post(P, '/api/returns', { tipo: 'profesional_a_proveedor', projectId: S.project2, items: [{ materialId: S.m6, elementId: S.E3.id, condition: 'sin_abrir', photoUrl: photo, qty: 1 }] }), 409)
+  // un pedido que el proveedor rechaza (no consume cantidad)
+  const rpr = await post(P, '/api/returns', proLeg({ items: [{ ...mItem, qty: 1 }] }))
+  st(F, 'el pro pide devolver 1 u. al proveedor', rpr, 201)
+  st(F, 'el proveedor lo rechaza con motivo', await patch(V, `/api/returns/${rpr.data?.return?.id}`, { action: 'rechazar', note: `${MARK} Ya no lo vendemos` }), 200)
+  const nPRej = await db.notification.findFirst({ where: { userId: P.id, type: 'devolucion_rechazada' } })
+  check(F, 'el pro (solicitante) recibe el rechazo con link a SU panel', !!nPRej && !linkProblem(nPRej.link, ['profesional']), `link=${nPRej?.link}`)
   const s3b = (await db.providerStock.findUnique({ where: { id: S.stock3 } })).quantity
-  const recC = await patch(V, `/api/returns/${S.retC}`, { action: 'recibir', items: [{ id: rc.data?.return?.items?.[0]?.id, qtyReceived: 1 }] })
-  check(F, 'recibir menos de lo aceptado prorratea el reembolso', recC.status === 200 && recC.data?.refundTotal === 2000, brief(recC))
-  check(F, 'stock del látex vuelve (+1)', (await db.providerStock.findUnique({ where: { id: S.stock3 } })).quantity === s3b + 1)
-  st(F, 'reembolso efectivo (proyecto)', await patch(V, `/api/returns/${S.retC}`, { action: 'reembolsar_efectivo' }), 200)
-  // cron: confirmación automática a las 72 h + recordatorio al proveedor por devolución sin responder
+  const rpp = await post(P, '/api/returns', proLeg({ parentReturnId: S.retC }))
+  st(F, 'el pro pide devolución al proveedor precargando lo recibido (2 u.)', rpp, 201)
+  S.retPP = rpp.data?.return?.id
+  const dbPP = S.retPP ? await db.leftoverReturn.findUnique({ where: { id: S.retPP } }) : null
+  check(F, 'vinculada a la devolución del cliente, vendedor = proveedor, sin pago en HomIA', dbPP?.tipo === 'profesional_a_proveedor' && dbPP?.sellerKind === 'proveedor' && dbPP?.providerId === V.provId && dbPP?.parentReturnId === S.retC && dbPP?.paymentMethod === null && dbPP?.invoiceId === null, JSON.stringify(dbPP)?.slice(0, 240))
+  const nVPro = await db.notification.findFirst({ where: { userId: V.id, type: 'devolucion_solicitada', title: { contains: 'profesional' } } })
+  check(F, 'al proveedor le llega el pedido del profesional con link válido', !!nVPro && !linkProblem(nVPro.link, ['proveedor']), `${nVPro?.title} ${nVPro?.link}`)
+  st(F, 'tope: 2 pedidas + 9 más supera lo vendido (10) → 409', await post(P, '/api/returns', proLeg({ items: [{ ...mItem, qty: 9 }] })), 409)
+  const e1b = await get(C, `/api/returns/eligible?projectId=${S.project1}`)
+  check(F, 'lo pedido al proveedor no descuenta lo que el cliente puede devolver (quedan 8)', (e1b.data?.items || []).find((i) => i.materialId === S.m1)?.remaining === 8, brief(e1b))
+  st(F, 'el cliente no actúa sobre la devolución pro → proveedor', await patch(C, `/api/returns/${S.retPP}`, { action: 'cancelar' }), 403)
+  st(F, 'el pro no acepta su propio pedido', await patch(P, `/api/returns/${S.retPP}`, { action: 'aceptar' }), 403)
+  const lvP = await get(V, '/api/returns?role=proveedor')
+  const rowPP = (lvP.data?.returns || []).find((r) => r.id === S.retPP)
+  check(F, 'el proveedor la ve con el profesional y el proyecto', !!rowPP && rowPP.tipo === 'profesional_a_proveedor' && rowPP.requester?.id === P.id && rowPP.origin?.kind === 'proyecto', brief(lvP))
+  const accPP = await patch(V, `/api/returns/${S.retPP}`, { action: 'aceptar' })
+  check(F, 'el proveedor acepta todo (tope precio × cantidad)', accPP.status === 200 && accPP.data?.status === 'aceptada' && accPP.data?.refundTotal === 4000, brief(accPP))
+  const recPP = await patch(V, `/api/returns/${S.retPP}`, { action: 'recibir' })
+  check(F, 'el proveedor recibe → recibida (reembolso por fuera pendiente)', recPP.status === 200 && recPP.data?.status === 'recibida', brief(recPP))
+  check(F, 'los materiales vuelven al stock del proveedor (+2)', (await db.providerStock.findUnique({ where: { id: S.stock3 } })).quantity === s3b + 2)
+  check(F, 'movimiento de stock "devolucion" de esta devolución', !!(await db.stockMovement.findFirst({ where: { stockId: S.stock3, type: 'devolucion', note: { contains: S.retPP || 'x' } } })))
+  st(F, 'en la pata pro → proveedor no se marca "efectivo" genérico', await patch(V, `/api/returns/${S.retPP}`, { action: 'reembolsar_efectivo' }), 409)
+  st(F, 'reembolsar por fuera sin método', await patch(V, `/api/returns/${S.retPP}`, { action: 'reembolsar_fuera' }), 400)
+  st(F, 'reembolsar por fuera con método inválido', await patch(V, `/api/returns/${S.retPP}`, { action: 'reembolsar_fuera', metodo: 'bitcoin' }), 400)
+  st(F, 'nunca se reintenta por Mercado Pago en esta pata', await patch(V, `/api/returns/${S.retPP}`, { action: 'reintentar_reembolso' }), 409)
+  const rfPP = await patch(V, `/api/returns/${S.retPP}`, { action: 'reembolsar_fuera', metodo: 'transferencia', nota: `${MARK} al alias del pro` })
+  const dbPP2 = S.retPP ? await db.leftoverReturn.findUnique({ where: { id: S.retPP } }) : null
+  check(F, 'el proveedor marca que le devolvió por transferencia (fuera de HomIA)', rfPP.status === 200 && dbPP2?.status === 'reembolsada' && dbPP2?.refundChannel === 'fuera_de_homia' && dbPP2?.refundMethod === 'transferencia' && !!dbPP2?.refundMethodNote && !dbPP2?.mpRefundId, brief(rfPP))
+  const nPRf = await db.notification.findFirst({ where: { userId: P.id, type: 'devolucion_reembolsada' }, orderBy: { createdAt: 'desc' } })
+  check(F, 'el pro recibe el aviso con link a Devoluciones → A mis proveedores', !!nPRf && !linkProblem(nPRf.link, ['profesional']) && nPRf.link.includes('tab=proveedores'), `link=${nPRf?.link}`)
+  st(F, 'el proveedor no confirma por el profesional', await patch(V, `/api/returns/${S.retPP}`, { action: 'confirmar_reembolso' }), 403)
+  const cfPP = await patch(P, `/api/returns/${S.retPP}`, { action: 'confirmar_reembolso' })
+  check(F, 'el profesional confirma que recibió el reembolso', cfPP.status === 200 && (await db.leftoverReturn.findUnique({ where: { id: S.retPP } }))?.refundConfirmedBy === 'solicitante', brief(cfPP))
+  check(F, 'el proveedor recibe el aviso de la confirmación', !!(await db.notification.findFirst({ where: { userId: V.id, type: 'devolucion_reembolso_confirmado', title: { contains: 'profesional' } } })))
+  const lpP = await get(P, '/api/returns?role=solicitante&tipo=profesional_a_proveedor')
+  check(F, 'el pro ve sus pedidos a proveedores ("A mis proveedores")', (lpP.data?.returns || []).some((r) => r.id === S.retPP && r.sellerName) && !(lpP.data?.returns || []).some((r) => r.tipo !== 'profesional_a_proveedor'), brief(lpP))
+
+  // cron: confirmación automática a las 72 h (pata pro → proveedor) + recordatorio al vendedor (proveedor y profesional)
   const H72 = 72 * 3600_000
-  await db.leftoverReturn.update({ where: { id: S.retC }, data: { refundedAt: new Date(Date.now() - H72 - 3600_000) } })
+  const rpp2 = await post(P, '/api/returns', proLeg({ items: [{ ...mItem, qty: 1 }] }))
+  S.retPP2 = rpp2.data?.return?.id
+  await patch(V, `/api/returns/${S.retPP2}`, { action: 'aceptar' })
+  await patch(V, `/api/returns/${S.retPP2}`, { action: 'recibir' })
+  st(F, 'reembolso por fuera en efectivo (para el cron)', await patch(V, `/api/returns/${S.retPP2}`, { action: 'reembolsar_fuera', metodo: 'efectivo' }), 200)
+  if (S.retPP2) await db.leftoverReturn.update({ where: { id: S.retPP2 }, data: { refundedAt: new Date(Date.now() - H72 - 3600_000) } })
   const rY = await post(C, '/api/returns', { purchaseId: S.purchaseA, items: [{ ...item, qty: 1 }] })
   st(F, 'devolución que el proveedor no responde', rY, 201)
   S.retY = rY.data?.return?.id
-  if (S.retY) await db.leftoverReturn.update({ where: { id: S.retY }, data: { requestedAt: new Date(Date.now() - H72 - 3600_000) } })
+  const rY2 = await post(C, '/api/returns', { projectId: S.project1, items: [{ ...mItem, photoUrl: photo, qty: 1 }] })
+  st(F, 'devolución que el profesional no responde', rY2, 201)
+  S.retY2 = rY2.data?.return?.id
+  for (const rid of [S.retY, S.retY2]) if (rid) await db.leftoverReturn.update({ where: { id: rid }, data: { requestedAt: new Date(Date.now() - H72 - 3600_000) } })
   const lim = new Date(Date.now() - H72)
-  const ajenasConf = await db.leftoverReturn.count({ where: { status: 'reembolsada', refundConfirmedAt: null, refundedAt: { lt: lim }, OR: [{ paymentMethod: null }, { paymentMethod: { not: 'mercadopago' } }], id: { not: S.retC } } })
-  const ajenasRec = await db.leftoverReturn.count({ where: { status: 'solicitada', reminderSentAt: null, requestedAt: { lt: lim }, id: { not: S.retY || 'x' } } })
+  const ajenasConf = await db.leftoverReturn.count({
+    where: {
+      status: 'reembolsada', refundConfirmedAt: null, refundedAt: { lt: lim }, id: { notIn: [S.retPP2 || 'x'] },
+      OR: [{ refundChannel: { in: ['efectivo', 'fuera_de_homia'] } }, { refundChannel: null, OR: [{ paymentMethod: null }, { paymentMethod: { not: 'mercadopago' } }] }],
+    },
+  })
+  const ajenasRec = await db.leftoverReturn.count({ where: { status: 'solicitada', reminderSentAt: null, requestedAt: { lt: lim }, id: { notIn: [S.retY || 'x', S.retY2 || 'x'] } } })
   const ajenasRes = await db.purchase.count({ where: { status: 'aprobado', reservationExpiresAt: { lt: new Date() } } })
   if (!process.env.CRON_SECRET || ajenasConf + ajenasRec + ajenasRes > 0) {
+    console.log(`  (cron de sobrantes NO corrido: ajenas conf=${ajenasConf} rec=${ajenasRec} res=${ajenasRes}, CRON_SECRET=${process.env.CRON_SECRET ? 'sí' : 'no'})`)
     check(F, 'cron de sobrantes no corrido: tocaría datos ajenos (o falta CRON_SECRET)', true)
   } else {
+    console.log('  (cron de sobrantes corrido contra datos propios)')
     const cr = await get(ANON, '/api/cron/reservations', { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } })
-    const rc72 = await db.leftoverReturn.findUnique({ where: { id: S.retC } })
-    check(F, 'cron: confirma solo el reembolso en efectivo a las 72 h', cr.status === 200 && cr.data?.autoConfirmed === 1 && rc72?.refundConfirmedBy === 'automatico' && !!rc72?.refundConfirmedAt, brief(cr))
-    const nRec = await db.notification.count({ where: { userId: V.id, type: 'devolucion_recordatorio' } })
-    check(F, 'cron: un recordatorio al proveedor por la devolución sin responder', cr.data?.reminded === 1 && nRec === 1 && !!(await db.leftoverReturn.findUnique({ where: { id: S.retY } }))?.reminderSentAt, brief(cr))
+    const r72 = await db.leftoverReturn.findUnique({ where: { id: S.retPP2 } })
+    check(F, 'cron: confirma solo el reembolso por fuera de HomIA a las 72 h', cr.status === 200 && cr.data?.autoConfirmed === 1 && r72?.refundConfirmedBy === 'automatico' && !!r72?.refundConfirmedAt, brief(cr))
+    const nAuto = await db.notification.findFirst({ where: { userId: P.id, type: 'devolucion_reembolso_confirmado', title: { contains: 'automáticamente' } } })
+    check(F, 'cron: el pro recibe el aviso con link a sus devoluciones', !!nAuto && !linkProblem(nAuto.link, ['profesional']), `link=${nAuto?.link}`)
+    const nRecV = await db.notification.count({ where: { userId: V.id, type: 'devolucion_recordatorio' } })
+    const nRecP = await db.notification.findFirst({ where: { userId: P.id, type: 'devolucion_recordatorio' } })
+    check(F, 'cron: un recordatorio a cada vendedor (proveedor y profesional)', cr.data?.reminded === 2 && nRecV === 1 && !!nRecP && nRecP.link.includes('/panel/profesional/devoluciones'), brief(cr))
     const cr2 = await get(ANON, '/api/cron/reservations', { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } })
     check(F, 'cron: el recordatorio no se repite', cr2.data?.reminded === 0 && (await db.notification.count({ where: { userId: V.id, type: 'devolucion_recordatorio' } })) === 1, brief(cr2))
   }
-  if (S.retY) st(F, 'el cliente cancela la devolución sin responder', await patch(C, `/api/returns/${S.retY}`, { action: 'cancelar' }), 200)
+  if (S.retY) st(F, 'el cliente cancela la devolución sin responder (proveedor)', await patch(C, `/api/returns/${S.retY}`, { action: 'cancelar' }), 200)
+  if (S.retY2) st(F, 'el cliente cancela la devolución sin responder (profesional)', await patch(C, `/api/returns/${S.retY2}`, { action: 'cancelar' }), 200)
   st(F, 'devolver todo el material otra vez (tope)', await post(C, '/api/returns', { projectId: S.project1, items: [{ ...mItem, photoUrl: photo, qty: 10 }] }), 409)
-  // cancelación por el solicitante
+
+  // (c) regresión modo B (cliente_paga_proveedor): contraparte = proveedor, como siempre
   const rx = await post(C, '/api/returns', { projectId: S.project2, items: [{ materialId: S.m6, elementId: S.E3.id, condition: 'sin_abrir', photoUrl: photo, qty: 1 }] })
   st(F, 'devolución de material modo B', rx, 201)
   S.retX = rx.data?.return?.id
+  const dbRx = S.retX ? await db.leftoverReturn.findUnique({ where: { id: S.retX } }) : null
+  check(F, 'modo B: la devolución es con el proveedor (como antes)', dbRx?.tipo === 'cliente' && dbRx?.sellerKind === 'proveedor' && dbRx?.providerId === V.provId && dbRx?.chargeId === S.charge2, JSON.stringify(dbRx)?.slice(0, 200))
+  st(F, 'modo B: el profesional no la gestiona', await patch(P, `/api/returns/${S.retX}`, { action: 'aceptar' }), 403)
   st(F, 'el proveedor no cancela (solo el solicitante)', await patch(V, `/api/returns/${S.retX}`, { action: 'cancelar' }), 403)
   st(F, 'el solicitante cancela', await patch(C, `/api/returns/${S.retX}`, { action: 'cancelar' }), 200)
   st(F, 'cancelar dos veces', await patch(C, `/api/returns/${S.retX}`, { action: 'cancelar' }), 409)
+  const rxp = await post(P, '/api/returns', { projectId: S.project2, items: [{ materialId: S.m6, elementId: S.E3.id, condition: 'sin_abrir', photoUrl: photoP, qty: 1 }] })
+  check(F, 'modo B: el profesional también puede devolverle al proveedor como comprador (como antes)', rxp.status === 201 && rxp.data?.return?.sellerKind === 'proveedor' && rxp.data?.return?.tipo === 'cliente', brief(rxp))
+  if (rxp.data?.return?.id) st(F, 'el pro cancela su devolución modo B', await patch(P, `/api/returns/${rxp.data.return.id}`, { action: 'cancelar' }), 200)
 
   const lr = await get(C, '/api/returns')
   check(F, 'mis devoluciones (solicitante) con origen legible', (lr.data?.returns || []).some((r) => r.id === S.ret1 && r.origin?.kind === 'compra'), brief(lr))
   const lv = await get(V, '/api/returns?role=proveedor')
-  check(F, 'devoluciones recibidas (proveedor)', (lv.data?.returns || []).length >= 4, brief(lv))
+  check(F, 'devoluciones recibidas (proveedor): compra, pro → proveedor y modo B; ninguna del profesional', (lv.data?.returns || []).length >= 5 && !(lv.data?.returns || []).some((r) => r.sellerKind === 'profesional'), brief(lv))
   st(F, 'devoluciones como proveedor sin serlo', await get(C, '/api/returns?role=proveedor'), 403)
 }
 
@@ -1092,7 +1203,7 @@ async function flowJ() {
   const F = 'J'
   const expected = {
     [C.id]: ['nuevo_presupuesto', 'proyecto_creado', 'mano_obra_cotizada', 'material_propuesto', 'factura_emitida', 'factura_efectivo_confirmado', 'cobro_materiales', 'cobro_efectivo_confirmado', 'compra_aprobada', 'compra_rechazada', 'compra_entregada', 'devolucion_aceptada', 'devolucion_recibida', 'devolucion_reembolsada', 'proyecto_cancelado', 'nueva_reseña', 'message'],
-    [P.id]: ['nuevo_trabajo', 'presupuesto_aceptado', 'contratacion', 'material_aprobar', 'material_rechazar', 'factura_efectivo_acordado', 'vinculacion_activada', 'nueva_reseña', 'message', 'devolucion_rechazada'],
+    [P.id]: ['nuevo_trabajo', 'presupuesto_aceptado', 'contratacion', 'material_aprobar', 'material_rechazar', 'factura_efectivo_acordado', 'vinculacion_activada', 'nueva_reseña', 'message', 'devolucion_rechazada', 'devolucion_solicitada', 'devolucion_reembolsada'],
     [P2.id]: ['nuevo_trabajo', 'presupuesto_rechazado'],
     [V.id]: ['vinculacion_solicitada', 'nueva_compra', 'cobro_efectivo_acordado', 'devolucion_solicitada', 'devolucion_cancelada', 'nueva_reseña', 'compra_cancelada'],
   }
@@ -1655,7 +1766,8 @@ async function purge({ quiet = false } = {}) {
   const n = async (k, p) => { out[k] = (await p).count }
   await n('activityEvents', db.activityEvent.deleteMany({ where: { OR: [{ orderId: { in: ordIds } }, { purchaseId: { in: purIds } }, { projectId: { in: projIds } }, { actorId: { in: uids } }] } }))
   await n('cartItems', db.cartItem.deleteMany({ where: { OR: [{ userId: { in: uids } }, { stock: { providerId: { in: provIds } } }] } }))
-  await n('leftoverReturns', db.leftoverReturn.deleteMany({ where: { OR: [{ requesterId: { in: uids } }, { providerId: { in: provIds } }, { projectId: { in: projIds } }, { purchaseId: { in: purIds } }] } }))
+  // incluye las devoluciones profesional → proveedor (parentReturnId) y las que tienen al profesional como vendedor
+  await n('leftoverReturns', db.leftoverReturn.deleteMany({ where: { OR: [{ requesterId: { in: uids } }, { providerId: { in: provIds } }, { professionalId: { in: proIds } }, { projectId: { in: projIds } }, { purchaseId: { in: purIds } }] } }))
   await n('works', db.completedWork.deleteMany({ where: { OR: [{ authorId: { in: uids } }, { projectId: { in: projIds } }, { professionalId: { in: proIds } }] } }))
   await n('reviews', db.review.deleteMany({ where: { OR: [{ authorId: { in: uids } }, { targetUserId: { in: uids } }, { projectId: { in: projIds } }, { purchaseId: { in: purIds } }] } }))
   await n('payments', db.payment.deleteMany({ where: { OR: [{ invoiceId: { in: invIds } }, { chargeId: { in: chIds } }, { purchaseId: { in: purIds } }] } }))
@@ -1759,7 +1871,7 @@ async function purge({ quiet = false } = {}) {
     stock: await db.providerStock.count({ where: { providerId: { in: provIds } } }),
     notificationsMarked: await db.notification.count({ where: { OR: [{ title: { contains: MARK } }, { body: { contains: MARK } }] } }),
     reviews: await db.review.count({ where: { OR: [{ authorId: { in: uids } }, { targetUserId: { in: uids } }] } }),
-    returns: await db.leftoverReturn.count({ where: { requesterId: { in: uids } } }),
+    returns: await db.leftoverReturn.count({ where: { OR: [{ requesterId: { in: uids } }, { providerId: { in: provIds } }, { professionalId: { in: proIds } }, { projectId: { in: projIds } }] } }),
     searchEvents: await db.searchEvent.count({ where: { userId: { in: uids } } }),
     homySessions: await db.homySession.count({ where: { OR: [{ userId: { in: uids } }, { visitorHash: { in: visitorHashes } }] } }),
     homyRuns: await db.homyRun.count({ where: { OR: [{ userId: { in: uids } }, { ipHash: { in: ipHashes } }] } }),

@@ -1,11 +1,29 @@
 // Sobrantes — reglas compartidas entre POST /api/returns, GET /api/returns/eligible
-// y PATCH /api/returns/[id]. Un pedido de devolución agrupa ítems pagados a UN solo
-// proveedor; el reembolso vuelve por el mismo medio con el que se pagó.
+// y PATCH /api/returns/[id]. Un pedido de devolución agrupa ítems de UN solo vendedor
+// y UN solo pago de origen; el reembolso vuelve por el mismo medio con el que se pagó.
 // Si el pago fue por Mercado Pago e incluyó el cargo de servicio HomIA (1%), se
 // reembolsa solo el precio de los ítems devueltos: el cargo de servicio no se devuelve.
+//
+// D14 (24/09/2026, Leonardo): "Devuelve la plata quien la cobró, y los materiales vuelven
+// a quien se los vendió al cliente".
+//   · Pata "cliente": el comprador devuelve a quien le cobró. Compra directa y cobro del
+//     proveedor (modo cliente_paga_proveedor) → vendedor = PROVEEDOR (los ítems vuelven a su
+//     stock). Materiales cobrados en la factura del profesional (modo pro_adelanta) →
+//     vendedor = PROFESIONAL (no vuelven al stock de nadie; reembolsa desde su cuenta).
+//   · Pata "profesional_a_proveedor" (opcional): el profesional le devuelve al proveedor lo
+//     que le compró para el proyecto. Ese pago fue por fuera de HomIA, así que el reembolso
+//     también: el proveedor marca cómo lo devolvió y el profesional confirma.
 import { db } from '@/lib/db'
 
 export const RETURN_WINDOW_DAYS = 30
+export const RETURN_TIPOS = ['cliente', 'profesional_a_proveedor'] as const
+export type ReturnTipo = (typeof RETURN_TIPOS)[number]
+export const OUTSIDE_REFUND_METHODS = ['efectivo', 'transferencia', 'saldo_a_favor'] as const
+export const OUTSIDE_REFUND_LABEL: Record<string, string> = {
+  efectivo: 'en efectivo',
+  transferencia: 'por transferencia',
+  saldo_a_favor: 'como saldo a favor en el local',
+}
 export const RETURN_ACTIVE_STATUSES = ['solicitada', 'aceptada', 'aceptada_parcial', 'recibida', 'reembolsada', 'reembolso_fallido']
 
 /** Foto de sobrante: solo subidas reales de HomIA (bucket público o legado /uploads). */
@@ -37,8 +55,10 @@ export function refundableOf(o: { paidAmount: number; serviceFee: number; refund
 }
 
 /** Cantidad ya devuelta (aceptada o, si sigue en curso, pedida) de un material, un
- *  ítem de compra (carrito, multi-ítem) o una compra histórica de un solo ítem. */
-export async function alreadyReturnedQty(key: { materialId?: string | null; purchaseId?: string | null; purchaseItemId?: string | null }, excludeReturnId?: string): Promise<number> {
+ *  ítem de compra (carrito, multi-ítem) o una compra histórica de un solo ítem.
+ *  Cada pata lleva su propia cuenta: lo que el cliente le devuelve al profesional no
+ *  descuenta de lo que el profesional le puede devolver al proveedor (y al revés). */
+export async function alreadyReturnedQty(key: { materialId?: string | null; purchaseId?: string | null; purchaseItemId?: string | null }, excludeReturnId?: string, tipo: ReturnTipo = 'cliente'): Promise<number> {
   const where = key.materialId
     ? { materialId: key.materialId }
     : key.purchaseItemId
@@ -51,7 +71,7 @@ export async function alreadyReturnedQty(key: { materialId?: string | null; purc
     where: {
       ...where,
       status: { not: 'rechazado' },
-      return: { status: { in: RETURN_ACTIVE_STATUSES }, ...(excludeReturnId ? { id: { not: excludeReturnId } } : {}) },
+      return: { tipo, status: { in: RETURN_ACTIVE_STATUSES }, ...(excludeReturnId ? { id: { not: excludeReturnId } } : {}) },
     },
     select: { qtyRequested: true, qtyAccepted: true, qtyReceived: true },
   })
@@ -127,6 +147,36 @@ export async function materialPaidOrigin(material: MaterialRow, invoices: Invoic
     serviceFee: method === 'mercadopago' ? invoice.serviceFee : 0,
     refundedAmount: payment?.refundedAmount ?? 0,
   }
+}
+
+/** Vendedor de la pata "cliente" según el pago de origen: factura del profesional → profesional; cobro/compra → proveedor. */
+export function sellerKindOf(origin: Pick<PaidOrigin, 'invoiceId'>): 'proveedor' | 'profesional' {
+  return origin.invoiceId ? 'profesional' : 'proveedor'
+}
+
+type ProLegMaterial = { id: string; status: string; providerId: string | null; elementId: string | null; invoicedAt: Date | null; updatedAt: Date }
+type ProLegCharge = { status: string; materialIds: string }
+
+/**
+ * Pata profesional → proveedor: ¿el profesional le compró este material al proveedor?
+ * Sí cuando está aprobado, tiene proveedor y elemento, y NO lo pagó el cliente al proveedor
+ * con un cobro (modo cliente_paga_proveedor): o el proyecto está en modo pro_adelanta o el
+ * material ya se facturó al cliente. Plazo: 30 días desde que lo facturó al cliente o, si
+ * todavía no lo facturó, desde la última actualización del material (su aprobación).
+ */
+export function proLegStatus(m: ProLegMaterial, project: { materialsPaymentMode: string }, charges: ProLegCharge[]): { ok: true; since: Date } | { ok: false; reason: string } {
+  if (m.status !== 'aprobado') return { ok: false, reason: 'no está aprobado en el proyecto' }
+  if (!m.providerId) return { ok: false, reason: 'no tiene proveedor asignado' }
+  if (!m.elementId) return { ok: false, reason: 'no tiene elemento de catálogo asociado' }
+  const paidByClient = charges.some((c) => {
+    if (c.status === 'anulada' || c.status === 'cancelada') return false
+    try { return (JSON.parse(c.materialIds || '[]') as string[]).includes(m.id) } catch { return false }
+  })
+  if (paidByClient) return { ok: false, reason: 'lo paga el cliente directo al proveedor: la devolución la pide el cliente' }
+  if (project.materialsPaymentMode !== 'pro_adelanta' && !m.invoicedAt) return { ok: false, reason: 'en este proyecto el cliente paga los materiales al proveedor' }
+  const since = m.invoicedAt ?? m.updatedAt
+  if (!withinReturnWindow(since)) return { ok: false, reason: `pasaron más de ${RETURN_WINDOW_DAYS} días` }
+  return { ok: true, since }
 }
 
 export function withinReturnWindow(paidAt: Date | null): boolean {

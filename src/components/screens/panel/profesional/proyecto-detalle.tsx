@@ -2,7 +2,7 @@
 // Detalle de proyecto (vista profesional): cotización de mano de obra, etapas, propuesta de
 // materiales (combobox difuso sobre el catálogo), alternativas, cuentas de retiro y facturación.
 import { useEffect, useState } from 'react'
-import { navigate, Link } from '@/lib/router'
+import { navigate, Link, useRoute } from '@/lib/router'
 import { StatusBadge, Loading, UAvatar, VerifyBadge } from '@/components/app/ui-bits'
 import { formatARS, formatDate } from '@/lib/format'
 import { matchScore } from '@/lib/search-match'
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { ClientSummaryButton } from '@/components/app/client-summary'
 import ReviewForm from '@/components/screens/panel/review-form'
-import SobrantesSection from '@/components/screens/panel/sobrantes-section'
+import ProSobrantes from '@/components/screens/panel/profesional/sobrantes-pro'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -63,6 +63,7 @@ async function readJson(res: Response): Promise<Record<string, unknown> & { erro
 }
 
 export default function ProProjectDetail({ id }: { id: string }) {
+  const route = useRoute()
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -817,8 +818,8 @@ export default function ProProjectDetail({ id }: { id: string }) {
           )}
         </div>
 
-        {/* sobrantes: devolución al proveedor con reembolso */}
-        <div className="mb-5"><SobrantesSection projectId={id} canRequest /></div>
+        {/* sobrantes (D14): devoluciones del cliente (él es el vendedor) y pedidos a sus proveedores */}
+        <div className="mb-5"><ProSobrantes projectId={id} materialsPaymentMode={p.materialsPaymentMode} autoOpen={route.query.devolver === '1'} /></div>
         {/* facturación */}
         <div className="homy-glass rounded-3xl p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">

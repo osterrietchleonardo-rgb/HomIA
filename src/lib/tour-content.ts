@@ -71,7 +71,7 @@ export const TOURS: Record<TourRole, TourStep[]> = {
       route: '/panel/cliente/proyectos',
       target: 'nav-proyectos',
       title: 'Proyectos: tu obra, siempre a la vista',
-      body: 'Al contratar se crea un proyecto: etapas, materiales que tu profesional propone con precios reales, y el acuerdo de quién paga los materiales (si los adelanta él, van en su factura; si no, te los cobra el proveedor directo). Al finalizar, acá mismo dejás tu reseña con estrellas, comentario y fotos, y si sobró material lo cargás en Sobrantes para devolverlo al local del proveedor.',
+      body: 'Al contratar se crea un proyecto: etapas, materiales que tu profesional propone con precios reales, y el acuerdo de quién paga los materiales (si los adelanta él, van en su factura; si no, te los cobra el proveedor directo). Al finalizar, acá mismo dejás tu reseña con estrellas, comentario y fotos, y si sobró material lo cargás en Sobrantes para devolvérselo a quien te lo cobró: el proveedor si se lo pagaste a él, o tu profesional si te lo cobró en su factura.',
       tip: 'Todo queda registrado en la plataforma: nada depende de la memoria de nadie.',
     },
     {
@@ -167,7 +167,7 @@ export const TOURS: Record<TourRole, TourStep[]> = {
       target: 'nav-proyectos',
       title: 'Proyectos: gestioná cada obra',
       body: 'El corazón de tu trabajo: etapas de la obra, materiales que proponés (con precios reales comparados entre proveedores), el acuerdo de quién paga los materiales, y las facturas. Emitís factura cuando corresponde y cobrás por Mercado Pago o en efectivo (el cliente elige; vos confirmás el efectivo al recibirlo). Para cobrar por Mercado Pago conectá tu cuenta en Mi perfil: la plata entra directo y cobrás el 100%; el cargo de servicio HomIA del 1% lo paga el cliente.',
-      tip: 'Si el cliente paga los materiales directo al proveedor, tu factura va solo con mano de obra: queda escrito para los dos.',
+      tip: 'Si el cliente paga los materiales directo al proveedor, tu factura va solo con mano de obra: queda escrito para los dos. Si los adelantás vos y los cobrás en tu factura, las devoluciones de sobrantes del cliente son con vos (menú Devoluciones) y, si querés, se los devolvés a tu proveedor desde el proyecto.',
     },
     {
       id: 'materiales',
@@ -261,7 +261,7 @@ export const TOURS: Record<TourRole, TourStep[]> = {
       route: '/panel/proveedor/cobros',
       target: 'nav-cobros',
       title: 'Cobros: cobrá tus materiales directo',
-      body: 'Primero tocá "Conectá Mercado Pago" para que los pagos lleguen directo a tu cuenta. Después, en proyectos donde el cliente te paga a vos, emitís el cobro por los materiales aprobados desde acá: el cliente paga con Mercado Pago o acuerda efectivo (lo confirmás vos al recibirlo). En la pestaña Devoluciones gestionás los sobrantes que te traen de vuelta.',
+      body: 'Primero tocá "Conectá Mercado Pago" para que los pagos lleguen directo a tu cuenta. Después, en proyectos donde el cliente te paga a vos, emitís el cobro por los materiales aprobados desde acá: el cliente paga con Mercado Pago o acuerda efectivo (lo confirmás vos al recibirlo). En la pestaña Devoluciones gestionás los sobrantes que te traen de vuelta (también los que te devuelve un profesional: como te pagó por fuera de HomIA, marcás cómo le devolviste la plata).',
       tip: 'Sin Mercado Pago conectado solo podés cobrar en efectivo: conectalo hoy.',
     },
     {

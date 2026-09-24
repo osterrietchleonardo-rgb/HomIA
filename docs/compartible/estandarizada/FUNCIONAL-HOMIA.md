@@ -463,9 +463,17 @@ La sección **Facturas** junta las facturas de todos tus proyectos.
 
 ### 2.8 Devolver sobrantes
 
-Si te sobró material **pagado**, podés devolverlo al proveedor que te lo vendió dentro de los
-**30 días** desde el pago. Se hace desde el proyecto (sección **Sobrantes**) o desde la compra, con
-el botón **Devolver sobrantes**.
+Si te sobró material **pagado**, podés devolvérselo **a quien te lo cobró** dentro de los
+**30 días** desde el pago (regla del 24/09/2026: "devuelve la plata quien la cobró"):
+
+- **Compra de materiales** o proyecto donde **le pagaste los materiales al proveedor** (cobro del
+  proveedor): la devolución es con **el proveedor**.
+- Proyecto donde **tu profesional adelantó los materiales y te los cobró en su factura**: la
+  devolución es con **tu profesional**. En la sección Sobrantes del proyecto lo ves escrito: "Los
+  materiales te los vendió <profesional> en su factura: la devolución es con él".
+
+Se hace desde el proyecto (sección **Sobrantes**) o desde la compra, con el botón **Devolver
+sobrantes**.
 
 1. Por cada material indicá:
    - la cantidad,
@@ -477,19 +485,23 @@ el botón **Devolver sobrantes**.
 
 **Qué pasa después:**
 
-1. El proveedor acepta todo, acepta una parte (y puede ajustar el monto) o rechaza, explicando el
-   motivo.
-2. Si acepta, acercás los sobrantes al local.
-3. Cuando el proveedor marca que los recibió, te devuelve la plata:
-   - **Si pagaste con Mercado Pago:** el reembolso vuelve solo a tu medio de pago, en 1 a 15 días.
-     Se devuelve el precio de lo que devolvés; **el cargo de servicio del 1% no se devuelve**.
-   - **Si pagaste en efectivo:** te lo devuelven en el mostrador. Después tocá **Recibí el
-     reembolso** para confirmarlo; si no lo confirmás, se confirma solo a las 72 horas.
+1. Quien te vendió (el proveedor o tu profesional) acepta todo, acepta una parte (y puede ajustar
+   el monto) o rechaza, explicando el motivo. Te llega el aviso.
+2. Si acepta, le entregás los sobrantes: al local del proveedor, o a tu profesional.
+3. Cuando marca que los recibió, te devuelve la plata:
+   - **Si pagaste con Mercado Pago:** el reembolso vuelve solo a tu medio de pago, en 1 a 15 días
+     (sale de la cuenta de quien te cobró). Se devuelve el precio de lo que devolvés; **el cargo de
+     servicio del 1% no se devuelve**.
+   - **Si pagaste en efectivo:** te lo devuelve en efectivo. Después tocá **Recibí el reembolso**
+     para confirmarlo; si no lo confirmás, se confirma solo a las 72 horas.
 
 **Reglas a tener en cuenta:**
 
-- Cada pedido de devolución va a **un solo proveedor**.
-- Mientras el proveedor no responda, podés **cancelar** el pedido.
+- Cada pedido de devolución va a **un solo vendedor** (un proveedor, o tu profesional por los
+  materiales de su factura) y a un solo pago.
+- Mientras no te respondan, podés **cancelar** el pedido.
+- Si tu profesional después le devuelve esos materiales a su proveedor, eso es entre ellos: vos no
+  lo ves ni tenés que hacer nada.
 
 *Fuente: `src/components/screens/panel/sobrantes-section.tsx`.*
 
@@ -566,6 +578,7 @@ el botón **Devolver sobrantes**.
 | **Materiales** | Más | Buscar materiales, carrito y comparar precios |
 | **Mis pedidos** | Más | Seguir y pagar los pedidos de materiales |
 | **Mis ofertas** | Más | Presupuestos que mandaste |
+| **Devoluciones** | Más | Sobrantes que te devuelven tus clientes y los que vos le devolvés a tus proveedores |
 | **CRM clientes** | Más | Tu tablero de oportunidades |
 | **Mis obras** | Más | Tu portafolio con fotos |
 | **Cuentas de retiro** | Más | Vínculos con proveedores |
@@ -722,9 +735,8 @@ El cliente ve el modo que elijas. Una vez que emitís una factura, el modo **que
 - "Todavía no cotizaste la mano de obra…": cotizá primero.
 - "Ya hay una factura pendiente de pago": esperá el pago de la anterior.
 
-**Devoluciones de materiales que facturaste (modo A):** si el cliente pagó la factura por Mercado
-Pago y después devuelve sobrantes al proveedor, el reembolso sale de **tu** cuenta de Mercado Pago
-(fuiste quien cobró). Es un punto pendiente de decisión.
+**Devoluciones de materiales que facturaste (modo A):** si le cobraste los materiales al cliente
+en tu factura, sus devoluciones de sobrantes son **con vos** (ver 3.14).
 
 *Fuente: `profesional/proyecto-detalle.tsx`, `profesional/perfil.tsx`, `src/components/app/mp-connect-card.tsx`.*
 
@@ -732,11 +744,52 @@ Pago y después devuelve sobrantes al proveedor, el reembolso sale de **tu** cue
 
 - Es la misma pantalla que la del cliente (punto 2.7): **carrito** y **Mis pedidos** (también en el
   menú). Tiene una pestaña extra, **Comparables**, con el mejor precio de cada material.
-- **Mis pedidos** y **Devolver sobrantes** funcionan igual que para el cliente.
-- En los proyectos, **el profesional también puede pedir devolver sobrantes** de los materiales
-  pagados.
+- **Mis pedidos** y **Devolver sobrantes** de tus compras funcionan igual que para el cliente.
+- En proyectos donde **el cliente le paga los materiales al proveedor** (modo B), también podés
+  pedirle al proveedor devolver sobrantes como comprador, igual que el cliente.
+- En proyectos donde **vos adelantaste los materiales** (modo A), mirá 3.14.
 
 *Fuente: `cliente/materiales.tsx` (con perfil profesional), `src/components/screens/panel/pedidos.tsx`.*
+
+### 3.14 Devoluciones de sobrantes (menú Devoluciones)
+
+Regla del 24/09/2026: **devuelve la plata quien la cobró, y los materiales vuelven a quien se los
+vendió al cliente.** Si adelantaste los materiales y se los cobraste al cliente en tu factura, vos
+sos quien le vendió: sus devoluciones te llegan a vos.
+
+La pantalla **Devoluciones** tiene dos pestañas:
+
+**De mis clientes** (te llega el aviso "Te pidieron devolver sobrantes"):
+
+| Estado | Qué podés hacer |
+|---|---|
+| **Nueva: respondé** | **Aceptar todo**, **Aceptar algunos** (cantidad y monto por ítem) o **Rechazar** con motivo |
+| **Aceptada: esperando los sobrantes** | Cuando te los entrega, **Marcar recibido** con cuánto recibiste |
+| **Recibida: reembolsá** | Si te pagó la factura en efectivo: le devolvés la plata en mano y tocás **Ya lo reembolsé en efectivo** |
+| **Reembolsada** | Si te pagó por Mercado Pago, el reembolso salió solo **de tu cuenta** al marcar recibido. En efectivo, esperás que el cliente confirme (o se confirma solo a las 72 h) |
+| **Falló el reembolso** | Revisá tu Mercado Pago en Mi perfil y tocá **Reintentar reembolso** |
+
+- Lo que te devuelve el cliente **no vuelve al stock de ningún proveedor**: queda con vos.
+- El cargo de servicio del 1% no se reembolsa.
+- Si no respondés en 72 horas, te llega **un** recordatorio.
+- Con los sobrantes en mano aparece **Devolvérselos a mi proveedor**, que te lleva al proyecto.
+
+**A mis proveedores** (opcional): lo que vos les pediste devolver.
+
+1. En el proyecto, sección **Sobrantes**, tocá **Pedir devolución a <proveedor>** (hay un botón por
+   cada proveedor con materiales en el proyecto).
+2. Si tu cliente ya te devolvió sobrantes, tocá **Precargar con lo que me devolvió el cliente**:
+   se completan cantidades, estado y fotos (podés cambiarlas).
+3. Por cada material: cantidad, estado, **foto obligatoria** y nota. No podés pedir más de lo que
+   ese proveedor te vendió para el proyecto (menos lo que ya le pediste).
+4. Tocá **Enviar pedido de devolución**. El proveedor acepta todo, una parte o rechaza.
+5. Le llevás los materiales; el proveedor marca recibido (vuelven a su stock).
+6. **Como a ese proveedor le pagaste por fuera de HomIA, la plata también vuelve por fuera:** el
+   proveedor marca cómo te la devolvió (efectivo, transferencia o saldo a favor en el local, con
+   una nota) y te llega el aviso. Tocá **Recibí el reembolso** (si no, se confirma solo a las 72 h).
+   Nunca se hace por Mercado Pago.
+
+*Fuente: `profesional/devoluciones.tsx`, `profesional/sobrantes-pro.tsx`, `proveedor/devoluciones-tab.tsx`.*
 
 ### 3.10 Mis obras (portafolio)
 
@@ -927,20 +980,28 @@ proveedor"** y el cliente los aprueba.
 ### 4.5 Devoluciones de sobrantes (pestaña dentro de Cobros)
 
 Cuando alguien te quiere devolver material que le sobró, te llega el aviso **"Te pidieron devolver
-sobrantes"**. El pedido trae fotos, cantidades y el estado de cada ítem.
+sobrantes"** (un cliente que te compró, o un profesional que te pagó un cobro) o **"Un profesional
+te pide devolver materiales"** (un profesional que te compró materiales para una obra y te los pagó
+por fuera de HomIA). El pedido trae fotos, cantidades y el estado de cada ítem; los de un
+profesional dicen "Profesional · proyecto <título>".
+
+Las devoluciones de materiales que un profesional le cobró al cliente en su factura **no te
+llegan**: son entre el cliente y el profesional.
 
 | Estado | Qué podés hacer |
 |---|---|
 | **Nueva: respondé** | **Aceptar todo**, **Aceptar algunos** (podés ajustar la cantidad y el monto de cada ítem, por ejemplo con un descuento por manipulación, y el cliente lo ve) o **Rechazar** (el motivo es obligatorio) |
 | **Aceptada: esperando que la acerquen** | Cuando te traen los sobrantes, **Marcar recibido** y confirmás cuánto recibiste |
-| **Recibida: reembolsá en efectivo** | Devolvés la plata en el mostrador y tocás **Ya lo reembolsé en efectivo** |
-| **Reembolsada** (efectivo) | Esperás que el cliente confirme: "Esperando que el cliente confirme que recibió el efectivo (se confirma solo a las 72 h)" |
+| **Recibida: reembolsá** | Devolvés la plata en el mostrador y tocás **Ya lo reembolsé en efectivo**. Si te lo pidió un profesional: **Marcá cómo le devolviste la plata** (efectivo, transferencia o saldo a favor en el local, con nota opcional) |
+| **Reembolsada** (efectivo o por fuera) | Esperás que el cliente (o el profesional) confirme que la recibió; se confirma solo a las 72 h |
 | **Falló el reembolso** | **Reintentar reembolso** |
 | **Rechazada / Cancelada** | — |
 
 **Qué pasa cuando marcás "recibido":**
 
-- Lo que recibiste **vuelve solo a tu stock**.
+- Lo que recibiste **vuelve solo a tu stock** (también lo que te devuelve un profesional).
+- Si te lo pidió un **profesional**, nunca hay reembolso por Mercado Pago: se lo devolvés por
+  fuera y lo marcás.
 - Si el cliente pagó con **Mercado Pago**, el reembolso sale **automáticamente** de la cuenta que
   cobró la venta (la tuya, si el pago se hizo con tu Mercado Pago). Se reembolsa el precio de lo
   devuelto; el cargo de servicio del 1% no se devuelve.

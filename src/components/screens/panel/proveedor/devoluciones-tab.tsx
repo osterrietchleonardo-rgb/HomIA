@@ -1,14 +1,18 @@
 'use client'
-// Tab "Devoluciones" de Cobros del proveedor: pedidos de devolución de sobrantes.
+// Devoluciones del lado del VENDEDOR (D14): la usa el proveedor (Cobros → Devoluciones) y el
+// profesional (Devoluciones → "De mis clientes", materiales que cobró en su factura).
 // solicitada → Aceptar todo / Aceptar algunos (cantidad y monto por ítem) / Rechazar (motivo)
-// aceptada* → Marcar recibido (cantidades) → reembolso MP automático o efectivo en el mostrador.
+// aceptada* → Marcar recibido (cantidades) → reembolso MP automático o efectivo en mano.
+// Pedidos de un profesional al proveedor (tipo profesional_a_proveedor): el pago fue por fuera
+// de HomIA → "Marcá cómo le devolviste la plata" (efectivo / transferencia / saldo a favor + nota).
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { formatARS, formatDate } from '@/lib/format'
 import { Loading, UAvatar, VerifyBadge } from '@/components/app/ui-bits'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Undo2, CircleCheck, Ban, PackageCheck, Banknote, RefreshCw, X, SlidersHorizontal, CreditCard } from 'lucide-react'
-import { RETURN_STATUS_META, CONDITION_LABEL, type LeftoverReturnRow, type LeftoverItemRow } from '../sobrantes-section'
+import { Link } from '@/lib/router'
+import { Undo2, CircleCheck, Ban, PackageCheck, Banknote, RefreshCw, X, SlidersHorizontal, CreditCard, HandCoins, ArrowRight } from 'lucide-react'
+import { RETURN_STATUS_META, CONDITION_LABEL, OUTSIDE_METHOD_LABEL, isMpRefund, type LeftoverReturnRow, type LeftoverItemRow } from '../sobrantes-section'
 
 async function readJson(res: Response): Promise<Record<string, any>> {
   try { return await res.json() } catch { return {} }
@@ -16,22 +20,31 @@ async function readJson(res: Response): Promise<Record<string, any>> {
 
 type EditRow = { id: string; include: boolean; qty: string; amount: string; amountTouched: boolean }
 
-const PROVIDER_LABEL: Record<string, string> = {
+const SELLER_LABEL: Record<string, string> = {
   solicitada: 'Nueva: respondé',
-  aceptada: 'Aceptada: esperando que la acerquen',
-  aceptada_parcial: 'Aceptada en parte: esperando que la acerquen',
-  recibida: 'Recibida: reembolsá en efectivo',
+  aceptada: 'Aceptada: esperando los sobrantes',
+  aceptada_parcial: 'Aceptada en parte: esperando los sobrantes',
+  recibida: 'Recibida: reembolsá',
   reembolsada: 'Reembolsada',
   reembolso_fallido: 'Falló el reembolso',
   rechazada: 'Rechazada',
-  cancelada: 'Cancelada por el cliente',
+  cancelada: 'Cancelada por quien la pidió',
 }
 
-export default function DevolucionesTab({ returns, mpConnected, onChanged }: {
+const OUTSIDE_METHODS = [
+  { value: 'efectivo', label: 'Efectivo' },
+  { value: 'transferencia', label: 'Transferencia' },
+  { value: 'saldo_a_favor', label: 'Saldo a favor en el local' },
+] as const
+
+export default function DevolucionesTab({ returns, mpConnected, onChanged, viewer = 'proveedor' }: {
   returns: LeftoverReturnRow[] | null
   mpConnected: boolean
   onChanged: () => void
+  /** quién mira: el proveedor (Cobros) o el profesional (devoluciones de sus clientes) */
+  viewer?: 'proveedor' | 'profesional'
 }) {
+  const isPro = viewer === 'profesional'
   const [busy, setBusy] = useState(false)
   const [zoom, setZoom] = useState<string | null>(null)
   const [acceptTarget, setAcceptTarget] = useState<LeftoverReturnRow | null>(null)
@@ -40,6 +53,9 @@ export default function DevolucionesTab({ returns, mpConnected, onChanged }: {
   const [rejectNote, setRejectNote] = useState('')
   const [receiveTarget, setReceiveTarget] = useState<LeftoverReturnRow | null>(null)
   const [receiveQty, setReceiveQty] = useState<Record<string, string>>({})
+  const [outsideTarget, setOutsideTarget] = useState<LeftoverReturnRow | null>(null)
+  const [outsideMethod, setOutsideMethod] = useState<string>('')
+  const [outsideNote, setOutsideNote] = useState('')
 
   async function act(r: LeftoverReturnRow, body: Record<string, unknown>): Promise<Record<string, any> | null> {
     setBusy(true)
@@ -57,7 +73,7 @@ export default function DevolucionesTab({ returns, mpConnected, onChanged }: {
   async function acceptAll(r: LeftoverReturnRow) {
     const d = await act(r, { action: 'aceptar' })
     if (!d) return
-    toast.success('Devolución aceptada', { description: `Reembolso acordado: ${formatARS(d.refundTotal)}. Marcala como recibida cuando te acerquen los sobrantes.` })
+    toast.success('Devolución aceptada', { description: `Reembolso acordado: ${formatARS(d.refundTotal)}. Marcala como recibida cuando te ${isPro ? 'entreguen' : 'acerquen'} los sobrantes.` })
     onChanged()
   }
 
@@ -93,7 +109,7 @@ export default function DevolucionesTab({ returns, mpConnected, onChanged }: {
 
   async function submitReject() {
     if (!rejectTarget) return
-    if (!rejectNote.trim()) { toast.error('Contale al cliente por qué no la aceptás'); return }
+    if (!rejectNote.trim()) { toast.error('Contale por qué no la aceptás'); return }
     const d = await act(rejectTarget, { action: 'rechazar', note: rejectNote.trim() })
     if (!d) return
     toast.info('Devolución rechazada')
@@ -111,9 +127,11 @@ export default function DevolucionesTab({ returns, mpConnected, onChanged }: {
     const items = Object.entries(receiveQty).map(([id, q]) => ({ id, qtyReceived: parseFloat(q) || 0 }))
     const d = await act(receiveTarget, { action: 'recibir', items })
     if (!d) return
-    if (d.status === 'reembolsada') toast.success('Recibido y reembolsado por Mercado Pago', { description: `${formatARS(d.refundTotal)} vuelven al medio de pago del cliente. El stock ya volvió a tu inventario.` })
+    const stockNote = isPro ? '' : ' El stock ya volvió a tu inventario.'
+    if (d.status === 'reembolsada') toast.success('Recibido y reembolsado por Mercado Pago', { description: `${formatARS(d.refundTotal)} vuelven al medio de pago del cliente.${stockNote}` })
     else if (d.status === 'reembolso_fallido') toast.error('Recibido, pero falló el reembolso por Mercado Pago', { description: d.error || 'Reintentalo desde la tarjeta.' })
-    else toast.success('Sobrantes recibidos', { description: `Devolvé ${formatARS(d.refundTotal)} en efectivo en el mostrador y marcalo acá. El stock ya volvió a tu inventario.` })
+    else if (receiveTarget.tipo === 'profesional_a_proveedor') toast.success('Materiales recibidos', { description: `Devolvele ${formatARS(d.refundTotal)} al profesional y marcá cómo lo hiciste.${stockNote}` })
+    else toast.success('Sobrantes recibidos', { description: `Devolvé ${formatARS(d.refundTotal)} en efectivo y marcalo acá.${stockNote}` })
     setReceiveTarget(null)
     onChanged()
   }
@@ -122,6 +140,20 @@ export default function DevolucionesTab({ returns, mpConnected, onChanged }: {
     const d = await act(r, { action: 'reembolsar_efectivo' })
     if (!d) return
     toast.success('Reembolso en efectivo registrado')
+    onChanged()
+  }
+
+  function openOutside(r: LeftoverReturnRow) {
+    setOutsideTarget(r); setOutsideMethod(''); setOutsideNote('')
+  }
+
+  async function submitOutside() {
+    if (!outsideTarget) return
+    if (!outsideMethod) { toast.error('Elegí cómo le devolviste la plata'); return }
+    const d = await act(outsideTarget, { action: 'reembolsar_fuera', metodo: outsideMethod, nota: outsideNote.trim() || undefined })
+    if (!d) return
+    toast.success('Reembolso registrado', { description: 'Le avisamos al profesional para que confirme que lo recibió.' })
+    setOutsideTarget(null)
     onChanged()
   }
 
@@ -139,8 +171,9 @@ export default function DevolucionesTab({ returns, mpConnected, onChanged }: {
         <span className="homy-empty-icon homy-chip-mint" aria-hidden><Undo2 className="size-6" /></span>
         <h3 className="font-extrabold tracking-tight text-[#0A2540]">Sin pedidos de devolución</h3>
         <p className="mt-1.5 max-w-md text-sm leading-relaxed text-slate-500">
-          Cuando un cliente o profesional quiera devolverte materiales que le sobraron (hasta 30 días después del pago), lo ves acá con fotos,
-          cantidades y estado. Vos decidís qué aceptar y cuánto reembolsar.
+          {isPro
+            ? 'Cuando un cliente quiera devolverte materiales que le cobraste en tu factura (hasta 30 días después del pago), lo ves acá con fotos, cantidades y estado. Vos decidís qué aceptar y cuánto reembolsar.'
+            : 'Cuando un cliente o un profesional quiera devolverte materiales que le sobraron, lo ves acá con fotos, cantidades y estado. Vos decidís qué aceptar y cuánto reembolsar.'}
         </p>
       </div>
     )
@@ -151,14 +184,18 @@ export default function DevolucionesTab({ returns, mpConnected, onChanged }: {
   return (
     <>
       <p className="homy-page-sub -mt-2 mb-4">
-        Así funciona: aceptás (todo o en parte) y fijás el reembolso → el cliente te acerca los sobrantes → marcás recibido y el stock vuelve a tu
-        inventario → si pagó con Mercado Pago el reembolso sale solo; si pagó en efectivo, se lo devolvés en el mostrador y lo marcás acá.
+        {isPro
+          ? 'Así funciona: aceptás (todo o en parte) y fijás el reembolso → tu cliente te entrega los sobrantes → marcás recibido → si te pagó la factura con Mercado Pago, el reembolso sale solo de tu cuenta; si te pagó en efectivo, se lo devolvés en mano y lo marcás acá. Después, si querés, se los devolvés a tu proveedor desde el proyecto.'
+          : 'Así funciona: aceptás (todo o en parte) y fijás el reembolso → te acercan los sobrantes → marcás recibido y el stock vuelve a tu inventario → si te pagaron con Mercado Pago el reembolso sale solo; si fue en efectivo, lo devolvés en el mostrador y lo marcás acá. Si te lo pide un profesional (te pagó por fuera de HomIA), marcás cómo le devolviste la plata.'}
       </p>
       <div className="space-y-3">
         {returns.map((r) => {
           const meta = RETURN_STATUS_META[r.status] || RETURN_STATUS_META.solicitada
           const Icon = meta.icon
           const estimated = r.items.reduce((a, i) => a + i.unitPricePaid * i.qtyRequested, 0)
+          const fromPro = r.tipo === 'profesional_a_proveedor'
+          const paidText = fromPro ? 'te pagó por fuera de HomIA'
+            : r.paymentMethod === 'mercadopago' ? 'pagó con Mercado Pago' : r.paymentMethod === 'efectivo' ? 'pagó en efectivo' : '—'
           return (
             <article key={r.id} className="homy-row p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -169,14 +206,14 @@ export default function DevolucionesTab({ returns, mpConnected, onChanged }: {
                       {r.requester.displayName} <VerifyBadge status={r.requester.verificationStatus || 'none'} />
                     </p>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      {r.origin?.label || 'Devolución'} · pedido el {formatDate(r.requestedAt)} · pagó {r.paymentMethod === 'mercadopago' ? 'con Mercado Pago' : r.paymentMethod === 'efectivo' ? 'en efectivo' : '—'}
+                      {fromPro ? <>Profesional · proyecto {r.origin?.label || '—'}</> : (r.origin?.label || 'Devolución')} · pedido el {formatDate(r.requestedAt)} · {paidText}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="homy-num-adapt text-lg font-extrabold text-[#0A2540] tabular-nums">{formatARS(r.status === 'solicitada' ? estimated : r.refundTotal)}</p>
                   <span className={`mt-1 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-extrabold ring-1 ${meta.tone}`}>
-                    <Icon className="size-3.5" aria-hidden /> {PROVIDER_LABEL[r.status] || meta.label}
+                    <Icon className="size-3.5" aria-hidden /> {SELLER_LABEL[r.status] || meta.label}
                   </span>
                 </div>
               </div>
@@ -190,7 +227,7 @@ export default function DevolucionesTab({ returns, mpConnected, onChanged }: {
                     <div className="min-w-0 flex-1 text-[12.5px] text-slate-600">
                       <p className="font-extrabold text-[#0A2540]">{it.element.name}</p>
                       <p>
-                        Pide devolver {it.qtyRequested} {it.element.unit} · {CONDITION_LABEL[it.condition] || it.condition} · pagó {formatARS(it.unitPricePaid)} c/u
+                        Pide devolver {it.qtyRequested} {it.element.unit} · {CONDITION_LABEL[it.condition] || it.condition} · {fromPro ? 'le vendiste a' : 'pagó'} {formatARS(it.unitPricePaid)} c/u
                       </p>
                       {it.qtyAccepted != null && it.status === 'aceptado' && (
                         <p>Aceptaste {it.qtyAccepted} {it.element.unit}{it.qtyReceived != null ? ` · recibiste ${it.qtyReceived}` : ''} · reembolso {formatARS(it.refundAmount ?? 0)}</p>
@@ -205,20 +242,25 @@ export default function DevolucionesTab({ returns, mpConnected, onChanged }: {
               {/* estado del reembolso */}
               {r.status === 'reembolsada' && (
                 <p className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-[#0e9f6e]/10 px-3 py-1.5 text-[12px] font-bold text-[#0e9f6e]">
-                  {r.paymentMethod === 'mercadopago' ? <CreditCard className="size-3.5" aria-hidden /> : <Banknote className="size-3.5" aria-hidden />}
-                  {r.paymentMethod === 'mercadopago' ? `Reembolsado por Mercado Pago el ${formatDate(r.refundedAt)}` : `Reembolsado en efectivo el ${formatDate(r.refundedAt)}`}
+                  {isMpRefund(r) ? <CreditCard className="size-3.5" aria-hidden /> : fromPro ? <HandCoins className="size-3.5" aria-hidden /> : <Banknote className="size-3.5" aria-hidden />}
+                  {isMpRefund(r)
+                    ? `Reembolsado por Mercado Pago el ${formatDate(r.refundedAt)}`
+                    : fromPro
+                      ? `Devuelto ${OUTSIDE_METHOD_LABEL[r.refundMethod || ''] || 'por fuera de HomIA'} el ${formatDate(r.refundedAt)}`
+                      : `Reembolsado en efectivo el ${formatDate(r.refundedAt)}`}
                 </p>
               )}
-              {r.status === 'reembolsada' && r.paymentMethod !== 'mercadopago' && (
+              {r.status === 'reembolsada' && fromPro && r.refundMethodNote && <p className="mt-1 text-[12px] text-slate-500">Nota: {r.refundMethodNote}</p>}
+              {r.status === 'reembolsada' && !isMpRefund(r) && (
                 <p className="mt-1 text-[12px] font-semibold text-slate-500">
                   {r.refundConfirmedAt
-                    ? (r.refundConfirmedBy === 'automatico' ? 'Reembolso confirmado automáticamente (pasaron 72 h).' : 'El cliente confirmó que recibió el reembolso.')
-                    : 'Esperando que el cliente confirme que recibió el efectivo (se confirma solo a las 72 h).'}
+                    ? (r.refundConfirmedBy === 'automatico' ? 'Reembolso confirmado automáticamente (pasaron 72 h).' : `${fromPro ? 'El profesional' : 'El cliente'} confirmó que recibió el reembolso.`)
+                    : `Esperando que ${fromPro ? 'el profesional' : 'el cliente'} confirme que recibió la plata (se confirma solo a las 72 h).`}
                 </p>
               )}
               {r.status === 'reembolso_fallido' && (
                 <p className="mt-2.5 rounded-xl bg-red-500/8 px-3 py-2 text-[12px] text-red-700">
-                  Falló el reembolso por Mercado Pago{r.providerNote ? `: ${r.providerNote}` : ''}.{!mpConnected ? ' Revisá que tu cuenta de Mercado Pago siga conectada.' : ''}
+                  Falló el reembolso por Mercado Pago{r.providerNote ? `: ${r.providerNote}` : ''}.{!mpConnected ? ` Revisá que tu cuenta de Mercado Pago siga conectada (${isPro ? 'Mi perfil' : 'Cobros'}).` : ''}
                 </p>
               )}
               {r.status === 'rechazada' && r.providerNote && <p className="mt-2 text-[12px] text-slate-500">Motivo: {r.providerNote}</p>}
@@ -226,32 +268,50 @@ export default function DevolucionesTab({ returns, mpConnected, onChanged }: {
               <div className="mt-3 flex flex-wrap gap-2">
                 {r.status === 'solicitada' && (
                   <>
-                    <button disabled={busy} onClick={() => void acceptAll(r)} className="homy-btn-primary px-4 py-2 text-sm disabled:opacity-50">
+                    <button disabled={busy} onClick={() => void acceptAll(r)} className="homy-btn-primary min-h-[44px] px-4 py-2 text-sm disabled:opacity-50">
                       <CircleCheck className="mr-1 inline size-4" aria-hidden /> Aceptar todo
                     </button>
-                    <button disabled={busy} onClick={() => openAcceptSome(r)} className="homy-glass-soft rounded-full px-4 py-2 text-sm font-bold text-[#1D63B8] disabled:opacity-50">
+                    <button disabled={busy} onClick={() => openAcceptSome(r)} className="homy-glass-soft min-h-[44px] rounded-full px-4 py-2 text-sm font-bold text-[#1D63B8] disabled:opacity-50">
                       <SlidersHorizontal className="mr-1 inline size-4" aria-hidden /> Aceptar algunos
                     </button>
-                    <button disabled={busy} onClick={() => { setRejectTarget(r); setRejectNote('') }} className="homy-glass-soft rounded-full px-4 py-2 text-sm font-bold text-slate-500 hover:text-red-600 transition disabled:opacity-50">
+                    <button disabled={busy} onClick={() => { setRejectTarget(r); setRejectNote('') }} className="homy-glass-soft min-h-[44px] rounded-full px-4 py-2 text-sm font-bold text-slate-500 hover:text-red-600 transition disabled:opacity-50">
                       <Ban className="mr-1 inline size-4" aria-hidden /> Rechazar
                     </button>
                   </>
                 )}
                 {(r.status === 'aceptada' || r.status === 'aceptada_parcial') && (
-                  <button disabled={busy} onClick={() => openReceive(r)} className="homy-btn-primary px-4 py-2 text-sm disabled:opacity-50">
+                  <button disabled={busy} onClick={() => openReceive(r)} className="homy-btn-primary min-h-[44px] px-4 py-2 text-sm disabled:opacity-50">
                     <PackageCheck className="mr-1 inline size-4" aria-hidden /> Marcar recibido
                   </button>
                 )}
-                {r.status === 'recibida' && (
+                {r.status === 'recibida' && fromPro && (
                   <>
-                    <p className="w-full text-[12.5px] text-slate-600">Reembolsá <b>{formatARS(r.refundTotal)}</b> en efectivo en el mostrador y marcá acá.</p>
-                    <button disabled={busy} onClick={() => void cashRefund(r)} className="homy-btn-primary px-4 py-2 text-sm disabled:opacity-50">
+                    <p className="w-full text-[12.5px] text-slate-600">Devolvele <b>{formatARS(r.refundTotal)}</b> al profesional por fuera de HomIA y marcá cómo lo hiciste.</p>
+                    <button disabled={busy} onClick={() => openOutside(r)} className="homy-btn-primary min-h-[44px] px-4 py-2 text-sm disabled:opacity-50">
+                      <HandCoins className="mr-1 inline size-4" aria-hidden /> Marcá cómo le devolviste la plata
+                    </button>
+                  </>
+                )}
+                {r.status === 'recibida' && !fromPro && (
+                  <>
+                    <p className="w-full text-[12.5px] text-slate-600">Reembolsá <b>{formatARS(r.refundTotal)}</b> en efectivo{isPro ? '' : ' en el mostrador'} y marcá acá.</p>
+                    <button disabled={busy} onClick={() => void cashRefund(r)} className="homy-btn-primary min-h-[44px] px-4 py-2 text-sm disabled:opacity-50">
                       <Banknote className="mr-1 inline size-4" aria-hidden /> Ya lo reembolsé en efectivo
                     </button>
                   </>
                 )}
+                {isPro && r.origin?.kind === 'proyecto' && (
+                  <Link to={r.origin.href} className="homy-glass-soft inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-4 text-sm font-bold text-slate-600">
+                    Ver proyecto
+                  </Link>
+                )}
+                {isPro && r.projectId && ['recibida', 'reembolsada', 'reembolso_fallido'].includes(r.status) && (
+                  <Link to={`/panel/profesional/proyectos/${r.projectId}?devolver=1`} className="homy-glass-soft inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-4 text-sm font-bold text-[#1D63B8]">
+                    <ArrowRight className="size-4" aria-hidden /> Devolvérselos a mi proveedor
+                  </Link>
+                )}
                 {r.status === 'reembolso_fallido' && (
-                  <button disabled={busy} onClick={() => void retry(r)} className="homy-btn-primary px-4 py-2 text-sm disabled:opacity-50">
+                  <button disabled={busy} onClick={() => void retry(r)} className="homy-btn-primary min-h-[44px] px-4 py-2 text-sm disabled:opacity-50">
                     <RefreshCw className="mr-1 inline size-4" aria-hidden /> Reintentar reembolso
                   </button>
                 )}
@@ -267,7 +327,7 @@ export default function DevolucionesTab({ returns, mpConnected, onChanged }: {
           <DialogHeader>
             <DialogTitle>Aceptar algunos ítems</DialogTitle>
             <DialogDescription>
-              Ajustá la cantidad y el monto a reembolsar por ítem. Si aplicás un descuento por manipulación, el cliente lo ve. Lo que destildes queda rechazado.
+              Ajustá la cantidad y el monto a reembolsar por ítem. Si aplicás un descuento por manipulación, quien te lo pidió lo ve. Lo que destildes queda rechazado.
             </DialogDescription>
           </DialogHeader>
           {acceptTarget && (
@@ -318,7 +378,7 @@ export default function DevolucionesTab({ returns, mpConnected, onChanged }: {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Rechazar devolución</DialogTitle>
-            <DialogDescription>Contale al cliente por qué: le llega en la notificación.</DialogDescription>
+            <DialogDescription>Contale por qué: le llega en la notificación.</DialogDescription>
           </DialogHeader>
           <textarea value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} rows={3} maxLength={400} autoFocus
             placeholder="Ej: el material está cortado a medida y no se puede revender"
@@ -339,8 +399,10 @@ export default function DevolucionesTab({ returns, mpConnected, onChanged }: {
           <DialogHeader>
             <DialogTitle>Marcar sobrantes recibidos</DialogTitle>
             <DialogDescription>
-              Confirmá cuánto recibiste de cada ítem. Vuelve a tu stock y el reembolso se ajusta a lo recibido.
-              {receiveTarget?.paymentMethod === 'mercadopago' ? ' Como pagó con Mercado Pago, el reembolso sale automáticamente.' : ' Como pagó en efectivo, después lo reembolsás en el mostrador.'}
+              Confirmá cuánto recibiste de cada ítem. {isPro ? 'El reembolso se ajusta a lo recibido.' : 'Vuelve a tu stock y el reembolso se ajusta a lo recibido.'}
+              {receiveTarget?.tipo === 'profesional_a_proveedor'
+                ? ' Como te pagó por fuera de HomIA, después le devolvés la plata por fuera y marcás cómo.'
+                : receiveTarget?.paymentMethod === 'mercadopago' ? ' Como pagó con Mercado Pago, el reembolso sale automáticamente.' : ' Como pagó en efectivo, después lo reembolsás en efectivo.'}
             </DialogDescription>
           </DialogHeader>
           {receiveTarget && (
@@ -360,6 +422,39 @@ export default function DevolucionesTab({ returns, mpConnected, onChanged }: {
             <button type="button" disabled={busy} onClick={() => setReceiveTarget(null)} className="homy-glass-soft min-h-[44px] rounded-full px-4 text-sm font-bold text-slate-500">Volver</button>
             <button type="button" disabled={busy} onClick={() => void submitReceive()} className="homy-btn-primary min-h-[44px] px-5 text-sm disabled:opacity-50">
               <PackageCheck className="size-4" aria-hidden /> {busy ? 'Procesando…' : 'Confirmar recepción'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog: reembolso por fuera de HomIA (pedido de un profesional) ── */}
+      <Dialog open={!!outsideTarget} onOpenChange={(o) => { if (!o && !busy) setOutsideTarget(null) }}>
+        <DialogContent className="max-h-[92dvh] max-w-md overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Marcá cómo le devolviste la plata</DialogTitle>
+            <DialogDescription>
+              {outsideTarget ? `${outsideTarget.requester.displayName} te pagó por fuera de HomIA, así que el reembolso de ${formatARS(outsideTarget.refundTotal)} también va por fuera. Le avisamos para que confirme que lo recibió.` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div role="radiogroup" aria-label="Cómo devolviste la plata" className="grid gap-2">
+            {OUTSIDE_METHODS.map((m) => (
+              <button
+                key={m.value} type="button" role="radio" aria-checked={outsideMethod === m.value}
+                onClick={() => setOutsideMethod(m.value)}
+                className={`min-h-[44px] rounded-2xl px-4 text-left text-sm font-bold ring-1 transition ${outsideMethod === m.value ? 'bg-[#1D63B8]/10 text-[#1D63B8] ring-[#1D63B8]/50' : 'bg-white/50 text-[#0A2540] ring-[#0A2540]/10 hover:ring-[#1D63B8]/30'}`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <textarea value={outsideNote} onChange={(e) => setOutsideNote(e.target.value)} rows={2} maxLength={300}
+            placeholder="Nota (opcional): ej. transferí al alias, número de operación, saldo a favor en la cuenta…"
+            aria-label="Nota del reembolso"
+            className="homy-glass-input w-full rounded-2xl px-4 py-3 text-sm" />
+          <DialogFooter>
+            <button type="button" disabled={busy} onClick={() => setOutsideTarget(null)} className="homy-glass-soft min-h-[44px] rounded-full px-4 text-sm font-bold text-slate-500">Volver</button>
+            <button type="button" disabled={busy || !outsideMethod} onClick={() => void submitOutside()} className="homy-btn-primary min-h-[44px] px-5 text-sm disabled:opacity-50">
+              <HandCoins className="size-4" aria-hidden /> {busy ? 'Guardando…' : 'Registrar reembolso'}
             </button>
           </DialogFooter>
         </DialogContent>

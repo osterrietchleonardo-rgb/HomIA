@@ -102,7 +102,7 @@ src/
     fees.ts orders.ts cart*.ts seller-pay.ts activity.ts units.ts   carrito, pedidos y cobros
     search-match.ts geo.ts   búsqueda difusa y distancias
 prisma/schema.prisma         modelo de datos (34 modelos)
-supabase/migrations/         SQL aplicado a la base (0001–0023 y 0030)
+supabase/migrations/         SQL aplicado a la base (0001–0024 y 0030)
 scripts/                     catálogo, demo, pruebas, limpieza (ver scripts/README.md)
 vercel.json                  crons
 ```
@@ -157,7 +157,7 @@ lista los 34 originales.
 | | `ProviderCharge` (`:385`) | `number` único `PRV-<año>-<n>`, `materialIds` (JSON), `amount`, `status` (pendiente/acordada_efectivo/pagada/anulada), `method` | N–1 proyecto (opcional), proveedor, cliente |
 | | `ProviderLink` (`:408`) | `accountLabel`, `active` | proveedor ↔ profesional |
 | Compras | `Purchase` (`:464`) | `elementName`, `quantity`, `unitPrice`, `total`, `type` compra/reserva, `status` (pendiente_aprobacion/aprobado/entregado/pagado/rechazado/cancelado), `chargeId`, `reservationExpiresAt` | N–1 cliente, proveedor |
-| Sobrantes | `LeftoverReturn` (`:638`) | `status` (solicitada/aceptada/aceptada_parcial/rechazada/cancelada/recibida/reembolsada/reembolso_fallido), `paymentMethod`, `mpPaymentId`, `mpRefundId`, `refundTotal` | 1–N `LeftoverItem` |
+| Sobrantes | `LeftoverReturn` | `tipo` (cliente/profesional_a_proveedor), `sellerKind` (proveedor/profesional), `providerId?`, `professionalId?`, `parentReturnId?`, `status` (solicitada/aceptada/aceptada_parcial/rechazada/cancelada/recibida/reembolsada/reembolso_fallido), `paymentMethod`, `mpPaymentId`, `mpRefundId`, `refundTotal`, `refundChannel`, `refundMethod`, `refundMethodNote` | 1–N `LeftoverItem`; N–1 proveedor u profesional (vendedor); autorrelación padre → hijas |
 | | `LeftoverItem` (`:666`) | `qtyRequested/Accepted/Received`, `unitPricePaid`, `refundAmount`, `condition` (sin_abrir/abierto_sin_usar), `photoUrl` obligatoria | N–1 devolución, elemento |
 | Reputación | `Review` (`:441`) | `rating` Int 1–5, `comment`, `photos` (JSON), `context` (proyecto/obra/perfil/compra), `projectId?`, `purchaseId?` | autor, destinatario |
 | | `CompletedWork` (`:423`) | obra publicada (`photos`, `visible` = baja lógica) | N–1 autor |
@@ -185,6 +185,32 @@ Migraciones `0022_carrito_pedidos.sql`, `0023_sobrantes_confirmacion.sql` y
 | `Payment.collector` | `vendedor` \| `plataforma` (quién cobró el pago de MP) |
 | `LeftoverItem.purchaseItemId` | Ítem de compra devuelto (compras multi-ítem) |
 | `LeftoverReturn.refundConfirmedAt/By`, `reminderSentAt` | Confirmación del reembolso en efectivo (`solicitante` \| `automatico`) y recordatorio único al proveedor (migración `0023`) |
+
+### 4.2 Sobrantes con el profesional como vendedor (D14, migración `0024`)
+
+`supabase/migrations/0024_sobrantes_profesional.sql`, **solo aditiva**, aplicada el 24/09/2026 con
+`prisma db execute --url $DIRECT_URL` (diff posterior vacío):
+
+| Columna / objeto | Qué guarda |
+|---|---|
+| `LeftoverReturn.tipo` `TEXT NOT NULL DEFAULT 'cliente'` | Pata: `cliente` (el comprador devuelve a quien le vendió) \| `profesional_a_proveedor` |
+| `LeftoverReturn.sellerKind` `TEXT NOT NULL DEFAULT 'proveedor'` | Vendedor que acepta, recibe y reembolsa: `proveedor` \| `profesional` |
+| `LeftoverReturn.providerId` → **`DROP NOT NULL`** | Sin proveedor cuando el vendedor es el profesional (FK sin cambios: `ON DELETE RESTRICT`) |
+| `LeftoverReturn.professionalId` + FK `ProfessionalProfile` (`RESTRICT`) + índice `(professionalId, status)` | Profesional vendedor (materiales cobrados en su factura) |
+| `LeftoverReturn.parentReturnId` + FK a sí misma (`ON DELETE SET NULL`) + índice | Devolución del cliente que originó la del profesional al proveedor |
+| `refundChannel`, `refundMethod`, `refundMethodNote` | Cómo se reembolsó: `mercadopago` \| `efectivo` \| `fuera_de_homia`; en la última, `efectivo` \| `transferencia` \| `saldo_a_favor` y la nota del proveedor |
+
+Las filas existentes quedaron `tipo = cliente`, `sellerKind = proveedor` (sin migrar datos).
+Código: `src/lib/leftovers.ts` (`sellerKindOf`, `proLegStatus`, `alreadyReturnedQty(…, tipo)`,
+`OUTSIDE_REFUND_METHODS`), `returns/route.ts` (GET por rol `solicitante|proveedor|profesional` y
+`tipo`; POST con `tipo` y `parentReturnId`), `returns/eligible/route.ts` (`tipo=profesional_a_proveedor`
++ `prefill`), `returns/[id]/route.ts` (actor = vendedor según `sellerKind`; acción nueva
+`reembolsar_fuera`; restock solo si el vendedor es proveedor; `logActivity` en cada acción),
+`src/lib/leftovers-cron.ts` (ambas patas: confirma a las 72 h todo reembolso que no fue por MP y
+recuerda al vendedor que corresponda). UI: `profesional/devoluciones.tsx` (ruta nueva
+`/panel/profesional/devoluciones`, en app-root y en el menú "Más"), `profesional/sobrantes-pro.tsx`
+(sección del proyecto), `sobrantes-section.tsx` (`ReturnRequestDialog`, `RequesterReturnList`
+reutilizables), `proveedor/devoluciones-tab.tsx` (parámetro `viewer`).
 | `HomySession.puerta/visitorHash`, `HomyMessage.runId/payload` | Sesiones de Homy de visitantes (hash del token del navegador) y tarjetas mostradas |
 | `AiUsage` | Cupo diario de Homy: único `(key, day)` |
 | `HomyRun` | Registro de cada corrida de Homy: pasos, modelo, tokens, costo estimado, latencia, resultado |
@@ -224,7 +250,8 @@ Archivos nuevos de código: `src/lib/{fees,units,activity,orders,order-view,cart
   maestro), `0018` (compras + planes), `0019` (lanzamiento: sobrantes, pagos de cobros/compras,
   presupuesto del proyecto, `invoicedAt`), `0020` (PKCE OAuth), `0021` (marca PRO), `0022` (carrito,
   pedidos, cargo de servicio, línea de tiempo), `0023` (confirmación de reembolso en efectivo y
-  recordatorio) y `0030` (súper agente Homy: cupo y registro). La numeración salta de 0023 a 0030
+  recordatorio), `0024` (sobrantes con el profesional como vendedor y pata profesional →
+  proveedor, §4.2) y `0030` (súper agente Homy: cupo y registro). La numeración salta de 0023 a 0030
   porque los dos equipos reservaron rangos distintos.
 - RLS: el commit `2d3b10c` activó RLS en las tablas; script en `scripts/base/enable-rls.mjs`. La app
   accede con el usuario de Prisma (no por la API REST de Supabase), así que RLS protege solo el
@@ -324,7 +351,7 @@ diario (§6.4).
 **Reembolsos (sobrantes):** `refundPayment()` (`mercadopago.ts:217`) llama `POST /v1/payments/{id}/refunds`
 con `X-Idempotency-Key: return-<returnId>` y **el mismo token que cobró**: si `Payment.collector =
 vendedor` (o compra histórica sin collector), el del vendedor — proveedor en compras y cobros,
-**profesional en facturas** —; si no, el de la plataforma (`returns/[id]/route.ts`, `doRefund`). **El
+**profesional en facturas** (D14: ahí el profesional es además el vendedor de la devolución) —; si no, el de la plataforma (`returns/[id]/route.ts`, `doRefund`). La pata profesional → proveedor **nunca** llama a Mercado Pago (reembolso por fuera, `reembolsar_fuera`). **El
 cargo de servicio del 1% no se reembolsa**: el tope es lo pagado menos el cargo menos lo ya
 reembolsado (`refundableOf`, `src/lib/leftovers.ts`).
 
@@ -429,7 +456,7 @@ de OpenAI), p50 9,3 s.
 
 ### 6.4 Vercel
 
-- **Crons** (`vercel.json`): `/api/cron/reservations` cada hora (`0 * * * *`; además corre las tareas de sobrantes de `src/lib/leftovers-cron.ts`: confirmación automática del reembolso en efectivo a las 72 h y recordatorio único al proveedor a las 72 h) y
+- **Crons** (`vercel.json`): `/api/cron/reservations` cada hora (`0 * * * *`; además corre las tareas de sobrantes de `src/lib/leftovers-cron.ts`: confirmación automática a las 72 h del reembolso en efectivo o por fuera de HomIA y recordatorio único al vendedor —proveedor o profesional— a las 72 h) y
   `/api/cron/subscriptions` todos los días a las 09:30 UTC (`30 9 * * *`). Ambos exigen
   `Authorization: Bearer <CRON_SECRET>`; sin secreto configurado responden 401 siempre
   (`cron/reservations/route.ts:7-11`, `cron/subscriptions/route.ts:68-72`).
@@ -483,7 +510,7 @@ Nombres exactos que lee el código (`grep process.env` en `src/`) y su documenta
   nunca del body. Cada recurso chequea que el usuario sea parte: proyecto (`projects/[id]/route.ts:51-53`),
   material del proyecto (`materials/route.ts:186`: el material tiene que pertenecer a ESE proyecto),
   factura (`invoices/[id]/route.ts:25-28`), cobro (`charges/[id]/route.ts:25-27`), compra
-  (`purchases/[id]/route.ts:48-50`), devolución (`returns/[id]/route.ts:43-45`), conversación
+  (`purchases/[id]/route.ts:48-50`), devolución (`returns/[id]/route.ts`: solo solicitante y vendedor según `sellerKind`), conversación
   (`messages/conversations/[id]/route.ts:8-13`), trato del CRM (el pipeline sale de la etapa
   validada, nunca del body — `crm/deals/route.ts:46-48`), OAuth (`state` del perfil propio).
 - **Validación de cuerpos:** `parseBody()` con zod (`src/lib/api.ts:16`) en la mayoría de las rutas

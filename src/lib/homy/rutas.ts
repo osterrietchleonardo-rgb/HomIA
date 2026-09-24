@@ -41,6 +41,7 @@ export const SECCIONES: Seccion[] = [
   { ruta: '/panel/profesional/crm', nombre: 'CRM clientes', rol: 'profesional' },
   { ruta: '/panel/profesional/obras', nombre: 'Mis obras', rol: 'profesional' },
   { ruta: '/panel/profesional/vinculaciones', nombre: 'Cuentas de retiro (vinculaciones)', rol: 'profesional' },
+  { ruta: '/panel/profesional/devoluciones', nombre: 'Devoluciones de sobrantes', rol: 'profesional' },
   { ruta: '/panel/profesional/perfil', nombre: 'Mi perfil', rol: 'profesional' },
   ...comunes('profesional'),
   // proveedor
