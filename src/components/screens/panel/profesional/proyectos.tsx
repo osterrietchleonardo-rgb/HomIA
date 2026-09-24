@@ -17,6 +17,7 @@ type Project = {
   invoices: { id: string; number: string; total: number; status: string }[]
   createdAt: string
   client: { id: string; displayName: string; avatarUrl: string | null; verificationStatus?: string }
+  pro?: { id: string; user?: { displayName: string } | null } | null
 }
 
 const FILTERS = [
@@ -27,6 +28,7 @@ const FILTERS = [
 
 export default function ProProjects() {
   const [projects, setProjects] = useState<Project[]>([])
+  const [contratados, setContratados] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>('todos')
@@ -39,6 +41,7 @@ export default function ProProjects() {
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setError(d.error || 'No pudimos cargar tus proyectos'); return }
       setProjects(d.asPro || [])
+      setContratados(d.contratados || [])
     } catch {
       setError('No pudimos conectar con HomIA. Revisá tu conexión y probá de nuevo.')
       toast.error('No pudimos cargar tus proyectos')
@@ -159,6 +162,32 @@ export default function ProProjects() {
               )
             })}
           </div>
+        )}
+
+        {/* Profesionales que ESTE profesional contrató (subcontrataciones): él es el cliente */}
+        {!error && contratados.length > 0 && (
+          <section className="mt-8" aria-labelledby="pro-contratados-titulo">
+            <h2 id="pro-contratados-titulo" className="text-base font-extrabold tracking-tight text-[#0A2540]">Profesionales que contrataste</h2>
+            <p className="mt-1 text-sm text-slate-500">Trabajos que le encargaste a otro profesional. Acá los seguís como cliente: cotización, avance, pago y reseña.</p>
+            <div className="mt-3 space-y-2.5">
+              {contratados.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => navigate(`/panel/profesional/proyectos/${p.id}`)}
+                  className="homy-row homy-focus flex min-h-[56px] w-full items-center justify-between gap-3 p-4 text-left"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-bold text-[#0A2540]">{p.title}</span>
+                    <span className="block truncate text-[12.5px] text-slate-500">
+                      {p.pro?.user?.displayName ? `Con ${p.pro.user.displayName}` : 'Profesional contratado'} · {STAGE_LABEL[p.stage] || p.stage}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-sm font-bold text-[#1D63B8]">Ver</span>
+                </button>
+              ))}
+            </div>
+          </section>
         )}
       </div>
     </div>

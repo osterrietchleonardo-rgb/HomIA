@@ -78,6 +78,12 @@ export function parseRoles(json: string | null | undefined): string[] {
   }
 }
 
+type SessionRow = {
+  id: string; email: string; displayName: string; roles: string; avatarUrl: string | null
+  verificationStatus: string; verifiedAt: Date | null; lat: number | null; lng: number | null
+  searchRadiusKm: number; hasProfessional: boolean; hasProvider: boolean
+}
+
 export async function getSessionUser(): Promise<SessionUser | null> {
   try {
     const store = await cookies()
@@ -93,12 +99,20 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     }
     if (!userId) return null
     // Error de DB → se loguea (no es un "no logueado": es infraestructura caída).
-    let user
+    // UNA sola consulta (con el pooler, cada consulta de Prisma son ~4 idas y vueltas
+    // a la base; findUnique + include de 2 relaciones eran 3 consultas por pedido).
+    // Esto corre en CADA pedido autenticado de la app.
+    let user: SessionRow | undefined
     try {
-      user = await db.user.findUnique({
-        where: { id: userId },
-        include: { professional: { select: { id: true } }, provider: { select: { id: true } } },
-      })
+      const rows = await db.$queryRaw<SessionRow[]>`
+        SELECT u.id, u.email, u."displayName", u.roles, u."avatarUrl", u."verificationStatus",
+               u."verifiedAt", u.lat, u.lng, u."searchRadiusKm",
+               EXISTS (SELECT 1 FROM "ProfessionalProfile" p WHERE p."userId" = u.id) AS "hasProfessional",
+               EXISTS (SELECT 1 FROM "ProviderProfile" v WHERE v."userId" = u.id) AS "hasProvider"
+        FROM "User" u
+        WHERE u.id = ${userId}
+        LIMIT 1`
+      user = rows[0]
     } catch (e) {
       console.error('[auth] DB error', e)
       return null
@@ -112,8 +126,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       avatarUrl: user.avatarUrl,
       verificationStatus: user.verificationStatus,
       verifiedAt: user.verifiedAt,
-      hasProfessional: !!user.professional,
-      hasProvider: !!user.provider,
+      hasProfessional: !!user.hasProfessional,
+      hasProvider: !!user.hasProvider,
       lat: user.lat,
       lng: user.lng,
       radiusKm: user.searchRadiusKm,

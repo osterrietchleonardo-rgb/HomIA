@@ -1,6 +1,7 @@
 'use client'
-// Marketplace público de materiales: todas las ofertas con stock real de proveedores
-// operativos, con distancia si el usuario comparte su ubicación. "Agregar al carrito"
+// Marketplace público de materiales: todas las ofertas de proveedores operativos, con
+// distancia si el usuario comparte su ubicación. Con stock: "Agregar al carrito" (compra
+// directa, sin aprobación) o "Reservar"; sin stock: solo "Reservar" (D15). "Agregar al carrito"
 // funciona también sin cuenta (carrito del visitante en este dispositivo): la cuenta
 // se pide recién al confirmar el pedido, y el carrito se conserva al entrar.
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -10,12 +11,12 @@ import { Loading, EmptyState, UAvatar, VerifyBadge } from '@/components/app/ui-b
 import { formatARS } from '@/lib/format'
 import { formatDistance } from '@/lib/geo'
 import { toast } from 'sonner'
-import { Search, MapPin, Package, Navigation, ChevronDown, ChevronUp, ShoppingCart, Loader2 } from 'lucide-react'
+import { Search, MapPin, Package, Navigation, ChevronDown, ChevronUp, ShoppingCart, Loader2, Clock } from 'lucide-react'
 import { addToCart } from '@/lib/cart'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 type Offer = {
-  stockId: string; elementId: string; price: number; quantity: number; brand: string | null
+  stockId: string; elementId: string; price: number; quantity: number; inStock: boolean; brand: string | null
   providerId: string; businessName: string; kind: string
   providerUserId: string; providerAvatar: string | null; providerCity: string | null
   providerRating: number; providerReviews: number; providerVerified: boolean
@@ -103,10 +104,10 @@ export default function MarketplaceScreen({ embedded = false }: { embedded?: boo
   }
 
   const [adding, setAdding] = useState<string | null>(null)
-  async function agregar(o: Offer, r: ElementResult) {
+  async function agregar(o: Offer, r: ElementResult, mode?: 'reserva') {
     setAdding(o.stockId)
     try {
-      await addToCart(o.stockId, 1, r.name)
+      await addToCart(o.stockId, 1, r.name, { mode: mode ?? (o.inStock ? undefined : 'reserva') })
     } finally {
       setAdding(null)
     }
@@ -208,7 +209,7 @@ export default function MarketplaceScreen({ embedded = false }: { embedded?: boo
 
           {loading && !results ? (
             <div className="py-20 text-center"><Loading text="Buscando ofertas…" /></div>
-          ) : !results?.some((r) => r.offersCount > 0) ? (
+          ) : !results?.some((r) => r.offers.length > 0) ? (
             <EmptyState
               icon={<Package className="size-7" />}
               title="Sin ofertas para esta búsqueda"
@@ -216,7 +217,7 @@ export default function MarketplaceScreen({ embedded = false }: { embedded?: boo
             />
           ) : (
             <div className={`grid gap-5 sm:grid-cols-2 lg:grid-cols-3 transition-opacity ${loading ? 'opacity-60' : ''}`}>
-              {results.filter((r) => r.offersCount > 0).map((r) => {
+              {results.filter((r) => r.offers.length > 0).map((r) => {
                 const isOpen = expanded.has(r.elementId)
                 const shown = isOpen ? r.offers : r.offers.slice(0, VISIBLE_OFFERS)
                 const hidden = r.offers.length - VISIBLE_OFFERS
@@ -237,7 +238,7 @@ export default function MarketplaceScreen({ embedded = false }: { embedded?: boo
 
                     <div className="mt-4 flex-1">
                       <p className="text-[13px] font-medium text-slate-600 mb-2">
-                        {r.offersCount} proveedor{r.offersCount === 1 ? '' : 'es'} con stock · por {r.unit}
+                        {r.offersCount > 0 ? <>{r.offersCount} proveedor{r.offersCount === 1 ? '' : 'es'} con stock</> : 'Sin stock ahora: podés reservarlo'} · por {r.unit}
                         {r.minPrice != null && <> · desde <b className="text-navy">{formatARS(r.minPrice)}</b></>}
                       </p>
                       <ul className="space-y-2">
@@ -261,7 +262,7 @@ export default function MarketplaceScreen({ embedded = false }: { embedded?: boo
                                     )}
                                   </p>
                                   <p className="text-[11px] text-slate-500 truncate">
-                                    {o.brand || 'Sin marca'} · stock {o.quantity}
+                                    {o.brand || 'Sin marca'} · {o.inStock ? `stock ${o.quantity}` : 'sin stock'}
                                   </p>
                                 </div>
                               </div>
@@ -272,16 +273,28 @@ export default function MarketplaceScreen({ embedded = false }: { embedded?: boo
                                 <MapPin className="size-3 text-slate-400" aria-hidden />
                                 {o.distanceKm != null ? formatDistance(o.distanceKm) : (o.providerCity || 'Argentina')}
                               </span>
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center justify-end gap-2">
+                                {o.inStock && (
+                                  <button
+                                    onClick={() => void agregar(o, r)}
+                                    disabled={adding === o.stockId}
+                                    className="homy-btn-primary inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-3.5 text-[12px] disabled:opacity-60"
+                                  >
+                                    {adding === o.stockId ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <ShoppingCart className="size-3.5" aria-hidden />} Agregar al carrito
+                                  </button>
+                                )}
                                 <button
-                                  onClick={() => void agregar(o, r)}
+                                  onClick={() => void agregar(o, r, 'reserva')}
                                   disabled={adding === o.stockId}
-                                  className="homy-btn-primary inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-3.5 text-[12px] disabled:opacity-60"
+                                  className={`${o.inStock ? 'homy-glass-soft text-[#1D63B8] hover:bg-white' : 'homy-btn-dark'} inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-3.5 text-[12px] font-bold disabled:opacity-60`}
                                 >
-                                  {adding === o.stockId ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <ShoppingCart className="size-3.5" aria-hidden />} Agregar al carrito
+                                  <Clock className="size-3.5" aria-hidden /> Reservar
                                 </button>
                               </div>
                             </div>
+                            {!o.inStock && (
+                              <p className="text-[11.5px] font-semibold text-[#1D63B8]">Sin stock: podés reservarlo y el proveedor te avisa</p>
+                            )}
                           </li>
                         ))}
                       </ul>

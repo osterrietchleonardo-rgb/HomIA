@@ -7,6 +7,7 @@ import { navigate } from '@/lib/router'
 import { useSession } from '@/lib/store'
 import { Loading, EmptyState, UAvatar, UStars, VerifyBadge, StatusBadge } from '@/components/app/ui-bits'
 import { ProfileGate } from '@/components/app/profile-gate'
+import ReviewsShortcut from '@/components/app/reviews-shortcut'
 import { formatARS, formatDate } from '@/lib/format'
 import { matchTerms } from '@/lib/search-match'
 import { toast } from 'sonner'
@@ -130,7 +131,8 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
     if (!canBuy) { toast('El carrito es para clientes y profesionales'); return }
     setAdding(s.id)
     try {
-      await addToCart(s.id, 1, s.name)
+      // sin stock solo se puede reservar (D15): el proveedor aprueba y avisa cuándo lo tiene
+      await addToCart(s.id, 1, s.name, s.status === 'agotado' ? { mode: 'reserva' } : undefined)
     } finally {
       setAdding(null)
     }
@@ -187,10 +189,9 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
               <p className="text-slate-300 text-sm mt-1.5 flex items-center gap-1.5">
                 <MapPin aria-hidden className="size-3.5 shrink-0" /> {p.city || p.address || '—'}
               </p>
-              <div className="flex items-center gap-2 mt-2.5">
-                <Star className="size-4 shrink-0 fill-[#FFC700] text-[#FFC700]" aria-hidden />
-                <span className="text-sm text-white font-bold tabular-nums">{p.rating > 0 ? p.rating : 'Nuevo en HomIA'}</span>
-                {p.rating > 0 && <span className="text-sm text-slate-300">· {p.reviewsCount} reseñas</span>}
+              {/* atajo a las reseñas (scroll suave + foco en la sección) */}
+              <div className="mt-2">
+                <ReviewsShortcut rating={p.rating} count={p.reviewsCount} targetId="resenas-proveedor" dark className="-ml-1" />
               </div>
             </div>
             <div className="homy-glass-dark rounded-2xl px-5 py-3.5 text-left shrink-0">
@@ -259,6 +260,14 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
               <Search className="size-4 shrink-0" aria-hidden /> Sin elementos que coincidan.
             </div>
           ) : (
+            // contenedor con scroll propio: la página no se hace eterna con catálogos
+            // grandes; el buscador de arriba queda siempre a mano
+            <div
+              role="region"
+              aria-label={`Elementos del catálogo (${filtered.length})`}
+              tabIndex={0}
+              className="homy-focus -mx-1 max-h-[60dvh] overflow-y-auto overscroll-contain rounded-2xl px-1 py-1 sm:max-h-[520px]"
+            >
             <div className="homy-stagger grid gap-3 sm:grid-cols-2">
               {filtered.map((s) => (
                 <div key={s.id} className="homy-row flex flex-wrap items-center justify-between gap-2 sm:gap-3 p-4">
@@ -266,30 +275,35 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
                     <p className="font-bold text-[#0A2540] truncate">{s.name}</p>
                     <p className="text-xs text-slate-400 mt-0.5">{s.category}{s.brand ? ` · ${s.brand}` : ''} · stock: {s.quantity} {s.unit}</p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-3 shrink-0">
+                  {/* max-w-full + wrap: dentro del contenedor con scroll nada se corta a la derecha */}
+                  <div className="flex max-w-full flex-wrap items-center gap-x-3 gap-y-2">
                     <StatusBadge status={s.status} />
+                    {s.status === 'agotado' && user.id !== p.userId && (
+                      <span className="w-full text-[12px] text-slate-500">Sin stock: podés reservarlo y el proveedor te avisa.</span>
+                    )}
                     <p className="homy-num text-lg font-extrabold text-[#16A34A] text-right">{formatARS(s.price)}</p>
                     {user.id !== p.userId && (
                       <button
                         onClick={() => void order(s)}
-                        disabled={adding === s.id || s.status === 'agotado'}
-                        className="homy-btn-dark homy-focus min-h-[40px] px-3.5 py-1.5 text-xs disabled:opacity-50"
-                        aria-label={`Agregar ${s.name} al carrito`}
+                        disabled={adding === s.id}
+                        className="homy-btn-dark homy-focus min-h-[44px] px-3.5 py-1.5 text-xs disabled:opacity-50"
+                        aria-label={s.status === 'agotado' ? `Reservar ${s.name} (sin stock)` : `Agregar ${s.name} al carrito`}
                       >
-                        <ShoppingCart className="size-3.5" aria-hidden /> {s.status === 'agotado' ? 'Sin stock' : 'Al carrito'}
+                        <ShoppingCart className="size-3.5" aria-hidden /> {s.status === 'agotado' ? 'Reservar' : 'Al carrito'}
                       </button>
                     )}
                   </div>
                 </div>
               ))}
             </div>
+            </div>
           )}
         </div>
 
         {/* reseñas desglosadas: estrellas + comentario + fotos que avalan */}
-        <section>
+        <section id="resenas-proveedor" aria-labelledby="resenas-proveedor-titulo" className="scroll-mt-24 rounded-3xl outline-none focus-visible:ring-2 focus-visible:ring-[#1D63B8]/40">
           <div className="homy-section-head">
-            <h2 className="homy-section-title">
+            <h2 id="resenas-proveedor-titulo" className="homy-section-title">
               <span className="homy-icon-chip homy-chip-gold size-9 shrink-0 [&_svg]:size-[18px]" aria-hidden><Star /></span>
               Reseñas
               <span className="homy-pill tabular-nums">{parsedReviews.length}</span>

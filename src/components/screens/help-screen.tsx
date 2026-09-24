@@ -134,7 +134,7 @@ const FAQ = [
   },
   {
     q: '¿Cómo funciona el carrito de materiales?',
-    a: 'Sumás productos de uno o varios proveedores con «Agregar al carrito» (también sin cuenta: se guarda en tu dispositivo y, al crear tu cuenta o ingresar, se pasa a tu cuenta). Al confirmar, cada proveedor recibe su parte, la aprueba y te reserva el stock. Después le pagás a cada uno por separado, en el orden que quieras: Mercado Pago (+1% de cargo de servicio) o efectivo al retirar. Todo se sigue en Mis pedidos.',
+    a: 'Sumás productos de uno o varios proveedores con «Agregar al carrito» (también sin cuenta: se guarda en tu dispositivo y, al crear tu cuenta o ingresar, se pasa a tu cuenta). Al confirmar elegís qué comprás y qué reservás. Lo que comprás con stock no necesita aprobación del proveedor: el stock queda reservado y tenés 24 h para pagar con Mercado Pago (+1% de cargo de servicio) o elegir efectivo al retirar (7 días para retirar); si no, se cancela sola. Lo que reservás (con o sin stock) lo aprueba el proveedor: si no lo tiene, te dice cuándo, y cuando está disponible tenés 48 h. A cada proveedor le pagás por separado. Todo se sigue en Mis pedidos.',
   },
   {
     q: '¿Qué hago con los materiales que sobraron?',

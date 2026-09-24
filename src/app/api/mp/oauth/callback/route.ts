@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   const state = sp.get('state')
   const oauthState = state ? await db.oAuthState.findUnique({ where: { state } }) : null
   const dest = (kind: string | undefined) =>
-    kind === 'professional' ? `${base}/panel/profesional/perfil` : `${base}/panel/proveedor/cobros`
+    kind === 'professional' ? `${base}/panel/profesional/cobros` : `${base}/panel/proveedor/cobros`
 
   // el usuario canceló en MP (?error=access_denied) u otro error del lado de MP
   if (sp.get('error')) {

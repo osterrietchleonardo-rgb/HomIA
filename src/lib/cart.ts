@@ -26,6 +26,9 @@ export type CartLine = {
   element: { id: string; name: string; unit: string; categoryName: string } | null
   problem: CartProblem | null
   problemText: string | null
+  /** hay stock para la cantidad: se puede comprar directo; si no, solo reservar (D15) */
+  inStock: boolean
+  stockNote: string | null
 }
 export type CartGroup = {
   provider: { id: string; businessName: string; userId: string; avatarUrl: string | null; city: string | null; mpConnected: boolean; operating: boolean }
@@ -49,6 +52,32 @@ type Mode = 'visitante' | 'cuenta' | 'sin_carrito'
 
 const LS_KEY = 'homia_cart_v1'
 let lastSyncKey: string | null = null
+
+// Preferencia "Comprar" / "Reservar" que el usuario tocó en cada oferta (D15). Es solo
+// una comodidad de este navegador: al confirmar, el carrito arranca con esa elección y
+// se puede cambiar. Lo que manda es lo que se envía a POST /api/orders.
+export type LineMode = 'compra' | 'reserva'
+const LS_MODES = 'homia_cart_modes_v1'
+export function readModePrefs(): Record<string, LineMode> {
+  try {
+    const raw = localStorage.getItem(LS_MODES)
+    const obj = raw ? (JSON.parse(raw) as Record<string, LineMode>) : {}
+    return obj && typeof obj === 'object' ? obj : {}
+  } catch {
+    return {}
+  }
+}
+export function saveModePref(stockId: string, mode: LineMode | null) {
+  try {
+    const all = readModePrefs()
+    if (mode) all[stockId] = mode
+    else delete all[stockId]
+    const keys = Object.keys(all)
+    // tope: las últimas 100 elecciones
+    for (const k of keys.slice(0, Math.max(0, keys.length - 100))) delete all[k]
+    localStorage.setItem(LS_MODES, JSON.stringify(all))
+  } catch { /* almacenamiento bloqueado: se elige al confirmar */ }
+}
 
 function readLocal(): LocalItem[] {
   try {
@@ -188,7 +217,6 @@ export const useCart = create<CartStore>((set, get) => ({
       const view = await preview(local)
       const line = view?.groups.flatMap((g) => g.items).find((l) => l.stockId === stockId)
       set({ local, view })
-      if (line?.problem === 'stock_insuficiente') return { ok: false, error: `Solo quedan ${line.available} ${line.element?.unit || ''} de ese producto` }
       return { ok: true }
     }
     return mutate(set, '/api/cart', 'POST', { stockId, quantity })
@@ -252,7 +280,7 @@ async function mutate(
  * "Agregar al carrito" de toda la app: agrega, avisa con un toast breve (con el
  * atajo "Ver carrito") y el contador se actualiza solo. El panel NO se abre solo.
  */
-export async function addToCart(stockId: string, quantity: number, name: string): Promise<boolean> {
+export async function addToCart(stockId: string, quantity: number, name: string, opts?: { mode?: LineMode }): Promise<boolean> {
   const st = useCart.getState()
   if (st.mode === 'sin_carrito') {
     toast.info('El carrito es para clientes y profesionales', { description: 'Con tu cuenta de proveedor vendés; para comprar, sumá el perfil de cliente.' })
@@ -263,8 +291,10 @@ export async function addToCart(stockId: string, quantity: number, name: string)
     toast.error(r.error)
     return false
   }
-  toast.success('Agregado al carrito', {
-    description: `${name} × ${quantity}`,
+  saveModePref(stockId, opts?.mode ?? null)
+  const reserva = opts?.mode === 'reserva'
+  toast.success(reserva ? 'Agregado al carrito para reservar' : 'Agregado al carrito', {
+    description: reserva ? `${name} × ${quantity} · el proveedor tiene que aprobar la reserva` : `${name} × ${quantity}`,
     duration: 2500,
     action: { label: 'Ver carrito', onClick: () => useCart.getState().setOpen(true) },
   })

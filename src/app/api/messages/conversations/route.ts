@@ -13,60 +13,79 @@ function pair(a: string, b: string) {
   return a < b ? { userAId: a, userBId: b } : { userAId: b, userBId: a }
 }
 
+type InboxRow = {
+  id: string
+  lastMessageAt: Date
+  otherId: string
+  otherName: string | null
+  otherAvatarUrl: string | null
+  otherRoles: string | null
+  otherVerification: string | null
+  proId: string | null
+  provId: string | null
+  lastBody: string | null
+  lastSenderId: string | null
+  lastCreatedAt: Date | null
+  unread: number
+}
+
+// Tope de conversaciones en la bandeja (las más recientes primero).
+const INBOX_LIMIT = 200
+
 export async function GET() {
   const auth = await requireAuth()
   if ('response' in auth) return auth.response
   const me = auth.user.id
 
-  const convs = await db.conversation.findMany({
-    where: { OR: [{ userAId: me }, { userBId: me }] },
-    include: {
-      messages: { orderBy: { createdAt: 'desc' }, take: 1, include: { sender: { select: { id: true, displayName: true } } } },
-    },
-    orderBy: { lastMessageAt: 'desc' },
-  })
-
-  const ids = convs.map((c) => c.id)
-  const unreadAgg = ids.length
-    ? await db.message.groupBy({
-        by: ['conversationId'],
-        where: { conversationId: { in: ids }, senderId: { not: me }, readAt: null },
-        _count: { _all: true },
-      })
-    : []
-  const unreadMap = new Map(unreadAgg.map((u) => [u.conversationId, u._count._all]))
-
-  const otherIds = convs.map((c) => (c.userAId === me ? c.userBId : c.userAId))
-  const others = await db.user.findMany({
-    where: { id: { in: otherIds } },
-    select: { id: true, displayName: true, avatarUrl: true, roles: true, verificationStatus: true },
-  })
-  const otherMap = new Map(others.map((o) => [o.id, o]))
-
-  // href de perfil público del otro (si tiene perfil pro/prov)
-  const proRows = await db.professionalProfile.findMany({ where: { userId: { in: otherIds } }, select: { id: true, userId: true } })
-  const provRows = await db.providerProfile.findMany({ where: { userId: { in: otherIds } }, select: { id: true, userId: true } })
-  const proMap = new Map(proRows.map((p) => [p.userId, `/profesional/${p.id}`]))
-  const provMap = new Map(provRows.map((p) => [p.userId, `/proveedor/${p.id}`]))
+  // UNA sola consulta: conversación + el otro usuario + su perfil público +
+  // último mensaje (LATERAL … LIMIT 1) + no leídos. Antes eran 6 consultas y el
+  // `include: { messages: { take: 1 } }` de Prisma traía TODOS los mensajes de
+  // todas las conversaciones para quedarse con uno en memoria.
+  // Con el pooler de Supabase (pgbouncer) cada consulta de Prisma cuesta ~4 idas
+  // y vueltas a la base: el número de consultas es lo que pesa.
+  const rows = await db.$queryRaw<InboxRow[]>`
+    SELECT c.id, c."lastMessageAt",
+           o.id AS "otherId", o."displayName" AS "otherName", o."avatarUrl" AS "otherAvatarUrl",
+           o.roles AS "otherRoles", o."verificationStatus" AS "otherVerification",
+           (SELECT p.id FROM "ProfessionalProfile" p WHERE p."userId" = o.id LIMIT 1) AS "proId",
+           (SELECT v.id FROM "ProviderProfile" v WHERE v."userId" = o.id LIMIT 1) AS "provId",
+           lm.body AS "lastBody", lm."senderId" AS "lastSenderId", lm."createdAt" AS "lastCreatedAt",
+           (SELECT count(*) FROM "Message" u
+             WHERE u."conversationId" = c.id AND u."senderId" <> ${me} AND u."readAt" IS NULL)::int AS unread
+    FROM "Conversation" c
+    JOIN "User" o ON o.id = CASE WHEN c."userAId" = ${me} THEN c."userBId" ELSE c."userAId" END
+    LEFT JOIN LATERAL (
+      SELECT m.body, m."senderId", m."createdAt" FROM "Message" m
+      WHERE m."conversationId" = c.id
+      ORDER BY m."createdAt" DESC, m.id DESC
+      LIMIT 1
+    ) lm ON true
+    WHERE c."userAId" = ${me} OR c."userBId" = ${me}
+    ORDER BY c."lastMessageAt" DESC
+    LIMIT ${INBOX_LIMIT}
+  `
 
   return ok({
-    conversations: convs.map((c) => {
-      const otherId = c.userAId === me ? c.userBId : c.userAId
-      const other = otherMap.get(otherId)
-      const last = c.messages[0]
-      return {
-        id: c.id,
-        otherUserId: otherId,
-        otherName: other?.displayName || 'Usuario',
-        otherAvatarUrl: other?.avatarUrl || null,
-        otherRoles: other ? JSON.parse(other.roles) as string[] : [],
-        otherVerification: other?.verificationStatus || 'none',
-        otherProfileHref: proMap.get(otherId) || provMap.get(otherId) || null,
-        lastMessage: last ? { body: last.body, senderId: last.senderId, senderName: last.sender.displayName, createdAt: last.createdAt, mine: last.senderId === me } : null,
-        unread: unreadMap.get(c.id) || 0,
-        lastMessageAt: c.lastMessageAt,
-      }
-    }),
+    conversations: rows.map((r) => ({
+      id: r.id,
+      otherUserId: r.otherId,
+      otherName: r.otherName || 'Usuario',
+      otherAvatarUrl: r.otherAvatarUrl || null,
+      otherRoles: parseJson<string[]>(r.otherRoles, []),
+      otherVerification: r.otherVerification || 'none',
+      otherProfileHref: r.proId ? `/profesional/${r.proId}` : r.provId ? `/proveedor/${r.provId}` : null,
+      lastMessage: r.lastSenderId && r.lastCreatedAt
+        ? {
+            body: r.lastBody || '',
+            senderId: r.lastSenderId,
+            senderName: r.lastSenderId === me ? auth.user.displayName : r.otherName || 'Usuario',
+            createdAt: r.lastCreatedAt,
+            mine: r.lastSenderId === me,
+          }
+        : null,
+      unread: Number(r.unread) || 0,
+      lastMessageAt: r.lastMessageAt,
+    })),
   })
 }
 

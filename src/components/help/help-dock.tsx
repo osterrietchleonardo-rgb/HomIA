@@ -35,6 +35,7 @@ export default function HelpDock() {
   const [tourActive, setTourActive] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [hint, setHint] = useState(false)
+  const [hayModal, setHayModal] = useState(false)
   const botonRef = useRef<HTMLButtonElement>(null)
 
   // ocultarse mientras el tour corre
@@ -42,6 +43,20 @@ export default function HelpDock() {
     const h = (e: Event) => setTourActive(!!(e as CustomEvent).detail?.active)
     window.addEventListener(STATE_EVENT, h)
     return () => window.removeEventListener(STATE_EVENT, h)
+  }, [])
+
+  // Con una ventana modal abierta encima (contratar, diálogos, paneles laterales) el botón
+  // flotante se oculta: si no, en el celular tapa el pie de la ventana y sus botones.
+  useEffect(() => {
+    const revisar = () => {
+      const abierto = [...document.querySelectorAll('[aria-modal="true"], [role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]')]
+        .some((el) => !el.closest('[data-homy-panel]'))
+      setHayModal(abierto)
+    }
+    revisar()
+    const mo = new MutationObserver(revisar)
+    mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-state', 'aria-modal'] })
+    return () => mo.disconnect()
   }, [])
 
   // puntito pulsante hasta la primera vez que lo abren (post-mount para no romper hidratación)
@@ -72,7 +87,7 @@ export default function HelpDock() {
 
   const authPage = route.path.startsWith('/ingresar') || route.path.startsWith('/registrarse')
   const homeSpa = s.length === 0 // la home tiene su propio botón de Homy (mismo agente)
-  if (tourActive || authPage || homeSpa) return null
+  if (tourActive || authPage || homeSpa || (hayModal && !open)) return null
 
   function openPanel() {
     setOpen(true)

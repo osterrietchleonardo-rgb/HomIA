@@ -5,8 +5,7 @@ import { Loading, AvatarUploader, VerifyBadge } from '@/components/app/ui-bits'
 import { useSession } from '@/lib/store'
 import { navigate } from '@/lib/router'
 import { toast } from 'sonner'
-import MpConnectCard from '@/components/app/mp-connect-card'
-import { BadgeCheck, ShieldCheck, UserRound, BriefcaseBusiness, ArrowRight } from 'lucide-react'
+import { BadgeCheck, ShieldCheck, UserRound, BriefcaseBusiness, ArrowRight, HandCoins } from 'lucide-react'
 
 const CATEGORIES = [
   { slug: 'plomeria', name: 'Plomería' },
@@ -148,8 +147,18 @@ export default function ProProfile() {
             </p>
           </section>
 
-          {/* cobro de facturas con el Mercado Pago del profesional (OAuth) */}
-          <MpConnectCard kind="professional" returnPath="/panel/profesional/perfil" />
+          {/* Mercado Pago y facturas viven en Cobros: un solo lugar para conectar y cobrar */}
+          <button
+            onClick={() => navigate('/panel/profesional/cobros')}
+            className="homy-glass homy-lift homy-focus flex w-full min-h-[44px] items-center gap-3 rounded-2xl p-4 text-left"
+          >
+            <span className="homy-icon-chip homy-chip-gold size-10 shrink-0 [&_svg]:size-5" aria-hidden><HandCoins /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-extrabold text-[#0A2540]">Cobros y Mercado Pago</span>
+              <span className="mt-0.5 block text-[13px] leading-snug text-slate-500">Conectá tu Mercado Pago, mirá lo cobrado y lo pendiente y confirmá los pagos en efectivo.</span>
+            </span>
+            <ArrowRight className="size-4 shrink-0 text-slate-300" aria-hidden />
+          </button>
 
           {/* identidad */}
           <section className="homy-glass rounded-3xl p-5 sm:p-6">

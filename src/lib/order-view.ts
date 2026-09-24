@@ -37,6 +37,8 @@ export type SubOrderView = {
   note: string | null
   rejectionReason: string | null
   reservationExpiresAt: Date | null
+  /** reserva sin stock aprobada: fecha aproximada de disponibilidad */
+  availableFrom: Date | null
   approvedAt: Date | null
   createdAt: Date
   updatedAt: Date
@@ -82,6 +84,7 @@ function subView(p: PurchaseRow, charge: ChargeLite | null): SubOrderView {
     note: p.note,
     rejectionReason: p.rejectionReason,
     reservationExpiresAt: p.reservationExpiresAt,
+    availableFrom: p.availableFrom,
     approvedAt: p.approvedAt,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
@@ -112,7 +115,7 @@ export function summarize(subs: SubOrderView[]): OrderSummary {
     paidProviders: paid.length,
     pendingAmount,
     total: round2(active.reduce((a, s) => a + s.total, 0)),
-    status: active.length === 0 ? 'cerrado' : allDone ? 'completo' : subs.every((s) => s.status === 'pendiente_aprobacion') ? 'esperando' : 'en_curso',
+    status: active.length === 0 ? 'cerrado' : allDone ? 'completo' : subs.every((s) => s.status === 'pendiente_aprobacion' || s.status === 'esperando_stock') ? 'esperando' : 'en_curso',
   }
 }
 

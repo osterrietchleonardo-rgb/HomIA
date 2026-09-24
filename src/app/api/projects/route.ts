@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { ok, requireAuth, fail, parseBody } from '@/lib/api'
 import { db } from '@/lib/db'
 import { isHomiaUploadUrl } from '@/lib/leftovers'
+import { assertJobOpen, closeJobWithHire, HireError } from '@/lib/job-hire'
 
 const userSelect = { id: true, displayName: true, avatarUrl: true, verificationStatus: true } as const
 const listInclude = {
@@ -30,6 +31,15 @@ export async function GET(req: NextRequest) {
         orderBy: { updatedAt: 'desc' },
       })
   const proProfile = await db.professionalProfile.findUnique({ where: { userId: auth.user.id } })
+  // Contrataciones que ESTE profesional hizo a otros profesionales (él es el cliente):
+  // sin esto, un profesional sin rol cliente no las encontraba en ninguna lista.
+  const contratados = role === 'profesional' && proProfile
+    ? await db.project.findMany({
+        where: { clientId: auth.user.id },
+        include: listInclude,
+        orderBy: { updatedAt: 'desc' },
+      })
+    : []
   const asPro = proProfile
     ? await db.project.findMany({
         where: { professionalId: proProfile.id },
@@ -81,6 +91,10 @@ export async function GET(req: NextRequest) {
     asPro: asPro.map((p) => ({
       ...serializeProject(p),
       canReview: canReview(p, 'profesional'),
+    })),
+    contratados: contratados.map((p) => ({
+      ...serializeProject(p),
+      canReview: canReview(p, 'cliente'),
     })),
   })
 }
@@ -171,7 +185,13 @@ const createSchema = z.object({
   // fotos del trabajo: solo subidas reales de HomIA (bucket público o legado /uploads)
   photos: z.array(z.string().max(600).refine(isHomiaUploadUrl, 'Las fotos tienen que subirse desde HomIA')).max(4).optional(),
   firstMessage: z.string().trim().max(2000).optional(), // opcional: abre chat cliente→profesional con el brief
-})
+  // D16 — "¿Es para algo que ya publicaste?" (uno u otro, nunca los dos):
+  //   jobId: un trabajo publicado ABIERTO del cliente de la sesión → el proyecto queda con ese jobId,
+  //          el trabajo pasa a en_proceso y las demás ofertas pendientes se rechazan (como aceptar una oferta).
+  //   parentProjectId: un proyecto ACTIVO del profesional de la sesión → subcontratación trazable.
+  jobId: z.string().min(1).max(60).optional(),
+  parentProjectId: z.string().min(1).max(60).optional(),
+}).refine((v) => !(v.jobId && v.parentProjectId), { message: 'Elegí un trabajo publicado o un proyecto, no los dos' })
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth()
@@ -216,33 +236,115 @@ export async function POST(req: NextRequest) {
     if (!isNaN(parsedDate.getTime())) deadline = parsedDate
   }
 
-  const project = await db.project.create({
-    data: {
-      clientId,
-      professionalId,
-      title: d.title,
-      description: d.description || null,
-      laborCost: 0, // sin cotizar: la define el profesional
-      budgetMin,
-      budgetMax,
-      stage: 'presupuesto',
-      urgency: d.urgency || null,
-      address: d.address || null,
-      deadline,
-      photos: d.photos && d.photos.length > 0 ? JSON.stringify(d.photos) : null,
-    },
-  })
+  // ── Origen elegido en el asistente (D16) ──
+  // Trabajo publicado: tiene que ser del usuario de la sesión y seguir abierto.
+  let job: { id: string; title: string; lat: number | null; lng: number | null } | null = null
+  let proBid: { id: string; amount: number } | null = null
+  if (d.jobId) {
+    const j = await db.jobPost.findUnique({
+      where: { id: d.jobId },
+      select: { id: true, userId: true, title: true, status: true, lat: true, lng: true },
+    })
+    if (!j) return fail('Trabajo publicado no encontrado', 404)
+    if (j.userId !== auth.user.id) return fail('Ese trabajo no es tuyo', 403)
+    if (j.status !== 'abierto') return fail('Ese trabajo ya no está abierto: elegí otro o escribilo de nuevo', 409)
+    job = { id: j.id, title: j.title, lat: j.lat, lng: j.lng }
+    // ¿el profesional que contratás ya había ofertado? Esa oferta queda aceptada con su monto.
+    proBid = await db.jobBid.findFirst({
+      where: { jobId: j.id, professionalId, status: 'pendiente' },
+      select: { id: true, amount: true },
+    })
+  }
+  // Proyecto activo del profesional de la sesión: subcontratación trazable.
+  let parent: { id: string; title: string } | null = null
+  if (d.parentProjectId) {
+    const pp = await db.project.findUnique({
+      where: { id: d.parentProjectId },
+      select: { id: true, title: true, status: true, stage: true, professionalId: true },
+    })
+    if (!pp) return fail('Proyecto no encontrado', 404)
+    if (!mePro || pp.professionalId !== mePro.id) return fail('Ese proyecto no es tuyo', 403)
+    if (pp.status !== 'activo' || pp.stage === 'finalizado') return fail('Ese proyecto ya no está activo', 409)
+    parent = { id: pp.id, title: pp.title }
+  }
 
-  // Notificar al profesional contratado (visita su panel → Proyectos)
-  await db.notification.create({
-    data: {
-      userId: proUserId,
-      type: 'contratacion',
-      title: 'Te contrataron: cotizá la mano de obra para arrancar',
-      body: `${auth.user.displayName} te contrató: ${d.title}`,
-      link: `#/panel/profesional/proyectos/${project.id}`,
-    },
-  })
+  const baseData = {
+    clientId,
+    professionalId,
+    title: d.title,
+    description: d.description || null,
+    // sin cotizar (0): la define el profesional. Si ya había ofertado por el trabajo, vale su oferta
+    // (igual que al aceptarla desde "Mis trabajos").
+    laborCost: proBid ? proBid.amount : 0,
+    budgetMin,
+    budgetMax,
+    stage: 'presupuesto',
+    urgency: d.urgency || null,
+    address: d.address || null,
+    deadline,
+    photos: d.photos && d.photos.length > 0 ? JSON.stringify(d.photos) : null,
+  }
+  const hiredLink = (id: string) => `#/panel/profesional/proyectos/${id}`
+
+  let project
+  if (job) {
+    const theJob = job
+    const bidOfPro = proBid
+    const result = await db.$transaction(async (tx) => {
+      // re-chequeo dentro de la transacción: dos contrataciones simultáneas no crean dos proyectos
+      await assertJobOpen(tx, theJob.id)
+      const created = await tx.project.create({
+        data: { ...baseData, jobId: theJob.id, lat: theJob.lat, lng: theJob.lng },
+      })
+      // mismo cierre que aceptar una oferta: la del contratado (si ofertó) aceptada, el resto rechazado con aviso
+      await closeJobWithHire(tx, {
+        jobId: theJob.id,
+        acceptedBidId: bidOfPro?.id || null,
+        rejectedTitle: 'El cliente contrató a otro profesional para este trabajo',
+        rejectedBody: `"${theJob.title}" ya tiene profesional. Tu oferta quedó rechazada: seguí buscando en la bolsa.`,
+      })
+      await tx.notification.create({
+        data: bidOfPro
+          ? {
+              userId: proUserId,
+              type: 'presupuesto_aceptado',
+              title: '¡Te contrataron por tu oferta!',
+              body: `${auth.user.displayName} te contrató para su trabajo publicado "${theJob.title}" con tu oferta. Coordiná materiales y cronograma.`,
+              link: hiredLink(created.id),
+            }
+          : {
+              userId: proUserId,
+              type: 'contratacion',
+              title: 'Te contrataron: cotizá la mano de obra para arrancar',
+              body: `${auth.user.displayName} te contrató para su trabajo publicado "${theJob.title}"`,
+              link: hiredLink(created.id),
+            },
+      })
+      return created
+    }).catch((e: unknown) => {
+      if (e instanceof HireError) return e.code
+      throw e
+    })
+    if (result === 'JOB_NOT_OPEN') return fail('Ese trabajo ya no está abierto: elegí otro o escribilo de nuevo', 409)
+    if (result === 'BID_NOT_PENDING') return fail('La oferta de ese profesional cambió recién: probá de nuevo', 409)
+    project = result
+  } else {
+    project = await db.project.create({
+      data: { ...baseData, ...(parent ? { parentProjectId: parent.id } : {}) },
+    })
+    // Notificar al profesional contratado (visita su panel → Proyectos)
+    await db.notification.create({
+      data: {
+        userId: proUserId,
+        type: 'contratacion',
+        title: 'Te contrataron: cotizá la mano de obra para arrancar',
+        body: parent
+          ? `${auth.user.displayName} te subcontrató: ${d.title} (parte de su proyecto "${parent.title}")`
+          : `${auth.user.displayName} te contrató: ${d.title}`,
+        link: hiredLink(project.id),
+      },
+    })
+  }
 
   // Opcional: abrir conversación cliente→profesional con el brief (el cliente puede iniciar)
   let conversationId: string | null = null

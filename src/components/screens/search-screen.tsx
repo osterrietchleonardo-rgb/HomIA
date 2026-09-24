@@ -4,7 +4,8 @@
 // La tarjeta de Homy usa el súper agente (/api/homy/agent, puerta "buscar"): mismo agente que la home y el panel.
 import { useCallback, useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { navigate, useRoute } from '@/lib/router'
+import { navigate, useRoute, Link } from '@/lib/router'
+import { addToCart, useCart } from '@/lib/cart'
 import { useSession, useLocation, syncLocationToServer } from '@/lib/store'
 import { Homy } from '@/components/homy/homy-character'
 import { Loading, EmptyState, UrgencyBadge, StatusBadge, UAvatar } from '@/components/app/ui-bits'
@@ -12,7 +13,7 @@ import { formatARS } from '@/lib/format'
 import { formatDistance } from '@/lib/geo'
 import type { MapPin } from '@/components/app/map-view'
 import { toast } from 'sonner'
-import { Search, SearchX, MapPin as MapPinIcon, Compass, Sparkles, X, Lock, Home, Hammer, BadgeCheck, Store, Star, ArrowUpRight, HardHat, Package, Briefcase, Loader2 } from 'lucide-react'
+import { Search, SearchX, MapPin as MapPinIcon, Compass, Sparkles, X, Lock, Home, Hammer, BadgeCheck, Store, Star, ArrowUpRight, HardHat, Package, Briefcase, Loader2, ShoppingCart, Clock } from 'lucide-react'
 import { AccionesHomy, TarjetasHomy } from '@/components/homy/homy-tarjetas'
 import { rutaActual, useDuenioHomy, useHomy } from '@/components/homy/homy-store'
 
@@ -56,7 +57,7 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
   void embedded
   // pantalla de búsqueda dual con superagente (re-render intencional)
   const route = useRoute()
-  const { user, refresh } = useSession()
+  const { user, revalidate } = useSession()
   const location = useLocation()
 
   const [mode, setMode] = useState<Mode>(route.query.mode === 'profesional' ? 'profesional' : 'cliente')
@@ -75,7 +76,7 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
   const turno = useHomy((st) => (turnoId ? st.turnos.find((t) => t.id === turnoId) ?? null : null))
   const [showMap, setShowMap] = useState(true)
 
-  useEffect(() => { refresh() /* sync sesión */ }, [refresh])
+  useEffect(() => { void revalidate() /* sync sesión en segundo plano (sin pedido duplicado) */ }, [revalidate])
 
   // Búsqueda directa (sin IA) — lista inmediata
   const directSearch = useCallback(async (q: string, category: string) => {
@@ -377,7 +378,7 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
             >
               {mode === 'cliente' && user && materials.length > 0 && (
                 <p className="homy-glass-soft rounded-2xl px-5 py-3.5 text-[13px] text-slate-600 leading-relaxed mb-4">
-                  Podés comprar estos insumos sin contratar a nadie: tocá la tarjeta para ver el proveedor, o abrí{' '}
+                  Podés comprar estos insumos sin contratar a nadie: agregalos al carrito o reservalos desde acá mismo, o abrí{' '}
                   <button onClick={() => navigate(`/panel/cliente/materiales${query ? `?q=${encodeURIComponent(query)}` : ''}`)} className="font-extrabold text-[#1D63B8] hover:underline underline-offset-2">
                     Materiales → Buscar materiales
                   </button>{' '}
@@ -480,12 +481,24 @@ function ProCard({ pro, logged }: { pro: ProResult; logged: boolean }) {
   )
 }
 
+// Tarjeta de material: se agrega al carrito o se reserva SIN salir de la búsqueda (D15).
+// Con stock: "Agregar al carrito" (compra directa) o "Reservar"; sin stock: solo "Reservar".
+// El nombre del proveedor sigue llevando a su perfil. El visitante también agrega (carrito
+// local); el proveedor puro no compra: sin botones.
 function MaterialCard({ m, logged }: { m: MaterialResult; logged: boolean }) {
+  const cartMode = useCart((s) => s.mode)
+  const [adding, setAdding] = useState<'compra' | 'reserva' | null>(null)
+  const inStock = m.quantity > 0 && m.status !== 'agotado'
+  async function add(mode: 'compra' | 'reserva') {
+    setAdding(mode)
+    try {
+      await addToCart(m.stockId, 1, m.elementName, { mode: mode === 'reserva' ? 'reserva' : undefined })
+    } finally {
+      setAdding(null)
+    }
+  }
   return (
-    <button
-      onClick={() => logged ? navigate(`/proveedor/${m.providerId}`) : gate()}
-      className="homy-focus text-left rounded-2xl homy-glass homy-lift p-5 homy-card-glow"
-    >
+    <article className="rounded-2xl homy-glass homy-lift p-5 homy-card-glow flex flex-col">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="font-bold text-[#0A2540] leading-snug">{m.elementName}</p>
@@ -496,18 +509,49 @@ function MaterialCard({ m, logged }: { m: MaterialResult; logged: boolean }) {
       {m.description && (
         <p className="mt-2 text-xs text-slate-500 leading-relaxed line-clamp-2">{m.description}</p>
       )}
-      <p className="mt-3 text-2xl font-extrabold text-[#16A34A] tabular-nums">
+      <p className="homy-num-adapt mt-3 text-2xl font-extrabold text-[#16A34A] tabular-nums">
         {formatARS(m.price)}<span className="text-xs font-semibold text-slate-400"> /{m.unit}</span>
       </p>
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-[#0A2540]/8 pt-3 text-xs text-slate-400">
-        <span className="flex min-w-0 items-center gap-1 truncate">
+        <span className="flex min-w-0 items-center gap-1">
           <Store className="size-3.5 shrink-0 text-tech" aria-hidden />
-          {m.providerName}{m.providerCity ? ` · ${m.providerCity}` : ''}{m.distanceKm !== undefined ? ` · ${formatDistance(m.distanceKm)}` : ''}
+          <span className="min-w-0 truncate">
+            {logged
+              ? <Link to={`/proveedor/${m.providerId}`} className="inline-flex min-h-[40px] items-center font-bold text-[#1D63B8] hover:underline underline-offset-2">{m.providerName}</Link>
+              : <button type="button" onClick={gate} className="inline-flex min-h-[40px] items-center font-bold text-[#1D63B8] hover:underline underline-offset-2">{m.providerName}</button>}
+            {m.providerCity ? ` · ${m.providerCity}` : ''}{m.distanceKm !== undefined ? ` · ${formatDistance(m.distanceKm)}` : ''}
+          </span>
         </span>
-        <span className="shrink-0">stock: {m.quantity}</span>
+        <span className="shrink-0">{inStock ? `stock: ${m.quantity}` : 'sin stock'}</span>
       </div>
-      {!logged && <GateBar />}
-    </button>
+      {cartMode !== 'sin_carrito' && (
+        <>
+          {!inStock && (
+            <p className="mt-2.5 text-[12px] font-semibold text-[#1D63B8]">Sin stock: podés reservarlo y el proveedor te avisa</p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {inStock && (
+              <button
+                type="button"
+                onClick={() => void add('compra')}
+                disabled={adding !== null}
+                className="homy-btn-primary inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-full px-4 text-[13px] disabled:opacity-60"
+              >
+                {adding === 'compra' ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <ShoppingCart className="size-4" aria-hidden />} Agregar al carrito
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => void add('reserva')}
+              disabled={adding !== null}
+              className={`${inStock ? 'homy-glass-soft text-[#1D63B8] hover:bg-white' : 'homy-btn-dark flex-1'} inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-full px-4 text-[13px] font-bold disabled:opacity-60`}
+            >
+              {adding === 'reserva' ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Clock className="size-4" aria-hidden />} Reservar
+            </button>
+          </div>
+        </>
+      )}
+    </article>
   )
 }
 

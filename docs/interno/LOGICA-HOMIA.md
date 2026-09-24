@@ -59,7 +59,8 @@ Estados: `abierto` → `en_proceso` | `cerrado` | `cancelado` (`prisma/schema.pr
 | Transición | Quién | Condición | Fuente |
 |---|---|---|---|
 | (alta) → `abierto` | Cualquier usuario logueado | Título, descripción y rubro obligatorios; rubro tiene que existir; presupuesto ≥ 0 y mín ≤ máx; hasta 6 fotos de HomIA | `jobs/route.ts:81-137` |
-| `abierto` → `en_proceso` | Sistema, al aceptar una oferta | Dentro de la transacción de aceptación | `bids/[id]/route.ts:111-114` |
+| `abierto` → `en_proceso` | Sistema, al aceptar una oferta | Dentro de la transacción de aceptación | `bids/[id]/route.ts` → `closeJobWithHire` (`src/lib/job-hire.ts`) |
+| `abierto` → `en_proceso` | Sistema, cuando el dueño contrata directo eligiendo ese trabajo en el asistente "Contratar" (D16) | Trabajo del usuario de la sesión y `abierto` (re-chequeado dentro de la transacción); `selectedBidId` = la oferta pendiente del profesional contratado, o vacío si no había ofertado | `projects/route.ts` (POST con `jobId`) → `closeJobWithHire` |
 | `abierto` → `cerrado` / `cancelado` | Dueño | — | `jobs/[id]/route.ts:65-70` |
 | `cerrado` / `cancelado` → `abierto` | Dueño | Solo si nunca se aceptó una oferta (`selectedBidId` vacío) | `jobs/[id]/route.ts:93-95` |
 | `en_proceso` → `cerrado` | Dueño | La obra sigue por el proyecto | `jobs/[id]/route.ts:69` |
@@ -79,6 +80,13 @@ Estados: `pendiente` → `aceptado` | `rechazado` | `retirado` (`schema.prisma:2
 | `pendiente` → `retirado` | Profesional autor | Solo desde pendiente | — | `bids/[id]/route.ts:34-41` |
 | `pendiente` → `rechazado` | Dueño del trabajo | Trabajo abierto | Notifica "Presupuesto rechazado" | `:49-61` |
 | `pendiente` → `aceptado` | Dueño del trabajo | Trabajo abierto; re-chequeo dentro de la transacción (dos aceptaciones simultáneas no crean dos proyectos) | Crea el `Project` con `laborCost = monto de la oferta`, copia presupuesto/dirección/fotos; rechaza el resto de las pendientes y avisa a cada uno; trabajo → `en_proceso`; notifica a ambos | `:63-143` |
+| `pendiente` → `aceptado` (D16) | Dueño del trabajo, contratando directo con el asistente y eligiendo ese trabajo | El profesional contratado tenía una oferta **pendiente** en ese trabajo | El proyecto nace con `laborCost = monto de la oferta`; al profesional le llega "¡Te contrataron por tu oferta!" | `projects/route.ts` POST |
+| `pendiente` → `rechazado` (D16) | Sistema, al contratar directo eligiendo el trabajo | Toda oferta pendiente que no sea la del contratado | Aviso "El cliente contrató a otro profesional para este trabajo" | `closeJobWithHire` |
+
+La lógica común a los dos caminos (oferta elegida `aceptado`, resto de pendientes `rechazado` con
+aviso a cada profesional, trabajo `en_proceso` con `selectedBidId`) vive en una sola función,
+`closeJobWithHire` en `src/lib/job-hire.ts`, que corre siempre **dentro** de la transacción que crea
+el proyecto; `assertJobOpen` re-chequea que el trabajo siga abierto. Si algo falla, no se crea nada.
 
 ---
 
@@ -95,7 +103,34 @@ Estados: `pendiente` → `aceptado` | `rechazado` | `retirado` (`schema.prisma:2
    arrancar" (`projects/route.ts:151-272`). El rubro elegido se acepta pero **no se guarda** (no hay
    campo; `projects/route.ts:161-163`).
 3. **Subcontratación:** un profesional puede contratar a otro con `counterpartyUserId`
-   (`projects/route.ts:198-205`).
+   (`projects/route.ts:198-205`) o con el mismo asistente Contratar (`professionalProfileId`):
+   en los dos casos el cliente del proyecto nuevo es el profesional que subcontrata.
+4. **Contratar a partir de algo ya publicado (D16, 24/09/2026)** — `POST /api/projects` acepta
+   **uno** de estos dos campos (los dos juntos → 400):
+   - `jobId` — un trabajo publicado del usuario de la sesión. Reglas: el trabajo existe (si no,
+     404), es suyo (si no, **403** "Ese trabajo no es tuyo") y está `abierto` (si no, **409** "Ese
+     trabajo ya no está abierto"). En **una transacción**: re-chequea que siga abierto, crea el
+     proyecto con `jobId` (y `lat/lng` del trabajo), y cierra el trabajo con `closeJobWithHire`
+     (§2). Si el profesional contratado tenía una oferta pendiente en ese trabajo, esa oferta queda
+     `aceptado`, es el `selectedBidId` y la mano de obra del proyecto es su monto; si no, el
+     proyecto arranca sin cotizar (`laborCost = 0`) y `selectedBidId` queda vacío. El resto de las
+     ofertas pendientes pasan a `rechazado` con aviso. El brief (título, detalles, urgencia,
+     presupuesto, dirección, fotos) es el que confirma el cliente en el asistente (precargado desde
+     el trabajo y editable).
+   - `parentProjectId` — un proyecto del **profesional de la sesión** (él es el profesional a
+     cargo) que esté `activo` y no `finalizado`. Si no existe → 404; si no es suyo (o quien pide no
+     tiene perfil profesional) → **403**; si está cancelado/finalizado → **409**. El proyecto nuevo
+     queda con `parentProjectId` (autorrelación `Project.parent`/`subcontracts`, `onDelete:
+     SetNull`). **Visibilidad:** el detalle del proyecto original trae `subcontracts` solo para su
+     profesional a cargo; el detalle de la subcontratación trae `parentProject` solo si quien mira
+     es su cliente **y** el profesional a cargo del original. El cliente original no puede abrir la
+     subcontratación (403, no es parte) ni ve sus datos o montos en su proyecto; el subcontratado no
+     ve el proyecto original.
+   - Sin ninguno de los dos: igual que antes.
+   - Avisos al contratado: con trabajo → "Te contrataron: cotizá la mano de obra para arrancar"
+     con "…para su trabajo publicado "<título>"" (o "¡Te contrataron por tu oferta!" si había
+     ofertado); con proyecto → "… te subcontrató: <título> (parte de su proyecto "<título>")".
+   - Selector del asistente: `GET /api/projects/hire-sources` (§13).
 
 ### 3.2 Estados y etapas
 
@@ -163,14 +198,41 @@ El IDOR está cerrado: el material tiene que pertenecer al proyecto de la URL (`
 Si el cliente había acordado efectivo y después paga por MP, el acuerdo de efectivo se borra **recién
 cuando MP creó la preferencia** (`invoices/[id]/route.ts:67-72`).
 
+**Cobros del profesional (`GET /api/invoices?mine=1`, 24/09/2026):** lista las facturas de TODOS los
+proyectos del profesional de la sesión (el dueño sale de la sesión; `professionalId` = su
+`ProfessionalProfile`), hasta 500, de la más nueva a la más vieja. Filtro opcional
+`estado=pendientes|cobradas|todas` (zod; otro valor → 400; sin `mine=1` → 400; sin perfil
+profesional → 403 `needsRole`). Por factura: número, fechas de emisión y cobro, estado, método,
+mano de obra, materiales, total, `serviceFee` (solo si se pagó por MP: el 1% que pagó el cliente
+aparte), `efectivoAcordado` (hay un `Payment` efectivo `acordado` y la factura no está pagada),
+proyecto (id y título) y **solo el nombre** del cliente. Resumen: `cobradoMes` = suma de `total` de
+las pagadas con `paidAt` desde el día 1 del mes en hora argentina (UTC−3); `pendienteTotal` y
+`pendientesCount` = facturas no pagadas; `efectivoPorConfirmar`. No devuelve tokens, email ni ids de
+Mercado Pago. Confirmar el efectivo desde Cobros usa el mismo `POST /api/invoices/[id]/cash
+{action:'confirmar'}` (mismas reglas).
+
 ---
 
 ## 4. Carrito, pedidos y compras de materiales
 
 Desde el commit `2eed864` las compras de materiales van por **carrito y pedidos multiproveedor**.
-Un **pedido** (`Order`, número `PED-AAAA-NNNNNN`) se parte en un **sub-pedido** (`Purchase`) por
-proveedor, con sus productos (`PurchaseItem`). Cada sub-pedido sigue su propia máquina de estados y
-se paga por separado. Las compras de un solo producto hechas antes quedan como "Compra anterior".
+Un **pedido** (`Order`, número `PED-AAAA-NNNNNN`) se parte en **sub-pedidos** (`Purchase`) **por
+proveedor y por tipo**, con sus productos (`PurchaseItem`). Cada sub-pedido sigue su propia máquina
+de estados y se paga por separado. Las compras de un solo producto hechas antes quedan como "Compra
+anterior".
+
+**D15 (24/09/2026, Leonardo):** *"Las compras no necesitan aprobación del proveedor: son directas al
+pago, siempre y cuando haya stock. Las aprobaciones son para las reservas de productos, con o sin
+stock."* Reglas y plazos en `src/lib/order-rules.ts`:
+
+| Tipo | Cuándo | Nace en | Plazo |
+|---|---|---|---|
+| **Compra** (`type = compra`) | Solo si hay stock suficiente de **todos** sus ítems | `aprobado` (= "Por pagar"): stock reservado + `ProviderCharge` emitido, **sin** intervención del proveedor | **24 h** para pagar por MP o elegir efectivo; con efectivo acordado, **7 días desde la compra** (`approvedAt`) para retirar y pagar |
+| **Reserva** (`type = reserva`) | Con o sin stock | `pendiente_aprobacion` (no toca el stock) | La aprueba el proveedor: con stock → reserva + cobro + **48 h**; sin stock → `esperando_stock` con fecha aproximada (`availableFrom`), y al marcarla **disponible** → reserva + cobro + **48 h** |
+
+Se reusa el estado `aprobado` para "por pagar" (compra) porque significa exactamente lo mismo que
+una reserva aprobada: stock reservado y cobro emitido. Así el pago, la entrega, la cancelación y el
+cron siguen una sola lógica; la UI lo nombra "Por pagar" en las compras.
 
 ### 4.1 Carrito
 
@@ -186,56 +248,85 @@ se paga por separado. Las compras de un solo producto hechas antes quedan como "
   (`auth-register.tsx`).
 - **Cuenta:** el carrito está en la base (`CartItem`, `GET/POST/PATCH/DELETE /api/cart`). Máximo
   **60 productos** (`cart/route.ts:18`). Al agregar se valida: la oferta existe, no es propia, el
-  proveedor opera, hay stock, la cantidad respeta el paso de la unidad (**de a 1** por pieza, **de
-  a 0,5** en metro, m2, m3, kg y litro — `src/lib/units.ts`) y no supera el stock.
+  proveedor opera y la cantidad respeta el paso de la unidad (**de a 1** por pieza, **de a 0,5** en
+  metro, m2, m3, kg y litro — `src/lib/units.ts`). **Desde D15 se puede agregar sin stock o más de lo
+  que hay**: esa línea queda `inStock: false` y solo se puede reservar.
+- **"Comprar" / "Reservar" en las ofertas:** la elección del botón se recuerda en el navegador
+  (`homia_cart_modes_v1`, `src/lib/cart.ts`) solo como valor inicial del paso de confirmación.
 - **Vista:** agrupado por proveedor con subtotal, "Cargo de servicio HomIA (1%) — solo si pagás con
-  Mercado Pago" y "Total con Mercado Pago"; cada línea marca su problema (no existe, sin stock,
-  stock insuficiente, proveedor inactivo, propio) y **no se puede confirmar** mientras haya alguno
-  (`cart-server.ts`). Vaciar pide confirmación.
+  Mercado Pago" y "Total con Mercado Pago"; cada línea marca su problema (no existe, proveedor
+  inactivo, propio) y **no se puede confirmar** mientras haya alguno (`cart-server.ts`). Sin stock o
+  stock insuficiente **no es un problema**: la línea trae `stockNote` ("Sin stock: podés reservarlo y
+  el proveedor te avisa" / "Hay N … para comprar ya: para más, reservalo"). Vaciar pide confirmación.
 
 ### 4.2 Confirmar el pedido
 
-`POST /api/orders` (`orders/route.ts:28-58`): exige sesión y rol que compra; zod: `types`
-(por proveedor `compra` = 7 días para retirar, `reserva` = 48 h) y `note` (≤ 500). Re-valida todas
-las líneas (`validateLines`, `src/lib/orders.ts:103-129`); si alguna falla responde 409 con el primer
-problema. `createOrder` (`orders.ts:143-242`) crea en **una transacción** el `Order` y un `Purchase`
-por proveedor con sus ítems, en `pendiente_aprobacion` y **sin tocar el stock**. Después, a cada
-proveedor: mensaje en el chat **iniciado por el cliente** con el detalle, notificación "Nuevo pedido
-de un cliente" y eventos `pedido_creado`/`subpedido_creado` en la línea de tiempo. Del carrito se
-borra solo lo que se pidió.
+`POST /api/orders` (`orders/route.ts`): exige sesión y rol que compra; zod: `lineTypes` (por
+`stockId`: `compra` | `reserva`), `types` (por proveedor, compatibilidad) y `note` (≤ 500). El tipo de
+cada línea: `lineTypes[stockId]` → `types[providerId]` → **compra si hay stock, reserva si no**.
+`validateLines` (`src/lib/orders.ts`) re-valida todo: oferta existente, proveedor operando, no propio,
+paso de la unidad, y **una línea pedida como compra sin stock suficiente es un problema** ("No hay
+stock para comprarlo ahora: podés reservarlo…" / "Solo quedan N …"): 409 con el primer problema, sin
+crear nada. `createOrder` crea en **una transacción** el `Order` y un `Purchase` **por proveedor y por
+tipo** (si un proveedor tiene de los dos, dos sub-pedidos):
+
+- **compra:** `status = aprobado`, `approvedAt = ahora`, `reservationExpiresAt = ahora + 24 h`;
+  **reserva atómica** de todos sus ítems (`reserveItems`: `updateMany` condicional `quantity >= pedido`
+  + movimiento `reserva` + estado del stock) y **`ProviderCharge` `pendiente`** con número
+  `PRV-AAAA-NNNNNN`, todo dentro de la misma transacción. Si un ítem no alcanza (el stock cambió entre
+  la validación y la transacción) se deshace **todo el pedido** y responde 409 "…solo quedan N … No se
+  creó nada: bajá la cantidad o reservalo".
+- **reserva:** `status = pendiente_aprobacion`, sin tocar el stock ni emitir cobro.
+
+Después, a cada proveedor: mensaje en el chat **iniciado por el cliente** con el detalle (los ítems
+sin stock dicen "sin stock: pido que me lo consigas"), notificación ("**Nueva compra: stock
+reservado**" … "Preparalo" / "**Nueva reserva de un cliente**" … "Aprobala o rechazala en Ventas",
+avisando si incluye productos sin stock) y eventos `pedido_creado` + `compra_confirmada` /
+`subpedido_creado` en la línea de tiempo. Del carrito se borra solo lo que se pidió.
 
 `POST /api/purchases` (pedido de un solo producto, compatibilidad) usa el mismo `createOrder` con
-`source: 'directo'` (`purchases/route.ts:111-131`).
+`source: 'directo'`; `type` es opcional (sin tipo: compra si hay stock, reserva si no).
 
 ### 4.3 Máquina de estados del sub-pedido (`purchases/[id]/route.ts`)
 
+Estados: `pendiente_aprobacion` (reserva sin aprobar) · `esperando_stock` (reserva aprobada sin
+stock, **nuevo en D15**) · `aprobado` ("Por pagar": stock reservado + cobro) · `entregado` ·
+`pagado` · `rechazado` · `cancelado`.
+
 | Transición | Quién | Condición | Efecto |
 |---|---|---|---|
-| `pendiente_aprobacion` → `aprobado` | Proveedor con plan activo | En compras históricas de un ítem puede fijar el precio; **reserva atómica de TODOS los ítems**: si uno no alcanza, no se reserva ninguno ("No te alcanza el stock de…") | Crea `ProviderCharge` `pendiente`; vencimiento 48 h (reserva) o 7 días (compra); notifica; evento en la línea de tiempo (`:186-280`) |
-| `pendiente_aprobacion` → `rechazado` | Proveedor | Motivo opcional; se rechaza la parte entera | Notifica (`:284-300`) |
-| `pendiente_aprobacion`/`aprobado` → `cancelado` | Cliente o proveedor | Cobro no pagado; `updateMany` condicional | Si estaba aprobado libera **todos** los ítems; cobro `anulada` (`:85-116`) |
-| Pagar en efectivo | Cliente | Desde `aprobado` o `entregado`, con cobro emitido | Cobro `acordada_efectivo`, `serviceFee = 0` (`:132-148`) |
-| Pagar por MP | Cliente | Desde `aprobado` o `entregado`; proveedor con MP conectado | Preferencia con el **token del proveedor**, cargo = 1% del subtotal del sub-pedido; sin conexión: 503 `needsConfig` "‹Proveedor› todavía no conectó Mercado Pago: podés pagar en efectivo" (`:150-177`) |
-| → `entregado` / `pagado` | Proveedor | No entregado antes | Movimiento `consumo` por ítem; nunca retrocede desde pagado (`:302-340`) |
+| (alta) → `aprobado` | Sistema, al confirmar una **compra** | Stock suficiente de todos los ítems | Reserva atómica + cobro + 24 h (§4.2) |
+| `pendiente_aprobacion` → `aprobado` | Proveedor con plan activo | **Reserva** con stock de todos los ítems (o compra anterior a D15 que quedó pendiente). Con un solo ítem puede ajustar/fijar el precio (`unitPrice`) | Reserva atómica de TODOS los ítems + `ProviderCharge` `pendiente` + 48 h (reserva; 7 días para una compra histórica); notifica "Tu reserva fue aprobada"; evento `aprobado` |
+| `pendiente_aprobacion` → `esperando_stock` | Proveedor con plan activo | Reserva donde algún ítem no alcanza **y** manda `availableFrom` (AAAA-MM-DD, entre hoy y 6 meses; se guarda a las 12:00 de Argentina). Sin fecha → 409 `needsDate` que dice cuál; fecha inválida → 400 | Guarda `availableFrom`, `approvedAt` y el precio ajustado; **no descuenta stock ni emite cobro**; notifica `reserva_aprobada_sin_stock` ("lo tendría disponible aproximadamente el …"); evento `aprobado_sin_stock` |
+| Aprobar una **compra** | Proveedor | — | 409 "Las compras no se aprueban: el cliente ya la tiene lista para pagar" |
+| `esperando_stock` → `aprobado` (`action: disponible`) | Proveedor con plan activo | Stock suficiente de todos los ítems; si no, 409 "Todavía no te alcanza el stock de …" | Reserva atómica + cobro + 48 h; notifica `reserva_disponible` ("Tu reserva ya está para retirar"); evento `disponible` |
+| `pendiente_aprobacion` → `rechazado` | Proveedor | Solo reservas pendientes; motivo opcional | Notifica "Tu reserva fue rechazada"; evento `rechazado` |
+| → `cancelado` (cliente) | Cliente | Desde `pendiente_aprobacion`, `esperando_stock` o `aprobado` con cobro no pagado; `updateMany` condicional | Si el stock estaba reservado (`aprobado`) libera **todos** los ítems; cobro `anulada` |
+| → `cancelado` (proveedor) | Proveedor | **Motivo obligatorio** (≥ 3 letras; si no, 400 `needsReason`). Desde `pendiente_aprobacion`, `esperando_stock`, `aprobado` o `pagado` **no entregado** (sin movimiento `consumo`; si ya entregó → 409) | Libera el stock reservado. Si estaba **pagado por MP**: primero **reembolso total** con `refundPayment` y el **token OAuth del proveedor** (idempotencia `purchase-cancel-<id>`); sin MP conectado → 409 `needsMp`; si MP falla → 502 y **no se cancela nada**; si sale, `Payment.refundedAmount` = monto y cobro `reembolsada`. Si estaba **pagado en efectivo**: cobro `reembolsada` y el aviso dice que lo devuelve en mano. Notifica al cliente con el motivo; evento `cancelado` |
+| Pagar en efectivo | Cliente | Desde `aprobado` o `entregado`, con cobro emitido | Cobro `acordada_efectivo`, `serviceFee = 0`; en una **compra** `aprobado`: `reservationExpiresAt = approvedAt + 7 días` |
+| Pagar por MP | Cliente | Desde `aprobado` o `entregado`; proveedor con MP conectado | Preferencia con el **token del proveedor**, cargo = 1% del subtotal del sub-pedido; sin conexión: 503 `needsConfig` "‹Proveedor› todavía no conectó Mercado Pago: podés pagar en efectivo". Desde `pendiente_aprobacion`/`esperando_stock` → 409 |
+| → `entregado` / `pagado` | Proveedor | Desde `aprobado` o `pagado` no entregado | Movimiento `consumo` por ítem; nunca retrocede desde pagado |
 | → `pagado` | Webhook (MP) o proveedor al confirmar efectivo | — | Cobro `pagada`; habilita la reseña de la compra |
-| `aprobado` → `cancelado` por vencimiento | Cron horario | Plazo vencido y cobro no pagado | Libera todos los ítems, anula el cobro, avisa a ambos, evento `vencido` (`cron/reservations/route.ts`) |
+| Pago MP que llega con el sub-pedido `cancelado`/`rechazado` | Webhook | Pago aprobado y monto válido | **No** se reabre: reembolso total con el token del proveedor (idempotencia `purchase-late-<paymentId>`), avisa a los dos (`compra_pago_devuelto`), evento `pago_devuelto`; si el reembolso falla, avisa que el proveedor tiene que reintegrarlo (evento `pago_tardio`) |
+| `aprobado` → `cancelado` por vencimiento | Cron horario | `reservationExpiresAt` vencido y cobro no pagado | Libera todos los ítems, anula el cobro, avisa a ambos, evento `vencido` con el motivo: "Compra vencida (24 h sin pagar ni elegir efectivo)", "Plazo de retiro vencido (7 días con efectivo acordado)" o "Reserva vencida (48 h sin pagar ni retirar)". `esperando_stock` no vence |
 
 Todas las acciones del proveedor exigen plan activo. Cada acción queda en `ActivityEvent`.
 
 ### 4.4 Seguimiento del pedido ("Mis pedidos")
 
 `GET /api/orders` y `GET /api/orders/[id]` (dueño; 404/403) devuelven cada pedido con su resumen
-(`src/lib/order-view.ts:100-116`): proveedores activos (no rechazados/cancelados), cuántos pagaron,
-**monto pendiente** y estado `esperando` (todos esperando aprobación) | `en_curso` | `completo` |
-`cerrado` (ningún proveedor activo). El proveedor ve **solo su parte** del pedido, con su línea de
+(`src/lib/order-view.ts`): partes activas (no rechazadas/canceladas), cuántas pagaron,
+**monto pendiente** y estado `esperando` (todas en `pendiente_aprobacion` o `esperando_stock`) |
+`en_curso` | `completo` | `cerrado` (ninguna activa). Cada parte trae `availableFrom`. El proveedor ve **solo su parte** del pedido, con su línea de
 tiempo, en Cobros → Ventas.
 
 ---
 
 ## 5. Cobros del proveedor (`ProviderCharge`)
 
-Nacen en dos casos: (1) al **aprobar un sub-pedido** (§4.3) y (2) cuando el proveedor **emite un
-cobro por los materiales aprobados** de un proyecto en **modo B**.
+Nacen en tres casos: (1) al **confirmar una compra** del carrito (§4.2, en la misma transacción),
+(2) al **aprobar una reserva con stock o marcarla disponible** (§4.3) y (3) cuando el proveedor
+**emite un cobro por los materiales aprobados** de un proyecto en **modo B**.
 
 - **Emitir cobro de proyecto** (`POST /api/provider/charges`, `provider/charges/route.ts:84-157`):
   proveedor con plan activo; proyecto en modo B; no al propio usuario; **un solo cobro abierto
@@ -244,7 +335,8 @@ cobro por los materiales aprobados** de un proyecto en **modo B**.
   `PRV-<año>-<000001>` con reintento (`src/lib/charge-number.ts`). Notifica "Cobro de materiales del
   proveedor".
 - **Estados:** `pendiente` → `acordada_efectivo` → `pagada`; `pendiente` → `pagada` (MP); cualquier
-  no pagado → `anulada` (cancelación o vencimiento del sub-pedido).
+  no pagado → `anulada` (cancelación o vencimiento del sub-pedido); `pagada` → `reembolsada` (el
+  proveedor cancela una venta ya pagada y no entregada, D15).
 
 | Transición | Quién | Fuente |
 |---|---|---|
@@ -295,8 +387,8 @@ Reglas:
 - `ProviderStock.status` se **deriva** de la cantidad: `agotado` si ≤ 0, `por_agotar` si ≤
   `minStock` (default 5), si no `disponible` (`provider/stock/route.ts:36-43`).
 - **Movimientos** (`StockMovement.type`): `entrada` (alta o suba manual), `salida`/`ajuste`
-  (edición manual), `reserva` (aprobación de material o compra), `liberacion` (rechazo, reemplazo,
-  cancelación, vencimiento), `consumo` (entrega de compra), `devolucion` (sobrantes recibidos).
+  (edición manual), `reserva` (aprobación de material, confirmación de una compra, aprobación o
+  "disponible" de una reserva), `liberacion` (rechazo, reemplazo, cancelación, vencimiento), `consumo` (entrega de compra), `devolucion` (sobrantes recibidos).
 - **Reserva = descuento real de `quantity`** con `updateMany` condicional (`quantity >= pedido`):
   si no alcanza no se toca nada (`materials/route.ts:199-204`; `purchases/[id]/route.ts:174-178`).
   El modelo `StockReservation` **no se usa**.
@@ -400,8 +492,19 @@ bucket de HomIA y extensión de imagen) (`reviews/route.ts:9-44`). No se puede r
   (`src/lib/orders.ts:205-215`); el asistente Contratar con "mensaje inicial"
   (`projects/route.ts`); la cancelación de proyecto y el pedido de devolución escriben en el hilo
   **solo si ya existe**.
-- Enviar: 1–4000 caracteres; notifica "Nuevo mensaje de …"; abrir el hilo marca como leídos los
-  mensajes del otro (`messages/conversations/[id]/route.ts`).
+- Enviar: 1–4000 caracteres (zod); notifica "Nuevo mensaje de …"; abrir el hilo marca como leídos los
+  mensajes del otro (`messages/conversations/[id]/route.ts`). Mensaje + fecha de la conversación +
+  notificación se guardan juntos (una transacción).
+- **Mensajes nuevos por cursor (24/09/2026):** `GET /messages/conversations/[id]?after=<fecha ISO>`
+  devuelve solo los mensajes con fecha **>=** `after` (incluye el del borde; el cliente deduplica por
+  id), también marca leídos, y trae `readUpTo` = fecha del último mensaje **mío** que el otro ya
+  leyó (con eso se pinta el doble tilde celeste sin volver a pedir todo). `after` inválido → 400.
+  Sin `after`: los últimos 300 mensajes en orden ascendente.
+- **Bandeja:** hasta 200 conversaciones ordenadas por último mensaje, cada una con el último mensaje y
+  sus no leídos (mensajes del otro sin `readAt`).
+- **Pantalla:** el hilo abierto pide lo nuevo cada 3 s y la bandeja cada 10 s (solo si está a la
+  vista y la pestaña no está oculta; nunca se apilan dos pedidos iguales). El envío es optimista: el
+  mensaje aparece al instante y, si el servidor lo rechaza, se saca y el texto vuelve al campo.
 
 ---
 
@@ -450,8 +553,10 @@ bucket de HomIA y extensión de imagen) (`reviews/route.ts:9-44`). No se puede r
 
 ### 12.1 Conexión de Mercado Pago (OAuth)
 
-- **Proveedor:** conecta desde Cobros; **profesional:** desde Mi perfil, tarjeta "Cobrá con tu
-  Mercado Pago" (`src/components/app/mp-connect-card.tsx`). Ambos por
+- **Proveedor:** conecta desde Cobros; **profesional:** desde **Cobros** (`/panel/profesional/cobros`,
+  desde el 24/09/2026; antes era Mi perfil), tarjeta "Cobrá con tu Mercado Pago"
+  (`src/components/app/mp-connect-card.tsx`). La vuelta del OAuth del profesional (connect y callback)
+  redirige a `/panel/profesional/cobros?mp=conectado|cancelado|error`. Ambos por
   `GET /api/mp/oauth/connect?kind=provider|professional` y desconectan con
   `DELETE /api/mp/oauth?kind=provider|professional`. Estados `connected` / `disconnected` /
   `expired`.
@@ -555,14 +660,20 @@ Acuerdo proveedor ↔ profesional para retirar materiales a cuenta de proyectos;
 
 | Cron | Frecuencia | Qué hace | Fuente |
 |---|---|---|---|
-| `/api/cron/reservations` | Cada hora | Cancela sub-pedidos `aprobado` vencidos (48 h reserva / 7 días compra) sin pago; devuelve el stock de todos sus ítems; anula el cobro; avisa a ambos; evento `vencido`. **Además** corre las tareas de sobrantes (ambas patas): confirma solos los reembolsos en efectivo o por fuera de HomIA no confirmados en 72 h y manda un recordatorio único al vendedor (proveedor o profesional) por devoluciones sin responder hace 72 h (`src/lib/leftovers-cron.ts`) | `cron/reservations/route.ts` |
+| `/api/cron/reservations` | Cada hora | Cancela sub-pedidos `aprobado` vencidos sin pago (compra: 24 h, o 7 días desde la compra con efectivo acordado; reserva: 48 h — D15); devuelve el stock de todos sus ítems; anula el cobro; avisa a ambos; evento `vencido`. **Además** corre las tareas de sobrantes (ambas patas): confirma solos los reembolsos en efectivo o por fuera de HomIA no confirmados en 72 h y manda un recordatorio único al vendedor (proveedor o profesional) por devoluciones sin responder hace 72 h (`src/lib/leftovers-cron.ts`) | `cron/reservations/route.ts` |
 | `/api/cron/subscriptions` | Diario 09:30 UTC | Re-consulta a MP cada suscripción de pago con `mpPreapprovalId`; degrada si `cancelled`/`paused` o si lleva más de 35 días sin cobro; nunca degrada por error de MP; no toca planes sin `mpPreapprovalId` (demo/alta manual) | `cron/subscriptions/route.ts` |
 
 Ambos exigen `Authorization: Bearer <CRON_SECRET>`.
 
 ---
 
-## 13. Catálogo de endpoints (64)
+### Proyectos que un profesional contrató (24/09/2026)
+
+`GET /api/projects?role=profesional` devuelve además `contratados`: los proyectos donde el usuario de la
+sesión es el **cliente** (contrató a otro profesional). Solo si tiene perfil de profesional; nunca de
+otros usuarios. El detalle se abre en `/panel/profesional/proyectos/<id>` con la vista de cliente.
+
+## 13. Catálogo de endpoints (65)
 
 Convenciones: **Auth** = qué exige (`—` público, `Sesión`, o perfil/rol); los errores comunes son
 401 sin sesión, 403 sin permiso, 404 inexistente, 409 estado inválido, 400 validación, 503 servicio
@@ -620,13 +731,15 @@ externo no disponible. Rutas relativas a `src/app/api/`. Cualquier `/api/*` que 
 | Método y ruta | Auth | Valida / hace | Errores clave |
 |---|---|---|---|
 | `GET /projects` | Sesión | Mis proyectos como cliente y como profesional, con `canReview` | — |
-| `POST /projects` | Sesión | zod; asistente Contratar o subcontratación (§3.1) | 400, 404 |
-| `GET /projects/[id]` | Partes | Detalle con materiales, facturas, cobros, cuentas de retiro, id del chat | 403, 404 |
+| `POST /projects` | Sesión | zod; asistente Contratar o subcontratación; opcional `jobId` (trabajo propio abierto) **o** `parentProjectId` (proyecto activo propio como profesional) (§3.1, D16) | 400, 403, 404, 409 |
+| `GET /projects/hire-sources` | Sesión | zod en query (`professionalProfileId` opcional). Solo del usuario de la sesión: `jobs` = sus trabajos `abierto` (hasta 30: título, rubro, fecha, ofertas pendientes, datos para precargar y `targetBidAmount` si el profesional a contratar ya ofertó) y `projects` = sus proyectos `activo` no finalizados como profesional a cargo (hasta 30: título, cliente, etapa, datos para precargar) | 400, 401 |
+| `GET /projects/[id]` | Partes | Detalle con materiales, facturas, cobros, cuentas de retiro, id del chat; `subcontracts` (solo al profesional a cargo) y `parentProject` (solo al profesional que subcontrató) (D16) | 403, 404 |
 | `PATCH /projects/[id]` | Partes | zod; etapa, cancelación, mano de obra, modo de materiales (§3.2) | 403, 409 |
 | `POST /projects/[id]/materials` | Profesional del proyecto | zod; §3.4 | 403, 409 |
 | `PATCH /projects/[id]/materials` | Partes según acción | zod; aprobar/rechazar/eliminar/reemplazar (§3.4) | 403, 404, 409 |
 | `GET /projects/[id]/invoice` | Partes | Facturas con ítems | 403 |
 | `POST /projects/[id]/invoice` | Profesional del proyecto | §3.5 | 403, 409, 503 |
+| `GET /invoices?mine=1[&estado=pendientes|cobradas|todas]` | Profesional (perfil) | Cobros: sus facturas de todos los proyectos + resumen (§3.5) | 400, 401, 403 |
 | `GET /invoices/[id]` | Partes | Detalle | 403, 404 |
 | `GET /invoices/[id]` devuelve también `mpServiceFee` y `professional.mpConnected` | | | |
 | `POST /invoices/[id]` | Cliente | Preferencia MP con token del profesional + cargo 1% | 403, 503 `needsConfig` |
@@ -641,11 +754,11 @@ externo no disponible. Rutas relativas a `src/app/api/`. Cualquier `/api/*` que 
 | `POST /cart/merge` | Sesión, rol que compra | zod; fusiona el carrito del visitante (≤ 60 líneas) | 401, 403 |
 | `POST /cart/preview` | — | zod; arma la vista del carrito del visitante con precios y problemas actuales | 400 |
 | `GET /orders` | Sesión | Mis pedidos con resumen de pago | 401 |
-| `POST /orders` | Sesión, rol que compra | zod; confirma el carrito (§4.2) | 400 vacío, 409 problemas, 503 |
+| `POST /orders` | Sesión, rol que compra | zod (`lineTypes`, `types`, `note`); confirma el carrito: compras por pagar con stock reservado, reservas pendientes (§4.2) | 400 vacío, 409 problemas o stock que no alcanza (nada creado), 503 |
 | `GET /orders/[id]` | Dueño | Pedido con sub-pedidos y línea de tiempo | 403, 404 |
 | `GET /purchases` | Sesión (`as=proveedor` exige perfil) | Mis compras o mis ventas (con ítems, cobro y línea de tiempo) | 403 |
-| `POST /purchases` | Sesión | zod; pedido de un solo producto vía `createOrder` | 404, 409 |
-| `PATCH /purchases/[id]` | Cliente o proveedor del sub-pedido | zod; §4.3 | 403, 409, 503 |
+| `POST /purchases` | Sesión | zod (`type` opcional); pedido de un solo producto vía `createOrder` | 404, 409 |
+| `PATCH /purchases/[id]` | Cliente o proveedor del sub-pedido | zod: `action` (`aprobar`, `rechazar`, `cancelar`, `pagar_efectivo`, `pagar_mp`, `entregar`, `disponible`), `unitPrice`, `reason`, `availableFrom`; §4.3 | 400 (`needsReason`, fecha), 403, 409 (`needsDate`, `needsMp`), 502 (reembolso MP falló), 503 |
 | `GET /charges/[id]` | Cliente o proveedor del cobro | — | 403 |
 | `POST /charges/[id]` | Cliente del cobro | `method` mercadopago (token del proveedor + 1%) / efectivo (sin cargo); solo `pendiente` | 403, 503 `needsConfig` |
 | `PATCH /charges/[id]` | Proveedor dueño | Confirmar efectivo acordado | 403 |
@@ -684,9 +797,9 @@ externo no disponible. Rutas relativas a `src/app/api/`. Cualquier `/api/*` que 
 
 | Método y ruta | Auth | Valida / hace | Errores clave |
 |---|---|---|---|
-| `GET /messages/conversations` | Sesión | Bandeja con último mensaje y no leídos | — |
+| `GET /messages/conversations` | Sesión | Bandeja (hasta 200) con último mensaje y no leídos, en 1 consulta | — |
 | `POST /messages/conversations` | Sesión | Abre o reutiliza el hilo; regla §10 | 403 `clientesFirst`, 404 |
-| `GET /messages/conversations/[id]` | Participante | 300 mensajes; marca leídos | 403 |
+| `GET /messages/conversations/[id][?after=ISO]` | Participante | 300 mensajes (o solo los nuevos con `after`) + `readUpTo`; marca leídos (§10) | 400, 403, 404 |
 | `POST /messages/conversations/[id]` | Participante | 1–4000 caracteres; notifica | 403 |
 | `GET /messages/unread` | Sesión | Total de no leídos | — |
 | `GET /notifications` | — (vacío sin sesión) | 50 últimas + no leídas | — |

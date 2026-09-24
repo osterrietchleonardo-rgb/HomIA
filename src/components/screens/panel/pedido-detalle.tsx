@@ -1,7 +1,9 @@
 'use client'
 // Detalle y seguimiento de un pedido (cliente o profesional que compra).
-// Cada proveedor con su parte: ítems, cantidades, precios, subtotal y estado
-// (esperando aprobación / aprobado / pagado / entregado / rechazado / cancelado).
+// Cada proveedor con su parte: ítems, cantidades, precios, subtotal y estado.
+// D15: una COMPRA (con stock) llega ya "Por pagar" — "Pagás ahora", con el plazo de 24 h
+// (7 días si elegís efectivo); una RESERVA espera la aprobación del proveedor (y, si no
+// tenía stock, la fecha aproximada en que lo tiene).
 // El cliente paga DE A UNO, en el orden que quiera, eligiendo en cada uno Mercado
 // Pago (con el cargo de servicio HomIA del 1%) o efectivo al retirar (sin cargo).
 // Arriba el resumen "2 de 3 proveedores pagados · Falta pagar $X" y abajo la
@@ -10,6 +12,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { navigate, useRoute, Link } from '@/lib/router'
 import { Loading, EmptyState, UAvatar, VerifyBadge } from '@/components/app/ui-bits'
 import { formatARS, formatARSCents, formatDate } from '@/lib/format'
+import { fmtDeadline, fmtDay } from '@/lib/order-rules'
 import { SERVICE_FEE_LABEL } from '@/lib/fees'
 import ReviewForm from './review-form'
 import SobrantesSection from './sobrantes-section'
@@ -28,7 +31,7 @@ type Line = { id: string; elementName: string; quantity: number; unit: string; u
 type Sub = {
   id: string; status: string; type: string; total: number; serviceFee: number; mpServiceFee: number
   paymentMethod: string | null; paid: boolean; active: boolean; note: string | null; rejectionReason: string | null
-  reservationExpiresAt: string | null; createdAt: string; label: string
+  reservationExpiresAt: string | null; availableFrom: string | null; createdAt: string; label: string
   items: Line[]
   charge: { id: string; number: string; status: string; method: string | null; paidAt: string | null; amount: number; serviceFee: number } | null
   provider: { id: string; businessName: string; userId: string; city: string | null; address: string | null; avatarUrl: string | null; verificationStatus: string; mpConnected: boolean }
@@ -38,7 +41,8 @@ type Ev = { id: string; purchaseId: string | null; actorRole: string; actorName:
 
 export const SUB_STATUS: Record<string, { label: string; icon: typeof Hourglass; tone: string }> = {
   pendiente_aprobacion: { label: 'Esperando aprobación', icon: Hourglass, tone: 'text-[#B98A00] bg-[#FFC700]/12 ring-[#FFC700]/35' },
-  aprobado: { label: 'Aprobado: falta el pago', icon: CircleCheck, tone: 'text-[#1D63B8] bg-[#1D63B8]/10 ring-[#1D63B8]/30' },
+  esperando_stock: { label: 'Aprobada: esperando stock', icon: Clock, tone: 'text-[#B98A00] bg-[#FFC700]/12 ring-[#FFC700]/35' },
+  aprobado: { label: 'Por pagar', icon: CreditCard, tone: 'text-[#1D63B8] bg-[#1D63B8]/10 ring-[#1D63B8]/30' },
   rechazado: { label: 'Rechazado', icon: Ban, tone: 'text-red-600 bg-red-500/10 ring-red-500/30' },
   entregado: { label: 'Entregado: falta el pago', icon: Truck, tone: 'text-[#FF5A1F] bg-[#FF5A1F]/10 ring-[#FF5A1F]/30' },
   pagado: { label: 'Pagado', icon: CircleCheck, tone: 'text-[#0e9f6e] bg-[#0e9f6e]/10 ring-[#0e9f6e]/30' },
@@ -298,12 +302,12 @@ function SubCard({ p, busy, anyBusy, mpHidden, reviewed, onPayMP, onPayCash, onC
               <VerifyBadge status={p.provider.verificationStatus} />
             </p>
             <p className="text-[11.5px] text-slate-500">
-              {p.type === 'reserva' ? 'Reserva (48 h)' : 'Compra (7 días para retirar)'}{p.provider.address || p.provider.city ? ` · ${p.provider.address || p.provider.city}` : ''}
+              {p.type === 'reserva' ? 'Reserva' : 'Compra directa'}{p.provider.address || p.provider.city ? ` · ${p.provider.address || p.provider.city}` : ''}
             </p>
           </div>
         </div>
         <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-extrabold ring-1 ${meta.tone}`}>
-          <Icon className="size-3.5" aria-hidden /> {chargePaid && p.status !== 'pagado' ? 'Pagado: falta retirar' : meta.label}
+          <Icon className="size-3.5" aria-hidden /> {chargePaid && p.status !== 'pagado' ? 'Pagado: falta retirar' : p.status === 'aprobado' && cashAgreed ? 'Efectivo al retirar' : p.status === 'aprobado' && p.type === 'reserva' ? 'Reservado: falta el pago' : meta.label}
         </span>
       </div>
 
@@ -332,12 +336,28 @@ function SubCard({ p, busy, anyBusy, mpHidden, reviewed, onPayMP, onPayCash, onC
         <p className="mt-2 rounded-xl bg-slate-500/8 px-3 py-2 text-[12.5px] text-slate-600">{p.rejectionReason}</p>
       )}
       {p.status === 'pendiente_aprobacion' && (
-        <p className="mt-2 text-[12.5px] text-slate-500">{p.provider.businessName} tiene que aprobar tu pedido: ahí te reserva el stock y podés pagar.</p>
+        <p className="mt-2 text-[12.5px] text-slate-500">
+          {p.type === 'reserva'
+            ? `${p.provider.businessName} tiene que aprobar tu reserva: si tiene stock te lo guarda 48 h, y si no, te dice cuándo lo tiene.`
+            : `${p.provider.businessName} tiene que aprobar este pedido (anterior a la compra directa): ahí te reserva el stock y podés pagar.`}
+        </p>
+      )}
+      {p.status === 'esperando_stock' && (
+        <p className="mt-2 flex items-start gap-1.5 rounded-xl bg-[#FFC700]/12 px-3 py-2 text-[12.5px] font-semibold text-[#8a6700]">
+          <Clock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <span>{p.provider.businessName} aprobó tu reserva y lo tendría disponible aproximadamente el {p.availableFrom ? fmtDay(p.availableFrom) : '—'}. Te avisamos cuando esté para retirar: ahí tenés 48 h para pagar y retirarlo.</span>
+        </p>
       )}
       {p.status === 'aprobado' && expires && !chargePaid && (
-        <p className="mt-2 flex items-center gap-1.5 text-[12.5px] text-slate-500">
-          <Clock className="size-3.5 shrink-0" aria-hidden />
-          {p.type === 'reserva' ? 'Te lo guardan hasta el' : 'Pagalo y retiralo antes del'} {expires.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })} a las {expires.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+        <p className="mt-2 flex items-start gap-1.5 text-[12.5px] font-semibold text-[#0A2540]">
+          <Clock className="mt-0.5 size-3.5 shrink-0 text-[#FF5A1F]" aria-hidden />
+          <span>
+            {p.type === 'reserva'
+              ? `Te lo guardan hasta el ${fmtDeadline(expires)}: pagalo y retiralo antes.`
+              : cashAgreed
+                ? `Retiralo y pagalo en efectivo antes del ${fmtDeadline(expires)}. Si no, la compra se cancela sola y el stock se libera.`
+                : `Pagá antes del ${fmtDeadline(expires)} (o elegí efectivo al retirar). Si no, la compra se cancela sola y el stock se libera.`}
+          </span>
         </p>
       )}
       {cashAgreed && !chargePaid && (
@@ -354,6 +374,11 @@ function SubCard({ p, busy, anyBusy, mpHidden, reviewed, onPayMP, onPayCash, onC
       {/* pagar: de a un proveedor, eligiendo el medio */}
       {payable && !cashAgreed && (
         <div className="mt-3 rounded-2xl bg-[#0A2540]/[0.035] p-3 ring-1 ring-[#0A2540]/8">
+          {p.type !== 'reserva' && p.status === 'aprobado' && (
+            <p className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-[#FF5A1F]/10 px-2.5 py-1 text-[11.5px] font-extrabold text-[#b8410f]">
+              <ShoppingBag className="size-3.5" aria-hidden /> Pagás ahora · compra con stock reservado
+            </p>
+          )}
           <p className="text-[12px] font-extrabold uppercase tracking-wider text-slate-400">¿Cómo le pagás a {p.provider.businessName}?</p>
           {mpOk ? (
             <dl className="mt-2 space-y-0.5 text-[12.5px]">
@@ -378,7 +403,7 @@ function SubCard({ p, busy, anyBusy, mpHidden, reviewed, onPayMP, onPayCash, onC
       )}
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {(p.status === 'pendiente_aprobacion' || (p.status === 'aprobado' && !chargePaid)) && (
+        {(p.status === 'pendiente_aprobacion' || p.status === 'esperando_stock' || (p.status === 'aprobado' && !chargePaid)) && (
           <button disabled={anyBusy} onClick={onCancel} className="homy-glass-soft inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-4 text-xs font-bold text-slate-500 transition hover:text-red-600 disabled:opacity-50">
             <Undo2 className="size-3.5" aria-hidden /> Cancelar esta parte
           </button>

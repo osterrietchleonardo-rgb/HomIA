@@ -65,16 +65,16 @@ const NUCLEO: Entrada[] = [
     titulo: 'Comprar materiales: carrito multiproveedor',
     roles: ['todos', 'cliente', 'profesional'],
     texto:
-      'Los materiales se compran desde Materiales: buscás el producto, ves las ofertas de todos los proveedores con stock (precio, marca, distancia, reseñas, si está verificado y si es Recomendado) y lo agregás al carrito. El carrito puede tener productos de varios proveedores: el pedido se separa por proveedor y cada proveedor lo aprueba y lo cobra por separado (cada uno con Mercado Pago o efectivo). Cuando el pedido está aprobado aparece "por pagar" en Mis pedidos.',
+      'Los materiales se compran desde Materiales (o desde la búsqueda): buscás el producto, ves las ofertas de todos los proveedores (precio, marca, stock, distancia, reseñas, si está verificado y si es Recomendado) y lo agregás al carrito o lo reservás. El carrito puede tener productos de varios proveedores y se paga a cada proveedor por separado. Hay dos formas: COMPRAR, solo si el proveedor tiene stock: no necesita aprobación, al confirmar el stock queda reservado y aparece "por pagar" en Mis pedidos; tenés 24 horas para pagar por Mercado Pago o elegir efectivo al retirar (con efectivo, 7 días para retirar y pagar); si no, se cancela sola. RESERVAR, con o sin stock: la tiene que aprobar el proveedor; si tiene stock te lo guarda 48 horas para pagar y retirar, y si no tiene te dice una fecha aproximada y te avisa cuando está disponible (ahí arrancan las 48 horas). Un producto sin stock solo se puede reservar.',
     ruta: '/panel/cliente/materiales',
-    claves: 'comprar materiales carrito pedido varios proveedores pagar pedido marketplace mis compras mis pedidos',
+    claves: 'comprar materiales carrito pedido varios proveedores pagar pedido marketplace mis compras mis pedidos reservar reserva sin stock aprobacion compra directa plazo 24 horas',
   },
   {
     id: 'mp-proveedor-no',
     titulo: 'Por qué no puedo pagar con Mercado Pago a un proveedor',
     roles: ['todos', 'cliente', 'profesional'],
     texto:
-      'Mercado Pago solo aparece si ESE proveedor conectó su cuenta de Mercado Pago en HomIA (así el dinero le llega directo a él). Si no la conectó, con ese proveedor por ahora se paga en efectivo al retirar, o le pedís por chat que la conecte. Si el pedido todavía no fue aprobado por el proveedor, tampoco se puede pagar: primero lo aprueba.',
+      'Mercado Pago solo aparece si ESE proveedor conectó su cuenta de Mercado Pago en HomIA (así el dinero le llega directo a él). Si no la conectó, con ese proveedor por ahora se paga en efectivo al retirar, o le pedís por chat que la conecte. Las compras con stock se pagan enseguida, sin aprobación; una reserva, en cambio, se paga recién cuando el proveedor la aprueba (y, si no tenía stock, cuando la marca disponible).',
     ruta: '/panel/cliente/materiales',
     claves: 'no puedo pagar mercado pago proveedor no aparece boton pagar solo efectivo',
   },
@@ -86,6 +86,15 @@ const NUCLEO: Entrada[] = [
       'El proveedor lo conecta en Panel → Cobros con el botón "Conectá Mercado Pago": se abre Mercado Pago, autorizás a HomIA y volvés al panel con la cuenta conectada. Desde ahí los clientes pueden pagarte con Mercado Pago y el dinero entra directo a tu cuenta. Si no conectás, solo podés cobrar en efectivo. Si algo falla al volver, reintentá desde el mismo botón.',
     ruta: '/panel/proveedor/cobros',
     claves: 'conectar mercado pago cuenta mp vincular cobrar oauth autorizar',
+  },
+  {
+    id: 'cobros-profesional',
+    titulo: 'Cobros del profesional (facturas y Mercado Pago)',
+    roles: ['profesional', 'todos'],
+    texto:
+      'El profesional tiene todo lo de cobrar en Panel → Cobros (en el celular, dentro de "Más"). Arriba conecta su Mercado Pago con "Conectar Mercado Pago": autoriza a HomIA y vuelve a Cobros con la cuenta conectada; así sus clientes le pagan las facturas por Mercado Pago y la plata entra directo en su cuenta (cobra el 100%: el cargo de servicio HomIA del 1% lo paga el cliente aparte). Sin conexión, sus clientes solo pueden pagarle en efectivo. Debajo ve lo cobrado este mes, lo pendiente de cobro y cuántas facturas faltan, y la lista de TODAS sus facturas de todos los proyectos (número, proyecto, cliente, fecha, total, estado y cómo se pagó) con filtros Pendientes / Cobradas / Todas: puede descargar cada PDF y, si el cliente acordó pagar en efectivo, tocar "Confirmar cobro en efectivo" cuando recibe la plata. Desde ahí también va a Comprar materiales y a Mis pedidos.',
+    ruta: '/panel/profesional/cobros',
+    claves: 'cobros cobrar facturas factura profesional conectar mercado pago mp cobrado pendiente efectivo confirmar cobro donde cobro recibir pagos',
   },
   {
     id: 'sobrantes',
@@ -141,7 +150,7 @@ const NUCLEO: Entrada[] = [
     titulo: 'Contratar un profesional',
     roles: ['todos', 'cliente'],
     texto:
-      'Dos caminos: (1) publicás tu trabajo gratis (qué necesitás, fotos, zona y presupuesto estimado) y los profesionales te mandan presupuestos para comparar; (2) elegís a alguien del directorio (ordenado por reseñas) y tocás Contratar: un asistente de 4 pasos arma el pedido y se crea el proyecto. Después seguís la obra por etapas, aprobás materiales y pagás al finalizar.',
+      'Dos caminos: (1) publicás tu trabajo gratis (qué necesitás, fotos, zona y presupuesto estimado) y los profesionales te mandan presupuestos para comparar; (2) elegís a alguien del directorio (ordenado por reseñas) y tocás Contratar: un asistente de 4 pasos arma el pedido y se crea el proyecto. Si ya habías publicado ese trabajo, en el asistente lo elegís en "¿Es para algo que ya publicaste?" y se cargan sus datos: al confirmar el trabajo queda en proceso, si ese profesional te había ofertado se acepta su oferta y las demás ofertas se rechazan con aviso. Después seguís la obra por etapas, aprobás materiales y pagás al finalizar.',
     ruta: '/panel/cliente/publicar',
     claves: 'contratar plomero electricista gasista presupuesto publicar trabajo como consigo',
   },
@@ -150,7 +159,7 @@ const NUCLEO: Entrada[] = [
     titulo: 'Conseguir trabajos como profesional',
     roles: ['todos', 'profesional'],
     texto:
-      'En Panel → Bolsa de trabajos ves los trabajos publicados por clientes, filtrás por rubro y zona y mandás tu presupuesto (precio, plazo y mensaje). Si el cliente lo acepta, se crea el proyecto. También te contratan directo desde el directorio: tener DNI verificado, obras cargadas con fotos y buenas reseñas te sube en el orden.',
+      'En Panel → Bolsa de trabajos ves los trabajos publicados por clientes, filtrás por rubro y zona y mandás tu presupuesto (precio, plazo y mensaje). Si el cliente lo acepta, se crea el proyecto. También te contratan directo desde el directorio. Y si necesitás ayuda en una obra, podés subcontratar a otro profesional: en su perfil tocás Contratar y elegís uno de tus proyectos activos; queda vinculado a tu proyecto y tu cliente no lo ve. Tener DNI verificado, obras cargadas con fotos y buenas reseñas te sube en el orden.',
     ruta: '/panel/profesional/bolsa',
     claves: 'trabajo conseguir clientes bolsa ofertar presupuestar soy plomero hay trabajos',
   },

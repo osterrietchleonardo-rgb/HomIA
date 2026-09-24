@@ -11,7 +11,7 @@ import { createHash, randomBytes } from 'node:crypto'
 export async function GET(req: NextRequest) {
   const base = appUrl()
   const kind = req.nextUrl.searchParams.get('kind') || 'provider'
-  const panelPath = kind === 'professional' ? '/panel/profesional/perfil' : '/panel/proveedor/cobros'
+  const panelPath = kind === 'professional' ? '/panel/profesional/cobros' : '/panel/proveedor/cobros'
   const user = await getSessionUser()
   if (!user) {
     return NextResponse.redirect(`${base}/ingresar?volver=${encodeURIComponent(panelPath)}`)
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     sellerKind = 'provider'
   } else if (kind === 'professional') {
     const professional = await db.professionalProfile.findUnique({ where: { userId: user.id }, select: { id: true } })
-    if (!professional) return NextResponse.redirect(`${base}/panel/profesional/perfil?mp=error`)
+    if (!professional) return NextResponse.redirect(`${base}/panel/profesional/cobros?mp=error`)
     sellerId = professional.id
     sellerKind = 'professional'
   } else {

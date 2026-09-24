@@ -50,6 +50,8 @@ type Project = {
   laborCost: number; budgetMin: number | null; budgetMax: number | null; materialsCost: number; materialsPaymentMode: string
   conversationId: string | null
   urgency?: string | null; address?: string | null; deadline?: string | null; photos?: string[]
+  // D16: solo llega si quien mira es el profesional que subcontrató desde su proyecto
+  parentProject?: { id: string; title: string } | null
   professional: {
     id: string; userId: string; displayName: string; avatarUrl: string | null; verificationStatus?: string
     personType: string; companyName: string | null; phone: string | null; email: string | null
@@ -287,6 +289,22 @@ export default function ClientProjectDetail({ id }: { id: string }) {
           </p>
           <button onClick={() => navigate('/directorio')} className="homy-btn-dark mt-3 px-4 py-2.5 text-sm">Buscar otro profesional</button>
         </section>
+      )}
+
+      {/* D16: subcontratación → link al proyecto original (lo ve solo el profesional que subcontrata) */}
+      {p.parentProject && (
+        <button
+          type="button"
+          onClick={() => navigate(`/panel/profesional/proyectos/${p.parentProject!.id}`)}
+          className="homy-glass-soft homy-focus mb-5 flex min-h-[44px] w-full items-center gap-3 rounded-2xl px-4 py-3 text-left transition hover:ring-1 hover:ring-[#1D63B8]/30"
+        >
+          <span className="homy-icon-chip homy-chip-blue size-8 shrink-0 [&_svg]:size-4" aria-hidden><FolderKanban /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[10.5px] font-extrabold uppercase tracking-[0.12em] text-slate-400">Subcontratación</span>
+            <span className="block truncate text-sm font-bold text-[#0A2540]">Parte del proyecto {p.parentProject.title}</span>
+          </span>
+          <ArrowRight className="size-4 shrink-0 text-[#1D63B8]" aria-hidden />
+        </button>
       )}
 
       {/* qué pediste: brief textual de la contratación */}

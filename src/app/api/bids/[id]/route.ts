@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { ok, fail, parseBody } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
+import { assertJobOpen, closeJobWithHire, HireError } from '@/lib/job-hire'
 
 const schema = z.object({
   action: z.enum(['aceptar', 'rechazar', 'retirar'], { message: 'Acción inválida' }),
@@ -60,13 +61,12 @@ export async function PATCH(
     return ok({ success: true, status: 'rechazado' })
   }
 
-  // aceptar → proyecto + cierre del trabajo + rechazo del resto, todo o nada
+  // aceptar → proyecto + cierre del trabajo + rechazo del resto, todo o nada.
+  // El cierre del trabajo (oferta aceptada, resto rechazado con aviso, trabajo en_proceso) vive en
+  // `src/lib/job-hire.ts`: lo comparte con "Contratar" eligiendo un trabajo publicado (D16).
   const project = await db.$transaction(async (tx) => {
     // re-chequeo dentro de la transacción: dos aceptaciones simultáneas no crean dos proyectos
-    const fresh = await tx.jobBid.findUnique({ where: { id }, select: { status: true } })
-    if (!fresh || fresh.status !== 'pendiente') throw new Error('BID_NOT_PENDING')
-    const job = await tx.jobPost.findUnique({ where: { id: bid.jobId }, select: { status: true } })
-    if (!job || job.status !== 'abierto') throw new Error('JOB_NOT_OPEN')
+    await assertJobOpen(tx, bid.jobId)
 
     const created = await tx.project.create({
       data: {
@@ -87,30 +87,12 @@ export async function PATCH(
         stage: 'presupuesto',
       },
     })
-    await tx.jobBid.update({ where: { id }, data: { status: 'aceptado' } })
-    // el resto de las ofertas pendientes queda rechazado… y cada profesional se entera
-    const others = await tx.jobBid.findMany({
-      where: { jobId: bid.jobId, id: { not: id }, status: 'pendiente' },
-      select: { professional: { select: { userId: true } } },
-    })
-    await tx.jobBid.updateMany({
-      where: { jobId: bid.jobId, id: { not: id }, status: 'pendiente' },
-      data: { status: 'rechazado' },
-    })
-    if (others.length) {
-      await tx.notification.createMany({
-        data: others.map((o) => ({
-          userId: o.professional.userId,
-          type: 'presupuesto_rechazado',
-          title: 'El cliente eligió otra oferta',
-          body: `"${bid.job.title}" ya tiene profesional. Tu oferta quedó rechazada: seguí buscando en la bolsa.`,
-          link: '#/panel/profesional/presupuestos',
-        })),
-      })
-    }
-    await tx.jobPost.update({
-      where: { id: bid.jobId },
-      data: { status: 'en_proceso', selectedBidId: id },
+    // la oferta queda aceptada; el resto de las pendientes, rechazadas… y cada profesional se entera
+    await closeJobWithHire(tx, {
+      jobId: bid.jobId,
+      acceptedBidId: id,
+      rejectedTitle: 'El cliente eligió otra oferta',
+      rejectedBody: `"${bid.job.title}" ya tiene profesional. Tu oferta quedó rechazada: seguí buscando en la bolsa.`,
     })
     await tx.notification.createMany({
       data: [
@@ -132,9 +114,7 @@ export async function PATCH(
     })
     return created
   }).catch((e: unknown) => {
-    const msg = e instanceof Error ? e.message : ''
-    if (msg === 'BID_NOT_PENDING') return 'BID_NOT_PENDING' as const
-    if (msg === 'JOB_NOT_OPEN') return 'JOB_NOT_OPEN' as const
+    if (e instanceof HireError) return e.code
     throw e
   })
 

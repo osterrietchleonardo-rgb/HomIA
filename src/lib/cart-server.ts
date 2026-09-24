@@ -2,7 +2,8 @@
 // logueado, carrito en la base) y POST /api/cart/preview (visitante: el carrito
 // vive en su localStorage y acá solo se enriquece con precio/stock actuales).
 // Cada línea trae su problema si lo hay: el carrito no se puede confirmar
-// mientras quede alguna línea con problema.
+// mientras quede alguna línea con problema. Sin stock (o con menos de lo pedido)
+// NO es un problema (D15): la línea solo se puede RESERVAR (`inStock: false`).
 import { db } from '@/lib/db'
 import { puedeOperar } from '@/lib/plans'
 import { qtyStepFor } from '@/lib/units'
@@ -23,6 +24,10 @@ export type CartLine = {
   element: { id: string; name: string; unit: string; categoryName: string } | null
   problem: CartProblem | null
   problemText: string | null
+  /** hay stock para la cantidad pedida: se puede comprar directo; si no, solo reservar */
+  inStock: boolean
+  /** aviso de stock para la línea (no bloquea) */
+  stockNote: string | null
 }
 
 export type CartGroup = {
@@ -71,6 +76,7 @@ export async function buildCartView(rows: { id: string; stockId: string; quantit
       orphans.push({
         id: r.id, stockId: r.stockId, quantity: r.quantity, price: 0, lineTotal: 0, available: 0, step: 1,
         brand: null, imageUrl: null, element: null, problem: 'no_existe', problemText: PROBLEM_TEXT.no_existe,
+        inStock: false, stockNote: null,
       })
       continue
     }
@@ -78,8 +84,10 @@ export async function buildCartView(rows: { id: string; stockId: string; quantit
     let problem: CartProblem | null = null
     if (viewerUserId && s.provider.userId === viewerUserId) problem = 'propio'
     else if (!operating) problem = 'proveedor_inactivo'
-    else if (s.status === 'agotado' || s.quantity <= 0) problem = 'sin_stock'
-    else if (s.quantity < r.quantity) problem = 'stock_insuficiente'
+    const inStock = s.status !== 'agotado' && s.quantity > 0 && s.quantity >= r.quantity
+    const stockNote = inStock ? null
+      : s.status === 'agotado' || s.quantity <= 0 ? 'Sin stock: podés reservarlo y el proveedor te avisa'
+        : `Hay ${s.quantity} ${s.element.unit} para comprar ya: para más, reservalo`
     const line: CartLine = {
       id: r.id,
       stockId: s.id,
@@ -93,6 +101,8 @@ export async function buildCartView(rows: { id: string; stockId: string; quantit
       element: { id: s.element.id, name: s.element.name, unit: s.element.unit, categoryName: s.element.category.name },
       problem,
       problemText: problem ? PROBLEM_TEXT[problem] : null,
+      inStock,
+      stockNote,
     }
     const g = groups.get(s.providerId) || {
       provider: {

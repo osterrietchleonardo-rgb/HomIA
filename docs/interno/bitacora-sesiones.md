@@ -26,6 +26,20 @@
 
 ---
 
+## 2026-09-24 — Mensajería rápida, atajos a reseñas, stock con scroll y Cobros del profesional (Leonardo)
+
+"La mensajería tarda en cada movimiento" → causa: con el pooler cada consulta Prisma = ~4 idas a la base y `connection_limit=1` encola; bandeja/hilo hacían 6–7 consultas (la bandeja traía todos los mensajes), cada clic re-montaba panel y pantalla, `/api/auth/me` ×3 al arrancar. Ahora 1 consulta por endpoint, cursor `?after=`, envío optimista, memoria entre montajes, `/me` ×1; índice `Conversation.userBId` (migración `0026`, aditiva, aplicada). Medido (390×844, dev compartido): abrir bandeja 5,6 s/6 req → 2,0 s/3 req; abrir hilo 4,6 s/4 req → 1,5 s/1 req; enviar → burbuja en 50 ms (antes esperaba el POST, 5 req); volver a Mensajes desde otra pantalla 0,14 s; polling 12 s 9 → 7 req (4–9 s c/u → ~1 s). Además: atajo "★ 4,5 · N reseñas" en perfiles y reputación del cliente (botón 44 px), catálogo del proveedor en caja con scroll (60 % de pantalla), Cobros del profesional (`/panel/profesional/cobros`, `GET /api/invoices?mine=1`, OAuth vuelve ahí). E2E A,B,D,E,F,G,I,N 663/663; visual 390 y 1280 38/38 c/u. Detalle: `TECNICO` §4.5, `LOGICA` §3.5/§10/§12.1/§13, `FUNCIONAL` 1.5/2.10/3.8/3.13/3.15/4.12, `AGENTS.md` §6/§7. Rama `feat/carrito-homy`, sin commit.
+
+## 2026-09-24 — Contratar eligiendo un trabajo publicado o un proyecto activo (D16) (Leonardo)
+
+Asistente "Contratar" con selector "¿Es para algo que ya publicaste?" (trabajos abiertos del cliente / proyectos activos del profesional para subcontratar), cierre del trabajo compartido con aceptar oferta (`src/lib/job-hire.ts`), `Project.parentProjectId` (migración `0027` aplicada) y `GET /api/projects/hire-sources`; detalle en `decisiones.md` D16, `FUNCIONAL` §2.4 y §3.4, `LOGICA` §2 y §3.1, `TECNICO` §4.4. Rama `feat/carrito-homy`, sin commit.
+
+## 2026-09-24 (noche) — Compra directa sin aprobación; las reservas las aprueba el proveedor, con o sin stock (D15) (Leonardo)
+
+Decisión D15 implementada en `feat/carrito-homy` (sin commit): las compras con stock nacen "por pagar" con el stock reservado y el cobro emitido (24 h para pagar o elegir efectivo; 7 días con efectivo), las reservas las aprueba el proveedor (sin stock: fecha aproximada → "disponible" → 48 h), lo sin stock solo se reserva, el proveedor cancela con motivo (reembolso total por MP con su token si ya estaba pagado) y en `/buscar` cada material se agrega al carrito o se reserva sin salir de la búsqueda. Migración `0025_compra_directa.sql` aplicada (una columna nullable, diff vacío). Detalle en `decisiones.md` (D15), `LOGICA-HOMIA.md` §4, `TECNICO-HOMIA.md` §4.3, `FUNCIONAL-HOMIA.md` 1.2/1.4/2.7/3.9/4.3 y `AGENTS.md` §6/§7.
+
+---
+
 ## 2026-09-24 (noche) — Sobrantes: devuelve la plata quien la cobró (D14) (Leonardo)
 
 Decisión D14 implementada en `feat/carrito-homy` (sin commit): en modo `pro_adelanta` la devolución del cliente es con el profesional (acepta, recibe, reembolsa por MP desde su cuenta o en efectivo; sin stock de proveedor) y pata nueva opcional profesional → proveedor con reembolso por fuera de HomIA. Migración `0024_sobrantes_profesional.sql` aplicada (solo aditiva, diff vacío). Suite E2E completa 785/785 (G: 124/124), recorrido visual 390×844 y 1280×800 81/82 (la X de 16 px del `Dialog` global de shadcn), purga verificada. Detalle en `decisiones.md` (D14), `LOGICA-HOMIA.md` §12.2, `TECNICO-HOMIA.md` §4.2, `FUNCIONAL-HOMIA.md` 2.8/3.14/4.5 y `AGENTS.md` §7.6.
@@ -43,6 +57,7 @@ plata a la cuenta del vendedor, Homy con `gpt-5.6-luna` y cupos) y completar los
 | Qué | Dónde |
 |---|---|
 | Commit `2eed864` en `feat/carrito-homy` (sin mergear a `main`): carrito para visitantes (localStorage, se fusiona al ingresar), clientes y profesionales; `Order` con un sub-pedido por proveedor; "Mis pedidos" con pago de a uno y línea de tiempo; `createSellerPreference` con token del vendedor y `marketplace_fee` 1%; "Cobrá con tu Mercado Pago" para el profesional; sobrantes por ítem sin reembolsar el 1%, confirmación del efectivo y recordatorio de 72 h; fuga de tokens OAuth en `GET /api/projects/[id]` corregida; súper agente Homy (Responses API, herramientas solo lectura, guardarraíles y ranking en código, cupo en `AiUsage`, `HomyRun`); regla del chat por destinatario (D13); `/api/*` inexistente → 404 JSON; migraciones 0022, 0023 y 0030 aplicadas | `git show --stat 2eed864` |
+| Integración tras los equipos de D15/D16/mensajería: navegación del panel sin recargas (`router.tsx`, `markSpaMounted`); sesión en una consulta (`auth.ts`); botón de Homy oculto con ventanas abiertas (`help-dock.tsx`); "Profesionales que contrataste" (`projects` GET `contratados`, `profesional/proyectos.tsx`); Reservar en perfil de proveedor sin stock; pestañas de 44 px; avisos de pedido en paralelo; región `gru1` (D17). Ver TÉCNICO §4.6 | commits de la rama |
 | Pedido de Leonardo al probar en dev: cinta de sponsors con cada proveedor una vez por vuelta, banda azul oscuro y logo/marca sutiles (`sponsors.tsx`, vista previa en `proveedor/perfil.tsx`); desde la home, los clics en tarjetas de Homy ahora navegan de verdad a registro/secciones (`router.tsx`). Verificado con Playwright en 1280 y 390 (3 corridas) | `scratch/verif-final/` |
 | Cambios del mismo día (incluidos en `2eed864`): header público con menú completo desde 1280 px y hamburguesa por debajo, textos sin partir (`site-header.tsx`); panel móvil con `pb-44` para que el botón de Homy no tape el final (`panel-layout.tsx`) | `2eed864` |
 | Verificación (informes de los equipos): E2E 16 secciones A–P **727/727**; A+I **69/69** tras el cambio del chat; Homy **32/32** en el set de evaluación, 0 alucinaciones, 19 tests; build de producción verde | `scripts/e2e-integral.mjs`, `scripts/homy-eval.mjs` |

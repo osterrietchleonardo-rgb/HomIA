@@ -10,8 +10,10 @@ import { serviceFeeFor } from '@/lib/fees'
 // ── SUB-PEDIDOS DE MATERIALES (compras a un proveedor) ──
 // Desde el carrito, cada pedido se fracciona en un sub-pedido (Purchase) por
 // proveedor con todos sus ítems. Flujo de cada sub-pedido:
-// pendiente_aprobacion → (proveedor aprueba: reserva TODO el stock + emite cobro)
-// aprobado → el cliente paga (MP con el 1% o efectivo) → el proveedor entrega → pagado
+// · compra (con stock): nace `aprobado` = por pagar (stock reservado + cobro emitido,
+//   SIN aprobación del proveedor; D15) → el cliente paga → el proveedor entrega → pagado
+// · reserva (con o sin stock): pendiente_aprobacion → el proveedor aprueba (reserva + cobro,
+//   o `esperando_stock` con fecha si no tiene) → aprobado → pago → entrega → pagado
 // → queda habilitada la reseña del proveedor por esa compra.
 //
 // GET              → mis compras (cliente) · ?as=proveedor → mis ventas con ítems y línea de tiempo
@@ -104,7 +106,8 @@ export async function GET(req: NextRequest) {
 const createSchema = z.object({
   stockId: z.string().min(1, 'Falta el producto que querés pedir'),
   quantity: z.coerce.number().positive('Decinos cuántas unidades necesitás'),
-  type: z.enum(['compra', 'reserva']).default('compra'),
+  // sin tipo: compra si hay stock, reserva si no (D15)
+  type: z.enum(['compra', 'reserva']).optional(),
   note: z.string().max(500).optional(),
 })
 
@@ -116,16 +119,19 @@ export async function POST(req: NextRequest) {
   if (parsed.error) return parsed.error
   const d = parsed.data
 
-  const { lines, problems } = await validateLines(user.id, [{ stockId: d.stockId, quantity: d.quantity }])
+  const { lines, problems } = await validateLines(user.id, [{ stockId: d.stockId, quantity: d.quantity, mode: d.type }])
   if (problems.length > 0) {
     const p = problems[0]
     if (p.reason === 'Esta oferta ya no existe') return fail('Esa oferta ya no existe', 404)
     if (p.reason.startsWith('Es un producto tuyo')) return fail('No podés pedirte productos a vos mismo')
     if (p.reason.startsWith('La cantidad no es válida')) return fail(p.reason, 400)
-    return fail(p.reason.startsWith('Solo quedan') ? `${p.reason} disponibles` : p.reason === 'Se quedó sin stock' ? 'Ese producto está sin stock en este momento' : 'Este proveedor no está operando por ahora', 409)
+    return fail(p.reason, 409)
   }
 
-  const created = await createOrder({ user, lines, types: { [lines[0].stock.providerId]: d.type }, note: d.note, source: 'directo' })
-  if (!created) return fail('No pudimos numerar tu pedido: probá de nuevo en unos segundos', 503)
+  const created = await createOrder({ user, lines, note: d.note, source: 'directo' })
+  if (!created.ok && created.reason === 'stock') {
+    return fail(`Solo quedan ${created.item.available} ${created.item.unit} de ${created.item.name} para comprar ahora: bajá la cantidad o reservalo`, 409, { item: created.item })
+  }
+  if (!created.ok) return fail('No pudimos numerar tu pedido: probá de nuevo en unos segundos', 503)
   return ok({ purchase: created.purchases[0], order: { id: created.order.id, number: created.order.number } }, 201)
 }

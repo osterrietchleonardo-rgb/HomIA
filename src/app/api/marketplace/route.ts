@@ -14,6 +14,9 @@ import { puedeOperar, esProActivo } from '@/lib/plans'
 // catálogo con su explicación, precio, stock real y ficha del proveedor
 // (reseñas, verificación, distancia). Los proveedores con plan PRO van
 // primeros como "Recomendados".
+// D15 (24/09/2026): también se listan las ofertas SIN stock (el proveedor publica el
+// elemento con cantidad 0) con `inStock: false`, al final: esas solo se pueden RESERVAR.
+// `offersCount`, `minPrice` y `maxPrice` cuentan solo las ofertas con stock.
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams
   const q = (sp.get('q') || '').trim()
@@ -84,10 +87,10 @@ export async function GET(req: NextRequest) {
 
   const elementIds = scored.map((x) => x.e.id)
 
-  // ── 2. Ofertas reales de esos elementos (stock de todos los proveedores) ──
+  // ── 2. Ofertas reales de esos elementos (stock de todos los proveedores, con y sin stock) ──
   const stocks = elementIds.length
     ? await db.providerStock.findMany({
-        where: { elementId: { in: elementIds }, quantity: { gt: 0 }, status: { not: 'agotado' } },
+        where: { elementId: { in: elementIds } },
         include: {
           provider: {
             include: {
@@ -99,7 +102,7 @@ export async function GET(req: NextRequest) {
     : []
 
   type Offer = {
-    stockId: string; elementId: string; price: number; quantity: number; brand: string | null
+    stockId: string; elementId: string; price: number; quantity: number; inStock: boolean; brand: string | null
     providerId: string; businessName: string; kind: string
     providerUserId: string; providerAvatar: string | null; providerCity: string | null
     providerRating: number; providerReviews: number; providerVerified: boolean
@@ -118,7 +121,8 @@ export async function GET(req: NextRequest) {
       stockId: s.id,
       elementId: s.elementId,
       price: s.price,
-      quantity: s.quantity,
+      quantity: Math.max(0, s.quantity),
+      inStock: s.quantity > 0 && s.status !== 'agotado',
       brand: s.brand,
       providerId: s.provider.id,
       businessName: s.provider.businessName,
@@ -154,6 +158,7 @@ export async function GET(req: NextRequest) {
   }
   for (const [, list] of byElement) {
     list.sort((a, b) => {
+      if (a.inStock !== b.inStock) return a.inStock ? -1 : 1 // sin stock (solo reserva) al final
       const ga = geoMap.get(a.stockId)?.distanceKm
       const gb = geoMap.get(b.stockId)?.distanceKm
       if (a.planPro !== b.planPro) return a.planPro ? -1 : 1 // Recomendados primero
@@ -167,7 +172,8 @@ export async function GET(req: NextRequest) {
       const g = geoMap.get(o.stockId)
       return { ...o, distanceKm: g?.distanceKm }
     })
-    const prices = offers.map((o) => o.price)
+    const withStock = offers.filter((o) => o.inStock)
+    const prices = withStock.map((o) => o.price)
     return {
       elementId: e.id,
       name: e.name,
@@ -176,10 +182,11 @@ export async function GET(req: NextRequest) {
       unit: e.unit,
       categorySlug: e.category.slug,
       categoryName: e.category.name,
-      offersCount: offers.length,
+      offersCount: withStock.length,
+      reservableCount: offers.length - withStock.length,
       minPrice: prices.length ? Math.min(...prices) : null,
       maxPrice: prices.length ? Math.max(...prices) : null,
-      hasPro: offers.some((o) => o.planPro),
+      hasPro: withStock.some((o) => o.planPro),
       offers,
     }
   })

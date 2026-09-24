@@ -210,8 +210,8 @@ export const fuenteDatosPrisma: FuenteDatos = {
         db.project.count({ where: { clientId: userId, status: 'activo' } }),
         db.jobPost.findMany({ where: { userId, status: 'abierto' }, select: { _count: { select: { bids: true } } } }),
       ])
-      add(porPagar, 'pedido(s) de materiales aprobado(s) por el proveedor y listo(s) para pagar', '/panel/cliente/pedidos')
-      add(porAprobar, 'pedido(s) de materiales esperando que el proveedor los apruebe', '/panel/cliente/pedidos')
+      add(porPagar, 'compra(s) o reserva(s) de materiales por pagar (las compras vencen a las 24 h si no pagás ni elegís efectivo)', '/panel/cliente/pedidos')
+      add(porAprobar, 'reserva(s) de materiales esperando que el proveedor las apruebe', '/panel/cliente/pedidos')
       add(facturas, 'factura(s) de profesionales pendiente(s) de pago', '/panel/cliente/facturas')
       add(cobros, 'cobro(s) de materiales de proveedores pendiente(s) en tus proyectos', '/panel/cliente/proyectos')
       add(proyectos, 'proyecto(s) activo(s)', '/panel/cliente/proyectos')
@@ -247,8 +247,8 @@ export const fuenteDatosPrisma: FuenteDatos = {
         db.providerStock.count({ where: { providerId: prov.id, status: 'agotado' } }),
         db.providerStock.count({ where: { providerId: prov.id, status: 'por_agotar' } }),
       ])
-      add(porAprobar, 'pedido(s) de clientes esperando tu aprobación', '/panel/proveedor/cobros')
-      add(aprobados, 'pedido(s) aprobado(s) esperando el pago del cliente', '/panel/proveedor/cobros')
+      add(porAprobar, 'reserva(s) de clientes esperando tu aprobación', '/panel/proveedor/cobros')
+      add(aprobados, 'venta(s) con stock reservado esperando el pago del cliente', '/panel/proveedor/cobros')
       add(cobros, 'cobro(s) emitido(s) pendiente(s) de pago', '/panel/proveedor/cobros')
       add(efectivo, 'cobro(s) en efectivo acordado(s): confirmalos cuando recibas el dinero', '/panel/proveedor/cobros')
       add(devoluciones, 'devolución(es) de sobrantes para responder', '/panel/proveedor/cobros')

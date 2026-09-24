@@ -1467,6 +1467,7 @@
 .homy-tab {
   display: inline-flex;
   align-items: center;
+  min-height: 44px; /* área tocable en el celular */
   gap: 0.4rem;
   white-space: nowrap;
   border-radius: 9999px;

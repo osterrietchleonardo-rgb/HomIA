@@ -3,7 +3,10 @@
 // Modal glass de 3 pasos (qué / cuándo-dónde / presupuesto) + resumen + éxito.
 // Crea un Project real con brief, fotos, urgencia y fecha; notifica al profesional
 // y opcionalmente abre el chat con el brief (el cliente inicia: permitido).
-import { useRef, useState } from 'react'
+// D16: arriba del primer paso, "¿Es para algo que ya publicaste?" permite partir de un trabajo
+// publicado abierto (cliente) o de un proyecto activo (profesional que subcontrata): precarga el
+// brief (editable) y al confirmar manda `jobId` o `parentProjectId`.
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { navigate } from '@/lib/router'
 import { formatARS } from '@/lib/format'
@@ -12,6 +15,7 @@ import { toast } from 'sonner'
 import {
   X, ChevronLeft, ChevronRight, CircleCheck, ImagePlus, Loader2,
   MapPin, CalendarDays, Wallet, MessageSquare, Zap, CalendarClock, Infinity as InfinityIcon, Trash2,
+  Link2, Info,
 } from 'lucide-react'
 
 export type HireTarget = {
@@ -34,6 +38,25 @@ const URGENCIAS = [
 ]
 
 const URGENCY_LABEL: Record<string, string> = { ya: 'Lo antes posible', esta_semana: 'Próximas semanas', normal: 'Fecha flexible' }
+
+// ── Origen elegido (D16) ──
+type SourceJob = {
+  id: string; title: string; description: string; categorySlug: string; categoryName: string
+  urgency: string; budgetMin: number | null; budgetMax: number | null; address: string | null; city: string | null
+  photos: string[]; createdAt: string; bidsCount: number; targetBidAmount: number | null
+}
+type SourceProject = {
+  id: string; title: string; description: string | null; stage: string; clientName: string
+  categorySlug: string | null; categoryName: string | null; urgency: string | null
+  budgetMin: number | null; budgetMax: number | null; address: string | null; city: string | null
+  deadline: string | null; photos: string[]; createdAt: string
+}
+type Source = { kind: 'job'; item: SourceJob } | { kind: 'project'; item: SourceProject }
+
+const STAGE_LABEL: Record<string, string> = { presupuesto: 'Presupuesto', materiales: 'Materiales', ejecucion: 'Ejecución', revision: 'Revisión' }
+// urgencia del trabajo publicado (baja|normal|alta|urgente) → la del asistente (ya|esta_semana|normal)
+const JOB_URGENCY_TO_WIZARD: Record<string, string> = { urgente: 'ya', alta: 'ya', normal: 'esta_semana', baja: 'normal' }
+const shortDate = (d: string) => new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
 
 export default function HireWizard({
   target, open, onClose, viewerCity,
@@ -62,13 +85,66 @@ export default function HireWizard({
   const [note, setNote] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
+  // "¿Es para algo que ya publicaste?": trabajos abiertos del cliente y proyectos activos del profesional
+  const [sources, setSources] = useState<{ jobs: SourceJob[]; projects: SourceProject[] } | null>(null)
+  const [source, setSource] = useState<Source | null>(null)
+  const targetId = target?.id
+  useEffect(() => {
+    if (!open || !targetId) return
+    let alive = true
+    fetch(`/api/projects/hire-sources?professionalProfileId=${encodeURIComponent(targetId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive) setSources(d && Array.isArray(d.jobs) ? { jobs: d.jobs, projects: d.projects || [] } : null) })
+      .catch(() => { if (alive) setSources(null) }) // sin sesión o sin red: el selector no aparece y el formulario queda como siempre
+    return () => { alive = false }
+  }, [open, targetId])
+
   if (!target) return null
 
-  function reset() {
-    setStep(0); setCreated(null); setTitle(''); setDesc(''); setRubro(null); setPhotos([])
+  function clearBrief() {
+    setTitle(''); setDesc(''); setRubro(null); setPhotos([])
     setUrgency('esta_semana'); setDeadline(''); setAddress(''); setCity('')
-    setBudgetMin(''); setBudgetMax(''); setNote('')
+    setBudgetMin(''); setBudgetMax('')
   }
+
+  function reset() {
+    setStep(0); setCreated(null); clearBrief(); setNote(''); setSource(null)
+  }
+
+  // Precarga el brief desde el trabajo/proyecto elegido; todo sigue editable.
+  function applySource(next: Source | null) {
+    setSource(next)
+    if (!next) { clearBrief(); return }
+    const it = next.item
+    setTitle(it.title.slice(0, 120))
+    setDesc((it.description || '').slice(0, 2000))
+    setRubro(it.categorySlug || null)
+    setPhotos(it.photos.slice(0, 4).map((url, i) => ({ url, name: `foto-${i + 1}` })))
+    setUrgency(next.kind === 'job'
+      ? JOB_URGENCY_TO_WIZARD[next.item.urgency] || 'esta_semana'
+      : next.item.urgency && URGENCY_LABEL[next.item.urgency] ? next.item.urgency : 'esta_semana')
+    const today = new Date().toISOString().slice(0, 10)
+    const dl = next.kind === 'project' && next.item.deadline ? next.item.deadline.slice(0, 10) : ''
+    setDeadline(dl && dl >= today ? dl : '')
+    setAddress(it.address || '')
+    setCity(it.city || '')
+    setBudgetMin(it.budgetMin && it.budgetMin > 0 ? String(it.budgetMin) : '')
+    setBudgetMax(it.budgetMax && it.budgetMax > 0 ? String(it.budgetMax) : '')
+  }
+
+  function onPickSource(value: string) {
+    if (!value) { applySource(null); return }
+    const [kind, id] = value.split(':')
+    if (kind === 'job') {
+      const item = sources?.jobs.find((j) => j.id === id)
+      if (item) applySource({ kind: 'job', item })
+    } else {
+      const item = sources?.projects.find((p) => p.id === id)
+      if (item) applySource({ kind: 'project', item })
+    }
+  }
+  const hasSources = !!sources && (sources.jobs.length > 0 || sources.projects.length > 0)
+  const descMax = source ? 2000 : 600
 
   function close() {
     onClose()
@@ -104,6 +180,8 @@ export default function HireWizard({
 
   const proName = target.companyName || target.displayName
   const rubroSel = rubro || target.professions[0] || null
+  // el rubro del trabajo elegido aparece aunque no sea uno de los oficios del profesional
+  const rubroChips = [...new Set([...(rubro ? [rubro] : []), ...target.professions.slice(0, 6)])]
 
   async function confirm() {
     if (busy) return
@@ -127,6 +205,8 @@ export default function HireWizard({
           deadline: deadline || undefined,
           photos: photos.map((p) => p.url),
           firstMessage: note.trim() || undefined,
+          jobId: source?.kind === 'job' ? source.item.id : undefined,
+          parentProjectId: source?.kind === 'project' ? source.item.id : undefined,
         }),
       })
       const d = await res.json().catch(() => ({}))
@@ -206,27 +286,80 @@ export default function HireWizard({
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7">
               {step === 0 && (
                 <div className="space-y-4">
+                  {hasSources && sources && (
+                    <div className="homy-glass-soft rounded-2xl p-3.5">
+                      <Field label="¿Es para algo que ya publicaste?" htmlFor="hire-source">
+                        <select
+                          id="hire-source"
+                          value={source ? `${source.kind}:${source.item.id}` : ''}
+                          onChange={(e) => onPickSource(e.target.value)}
+                          className="homy-glass-input homy-focus min-h-[44px] w-full cursor-pointer rounded-xl px-3 py-2.5 text-sm"
+                        >
+                          <option value="">No, lo escribo ahora</option>
+                          {sources.jobs.length > 0 && (
+                            <optgroup label="Tus trabajos publicados (abiertos)">
+                              {sources.jobs.map((j) => (
+                                <option key={j.id} value={`job:${j.id}`}>
+                                  {`${j.title} · ${j.categoryName} · ${shortDate(j.createdAt)} · ${j.bidsCount} oferta${j.bidsCount === 1 ? '' : 's'}`}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                          {sources.projects.length > 0 && (
+                            <optgroup label="Tus proyectos activos (subcontratar)">
+                              {sources.projects.map((p) => (
+                                <option key={p.id} value={`project:${p.id}`}>
+                                  {`${p.title} · cliente ${p.clientName} · ${STAGE_LABEL[p.stage] || p.stage}`}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                        </select>
+                      </Field>
+                      {source ? (
+                        <div className="mt-2.5 space-y-2">
+                          <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-[#1D63B8]/10 py-1 pl-3 pr-1 text-xs font-bold text-[#1D63B8]">
+                            <Link2 className="size-3.5 shrink-0" aria-hidden />
+                            <span className="min-w-0 truncate">Basado en: {source.item.title}</span>
+                            <button
+                              type="button" onClick={() => applySource(null)}
+                              aria-label="Quitar el trabajo elegido y escribir de cero"
+                              className="homy-focus grid size-7 shrink-0 place-items-center rounded-full transition hover:bg-[#1D63B8]/15"
+                            ><X className="size-3.5" aria-hidden /></button>
+                          </span>
+                          <p className="flex gap-1.5 text-[11.5px] leading-relaxed text-slate-500">
+                            <Info className="mt-0.5 size-3.5 shrink-0 text-[#1D63B8]" aria-hidden />
+                            <span>{sourceHint(source, proName)} Podés cambiar los datos que cargamos.</span>
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-[11.5px] leading-relaxed text-slate-500">
+                          Elegí uno para cargar sus datos, o seguí y escribilo ahora.
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <Field label="¿Qué trabajo necesitás?" htmlFor="hire-title">
                     <input
                       id="hire-title" autoFocus
                       value={title} onChange={(e) => setTitle(e.target.value)}
                       placeholder="Ej: Renovar instalación eléctrica del living"
-                      className="homy-glass-input rounded-xl px-3.5 py-3 min-h-[44px] text-sm w-full" maxLength={90}
+                      className="homy-glass-input rounded-xl px-3.5 py-3 min-h-[44px] text-sm w-full" maxLength={source ? 120 : 90}
                     />
                   </Field>
-                  <Field label="Contale los detalles" hint={`${desc.length}/600`} htmlFor="hire-desc">
+                  <Field label="Contale los detalles" hint={`${desc.length}/${descMax}`} htmlFor="hire-desc">
                     <textarea
                       id="hire-desc"
-                      value={desc} onChange={(e) => setDesc(e.target.value.slice(0, 600))}
+                      value={desc} onChange={(e) => setDesc(e.target.value.slice(0, descMax))}
                       rows={4}
                       placeholder="Contale qué hay que hacer, el estado actual, medidas, si tenés los materiales…"
                       className="homy-glass-input rounded-xl px-3.5 py-3 min-h-[44px] text-sm w-full resize-none leading-relaxed"
                     />
                   </Field>
-                  {target.professions.length > 0 && (
+                  {rubroChips.length > 0 && (
                     <Field label="Rubro principal">
                       <div className="flex flex-wrap gap-2">
-                        {target.professions.slice(0, 6).map((r) => (
+                        {rubroChips.map((r) => (
                           <button
                             key={r} type="button" onClick={() => setRubro(r)}
                             aria-pressed={rubroSel === r}
@@ -329,6 +462,12 @@ export default function HireWizard({
 
               {step === 3 && (
                 <div className="space-y-3.5">
+                  {source && (
+                    <SummaryRow icon={<Link2 className="size-4" aria-hidden />} tone="blue" label={source.kind === 'job' ? 'Basado en tu trabajo publicado' : 'Subcontratación de tu proyecto'}>
+                      <p className="font-extrabold text-[#0A2540]">{source.item.title}</p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{sourceHint(source, proName)}</p>
+                    </SummaryRow>
+                  )}
                   <SummaryRow icon={<CircleCheck className="size-4" aria-hidden />} tone="mint" label="Trabajo">
                     <p className="font-extrabold text-[#0A2540]">{title}</p>
                     <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-slate-500">{desc}</p>
@@ -371,8 +510,15 @@ export default function HireWizard({
                   </motion.span>
                   <h3 className="mt-4 text-xl font-extrabold tracking-tight text-[#0A2540]">¡Contratación enviada!</h3>
                   <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-slate-500">
-                    <strong className="text-[#0A2540]">{proName}</strong> ya tiene tu brief de <strong className="text-[#0A2540]">{created.project.title}</strong> y le llegó la notificación. Va a cotizar la mano de obra en tu proyecto.
+                    <strong className="text-[#0A2540]">{proName}</strong> ya tiene tu brief de <strong className="text-[#0A2540]">{created.project.title}</strong> y le llegó la notificación. {source?.kind === 'job' && source.item.targetBidAmount ? 'Quedó aceptada su oferta: ya pueden coordinar materiales y fechas.' : 'Va a cotizar la mano de obra en tu proyecto.'}
                   </p>
+                  {source && (
+                    <p className="mx-auto mt-2 max-w-sm text-xs font-semibold leading-relaxed text-[#1D63B8]">
+                      {source.kind === 'job'
+                        ? `Tu trabajo "${source.item.title}" pasó a en proceso.`
+                        : `Quedó vinculada a tu proyecto "${source.item.title}".`}
+                    </p>
+                  )}
                   {!created.conversationId && (
                     <p className="mx-auto mt-3 max-w-sm rounded-2xl homy-glass-soft px-4 py-3 text-xs font-semibold leading-relaxed text-slate-600">
                       Abrí el chat para coordinar: el profesional no puede escribirte primero.
@@ -386,7 +532,7 @@ export default function HireWizard({
                     >
                       <MessageSquare className="size-4" aria-hidden /> Abrir el chat
                     </button>
-                    <button type="button" onClick={() => { close(); navigate(`/panel/cliente/proyectos/${created.project.id}`) }} className={`${created.conversationId ? 'homy-btn-primary' : 'homy-btn-dark'} w-full px-6 py-3.5 text-sm`}>
+                    <button type="button" onClick={() => { close(); navigate(source?.kind === 'project' ? `/panel/profesional/proyectos/${created.project.id}` : `/panel/cliente/proyectos/${created.project.id}`) }} className={`${created.conversationId ? 'homy-btn-primary' : 'homy-btn-dark'} w-full px-6 py-3.5 text-sm`}>
                       Ver el proyecto
                     </button>
                     <button type="button" onClick={() => { close(); navigate('/directorio') }} className="homy-focus rounded-xl px-6 py-3 text-sm font-bold text-[#1D63B8] transition hover:bg-[#1D63B8]/5">
@@ -427,6 +573,19 @@ export default function HireWizard({
       )}
     </AnimatePresence>
   )
+}
+
+// Qué pasa al confirmar según el origen elegido (texto honesto, igual al que hace el servidor).
+function sourceHint(source: Source, proName: string): string {
+  if (source.kind === 'project') {
+    return `Queda como subcontratación de tu proyecto con ${source.item.clientName}. Tu cliente no la ve ni ve sus montos.`
+  }
+  const j = source.item
+  const others = j.bidsCount - (j.targetBidAmount ? 1 : 0)
+  let t = 'Al confirmar, tu trabajo queda en proceso'
+  if (j.targetBidAmount) t += ` y la oferta de ${proName} (${formatARS(j.targetBidAmount)}) queda aceptada`
+  if (others > 0) t += `; ${others === 1 ? 'la otra oferta queda rechazada' : `las otras ${others} ofertas quedan rechazadas`} y ${others === 1 ? 'le' : 'les'} avisamos`
+  return t + '.'
 }
 
 // Field NO envuelve en <label>: adentro puede haber grupos de botones (rubro, urgencia, fotos)

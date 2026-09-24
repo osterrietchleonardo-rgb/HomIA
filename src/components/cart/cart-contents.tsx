@@ -2,12 +2,14 @@
 // Contenido del carrito — lo comparten el panel lateral/inferior (CartSheet) y la
 // pantalla /carrito. Ítems AGRUPADOS POR PROVEEDOR con cantidad editable (paso según
 // la unidad, tope en el stock), subtotal por proveedor, total general y el cargo de
-// servicio HomIA (1%) que se suma SOLO si pagás con Mercado Pago. Confirmar crea un
-// pedido con un sub-pedido por proveedor; el visitante primero crea su cuenta o ingresa.
+// servicio HomIA (1%) que se suma SOLO si pagás con Mercado Pago. Al confirmar, cada
+// producto va como COMPRA (con stock: sin aprobación, se paga enseguida) o RESERVA (la
+// aprueba el proveedor; lo sin stock solo se reserva) — D15. Se crea un pedido con un
+// sub-pedido por proveedor y tipo; el visitante primero crea su cuenta o ingresa.
 import { useEffect, useState } from 'react'
 import { navigate, useRoute } from '@/lib/router'
 import { useSession } from '@/lib/store'
-import { useCart, type CartLine, type CartGroup } from '@/lib/cart'
+import { useCart, readModePrefs, type CartLine, type CartGroup, type LineMode } from '@/lib/cart'
 import { formatARS, formatARSCents } from '@/lib/format'
 import { SERVICE_FEE_LABEL } from '@/lib/fees'
 import { UAvatar, Loading } from '@/components/app/ui-bits'
@@ -37,7 +39,8 @@ export default function CartContents({ variant, onDone }: { variant: 'sheet' | '
   const { user } = useSession()
   const panel = useBuyerPanel()
   const [step, setStep] = useState<Step>('lista')
-  const [types, setTypes] = useState<Record<string, 'compra' | 'reserva'>>({})
+  // elección por producto (stockId): lo sin stock siempre es reserva
+  const [types, setTypes] = useState<Record<string, LineMode>>({})
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [askClear, setAskClear] = useState(false)
@@ -83,16 +86,22 @@ export default function CartContents({ variant, onDone }: { variant: 'sheet' | '
       const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ types, note: note.trim() || undefined }),
+        body: JSON.stringify({ lineTypes: resolvedTypes(groups, types), note: note.trim() || undefined }),
       })
-      const d = (await res.json().catch(() => ({}))) as { error?: string; order?: { id: string; number: string } }
+      const d = (await res.json().catch(() => ({}))) as { error?: string; order?: { id: string; number: string }; purchases?: { type: string }[] }
       if (!res.ok || !d.order) {
         toast.error(d.error || 'No pudimos confirmar el pedido')
         void refresh()
         setStep('lista')
         return
       }
-      toast.success(`Pedido ${d.order.number} enviado`, { description: 'Cada proveedor lo aprueba y después pagás a cada uno.' })
+      const compras = (d.purchases || []).filter((p) => p.type === 'compra').length
+      const reservas = (d.purchases || []).length - compras
+      toast.success(`Pedido ${d.order.number} confirmado`, {
+        description: compras && reservas ? 'Pagá tus compras en las próximas 24 h; las reservas las aprueba cada proveedor.'
+          : compras ? 'Stock reservado: pagá en las próximas 24 h (Mercado Pago o elegí efectivo al retirar).'
+            : 'Cada proveedor aprueba su reserva y te avisamos.',
+      })
       await refresh()
       setStep('lista')
       setNote('')
@@ -159,7 +168,7 @@ export default function CartContents({ variant, onDone }: { variant: 'sheet' | '
             <dt className="text-slate-500">Total con Mercado Pago</dt>
             <dd className="font-extrabold text-[#1D63B8] tabular-nums">{formatARSCents(view?.totalMp ?? 0)}</dd>
           </div>
-          <p className="pt-0.5 text-[11.5px] leading-snug text-slate-400">En efectivo pagás {formatARS(view?.subtotal ?? 0)}, sin cargo. Elegís cómo pagarle a cada proveedor cuando apruebe su parte.</p>
+          <p className="pt-0.5 text-[11.5px] leading-snug text-slate-400">En efectivo pagás {formatARS(view?.subtotal ?? 0)}, sin cargo. Lo que comprás con stock se paga enseguida; las reservas, cuando el proveedor las aprueba.</p>
         </dl>
 
         {blocked && step === 'lista' && (
@@ -171,7 +180,7 @@ export default function CartContents({ variant, onDone }: { variant: 'sheet' | '
         {step === 'lista' ? (
           <div className="mt-3 flex flex-col gap-2">
             <button
-              onClick={() => setStep('confirmar')}
+              onClick={() => { setTypes((prev) => ({ ...readModePrefs(), ...prev })); setStep('confirmar') }}
               disabled={blocked || loading}
               className="homy-btn-primary min-h-[46px] w-full text-[15px] disabled:opacity-50"
             >
@@ -201,7 +210,7 @@ export default function CartContents({ variant, onDone }: { variant: 'sheet' | '
           <div className="mt-3 flex flex-col gap-2">
             <button onClick={() => void confirmar()} disabled={busy} className="homy-btn-primary min-h-[46px] w-full text-[15px] disabled:opacity-60">
               {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Send className="size-4" aria-hidden />}
-              {busy ? 'Enviando…' : `Enviar pedido a ${providers} proveedor${providers === 1 ? '' : 'es'}`}
+              {busy ? 'Enviando…' : confirmLabel(groups, types)}
             </button>
             <BackBtn onClick={() => setStep('lista')} disabled={busy} />
           </div>
@@ -294,13 +303,14 @@ function LineRow({ l, onQty, onRemove }: {
   const [draft, setDraft] = useState(String(l.quantity))
   const [busy, setBusy] = useState(false)
   const unit = l.element?.unit || 'unidad'
-  const max = l.available
+  // se puede pedir más de lo que hay: lo que no alcanza va como reserva (D15)
+  const max = 100000
 
   async function commit(q: number) {
     if (!Number.isFinite(q) || q <= 0) { setDraft(String(l.quantity)); return }
     const stepped = Math.round(q / l.step) * l.step
     const clamped = Math.min(Math.max(stepped, l.step), Math.max(max, l.step))
-    if (clamped !== q) toast.info(q > max ? `Hay ${max} ${unit} disponibles` : `Se vende de a ${l.step} ${unit}`)
+    if (clamped !== q) toast.info(`Se vende de a ${l.step} ${unit}`)
     if (clamped === l.quantity) { setDraft(String(l.quantity)); return }
     setBusy(true)
     const r = await onQty(l.stockId, clamped)
@@ -350,50 +360,112 @@ function LineRow({ l, onQty, onRemove }: {
         <span className="text-[11.5px] text-slate-400">{unit}</span>
         <span className="homy-num-adapt ml-auto text-[14px] font-extrabold text-[#0A2540] tabular-nums">{formatARS(l.lineTotal)}</span>
       </div>
-      {l.problem && (
+      {l.problem ? (
         <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-red-500/10 px-2.5 py-1.5 text-[12px] font-semibold text-red-700" role="alert">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden /> {l.problemText}
         </p>
-      )}
+      ) : l.stockNote ? (
+        <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-[#1D63B8]/8 px-2.5 py-1.5 text-[12px] font-semibold text-[#1D63B8]">
+          <Clock className="mt-0.5 size-3.5 shrink-0" aria-hidden /> {l.stockNote}
+        </p>
+      ) : null}
     </li>
   )
 }
 
+/** Compra o reserva de una línea: lo que no tiene stock suficiente solo se reserva. */
+function modeOf(l: CartLine, types: Record<string, LineMode>): LineMode {
+  if (!l.inStock) return 'reserva'
+  return types[l.stockId] || 'compra'
+}
+
+function resolvedTypes(groups: CartGroup[], types: Record<string, LineMode>): Record<string, LineMode> {
+  const out: Record<string, LineMode> = {}
+  for (const g of groups) for (const l of g.items) out[l.stockId] = modeOf(l, types)
+  return out
+}
+
+function confirmLabel(groups: CartGroup[], types: Record<string, LineMode>): string {
+  let compras = 0
+  let reservas = 0
+  for (const g of groups) {
+    const modes = new Set(g.items.map((l) => modeOf(l, types)))
+    if (modes.has('compra')) compras++
+    if (modes.has('reserva')) reservas++
+  }
+  if (compras && !reservas) return compras === 1 ? 'Confirmar compra' : `Confirmar ${compras} compras`
+  if (reservas && !compras) return reservas === 1 ? 'Enviar reserva' : `Enviar ${reservas} reservas`
+  return `Confirmar ${compras} compra${compras === 1 ? '' : 's'} y ${reservas} reserva${reservas === 1 ? '' : 's'}`
+}
+
 function ConfirmStep({ groups, types, setTypes, note, setNote }: {
   groups: CartGroup[]
-  types: Record<string, 'compra' | 'reserva'>
-  setTypes: (t: Record<string, 'compra' | 'reserva'>) => void
+  types: Record<string, LineMode>
+  setTypes: (t: Record<string, LineMode>) => void
   note: string
   setNote: (v: string) => void
 }) {
   return (
     <div className="space-y-3">
       <p className="text-[13px] leading-relaxed text-slate-600">
-        Cada proveedor recibe <b>su parte</b> del pedido y la aprueba (ahí te reserva el stock). Después pagás a cada uno cuando quieras: con Mercado Pago o en efectivo al retirar.
+        Elegí qué <b>comprás</b> y qué <b>reservás</b>. Lo que comprás con stock <b>no necesita aprobación</b>: te lo reservamos al confirmar y lo pagás enseguida (Mercado Pago o efectivo al retirar). Lo que reservás lo <b>aprueba el proveedor</b>; lo que no tiene stock solo se puede reservar y el proveedor te avisa cuándo lo tiene.
       </p>
       {groups.map((g) => {
-        const t = types[g.provider.id] || 'compra'
+        const compra = g.items.filter((l) => modeOf(l, types) === 'compra')
+        const reserva = g.items.filter((l) => modeOf(l, types) === 'reserva')
+        const sum = (ls: CartLine[]) => ls.reduce((a, l) => a + l.lineTotal, 0)
         return (
-          <section key={g.provider.id} className="homy-glass rounded-2xl p-3.5">
+          <section key={g.provider.id} className="homy-glass rounded-2xl p-3.5" aria-label={`Qué comprás y qué reservás a ${g.provider.businessName}`}>
             <p className="text-[14px] font-extrabold text-[#0A2540]">{g.provider.businessName}</p>
-            <p className="text-[12px] text-slate-500">{g.items.length} producto{g.items.length === 1 ? '' : 's'} · {formatARS(g.subtotal)}</p>
-            <div role="radiogroup" aria-label={`Tipo de pedido para ${g.provider.businessName}`} className="mt-2.5 grid grid-cols-2 gap-2">
-              {(['compra', 'reserva'] as const).map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  role="radio"
-                  aria-checked={t === opt}
-                  onClick={() => setTypes({ ...types, [g.provider.id]: opt })}
-                  className={`min-h-[56px] rounded-2xl px-3 py-2 text-left ring-1 transition ${t === opt ? 'bg-[#1D63B8]/10 ring-[#1D63B8]/45' : 'bg-white/50 ring-[#0A2540]/10 hover:bg-white/80'}`}
-                >
-                  <span className="flex items-center gap-1.5 text-[13px] font-extrabold text-[#0A2540]">
-                    {opt === 'compra' ? <ShoppingBag className="size-3.5 text-[#FF5A1F]" aria-hidden /> : <Clock className="size-3.5 text-[#1D63B8]" aria-hidden />}
-                    {opt === 'compra' ? 'Comprar' : 'Reservar'}
-                  </span>
-                  <span className="mt-0.5 block text-[11.5px] leading-snug text-slate-500">{opt === 'compra' ? '7 días para retirar' : 'Te lo guardan 48 h'}</span>
-                </button>
-              ))}
+            <ul className="mt-2 space-y-2">
+              {g.items.map((l) => {
+                const m = modeOf(l, types)
+                return (
+                  <li key={l.stockId} className="rounded-xl bg-white/50 p-2.5 ring-1 ring-[#0A2540]/8">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+                      <span className="min-w-0 flex-[1_1_10rem] text-[13px] font-bold text-[#0A2540]">{l.element?.name || 'Producto'} × {l.quantity}</span>
+                      <span className="homy-num-adapt text-[13px] font-extrabold tabular-nums text-[#0A2540]">{formatARS(l.lineTotal)}</span>
+                    </div>
+                    {l.inStock ? (
+                      <div role="radiogroup" aria-label={`Comprar o reservar ${l.element?.name || 'producto'}`} className="mt-2 grid grid-cols-2 gap-1.5">
+                        {(['compra', 'reserva'] as const).map((opt) => (
+                          <button
+                            key={opt}
+                            type="button"
+                            role="radio"
+                            aria-checked={m === opt}
+                            onClick={() => setTypes({ ...types, [l.stockId]: opt })}
+                            className={`inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl px-2 text-[12.5px] font-extrabold ring-1 transition ${m === opt ? 'bg-[#1D63B8]/10 text-[#0A2540] ring-[#1D63B8]/45' : 'bg-white/60 text-slate-500 ring-[#0A2540]/10 hover:bg-white'}`}
+                          >
+                            {opt === 'compra' ? <ShoppingBag className="size-3.5 text-[#FF5A1F]" aria-hidden /> : <Clock className="size-3.5 text-[#1D63B8]" aria-hidden />}
+                            {opt === 'compra' ? 'Comprar' : 'Reservar'}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-1.5 flex items-start gap-1.5 text-[12px] font-semibold text-[#1D63B8]">
+                        <Clock className="mt-0.5 size-3.5 shrink-0" aria-hidden /> {l.stockNote || 'Sin stock: podés reservarlo y el proveedor te avisa'}
+                      </p>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+            <div className="mt-2.5 space-y-1.5">
+              {compra.length > 0 && (
+                <p className="flex flex-wrap items-center justify-between gap-x-2 rounded-xl bg-[#FF5A1F]/8 px-3 py-2 text-[12.5px]">
+                  <span className="font-extrabold text-[#b8410f]"><ShoppingBag className="mr-1 inline size-3.5" aria-hidden />Compra directa · Pagás ahora</span>
+                  <span className="homy-num-adapt font-extrabold tabular-nums text-[#0A2540]">{formatARS(sum(compra))}</span>
+                  <span className="basis-full text-[11.5px] text-slate-500">Sin aprobación: el stock queda reservado y tenés 24 h para pagar o elegir efectivo (con efectivo, 7 días para retirar).</span>
+                </p>
+              )}
+              {reserva.length > 0 && (
+                <p className="flex flex-wrap items-center justify-between gap-x-2 rounded-xl bg-[#1D63B8]/8 px-3 py-2 text-[12.5px]">
+                  <span className="font-extrabold text-[#1D63B8]"><Clock className="mr-1 inline size-3.5" aria-hidden />Reserva · El proveedor tiene que aprobarla</span>
+                  <span className="homy-num-adapt font-extrabold tabular-nums text-[#0A2540]">{formatARS(sum(reserva))}</span>
+                  <span className="basis-full text-[11.5px] text-slate-500">Si tiene stock te lo guarda 48 h; si no, te dice cuándo lo tiene.</span>
+                </p>
+              )}
             </div>
           </section>
         )

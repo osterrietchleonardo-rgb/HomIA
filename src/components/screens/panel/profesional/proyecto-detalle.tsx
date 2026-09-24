@@ -15,6 +15,7 @@ import {
 import { ClientSummaryButton } from '@/components/app/client-summary'
 import ReviewForm from '@/components/screens/panel/review-form'
 import ProSobrantes from '@/components/screens/panel/profesional/sobrantes-pro'
+import ClientProjectDetail from '@/components/screens/panel/cliente/proyecto-detalle'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -47,6 +48,8 @@ type Project = {
   materialsPaymentMode: string; conversationId: string | null; createdAt: string
   urgency?: string | null; address?: string | null; deadline?: string | null; photos?: string[]
   job: { id: string; title: string } | null
+  // D16: subcontrataciones que salieron de este proyecto (solo las ve el profesional a cargo)
+  subcontracts?: { id: string; title: string; stage: string; status: string; laborCost: number; proName: string }[]
   client: { id: string; displayName: string; avatarUrl: string | null; phone: string | null; email: string | null; verificationStatus?: string }
   professional: { id: string; displayName: string; personType: string }
 }
@@ -301,6 +304,10 @@ export default function ProProjectDetail({ id }: { id: string }) {
     </div>
   )
 
+  // D16: una subcontratación que hiciste vos (sos el cliente de ese proyecto) se abre dentro de tu
+  // panel de profesional con la vista de cliente (el panel de cliente redirige si no tenés ese rol).
+  if (data.role === 'cliente') return <ClientProjectDetail id={id} />
+
   const p = data.project
   const isActive = p.status === 'activo'
   const isCancelled = p.status === 'cancelado'
@@ -400,6 +407,32 @@ export default function ProProjectDetail({ id }: { id: string }) {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* D16: subcontrataciones de este proyecto (el cliente no las ve) */}
+        {p.subcontracts && p.subcontracts.length > 0 && (
+          <div className="homy-glass mb-5 rounded-3xl p-4 sm:p-5" aria-label="Subcontrataciones">
+            <p className="flex items-center gap-2 text-sm font-extrabold text-[#0A2540]">
+              <span className="homy-icon-chip homy-chip-blue size-8 shrink-0 [&_svg]:size-4" aria-hidden><FolderOpen /></span>
+              Subcontrataciones
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">Profesionales que contrataste para este proyecto. Tu cliente no las ve.</p>
+            <div className="mt-3 grid gap-2">
+              {p.subcontracts.map((s) => (
+                <Link key={s.id} to={`/panel/profesional/proyectos/${s.id}`}
+                  className="homy-glass-soft homy-focus flex min-h-[44px] flex-wrap items-center justify-between gap-2 rounded-xl px-4 py-3 transition hover:ring-1 hover:ring-[#1D63B8]/30">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-bold text-[#0A2540]">{s.title}</span>
+                    <span className="block text-xs text-slate-500">
+                      {s.proName} · {s.status === 'activo' ? STAGE_LABEL[s.stage] || s.stage : s.status === 'cancelado' ? 'Cancelado' : 'Finalizado'}
+                      {s.laborCost > 0 ? ` · ${formatARS(s.laborCost)}` : ' · sin cotizar'}
+                    </span>
+                  </span>
+                  <ArrowRight className="size-4 shrink-0 text-[#1D63B8]" aria-hidden />
+                </Link>
+              ))}
+            </div>
           </div>
         )}
 

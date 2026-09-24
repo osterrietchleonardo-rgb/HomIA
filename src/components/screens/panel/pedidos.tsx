@@ -80,7 +80,7 @@ export function OrdersList({ role, embedded = false }: { role: 'cliente' | 'prof
   return (
     <div className="space-y-3">
       {!embedded && (
-        <p className="homy-page-sub -mt-1">Pedís → cada proveedor aprueba su parte y te reserva el stock → le pagás a cada uno (Mercado Pago o efectivo al retirar) → retirás → calificás.</p>
+        <p className="homy-page-sub -mt-1">Lo que comprás con stock queda reservado al confirmar y lo pagás enseguida (Mercado Pago o efectivo al retirar); lo que reservás lo aprueba cada proveedor. Después retirás y calificás.</p>
       )}
       {orders.map((o) => {
         const meta = ORDER_STATUS[o.summary.status]
@@ -126,7 +126,7 @@ export default function OrdersScreen({ role }: { role: 'cliente' | 'profesional'
         <div className="min-w-0">
           <p className="homy-eyebrow">Materiales</p>
           <h1 className="homy-page-title mt-1.5">Mis pedidos</h1>
-          <p className="homy-page-sub">Seguí cada pedido por proveedor: aprobación, pago, retiro y reseña. Todo queda registrado.</p>
+          <p className="homy-page-sub">Seguí cada pedido por proveedor: pago de tus compras, aprobación de tus reservas, retiro y reseña. Todo queda registrado.</p>
         </div>
       </header>
       <OrdersList role={role} />

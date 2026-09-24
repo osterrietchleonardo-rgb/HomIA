@@ -39,7 +39,7 @@ export default function MpConnectCard({ kind, returnPath }: { kind: 'professiona
     const r = route.query.mp
     if (!r) return
     if (r === 'conectado') toast.success('Mercado Pago conectado', { description: 'Tus clientes ya pueden pagarte las facturas por Mercado Pago: la plata entra en tu cuenta.' })
-    else if (r === 'cancelado') toast.info('No conectaste Mercado Pago', { description: 'Podés hacerlo cuando quieras desde tu perfil.' })
+    else if (r === 'cancelado') toast.info('No conectaste Mercado Pago', { description: 'Podés hacerlo cuando quieras desde Cobros.' })
     else toast.error('No pudimos conectar tu Mercado Pago', { description: 'Probá de nuevo en un rato. Mientras tanto, tus clientes te pagan en efectivo.' })
     navigate(returnPath, { replace: true })
   }, [route.query.mp, returnPath])

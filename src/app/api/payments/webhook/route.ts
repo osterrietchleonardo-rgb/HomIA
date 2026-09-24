@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getPayment, getPreapproval, cancelPreapproval, verifyWebhookSignature, type MpPaymentInfo } from '@/lib/mercadopago'
+import { getPayment, getPreapproval, cancelPreapproval, verifyWebhookSignature, ensureFreshSellerToken, refundPayment, type MpPaymentInfo } from '@/lib/mercadopago'
 import { planTransicion } from '@/lib/plans'
 import { round2, serviceFeeFor } from '@/lib/fees'
 import { logActivity } from '@/lib/activity'
@@ -253,7 +253,7 @@ function findPurchaseWithProvider(purchaseId: string) {
   return db.purchase.findUnique({
     where: { id: purchaseId },
     include: {
-      provider: { select: { id: true, userId: true, businessName: true, mpOauthAccessToken: true } },
+      provider: { select: { id: true, userId: true, businessName: true, mpOauthAccessToken: true, mpOauthRefreshToken: true, mpOauthExpiresAt: true, mpOauthStatus: true } },
       client: { select: { roles: true } },
     },
   })
@@ -272,6 +272,12 @@ async function applyPurchasePayment(purchase: PurchaseWithProvider, payment: MpP
   }
   if (payment.status !== 'approved') return
   if (purchase.status === 'pagado') return // ya estaba pagada: no se toca
+  // pago que llegó tarde a una compra ya cancelada (p. ej. venció a las 24 h y el stock se
+  // liberó): no se "resucita" la compra — se devuelve el pago completo con el token del proveedor
+  if (purchase.status === 'cancelado' || purchase.status === 'rechazado') {
+    await refundLatePayment(purchase, payment)
+    return
+  }
 
   const fee = paidFee(payment, purchase.total)
   // condicional: dos avisos simultáneos no duplican notificaciones ni eventos
@@ -310,6 +316,50 @@ async function applyPurchasePayment(purchase: PurchaseWithProvider, payment: MpP
   await logActivity({
     orderId: purchase.orderId, purchaseId: purchase.id, actorId: null, actorRole: 'sistema', type: 'pagado',
     message: `Mercado Pago acreditó el pago: ${purchase.total.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 })}${fee > 0 ? ` + cargo de servicio ${fee.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 })}` : ''}.`,
+    data: { mpPaymentId: payment.id, amount: payment.transactionAmount },
+  })
+}
+
+async function refundLatePayment(purchase: PurchaseWithProvider, payment: MpPaymentInfo) {
+  const panel = parseJson<string[]>(purchase.client.roles, []).includes('cliente') ? 'cliente' : 'profesional'
+  const orderKey = purchase.orderId || `legacy-${purchase.id}`
+  let ok = false
+  try {
+    const token = await ensureFreshSellerToken(purchase.provider)
+    await refundPayment({ paymentId: payment.id, accessToken: token, idempotencyKey: `purchase-late-${payment.id}` })
+    await db.payment.updateMany({ where: { mpPaymentId: payment.id }, data: { refundedAmount: payment.transactionAmount } })
+    ok = true
+  } catch (e) {
+    console.error('[mp webhook] no se pudo devolver el pago tardío de una compra cancelada', purchase.id, payment.id, e)
+  }
+  const monto = payment.transactionAmount.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 })
+  await db.notification.createMany({
+    data: [
+      {
+        userId: purchase.clientId,
+        type: 'compra_pago_devuelto',
+        title: ok ? 'Te devolvimos el pago' : 'Pago de una compra cancelada',
+        body: ok
+          ? `Tu pago de ${monto} llegó cuando la compra de ${purchase.elementName} ya estaba cancelada: Mercado Pago te lo devuelve completo.`
+          : `Tu pago de ${monto} llegó cuando la compra de ${purchase.elementName} ya estaba cancelada y no pudimos devolverlo solos: escribile a ${purchase.provider.businessName} para que te lo reintegre.`,
+        link: `#/panel/${panel}/pedidos/${orderKey}`,
+      },
+      {
+        userId: purchase.provider.userId,
+        type: 'compra_pago_devuelto',
+        title: ok ? 'Pago devuelto de una compra cancelada' : 'Devolvé un pago de una compra cancelada',
+        body: ok
+          ? `Llegó un pago de ${monto} por ${purchase.elementName}, que ya estaba cancelada: se devolvió completo al cliente desde tu Mercado Pago.`
+          : `Llegó un pago de ${monto} por ${purchase.elementName}, que ya estaba cancelada, y no pudimos devolverlo automáticamente (revisá tu conexión de Mercado Pago). Devolvéselo al cliente desde tu cuenta.`,
+        link: '#/panel/proveedor/cobros?tab=ventas',
+      },
+    ],
+  })
+  await logActivity({
+    orderId: purchase.orderId, purchaseId: purchase.id, actorId: null, actorRole: 'sistema', type: ok ? 'pago_devuelto' : 'pago_tardio',
+    message: ok
+      ? `Llegó un pago de ${monto} con la compra ya cancelada: se devolvió completo por Mercado Pago.`
+      : `Llegó un pago de ${monto} con la compra ya cancelada y no se pudo devolver automáticamente: el proveedor tiene que reintegrarlo.`,
     data: { mpPaymentId: payment.id, amount: payment.transactionAmount },
   })
 }

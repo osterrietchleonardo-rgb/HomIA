@@ -62,6 +62,9 @@ export async function GET(
       })
     : []
 
+  // subcontratación (D16): se consulta aparte y solo para quien la puede ver
+  const sub = await subcontractInfo(project.id, isClient, isPro, user.id)
+
   // conversación cliente↔profesional (si el cliente ya la abrió): atajo "Abrir chat"
   const conv = await db.conversation.findUnique({
     where: { userAId_userBId: pairKey(project.clientId, project.pro.userId) },
@@ -83,6 +86,12 @@ export async function GET(
       conversationId: conv?.id || null,
       createdAt: project.createdAt,
       job: project.job,
+      // "Parte del proyecto <título>": solo si quien mira es el cliente de esta subcontratación
+      // Y además el profesional a cargo del proyecto original. El subcontratado no lo ve.
+      parentProject: sub.parentProject,
+      // "Subcontrataciones": solo para el profesional a cargo. El cliente original nunca ve
+      // las subcontrataciones ni sus montos.
+      subcontracts: sub.subcontracts,
       client: project.client,
       // brief de la contratación guiada (wizard del directorio)
       urgency: project.urgency,
@@ -140,6 +149,44 @@ export async function GET(
       })(),
     })),
   })
+}
+
+// Subcontratación (D16), aparte del detalle principal: si falla, el detalle del proyecto se
+// sigue viendo (sin las secciones de subcontratación) y el error queda en el log.
+//   parentProject: solo si quien mira es el cliente de la subcontratación Y el profesional a
+//                  cargo del proyecto original (el que subcontrató).
+//   subcontracts:  solo si quien mira es el profesional a cargo del proyecto original.
+async function subcontractInfo(projectId: string, isClient: boolean, isPro: boolean, userId: string) {
+  const out: {
+    parentProject: { id: string; title: string } | null
+    subcontracts: { id: string; title: string; stage: string; status: string; laborCost: number; createdAt: Date; proName: string }[]
+  } = { parentProject: null, subcontracts: [] }
+  try {
+    if (isClient) {
+      const own = await db.project.findUnique({
+        where: { id: projectId },
+        select: { parent: { select: { id: true, title: true, pro: { select: { userId: true } } } } },
+      })
+      if (own?.parent && own.parent.pro.userId === userId) out.parentProject = { id: own.parent.id, title: own.parent.title }
+    }
+    if (isPro) {
+      const subs = await db.project.findMany({
+        where: { parentProjectId: projectId },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true, title: true, stage: true, status: true, laborCost: true, createdAt: true,
+          pro: { select: { companyName: true, user: { select: { displayName: true } } } },
+        },
+      })
+      out.subcontracts = subs.map((s) => ({
+        id: s.id, title: s.title, stage: s.stage, status: s.status, laborCost: s.laborCost, createdAt: s.createdAt,
+        proName: s.pro.companyName || s.pro.user.displayName,
+      }))
+    }
+  } catch (e) {
+    console.error('[projects/[id]] no se pudo leer la subcontratación', e)
+  }
+  return out
 }
 
 // ── PATCH: máquina de estados del proyecto ──

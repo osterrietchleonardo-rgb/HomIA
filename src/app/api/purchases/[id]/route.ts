@@ -4,39 +4,49 @@ import { ok, fail, parseBody, appUrl, parseJson } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
 import { planState } from '@/lib/plans'
-import { createSellerPreference } from '@/lib/mercadopago'
+import { createSellerPreference, ensureFreshSellerToken, refundPayment } from '@/lib/mercadopago'
 import { createWithChargeNumber } from '@/lib/charge-number'
-import { purchaseLines, releaseLines, refreshStockStatus, fmt, type PurchaseLine } from '@/lib/orders'
+import { purchaseLines, releaseLines, reserveItems, StockShortError, fmt, type PurchaseLine } from '@/lib/orders'
 import { serviceFeeFor, round2, totalWithMp } from '@/lib/fees'
 import { logActivity } from '@/lib/activity'
 import { sellerTokenOr503, mpDown } from '@/lib/seller-pay'
 import { LEGACY_PREFIX } from '@/lib/order-view'
+import { RESERVA_MS, COMPRA_EFECTIVO_MS, fmtDeadline, fmtDay } from '@/lib/order-rules'
 
-// ── Máquina de estados de un sub-pedido (compra a UN proveedor, con uno o más ítems) ──
-//   pendiente_aprobacion ─aprobar(prov)──▶ aprobado ─entregar(prov)──▶ entregado | pagado
-//          │                                  │
-//          ├─rechazar(prov)──▶ rechazado      ├─pagar_efectivo(cli): charge acordada_efectivo (también desde entregado)
-//          └─cancelar(ambos)─▶ cancelado      ├─pagar_mp(cli): preferencia MP con el token del proveedor + cargo 1%
-//                                             └─cancelar(ambos, si el cobro no está pagado) ─▶ cancelado (+ devuelve stock)
-// Aprobar reserva TODOS los ítems en una transacción: si alguno no alcanza, no se
-// reserva nada y el 409 dice cuál. El cobro (ProviderCharge) nace al aprobar:
-// pendiente → acordada_efectivo/pagada → confirma el proveedor (PATCH /api/charges/:id)
-// o el webhook de MP. Al pasar a pagada, el sub-pedido queda `pagado`.
+// ── Máquina de estados de un sub-pedido (a UN proveedor, con uno o más ítems) ──
+// D15 (24/09/2026, Leonardo): "Las compras no necesitan aprobación del proveedor: son
+// directas al pago, siempre y cuando haya stock. Las aprobaciones son para las reservas
+// de productos, con o sin stock."
+//
+// COMPRA (nace en POST /api/orders ya `aprobado` = por pagar, stock reservado + cobro):
+//   aprobado ─pagar_efectivo(cli)─▶ aprobado (cobro acordada_efectivo, 7 días desde la compra)
+//            ─pagar_mp(cli)───────▶ preferencia MP (token del proveedor + 1%) → webhook → pagado
+//            ─entregar(prov)──────▶ entregado | pagado
+//            ─cancelar(ambos; el proveedor con motivo, también si ya está pagada y no la
+//             entregó → reembolso total por MP con SU token) ─▶ cancelado (+ libera stock)
+//   24 h sin pagar ni elegir efectivo / 7 días con efectivo sin retirar → cron → cancelado
+//
+// RESERVA (con o sin stock):
+//   pendiente_aprobacion ─aprobar(prov)─▶ aprobado (hay stock: reserva atómica + cobro + 48 h)
+//                        ─aprobar(prov, availableFrom)─▶ esperando_stock (no hay stock: fecha
+//                           aproximada, sin descontar nada; puede fijar el precio si era "a coordinar")
+//                        ─rechazar(prov, motivo)─▶ rechazado
+//   esperando_stock ─disponible(prov)─▶ aprobado (reserva atómica + cobro + 48 h)
+//   cualquier estado sin pago ─cancelar(ambos)─▶ cancelado
 // Cada acción queda en la línea de tiempo (ActivityEvent) y avisa a la otra parte.
 
-const RESERVA_MS = 48 * 60 * 60 * 1000
-const COMPRA_MS = 7 * 24 * 60 * 60 * 1000
-
 const schema = z.object({
-  action: z.enum(['aprobar', 'rechazar', 'cancelar', 'pagar_efectivo', 'pagar_mp', 'entregar']),
+  action: z.enum(['aprobar', 'rechazar', 'cancelar', 'pagar_efectivo', 'pagar_mp', 'entregar', 'disponible']),
   unitPrice: z.coerce.number().positive().optional(),
   reason: z.string().max(400).optional(),
+  // reserva sin stock: fecha aproximada de disponibilidad (AAAA-MM-DD)
+  availableFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha tiene que ser AAAA-MM-DD').optional(),
 })
 
-class StockShortError extends Error {
-  constructor(readonly line: PurchaseLine, readonly available: number) {
-    super('STOCK_SHORT')
-  }
+/** AAAA-MM-DD → mediodía de ese día en Argentina (15:00 UTC). */
+function parseDay(s: string): Date | null {
+  const d = new Date(`${s}T15:00:00.000Z`)
+  return Number.isNaN(d.getTime()) ? null : d
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -68,6 +78,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const lines = purchaseLines(purchase)
   const label = purchase.elementName
   const st = purchase.status
+  const esCompra = purchase.type !== 'reserva'
   // el comprador puede ser cliente o profesional: los avisos lo llevan a SU panel
   const buyerRoles = parseJson<string[]>(purchase.client.roles, [])
   const buyerPanel = buyerRoles.includes('cliente') ? 'cliente' : buyerRoles.includes('profesional') ? 'profesional' : 'cliente'
@@ -81,9 +92,34 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       actorRole: isProvider ? 'proveedor' : buyerPanel, type, message, data,
     })
 
+  /** Emite el cobro de un sub-pedido con el stock ya reservado; si no se pudo, deshace la reserva. */
+  async function emitCharge(total: number, reservedLines: PurchaseLine[], revertTo: 'pendiente_aprobacion' | 'esperando_stock') {
+    const newCharge = await createWithChargeNumber((number) =>
+      db.providerCharge.create({
+        data: {
+          number,
+          providerId: purchase!.providerId,
+          clientId: purchase!.clientId,
+          projectId: null,
+          amount: total,
+          status: 'pendiente',
+          materialIds: '[]',
+          description: `${purchase!.order ? `${esCompra ? 'Compra' : 'Reserva'} ${purchase!.order.number}: ` : 'Compra directa: '}${label}`.slice(0, 500),
+        },
+      })
+    )
+    if (!newCharge) {
+      await releaseLines(reservedLines, `Aprobación fallida del pedido ${purchase!.id}`)
+      await db.purchase.update({ where: { id }, data: { status: revertTo, ...(revertTo === 'pendiente_aprobacion' ? { approvedAt: null } : {}) } })
+    }
+    return newCharge
+  }
+
   // ─────────────── CANCELAR (cliente o proveedor) ───────────────
   if (d.action === 'cancelar') {
-    if (!['pendiente_aprobacion', 'aprobado'].includes(st)) {
+    const reason = d.reason?.trim() || ''
+    const cancelables = isProvider ? ['pendiente_aprobacion', 'esperando_stock', 'aprobado', 'pagado'] : ['pendiente_aprobacion', 'esperando_stock', 'aprobado']
+    if (!cancelables.includes(st)) {
       return fail(
         st === 'cancelado' ? 'Este pedido ya está cancelado'
           : st === 'rechazado' ? 'Este pedido ya fue rechazado'
@@ -91,27 +127,69 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         409
       )
     }
-    if (chargePagado) return fail('El cobro ya está pagado: no se puede cancelar. Coordiná por chat', 409)
+    if (isClient && chargePagado) return fail('El cobro ya está pagado: no se puede cancelar. Coordiná por chat', 409)
+    if (isProvider && reason.length < 3) return fail('Contale al cliente por qué cancelás: le llega en la notificación y en su pedido', 400, { needsReason: true })
+
+    // el proveedor cancela algo ya pagado (no entregado): se devuelve la plata
+    const paid = chargePagado || st === 'pagado'
+    let refundNote = ''
+    let refunded: { id: string; amount: number } | null = null
+    if (paid) {
+      const withStock = lines.filter((l) => !!l.stockId)
+      const entregado = withStock.length
+        ? await db.stockMovement.findFirst({ where: { stockId: { in: withStock.map((l) => l.stockId!) }, type: 'consumo', note: { contains: purchase.id } } })
+        : null
+      if (entregado) return fail('Ya lo entregaste: si hay un problema con los productos, se resuelve con una devolución', 409)
+      const porMp = (charge?.method || purchase.paymentMethod) === 'mercadopago'
+      if (porMp) {
+        const paymentId = purchase.mpPaymentId || charge?.mpPaymentId
+        if (!paymentId) return fail('No encontramos el pago de Mercado Pago para devolverlo. Escribinos antes de cancelar', 409)
+        let token: string
+        try {
+          token = await ensureFreshSellerToken(purchase.provider)
+        } catch {
+          return fail('Tu Mercado Pago no está conectado: reconectalo en Cobros para poder devolverle el pago al cliente. No se canceló nada', 409, { needsMp: true })
+        }
+        try {
+          const r = await refundPayment({ paymentId, accessToken: token, idempotencyKey: `purchase-cancel-${purchase.id}` })
+          const pay = await db.payment.findUnique({ where: { mpPaymentId: paymentId } })
+          const amount = pay?.amount ?? round2(purchase.total + purchase.serviceFee)
+          if (pay) await db.payment.update({ where: { id: pay.id }, data: { refundedAmount: amount } })
+          refunded = { id: r.id, amount }
+          refundNote = ` Mercado Pago le devuelve ${fmt(amount)} al cliente (reembolso total).`
+        } catch (e) {
+          console.error('[purchases] reembolso al cancelar', purchase.id, e)
+          return fail('Mercado Pago no pudo hacer la devolución, así que no se canceló nada. Probá de nuevo en un rato', 502, { retry: true })
+        }
+      } else {
+        refundNote = ` Como ya pagó en efectivo, devolvele ${fmt(purchase.total)} en mano.`
+      }
+    }
 
     // cancelación condicional: si otro proceso la cambió entre medio, no se libera stock dos veces
-    const upd = await db.purchase.updateMany({ where: { id, status: st }, data: { status: 'cancelado', rejectionReason: d.reason?.trim() || null } })
+    const upd = await db.purchase.updateMany({ where: { id, status: st }, data: { status: 'cancelado', rejectionReason: reason || null } })
     if (upd.count === 0) return fail('El pedido cambió de estado recién: actualizá la pantalla', 409)
-    if (st === 'aprobado') await releaseLines(lines, `Cancelación del pedido ${purchase.id}`)
+    const stockReservado = st === 'aprobado' || st === 'pagado'
+    if (stockReservado) await releaseLines(lines, `Cancelación del pedido ${purchase.id}`)
     if (charge && charge.status !== 'anulada') {
-      await db.providerCharge.update({ where: { id: charge.id }, data: { status: 'anulada' } })
+      await db.providerCharge.update({ where: { id: charge.id }, data: { status: paid ? 'reembolsada' : 'anulada' } })
     }
     const otherId = isClient ? purchase.provider.userId : purchase.clientId
     await db.notification.create({
       data: {
         userId: otherId,
         type: 'compra_cancelada',
-        title: 'Pedido cancelado',
-        body: `${user.displayName} canceló el pedido ${ref}${label}.${d.reason?.trim() ? ` Motivo: ${d.reason.trim()}` : ''}`,
+        title: paid ? 'Pedido cancelado: te devuelven el pago' : 'Pedido cancelado',
+        body: `${isProvider ? purchase.provider.businessName : user.displayName} canceló el pedido ${ref}${label}.${reason ? ` Motivo: ${reason}` : ''}${paid ? (refunded ? ` Mercado Pago te devuelve ${fmt(refunded.amount)}.` : ` ${purchase.provider.businessName} te tiene que devolver ${fmt(purchase.total)} en efectivo.`) : ''}`,
         link: isClient ? providerLink : clientLink,
       },
     })
-    await ev('cancelado', `${user.displayName} canceló el pedido${st === 'aprobado' ? ' (el stock reservado volvió al proveedor)' : ''}.${d.reason?.trim() ? ` Motivo: ${d.reason.trim()}` : ''}`)
-    return ok({ success: true, status: 'cancelado' })
+    await ev(
+      'cancelado',
+      `${isProvider ? purchase.provider.businessName : user.displayName} canceló el pedido${stockReservado ? ' (el stock reservado volvió al proveedor)' : ''}.${reason ? ` Motivo: ${reason}` : ''}${refundNote}`,
+      refunded ? { refundId: refunded.id, amount: refunded.amount } : undefined
+    )
+    return ok({ success: true, status: 'cancelado', refunded })
   }
 
   // ─────────────── ACCIONES DEL CLIENTE ───────────────
@@ -120,9 +198,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // se paga desde `aprobado` o, si el proveedor entregó antes de cobrar, desde `entregado`
     if (st !== 'aprobado' && st !== 'entregado') {
       return fail(
-        st === 'pendiente_aprobacion' ? 'El proveedor todavía no aprobó tu pedido'
-          : st === 'pagado' ? 'Este pedido ya está pagado'
-            : 'Este pedido no está en condiciones de pagarse',
+        st === 'pendiente_aprobacion' ? 'El proveedor todavía no aprobó tu reserva'
+          : st === 'esperando_stock' ? 'Tu reserva todavía no está disponible: el proveedor te avisa cuando la tenga'
+            : st === 'pagado' ? 'Este pedido ya está pagado'
+              : 'Este pedido no está en condiciones de pagarse',
         409
       )
     }
@@ -130,20 +209,28 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (chargePagado) return fail('Este pedido ya está pagado', 409)
 
     if (d.action === 'pagar_efectivo') {
-      // en efectivo NO hay cargo de servicio
+      // en efectivo NO hay cargo de servicio. En una COMPRA, con efectivo acordado hay
+      // 7 días desde la compra para retirar y pagar (en vez de las 24 h para pagar).
+      const efectivoHasta = esCompra && st === 'aprobado'
+        ? new Date((purchase.approvedAt ?? purchase.createdAt).getTime() + COMPRA_EFECTIVO_MS)
+        : null
       await db.providerCharge.update({ where: { id: charge.id }, data: { status: 'acordada_efectivo', method: 'efectivo', serviceFee: 0 } })
-      await db.purchase.update({ where: { id }, data: { paymentMethod: 'efectivo', serviceFee: 0 } })
+      await db.purchase.update({
+        where: { id },
+        data: { paymentMethod: 'efectivo', serviceFee: 0, ...(efectivoHasta ? { reservationExpiresAt: efectivoHasta } : {}) },
+      })
+      const plazo = efectivoHasta ? ` Tiene hasta el ${fmtDeadline(efectivoHasta)} para retirarlo y pagarte.` : ''
       await db.notification.create({
         data: {
           userId: purchase.provider.userId,
           type: 'cobro_efectivo_acordado',
           title: 'Pago en efectivo acordado',
-          body: `${user.displayName} paga ${ref}${label} (${fmt(purchase.total)}) en efectivo al retirar. Confirmá el cobro cuando recibas el dinero.`,
+          body: `${user.displayName} paga ${ref}${label} (${fmt(purchase.total)}) en efectivo al retirar.${plazo} Confirmá el cobro cuando recibas el dinero.`,
           link: providerLink,
         },
       })
-      await ev('pago_efectivo_acordado', `${user.displayName} eligió pagar ${fmt(purchase.total)} en efectivo al retirar (sin cargo de servicio).`)
-      return ok({ success: true, status: st, paymentMethod: 'efectivo', chargeStatus: 'acordada_efectivo' })
+      await ev('pago_efectivo_acordado', `${user.displayName} eligió pagar ${fmt(purchase.total)} en efectivo al retirar (sin cargo de servicio).${efectivoHasta ? ` Plazo para retirar y pagar: hasta el ${fmtDeadline(efectivoHasta)}.` : ''}`)
+      return ok({ success: true, status: st, paymentMethod: 'efectivo', chargeStatus: 'acordada_efectivo', reservationExpiresAt: efectivoHasta ?? purchase.reservationExpiresAt })
     }
 
     // pagar_mp: Checkout Pro con el token del proveedor (cobra directo a su cuenta) + cargo 1%
@@ -185,11 +272,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   if (d.action === 'aprobar') {
     if (st !== 'pendiente_aprobacion') {
-      return fail(st === 'aprobado' ? 'Este pedido ya está aprobado' : 'Solo se aprueban pedidos pendientes', 409)
+      return fail(
+        st === 'aprobado' ? (esCompra ? 'Las compras no se aprueban: el cliente ya la tiene lista para pagar' : 'Esta reserva ya está aprobada')
+          : st === 'esperando_stock' ? 'Esta reserva ya está aprobada: marcala "disponible" cuando tengas el producto'
+            : 'Solo se aprueban reservas pendientes',
+        409
+      )
     }
     if (lines.length === 0 || lines.some((l) => !l.stockId)) return fail('Este pedido no está asociado a un stock tuyo', 409)
 
-    // precio final: el de la oferta; en pedidos históricos de un solo ítem "a coordinar", el que fija el proveedor
+    // precio final: el de la oferta; con un solo ítem el proveedor puede ajustarlo (o fijarlo si era "a coordinar")
     let finalLines = lines
     if (d.unitPrice && d.unitPrice > 0 && lines.length === 1) {
       const up = round2(d.unitPrice)
@@ -198,6 +290,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (finalLines.some((l) => l.unitPrice <= 0)) return fail('Este pedido se pidió sin precio: fijá el precio unitario para aprobarlo', 400, { needsPrice: true })
     const total = round2(finalLines.reduce((a, l) => a + l.total, 0))
     if (total <= 0) return fail('El precio tiene que ser mayor a cero', 400, { needsPrice: true })
+    const priceChanged = finalLines !== lines
+    const savePrice = async () => {
+      if (!priceChanged) return
+      await db.purchase.update({ where: { id }, data: { total, unitPrice: finalLines[0].unitPrice } })
+      if (!finalLines[0].legacy) await db.purchaseItem.update({ where: { id: finalLines[0].id }, data: { unitPrice: finalLines[0].unitPrice, total: finalLines[0].total } })
+    }
+
+    let availableFrom: Date | null = null
+    if (d.availableFrom) {
+      availableFrom = parseDay(d.availableFrom)
+      const today = new Date(Date.now() - 36 * 3600 * 1000)
+      if (!availableFrom || availableFrom < today || availableFrom.getTime() > Date.now() + 180 * 86400000) {
+        return fail('Elegí una fecha entre hoy y los próximos 6 meses', 400)
+      }
+    }
 
     // reserva atómica de TODOS los ítems: si uno no alcanza, no se reserva ninguno
     try {
@@ -205,84 +312,106 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         // el estado se "toma" dentro de la transacción: dos aprobaciones simultáneas no reservan dos veces
         const taken = await tx.purchase.updateMany({ where: { id, status: 'pendiente_aprobacion' }, data: { approvedAt: new Date() } })
         if (taken.count === 0) throw new Error('YA_APROBADO')
-        for (const l of finalLines) {
-          const r = await tx.providerStock.updateMany({
-            where: { id: l.stockId!, quantity: { gte: l.quantity } },
-            data: { quantity: { decrement: l.quantity } },
-          })
-          if (r.count === 0) {
-            const s = await tx.providerStock.findUnique({ where: { id: l.stockId! }, select: { quantity: true } })
-            throw new StockShortError(l, s?.quantity ?? 0)
-          }
-          await tx.stockMovement.create({
-            data: { stockId: l.stockId!, type: 'reserva', quantity: l.quantity, note: `Pedido ${purchase.id} de ${purchase.client.displayName}` },
-          })
-          await refreshStockStatus(l.stockId!, tx)
-        }
+        await reserveItems(tx, finalLines, `Pedido ${purchase.id} de ${purchase.client.displayName}`)
         await tx.purchase.update({ where: { id }, data: { status: 'aprobado' } })
-      })
+      }, { timeout: 30_000, maxWait: 10_000 })
     } catch (e) {
-      if (e instanceof StockShortError) {
-        return fail(
-          `No te alcanza el stock de "${e.line.elementName}": pidieron ${e.line.quantity} ${e.line.unit} y tenés ${e.available}. No se reservó nada: actualizá tu stock o rechazá el pedido con un motivo`,
-          409,
-          { item: { id: e.line.id, name: e.line.elementName, requested: e.line.quantity, available: e.available } }
-        )
-      }
       if (e instanceof Error && e.message === 'YA_APROBADO') return fail('Este pedido ya está aprobado', 409)
-      throw e
+      if (!(e instanceof StockShortError)) throw e
+
+      // ── no hay stock: una RESERVA se aprueba igual, con fecha aproximada ──
+      if (!esCompra && availableFrom) {
+        const upd = await db.purchase.updateMany({
+          where: { id, status: 'pendiente_aprobacion' },
+          data: { status: 'esperando_stock', approvedAt: new Date(), availableFrom },
+        })
+        if (upd.count === 0) return fail('El pedido cambió de estado recién: actualizá la pantalla', 409)
+        await savePrice()
+        const dia = fmtDay(availableFrom)
+        await db.notification.create({
+          data: {
+            userId: purchase.clientId,
+            type: 'reserva_aprobada_sin_stock',
+            title: 'Tu reserva fue aprobada',
+            body: `${purchase.provider.businessName} aprobó tu reserva ${ref}${label} (${fmt(total)}) y lo tendría disponible aproximadamente el ${dia}. Te avisamos cuando esté para retirar.`,
+            link: clientLink,
+          },
+        })
+        await ev('aprobado_sin_stock', `${purchase.provider.businessName} aprobó la reserva sin stock por ${fmt(total)}: disponible aproximadamente el ${dia}. Todavía no se reservó stock.`)
+        return ok({ success: true, status: 'esperando_stock', total, availableFrom })
+      }
+      return fail(
+        esCompra
+          ? `No te alcanza el stock de "${e.line.elementName}": pidieron ${e.line.quantity} ${e.line.unit} y tenés ${e.available}. No se reservó nada: actualizá tu stock o rechazá el pedido con un motivo`
+          : `No tenés stock suficiente de "${e.line.elementName}" (pidieron ${e.line.quantity} ${e.line.unit}, tenés ${e.available}). Indicá la fecha aproximada en que lo vas a tener para aprobar la reserva, o rechazala con un motivo`,
+        409,
+        { item: { id: e.line.id, name: e.line.elementName, requested: e.line.quantity, available: e.available }, needsDate: !esCompra }
+      )
     }
 
-    const newCharge = await createWithChargeNumber((number) =>
-      db.providerCharge.create({
-        data: {
-          number,
-          providerId: purchase.providerId,
-          clientId: purchase.clientId,
-          projectId: null,
-          amount: total,
-          status: 'pendiente',
-          materialIds: '[]',
-          description: `${purchase.order ? `Pedido ${purchase.order.number}: ` : 'Compra directa: '}${label}`.slice(0, 500),
-        },
-      })
-    )
-    if (!newCharge) {
-      // no quedó cobro: se devuelve la reserva y el pedido vuelve a pendiente
-      await releaseLines(finalLines, `Aprobación fallida del pedido ${purchase.id}`)
-      await db.purchase.update({ where: { id }, data: { status: 'pendiente_aprobacion', approvedAt: null } })
-      return fail('No pudimos emitir el cobro del pedido: probá aprobarlo de nuevo en unos segundos', 503)
-    }
-    const expiresAt = new Date(Date.now() + (purchase.type === 'reserva' ? RESERVA_MS : COMPRA_MS))
-    await db.purchase.update({
-      where: { id },
-      data: {
-        approvedAt: new Date(),
-        reservationExpiresAt: expiresAt,
-        total,
-        chargeId: newCharge.id,
-        ...(finalLines !== lines ? { unitPrice: finalLines[0].unitPrice } : {}),
-      },
-    })
-    if (finalLines !== lines && !finalLines[0].legacy) {
-      await db.purchaseItem.update({ where: { id: finalLines[0].id }, data: { unitPrice: finalLines[0].unitPrice, total: finalLines[0].total } })
-    }
-    const hasta = expiresAt.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
+    const newCharge = await emitCharge(total, finalLines, 'pendiente_aprobacion')
+    if (!newCharge) return fail('No pudimos emitir el cobro del pedido: probá aprobarlo de nuevo en unos segundos', 503)
+    // compra aprobada acá: solo pedidos anteriores a D15 que quedaron pendientes (regla vieja de 7 días)
+    const expiresAt = new Date(Date.now() + (esCompra ? COMPRA_EFECTIVO_MS : RESERVA_MS))
+    await db.purchase.update({ where: { id }, data: { approvedAt: new Date(), reservationExpiresAt: expiresAt, total, chargeId: newCharge.id } })
+    await savePrice()
+    const hasta = fmtDeadline(expiresAt)
     await db.notification.create({
       data: {
         userId: purchase.clientId,
         type: 'compra_aprobada',
-        title: 'Tu pedido fue aprobado: pagá para retirarlo',
-        body: `${purchase.provider.businessName} aprobó ${ref}${label} por ${fmt(total)}. Tenés hasta el ${hasta} para ${purchase.type === 'reserva' ? 'retirarlo' : 'pagarlo y retirarlo'}.`,
+        title: esCompra ? 'Tu pedido fue aprobado: pagá para retirarlo' : 'Tu reserva fue aprobada',
+        body: `${purchase.provider.businessName} aprobó ${ref}${label} por ${fmt(total)} y te lo guarda. Tenés hasta el ${hasta} para pagarlo y retirarlo.`,
         link: clientLink,
       },
     })
-    await ev('aprobado', `${purchase.provider.businessName} aprobó el pedido y reservó ${finalLines.length} producto${finalLines.length === 1 ? '' : 's'} por ${fmt(total)}. Plazo: hasta el ${hasta}.`)
+    await ev('aprobado', `${purchase.provider.businessName} aprobó ${esCompra ? 'el pedido' : 'la reserva'} y reservó ${finalLines.length} producto${finalLines.length === 1 ? '' : 's'} por ${fmt(total)}. Plazo: hasta el ${hasta}.`)
     return ok({ success: true, status: 'aprobado', chargeId: newCharge.id, total, reservationExpiresAt: expiresAt })
   }
 
+  // ─────────────── reserva sin stock → ya lo tengo ───────────────
+  if (d.action === 'disponible') {
+    if (st !== 'esperando_stock') {
+      return fail(st === 'pendiente_aprobacion' ? 'Primero aprobá la reserva' : 'Solo se marcan disponibles las reservas que esperan stock', 409)
+    }
+    if (lines.length === 0 || lines.some((l) => !l.stockId)) return fail('Esta reserva no está asociada a un stock tuyo', 409)
+    try {
+      await db.$transaction(async (tx) => {
+        const taken = await tx.purchase.updateMany({ where: { id, status: 'esperando_stock' }, data: { status: 'aprobado' } })
+        if (taken.count === 0) throw new Error('YA_DISPONIBLE')
+        await reserveItems(tx, lines, `Reserva ${purchase.id} de ${purchase.client.displayName} (disponible)`)
+      }, { timeout: 30_000, maxWait: 10_000 })
+    } catch (e) {
+      if (e instanceof Error && e.message === 'YA_DISPONIBLE') return fail('Esta reserva ya está disponible', 409)
+      if (e instanceof StockShortError) {
+        return fail(
+          `Todavía no te alcanza el stock de "${e.line.elementName}": la reserva pide ${e.line.quantity} ${e.line.unit} y tenés ${e.available}. Cargalo en Stock y volvé a marcarla disponible`,
+          409,
+          { item: { id: e.line.id, name: e.line.elementName, requested: e.line.quantity, available: e.available } }
+        )
+      }
+      throw e
+    }
+    const newCharge = await emitCharge(purchase.total, lines, 'esperando_stock')
+    if (!newCharge) return fail('No pudimos emitir el cobro de la reserva: probá de nuevo en unos segundos', 503)
+    const expiresAt = new Date(Date.now() + RESERVA_MS)
+    await db.purchase.update({ where: { id }, data: { reservationExpiresAt: expiresAt, chargeId: newCharge.id } })
+    const hasta = fmtDeadline(expiresAt)
+    await db.notification.create({
+      data: {
+        userId: purchase.clientId,
+        type: 'reserva_disponible',
+        title: 'Tu reserva ya está para retirar',
+        body: `${purchase.provider.businessName} ya tiene ${ref}${label} (${fmt(purchase.total)}) y te lo guarda hasta el ${hasta}. Pagalo por Mercado Pago o en efectivo al retirar.`,
+        link: clientLink,
+      },
+    })
+    await ev('disponible', `${purchase.provider.businessName} ya tiene el producto: reservó el stock y te lo guarda 48 h, hasta el ${hasta}.`)
+    return ok({ success: true, status: 'aprobado', chargeId: newCharge.id, reservationExpiresAt: expiresAt })
+  }
+
   if (d.action === 'rechazar') {
-    if (st !== 'pendiente_aprobacion') return fail('Solo se rechazan pedidos pendientes', 409)
+    if (st !== 'pendiente_aprobacion') return fail('Solo se rechazan reservas pendientes: si ya la aprobaste, cancelala con un motivo', 409)
     const reason = d.reason?.trim() || null
     const upd = await db.purchase.updateMany({ where: { id, status: 'pendiente_aprobacion' }, data: { status: 'rechazado', rejectionReason: reason } })
     if (upd.count === 0) return fail('El pedido cambió de estado recién: actualizá la pantalla', 409)
@@ -290,12 +419,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       data: {
         userId: purchase.clientId,
         type: 'compra_rechazada',
-        title: 'Tu pedido fue rechazado',
-        body: `${purchase.provider.businessName} rechazó tu pedido ${ref}${label}.${reason ? ` Motivo: ${reason}` : ''}`,
+        title: esCompra ? 'Tu pedido fue rechazado' : 'Tu reserva fue rechazada',
+        body: `${purchase.provider.businessName} rechazó tu ${esCompra ? 'pedido' : 'reserva'} ${ref}${label}.${reason ? ` Motivo: ${reason}` : ''}`,
         link: clientLink,
       },
     })
-    await ev('rechazado', `${purchase.provider.businessName} rechazó el pedido.${reason ? ` Motivo: ${reason}` : ''}`)
+    await ev('rechazado', `${purchase.provider.businessName} rechazó ${esCompra ? 'el pedido' : 'la reserva'}.${reason ? ` Motivo: ${reason}` : ''}`)
     return ok({ success: true, status: 'rechazado' })
   }
 
@@ -304,7 +433,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // (el webhook de MP puede marcar pagado antes de que el cliente retire).
     if (st !== 'aprobado' && st !== 'pagado') {
       return fail(
-        st === 'pendiente_aprobacion' ? 'Primero aprobá el pedido' : st === 'entregado' ? 'Este pedido ya está entregado' : 'No podés entregar este pedido ahora',
+        st === 'pendiente_aprobacion' ? 'Primero aprobá la reserva'
+          : st === 'esperando_stock' ? 'Primero marcá la reserva como disponible'
+            : st === 'entregado' ? 'Este pedido ya está entregado' : 'No podés entregar este pedido ahora',
         409
       )
     }

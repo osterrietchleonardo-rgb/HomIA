@@ -43,6 +43,10 @@
 
 ---
 
+- **Botón de Homy y ventanas:** cuando se abre una ventana encima (contratar, un diálogo, un panel
+  lateral), el botón flotante de Homy se oculta para no tapar los botones de esa ventana, y vuelve al
+  cerrarla.
+
 ## 1. Visitante (sin cuenta)
 
 ### 1.1 Portada (home)
@@ -97,9 +101,21 @@
   materiales (con precio) y tu posición.
 - Se puede ocultar con **"Ocultar mapa"**.
 
+**Materiales en la lista (desde el 24/09/2026):**
+
+- Cada tarjeta de material tiene sus botones: **Agregar al carrito** (si el proveedor tiene stock:
+  es una compra directa) y **Reservar** (con o sin stock). Si no hay stock, dice "Sin stock: podés
+  reservarlo y el proveedor te avisa" y solo aparece **Reservar**.
+- Al tocar un botón aparece el aviso "Agregado al carrito · Ver carrito" y **seguís en la
+  búsqueda**: ya no te lleva al perfil del proveedor. El nombre del proveedor sigue siendo un link a
+  su perfil.
+- Sin cuenta también se puede agregar (el carrito queda en tu celular o computadora). Una cuenta
+  que es solo de proveedor no ve estos botones (el proveedor vende, no compra).
+
 **Sin cuenta:**
 
-- Ves las tarjetas, pero para abrirlas aparece "Registrate para ver esta tarjeta".
+- Ves las tarjetas, pero para abrir un profesional, un trabajo o el perfil de un proveedor aparece
+  "Registrate para ver esta tarjeta".
 - **"Preguntale a Homy"** responde con inteligencia artificial, con el mismo límite de consultas
   que en la portada (ver 1.1).
 
@@ -153,14 +169,18 @@ dorada **"★ Recomendado"**.
 - Muestra "N proveedores con stock", el precio "desde $X" y la etiqueta **"★ Recomendado"** si lo
   vende un proveedor PRO.
 - Se ven 3 ofertas y un botón **"Ver N ofertas más"**.
+- También aparecen los proveedores que publican el material **sin stock** (al final): dicen
+  "Sin stock: podés reservarlo y el proveedor te avisa" y solo tienen el botón **Reservar**.
+- Con stock hay dos botones: **Agregar al carrito** (compra directa, sin aprobación) y **Reservar**
+  (le pedís al proveedor que te lo guarde; lo tiene que aprobar).
 
 **Sin cuenta:** podés armar el carrito (ver abajo); para confirmar el pedido hay que crear la
 cuenta.
 
 **El carrito, también sin cuenta:**
 
-- En cada oferta hay un botón **Agregar al carrito**. Arriba, en el menú, está el ícono del
-  **carrito** con la cantidad de productos.
+- En cada oferta hay un botón **Agregar al carrito** (y **Reservar**). Arriba, en el menú, está el
+  ícono del **carrito** con la cantidad de productos.
 - Podés sumar productos de **varios proveedores**. Sin cuenta, el carrito se guarda en tu
   celular o computadora.
 - Al tocar **Confirmar pedido** te pide crear tu cuenta o ingresar ("**Tu carrito se guarda** y lo
@@ -172,11 +192,18 @@ cuenta.
 
 ### 1.5 Perfiles de profesionales y proveedores
 
+En el perfil de un proveedor, los productos **sin stock** muestran el botón **Reservar** y la leyenda
+"Sin stock: podés reservarlo y el proveedor te avisa"; los que tienen stock, **Al carrito**.
+
 - **Sin cuenta:** no se ven. Aparece "Ingresá para ver este profesional", con los botones
   "Crear cuenta gratis" y "Ya tengo cuenta".
-- **Con cuenta:** ver los puntos 2.10 (profesional) y 4.12 (proveedor).
+- **Con cuenta:** ver los puntos 3.15 (profesional) y 4.12 (proveedor).
+- **Atajo a las reseñas (los dos perfiles):** debajo del nombre hay un botón **"★ 4,5 · 12 reseñas"**.
+  Al tocarlo, la página baja suave hasta la sección **Reseñas** (y el foco queda ahí, para quien usa
+  teclado o lector de pantalla). Si todavía no tiene reseñas dice **"Sin reseñas todavía"** y no es
+  un botón. *(Agregado el 24/09/2026.)*
 
-*Fuente: `src/components/app/profile-gate.tsx`.*
+*Fuente: `src/components/app/profile-gate.tsx`, `src/components/app/reviews-shortcut.tsx`.*
 
 ### 1.6 Detalle de un trabajo publicado
 
@@ -309,6 +336,14 @@ tarjeta del presupuesto no hay botón de chat.
 
 Desde el **Directorio** o el perfil de un profesional, tocá **Contratar**.
 
+0. **¿Es para algo que ya publicaste?** (arriba del primer paso; aparece solo si tenés trabajos
+   publicados abiertos). Por defecto dice **"No, lo escribo ahora"** y el asistente queda igual que
+   siempre. Si elegís uno de tus trabajos (se ve título, rubro, fecha y cuántas ofertas tiene):
+   - Se cargan sus datos: título, detalles, rubro, fotos (hasta 4), urgencia, dirección, localidad
+     y presupuesto. **Todo se puede cambiar.**
+   - Aparece el chip **"Basado en: <título>"**; con la **X** lo quitás y el formulario vuelve a
+     quedar vacío.
+   - Te avisamos qué va a pasar al confirmar (ver abajo).
 1. **Qué necesitás:** título, detalles, rubro y hasta 4 fotos del lugar.
 2. **Cuándo y dónde:**
    - Urgencia: "Lo antes posible", "Próximas semanas" o "Fecha flexible".
@@ -324,7 +359,18 @@ Desde el **Directorio** o el perfil de un profesional, tocá **Contratar**.
   ponga el precio de su trabajo.
 - Si no dejaste mensaje, conviene abrir el chat: **el profesional no puede escribirte primero**.
 
-*Fuente: `src/components/app/hire-wizard.tsx`.*
+**Si elegiste un trabajo publicado:**
+
+- Tu trabajo pasa a **En proceso** y deja de recibir presupuestos (sale de la bolsa).
+- Si ese profesional ya te había mandado un presupuesto por ese trabajo, **se acepta su oferta**:
+  el proyecto arranca con ese precio de mano de obra y a él le llega "¡Te contrataron por tu
+  oferta!". Si no había ofertado, cotiza la mano de obra como siempre.
+- Los demás presupuestos pendientes quedan **rechazados** y a cada profesional le avisamos: "El
+  cliente contrató a otro profesional para este trabajo".
+- Si mientras tanto el trabajo dejó de estar abierto (por ejemplo, lo cerraste o aceptaste otra
+  oferta), la app te lo dice y no crea nada.
+
+*Fuente: `src/components/app/hire-wizard.tsx`; reglas en `LOGICA-HOMIA.md` §2 y §3.1 (D16).*
 
 ### 2.5 Seguir un proyecto
 
@@ -412,38 +458,61 @@ La sección **Facturas** junta las facturas de todos tus proyectos.
 
 **Armar el carrito:**
 
-1. Buscá el producto; por ejemplo, "caño". Vas a ver las ofertas de todos los proveedores con
-   stock.
-2. En la oferta que te convenga, tocá **Agregar al carrito**. Podés sumar productos de **varios
-   proveedores** (hasta 60 productos).
+1. Buscá el producto; por ejemplo, "caño". Vas a ver las ofertas de todos los proveedores (primero
+   las que tienen stock; al final las que no, para reservar).
+2. En la oferta que te convenga, tocá **Agregar al carrito** (para comprar) o **Reservar**. Lo que
+   no tiene stock solo se puede reservar. Podés sumar productos de **varios proveedores** (hasta 60
+   productos). También podés hacerlo desde la lista de materiales de **Buscar** (el mapa).
 3. Abrí el **carrito** (ícono de arriba). Ahí ves todo **agrupado por proveedor**, con:
    - la cantidad de cada producto (de a 1, o de a medio en metros, kilos, litros, etc.) y el botón
      para sacarlo;
    - **Total**, **"Cargo de servicio HomIA (1%) — solo si pagás con Mercado Pago"** y **Total con
      Mercado Pago**. En efectivo pagás el total, sin cargo.
-   - Si un producto se quedó sin stock o el proveedor dejó de operar, aparece en rojo: sacalo o
-     ajustá la cantidad para poder confirmar.
+   - Si un producto no tiene stock (o pediste más de lo que hay) aparece en azul "Sin stock: podés
+     reservarlo y el proveedor te avisa" o "Hay N para comprar ya: para más, reservalo". **No
+     bloquea**: esa línea va como reserva.
+   - Si el proveedor dejó de operar o la oferta ya no existe, aparece en rojo: sacalo para poder
+     confirmar.
    - **Vaciar carrito** pide confirmación.
-4. Tocá **Confirmar pedido**. Para **cada proveedor** elegí:
-   - **Comprar:** tenés 7 días para retirar.
-   - **Reservar:** te lo guardan 48 horas.
+4. Tocá **Confirmar pedido**. Para **cada producto** elegí **Comprar** o **Reservar** (lo que no
+   tiene stock ya viene como reserva, sin opción). Debajo de cada proveedor ves qué parte es:
+   - **Compra directa · Pagás ahora:** no necesita aprobación del proveedor. Al confirmar, el stock
+     queda reservado para vos y tenés **24 horas** para pagar con Mercado Pago o elegir efectivo al
+     retirar (con efectivo, **7 días desde la compra** para retirar y pagar).
+   - **Reserva · El proveedor tiene que aprobarla:** si tiene stock te lo guarda **48 horas**; si
+     no tiene, te dice una fecha aproximada y te avisa cuando lo tiene.
 
-   Podés dejar una aclaración para los proveedores (cuándo pasás, marca preferida…).
-5. Tocá **Enviar pedido a N proveedores**.
+   Si de un mismo proveedor comprás unas cosas y reservás otras, se arman **dos partes** (una compra
+   y una reserva). Podés dejar una aclaración para los proveedores (cuándo pasás, marca
+   preferida…).
+5. Tocá **Confirmar compra**, **Enviar reserva** o **Confirmar N compras y M reservas**.
+   - Si justo mientras confirmabas otro se llevó el stock de algo que compraste, te avisa cuál
+     ("solo quedan N…") y **no se crea nada**: bajá la cantidad o reservalo.
 
 **Qué pasa después:**
 
 - Se crea tu **pedido** (número PED-2026-…). Cada proveedor recibe **su parte** por aviso y por
-  chat (el chat lo iniciás vos) y la aprueba o la rechaza.
-- **Aprobar** significa que te reservó **todos** los productos de su parte.
+  chat (el chat lo iniciás vos).
+- **Tus compras** quedan **Por pagar** al instante: el proveedor no tiene que aprobar nada, solo
+  prepararlas.
+- **Tus reservas** esperan la aprobación: con stock, el proveedor te reserva **todos** los
+  productos juntos; sin stock, la aprueba con **"Disponible aproximadamente el …"** y, cuando le
+  llega, la marca disponible (te llega el aviso "Tu reserva ya está para retirar" y ahí arrancan
+  las 48 horas). También puede rechazarla con un motivo.
 
 **Mis pedidos (seguimiento):**
 
 - Cada pedido muestra algo como **"1 de 2 proveedores pagados · Falta pagar $Z"** y una barra de
   avance. Le pagás a **cada proveedor por separado**, en el orden que quieras.
-- Cada parte de proveedor muestra su estado:
-  - **Esperando aprobación.**
-  - **Aprobado: falta el pago** — con "Te lo guardan hasta el…" o "Pagalo y retiralo antes del…".
+- Cada parte de proveedor dice si es **Compra directa** o **Reserva** y muestra su estado:
+  - **Por pagar** (compra) — con el recuadro **"Pagás ahora · compra con stock reservado"** y el
+    plazo exacto: "Pagá antes del jue 25 sep, 16:05 (o elegí efectivo al retirar). Si no, la
+    compra se cancela sola y el stock se libera". Con efectivo elegido: **Efectivo al retirar** y
+    "Retiralo y pagalo en efectivo antes del …".
+  - **Esperando aprobación** (reserva).
+  - **Aprobada: esperando stock** (reserva sin stock) — "lo tendría disponible aproximadamente el
+    …".
+  - **Reservado: falta el pago** (reserva aprobada o disponible) — "Te lo guardan hasta el …".
   - **Pagado: falta retirar** / **Pagado.**
   - **Entregado: falta el pago** (si retiraste sin pagar).
   - **Rechazado** (con el motivo) o **Cancelado.**
@@ -454,12 +523,19 @@ La sección **Facturas** junta las facturas de todos tus proyectos.
   - **Efectivo al retirar:** sin cargo. El proveedor confirma cuando recibe la plata.
   - Al volver de Mercado Pago, la app dice "Mercado Pago está confirmando tu pago…" y la parte pasa
     sola a **Pagado**.
-- **Cancelar esta parte:** mientras no esté pagada. Si ya estaba aprobada, el stock vuelve al
-  proveedor.
+- **Cancelar esta parte:** mientras no esté pagada (también una reserva que espera stock). Si el
+  stock ya estaba reservado, vuelve al proveedor.
+- Si el **proveedor** cancela (siempre con un motivo, por ejemplo porque no puede cumplir), te llega
+  el aviso con el motivo. Si ya habías pagado por Mercado Pago, se te devuelve el pago completo;
+  si pagaste en efectivo, el aviso te dice que te lo devuelve en mano.
+- Si un pago de Mercado Pago llega cuando la compra ya se había cancelado (por ejemplo, pasaron
+  las 24 horas), se devuelve solo y te avisamos.
 - **Calificar** al proveedor cuando la parte está entregada o pagada, **Chatear** con él y, si está
   pagada, **Devolver sobrantes**.
 - **Línea de tiempo:** abajo queda registrado todo lo que pasó (quién hizo qué y cuándo).
-- **Si no pagás a tiempo**, esa parte se cancela sola y te avisamos.
+- **Si no pagás a tiempo**, esa parte se cancela sola, el stock vuelve al proveedor y te avisamos:
+  compra sin pagar ni elegir efectivo → a las 24 horas; compra en efectivo sin retirar → a los 7
+  días de la compra; reserva disponible sin pagar → a las 48 horas.
 
 *Fuente: `src/components/cart/cart-contents.tsx`, `src/components/screens/panel/pedidos.tsx`,
 `src/components/screens/panel/pedido-detalle.tsx`.*
@@ -534,7 +610,19 @@ sobrantes**.
   - **Abrir chat** en un proyecto.
   - **Preguntarle** o **Chatear** en Materiales.
   - El mensaje inicial del asistente de contratación.
-- Se ve el doble tilde de leído.
+- Se ve el doble tilde de leído (celeste cuando el otro ya lo leyó).
+- **Rápida en cada movimiento (24/09/2026):**
+  - Abrir un chat, volver a la bandeja y entrar de nuevo a Mensajes muestra al instante lo último
+    que viste; lo nuevo llega solo en segundo plano (el chat abierto se actualiza cada 3 segundos
+    y la bandeja cada 10, solo mientras se ve).
+  - Si abrís un chat por primera vez, el encabezado (nombre, foto, "Ver perfil") aparece enseguida
+    y abajo dice "Cargando mensajes…".
+  - **Al enviar**, tu mensaje aparece al instante con un relojito; cuando el servidor lo confirma
+    pasa al tilde. Si no se pudo enviar, desaparece, el texto vuelve al campo y avisa "No se pudo
+    enviar el mensaje…".
+  - Abrir y cerrar un chat ya no te saca de tu panel (la dirección queda en
+    `/panel/<tu rol>/mensajes?c=…`).
+- **Reputación del cliente** (lo ven profesionales y proveedores en el chat con un cliente): ver 3.13.
 
 *Fuente: `src/components/screens/messages-screen.tsx`.*
 
@@ -578,6 +666,7 @@ sobrantes**.
 | **Bolsa de trabajos** ("Bolsa") | Barra de abajo | Trabajos publicados para ofertar |
 | **Proyectos** | Barra de abajo | Obras en curso |
 | **Mensajes** | Barra de abajo | Chats |
+| **Cobros** | Más | Conectar Mercado Pago, lo cobrado y lo pendiente, todas tus facturas (3.8) |
 | **Materiales** | Más | Buscar materiales, carrito y comparar precios |
 | **Mis pedidos** | Más | Seguir y pagar los pedidos de materiales |
 | **Mis ofertas** | Más | Presupuestos que mandaste |
@@ -652,6 +741,22 @@ sobrantes**.
 
 *Fuente: `profesional/proyecto-detalle.tsx`.*
 
+**Subcontratar a otro profesional para uno de tus proyectos (D16):**
+
+1. Entrá al perfil del otro profesional (Directorio) y tocá **Contratar**.
+2. Arriba del primer paso, en **"¿Es para algo que ya publicaste?"**, elegí uno de **tus proyectos
+   activos** (se ve título, cliente y etapa; los finalizados o cancelados no aparecen). Se cargan
+   sus datos y los podés cambiar. Si no elegís nada, es una contratación suelta como siempre.
+3. Confirmá. Para ese proyecto nuevo vos sos el cliente: lo seguís en **Proyectos** de tu panel de
+   cliente, con el aviso **"Parte del proyecto <título>"** que te lleva al proyecto original.
+4. En tu proyecto original aparece la sección **Subcontrataciones** con cada una (profesional,
+   etapa y monto) y el link para abrirla.
+5. **Tu cliente no ve las subcontrataciones ni sus montos**, y el profesional subcontratado no ve
+   tu proyecto original. Al subcontratado le llega "… te subcontrató: <título> (parte de su
+   proyecto …)".
+
+Si también publicaste trabajos como cliente, el selector muestra los dos grupos por separado.
+
 ### 3.5 Llevar el proyecto por etapas
 
 - **Avanzar etapa:** con el botón **"Avanzar a …"**.
@@ -715,14 +820,36 @@ El cliente ve el modo que elijas. Una vez que emitís una factura, el modo **que
 3. Solo puede haber **una factura pendiente a la vez**: para emitir la siguiente, esperá a que el
    cliente pague la anterior.
 
-**Conectar tu Mercado Pago (para cobrar):**
+**La pantalla Cobros (menú Cobros; en el celular, dentro de "Más") — desde el 24/09/2026:**
 
-1. En **Mi perfil**, en la tarjeta **"Cobrá con tu Mercado Pago"**, tocá **Conectar Mercado Pago** y
-   autorizá en Mercado Pago.
-2. Al volver: "Mercado Pago conectado — Tus clientes ya pueden pagarte las facturas por Mercado Pago:
-   la plata entra en tu cuenta."
-3. Estados: conectado (con fecha), "Vencido: volvé a conectar" o "No conectado". Podés
-   **desconectar** cuando quieras.
+Es el único lugar para todo lo de cobrar. De arriba hacia abajo:
+
+1. **Cobrá con tu Mercado Pago:** tocá **Conectar Mercado Pago** y autorizá en Mercado Pago. Volvés
+   solo a **Cobros** con "Mercado Pago conectado — Tus clientes ya pueden pagarte las facturas por
+   Mercado Pago: la plata entra en tu cuenta." Si cancelás: "No conectaste Mercado Pago — Podés
+   hacerlo cuando quieras desde Cobros." Estados: conectado (con fecha), "Vencido: volvé a conectar"
+   o "No conectado". Podés **desconectar** cuando quieras.
+2. **Resumen:** **Cobrado este mes** (facturas cobradas desde el día 1 del mes, hora argentina),
+   **Pendiente de cobro** (suma de las facturas sin cobrar) y **Facturas pendientes** (cantidad; si
+   hay efectivo para confirmar, lo dice abajo).
+3. **Tus facturas:** las de **todos** tus proyectos, con filtros **Pendientes** (arranca acá),
+   **Cobradas** y **Todas**. Cada una muestra número, proyecto (tocándolo vas al proyecto), cliente,
+   fecha de emisión (y de cobro), total y cómo está:
+   - **Cobrada por Mercado Pago** — "Cobraste el 100%: el cargo de servicio HomIA (1%, $…) lo pagó el
+     cliente aparte."
+   - **Cobrada en efectivo** — "Confirmaste que recibiste el dinero."
+   - **Efectivo acordado** — el cliente eligió efectivo: aparece **Confirmar cobro en efectivo**.
+     Pide confirmación ("¿Ya recibiste el efectivo?… no se puede deshacer") y al aceptar la factura
+     queda cobrada y el cliente recibe el aviso.
+   - **Pago por Mercado Pago en curso** — el cliente inició el pago; se marca cobrada sola.
+   - **Esperando el pago** — el cliente todavía no eligió cómo pagar.
+   - Botón **PDF** en todas.
+   - Sin facturas: "Todavía no emitiste facturas" con el botón **Ver mis proyectos**.
+4. **Comprar materiales** (buscás entre todos los proveedores y armás el carrito) y **Mis pedidos**
+   (seguís lo que les compraste: pago, preparación y entrega).
+
+En **Mi perfil** ya no está la tarjeta de Mercado Pago: hay un acceso **"Cobros y Mercado Pago"** que
+lleva a esta pantalla.
 
 **Cómo cobrás (el cliente elige cómo pagar):**
 
@@ -730,7 +857,7 @@ El cliente ve el modo que elijas. Una vez que emitís una factura, el modo **que
   **100%** de la factura; el cliente paga aparte el cargo de servicio HomIA del 1%. Cuando se
   acredita, la factura pasa sola a pagada.
 - **Efectivo:** sin cargo. Te llega "Pago en efectivo acordado". Cuando recibís la plata, tocá
-  **Confirmar cobro en efectivo** en el proyecto.
+  **Confirmar cobro en efectivo** en el proyecto o en **Cobros**.
 - **Si no conectaste Mercado Pago,** el cliente solo puede pagarte en efectivo.
 
 **Si algo sale mal:**
@@ -741,13 +868,17 @@ El cliente ve el modo que elijas. Una vez que emitís una factura, el modo **que
 **Devoluciones de materiales que facturaste (modo A):** si le cobraste los materiales al cliente
 en tu factura, sus devoluciones de sobrantes son **con vos** (ver 3.14).
 
-*Fuente: `profesional/proyecto-detalle.tsx`, `profesional/perfil.tsx`, `src/components/app/mp-connect-card.tsx`.*
+*Fuente: `profesional/proyecto-detalle.tsx`, `profesional/cobros.tsx`, `profesional/perfil.tsx`, `src/components/app/mp-connect-card.tsx`.*
 
 ### 3.9 Materiales para vos
 
 - Es la misma pantalla que la del cliente (punto 2.7): **carrito** y **Mis pedidos** (también en el
   menú). Tiene una pestaña extra, **Comparables**, con el mejor precio de cada material.
 - **Mis pedidos** y **Devolver sobrantes** de tus compras funcionan igual que para el cliente.
+- Igual que el cliente: lo que **comprás con stock** no necesita aprobación del proveedor (queda
+  reservado al confirmar y tenés 24 horas para pagar o elegir efectivo; con efectivo, 7 días para
+  retirar); lo que **reservás** (con o sin stock) lo aprueba el proveedor. Lo sin stock solo se
+  reserva.
 - En proyectos donde **el cliente le paga los materiales al proveedor** (modo B), también podés
   pedirle al proveedor devolver sobrantes como comprador, igual que el cliente.
 - En proyectos donde **vos adelantaste los materiales** (modo A), mirá 3.14.
@@ -845,11 +976,34 @@ proyectos. **No es una cuenta bancaria ni guarda plata.**
 - **Mi perfil:**
   - Datos de contacto, persona o empresa, oficios (al menos uno), habilidades, experiencia y bio.
   - **Radio de servicio:** a qué distancia aceptás trabajar.
-  - **"Cobrá con tu Mercado Pago"** (ver 3.8).
+  - Acceso **"Cobros y Mercado Pago"** (lleva a Cobros, ver 3.8).
   - Un aviso: usar HomIA es gratis; cuando alguien paga por Mercado Pago se suma un cargo de
     servicio del 1% que paga quien compra (vos cobrás el 100% de tu factura).
+- **Reputación del cliente** (botón **Reputación** en el chat con un cliente, **Ver reputación** en
+  el proyecto, y en los pedidos del proveedor): muestra nombre, verificación, ciudad, antigüedad, un
+  atajo **"★ 5 · 1 reseña"** que baja hasta la lista **"Lo que dicen los profesionales que
+  trabajaron con él/ella"** (estrellas, comentario, si fue obra o compra y, desde el 24/09/2026, las
+  fotos de la reseña), y las cifras: obras finalizadas, compras a proveedores y proyectos activos.
+  Sin reseñas: "Sin reseñas todavía" (sin link). El cliente no tiene perfil público: esto es lo que
+  ven de él.
 
-*Fuente: `profesional/perfil.tsx`, `src/components/screens/pro-profile.tsx`.*
+*Fuente: `profesional/perfil.tsx`, `src/components/app/client-summary.tsx`.*
+
+### 3.14.1 Profesionales que contrataste
+
+En **Mis proyectos**, abajo de tus proyectos, aparece **"Profesionales que contrataste"** cuando le
+encargaste un trabajo a otro profesional (con o sin elegir uno de tus proyectos). Tocás uno y lo seguís
+como cliente: su cotización, el avance, el pago y la reseña.
+
+### 3.15 Tu perfil público (lo que ven los demás)
+
+- Nombre (o empresa), verificación, oficios, ciudad, radio y antigüedad.
+- **Atajo a tus reseñas** "★ 4,5 · 12 reseñas" que baja hasta la sección Reseñas (ver 1.5).
+- Cifras (obras, años de experiencia, reseñas), bio y habilidades, **Trabajos realizados** y
+  **Reseñas** con fotos.
+- Botones **Contactar**, **Contratar**, favorito y compartir.
+
+*Fuente: `src/components/screens/pro-profile.tsx`.*
 
 ---
 
@@ -927,23 +1081,44 @@ cantidad (con los botones − y +) y el stock mínimo. También podés **Elimina
 ### 4.3 Ventas (pestaña "Ventas (pedidos)" dentro de Cobros)
 
 Acá llega **tu parte** de cada pedido: uno o más productos tuyos que un cliente o profesional sumó a
-su carrito. Te llega por chat y con el aviso **"Nuevo pedido de un cliente"**. Solo ves tu parte:
-no ves lo que ese cliente le pidió a otros proveedores.
+su carrito. Te llega por chat y con un aviso. Solo ves tu parte: no ves lo que ese cliente le pidió
+a otros proveedores. Desde el 24/09/2026 (decisión D15) hay dos tipos:
+
+- **Compra directa** (aviso **"Nueva compra: stock reservado"**): el cliente compró algo que tenés
+  en stock. **No tenés que aprobar nada**: tu stock ya quedó reservado para él y el cobro ya está
+  emitido. El cliente tiene 24 horas para pagar por Mercado Pago o elegir efectivo (con efectivo, 7
+  días desde la compra para retirar y pagar). Vos lo preparás y lo entregás.
+- **Reserva** (aviso **"Nueva reserva de un cliente"**): el cliente te pide que se lo guardes o que
+  se lo consigas. **La aprobás o la rechazás.** Puede incluir productos que publicás con cantidad 0.
 
 | Estado | Qué ves | Qué podés hacer |
 |---|---|---|
-| **Pedido nuevo** | Número de pedido, productos y cantidades, cliente, si es reserva 48 h o compra, nota, **Reputación del cliente** | **Aprobar** o **Rechazar el pedido entero** (con motivo) |
-| **Aprobado: esperando pago y retiro** | Cómo va a pagar y hasta cuándo tiene | **Entregado**, **Cancelar** (si no está pagado), **Confirmar cobro en efectivo** (si acordó efectivo) |
+| **Reserva para aprobar** | Número de pedido, productos y cantidades, cliente, nota, **Reputación del cliente** | **Aprobar reserva** o **Rechazar** (con motivo) |
+| **Aprobada: esperando tu stock** | "Le dijiste al cliente que lo tenés aproximadamente el …" | **Ya lo tengo: disponible** o **Cancelar** (con motivo) |
+| **Por pagar** (compra) / **Reservada: por pagar** (reserva) | "Compra directa: tu stock ya está reservado para este cliente. No hace falta aprobarla", cómo va a pagar y "Si no se paga, se cancela sola el …" | **Entregado**, **Cancelar** (con motivo), **Confirmar cobro en efectivo** (si acordó efectivo) |
+| **Efectivo al retirar** | El cliente acordó efectivo | **Confirmar cobro en efectivo**, **Entregado**, **Cancelar** (con motivo) |
+| **Pagada: falta entregar** / **Pagado** sin entregar | El cliente ya pagó | **Entregado** o **Cancelar y devolver** (con motivo) |
 | **Entregado: falta el pago** | — | **Confirmar cobro en efectivo** si acordó efectivo |
 | **Pagado** | "Venta cobrada — el cliente puede calificarte" | — |
 | **Rechazado / Cancelado** | Motivo | — |
 
-**Cómo aprobar:**
+**Cómo aprobar una reserva:**
 
-1. Tocá **Aprobar**. Vas a ver cada producto con el stock que tenés.
-2. Tocá **Aprobar y reservar todo**. Se reservan **todos los productos juntos** y se emite el cobro.
-   **Si alguno no alcanza, no se reserva nada:** actualizá tu stock o rechazá con un motivo.
-3. Al cliente le llega el aviso para que pague.
+1. Tocá **Aprobar reserva**. Vas a ver cada producto con el stock que tenés.
+2. **Si tenés stock de todo:** tocá **Aprobar y reservar todo**. Se reservan **todos los productos
+   juntos**, se emite el cobro y el cliente tiene **48 horas** para pagar y retirar.
+3. **Si te falta algo:** aparece el campo **"Disponible aproximadamente el…"**. Elegí la fecha y
+   tocá **Aprobar sin stock** (si era "a coordinar", también fijás el precio). No se descuenta nada:
+   el cliente ve la fecha. Cuando te llegue, cargalo en **Stock** y tocá **Ya lo tengo:
+   disponible**: ahí se reserva, se emite el cobro, al cliente le llega "Tu reserva ya está para
+   retirar" y arrancan sus 48 horas. Si todavía no te alcanza, te dice cuál falta.
+
+**Cancelar una venta (compra o reserva ya aprobada):** siempre con un **motivo** (le llega al
+cliente). El stock reservado vuelve a tu inventario. Si el cliente **ya pagó por Mercado Pago** y
+no se lo entregaste, se le devuelve el pago completo **desde tu cuenta de Mercado Pago** (si tu
+Mercado Pago no está conectado, primero reconectalo; si Mercado Pago no responde, no se cancela
+nada). Si ya te pagó **en efectivo**, el aviso le dice que se lo devolvés en mano. Lo que ya
+entregaste no se cancela: eso va por devoluciones de sobrantes.
 
 **Qué pasa después:**
 
@@ -953,8 +1128,9 @@ no ves lo que ese cliente le pidió a otros proveedores.
   "Cobro acreditado por Mercado Pago". El 1% lo paga el cliente, no vos.
 - **Si acordó efectivo:** tocá **Confirmar cobro en efectivo** cuando recibas la plata.
 - **Si no tenés Mercado Pago conectado:** el cliente solo puede pagarte en efectivo.
-- **Si no paga a tiempo** (48 horas para una reserva, 7 días para una compra): se cancela sola y el
-  stock vuelve a tu inventario.
+- **Si no paga a tiempo** se cancela sola y el stock vuelve a tu inventario: compra sin pagar ni
+  elegir efectivo → 24 horas; compra con efectivo acordado → 7 días desde la compra; reserva
+  aprobada o disponible → 48 horas. Una reserva que espera tu stock no vence sola.
 - Cada acción queda en la **línea de tiempo** de la venta.
 
 *Fuente: `src/components/screens/panel/proveedor/cobros.tsx`.*
@@ -1147,8 +1323,12 @@ En la cinta de sponsors aparecen primero los proveedores que cargaron logo propi
 ### 4.12 Tu perfil público (lo que ven los demás)
 
 - **Datos:** nombre del negocio, verificación, rubro y **"★ Recomendado"** si tenés PRO.
-- **Ubicación y reputación:** ciudad, puntaje y cantidad de elementos publicados.
-- **Catálogo con stock:** con un botón **Pedir** por cada material.
+- **Ubicación y reputación:** ciudad, atajo **"★ 4,5 · 12 reseñas"** que baja hasta tus reseñas
+  (ver 1.5) y cantidad de elementos publicados.
+- **Catálogo con stock:** el buscador y los rubros quedan arriba; los materiales van en una **caja
+  con scroll propio** (alto máximo ≈ 60 % de la pantalla en el celular, 520 px en la compu), así la
+  página no se hace eterna con catálogos grandes. Cada material tiene su botón **Al carrito** (o
+  "Sin stock"). *(24/09/2026.)*
 - **Reseñas:** con fotos.
 - **Contactar:** los clientes te escriben con el botón **Contactar**.
 

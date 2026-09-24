@@ -140,7 +140,7 @@ export async function GET(req: NextRequest) {
       _sum: { total: true },
     }),
     db.providerStock.count({ where: { providerId: prov.id } }),
-    db.purchase.count({ where: { providerId: prov.id, status: { in: ['pendiente_aprobacion', 'aprobado'] } } }),
+    db.purchase.count({ where: { providerId: prov.id, status: { in: ['pendiente_aprobacion', 'esperando_stock', 'aprobado'] } } }),
   ])
 
   return ok({

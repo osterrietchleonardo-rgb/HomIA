@@ -87,7 +87,7 @@ export const TOURS: Record<TourRole, TourStep[]> = {
       route: '/panel/cliente/pedidos',
       target: 'nav-pedidos',
       title: 'Carrito y Mis pedidos',
-      body: 'Sumá materiales de uno o varios proveedores al carrito (el ícono de arriba) y confirmalos en un solo pedido. Cada proveedor aprueba su parte y le pagás a cada uno cuando quieras: Mercado Pago (+1% de cargo de servicio) o efectivo al retirar. Acá seguís cada parte con su línea de tiempo.',
+      body: 'Sumá materiales de uno o varios proveedores al carrito (el ícono de arriba) y confirmalos en un solo pedido. Lo que comprás con stock no necesita aprobación: queda reservado y lo pagás en 24 h (Mercado Pago +1% de cargo de servicio, o efectivo al retirar). Lo que reservás lo aprueba el proveedor. Acá seguís cada parte con su línea de tiempo.',
       tip: 'El carrito se guarda en tu cuenta: lo ves igual desde el celu y la compu.',
     },
     {
@@ -95,7 +95,7 @@ export const TOURS: Record<TourRole, TourStep[]> = {
       route: '/panel/cliente/directorio',
       target: 'nav-directorio',
       title: 'Directorio: elegí con datos, no con fe',
-      body: 'Profesionales y proveedores ordenados de mejor a peor reputación: reseñas reales con fotos, obras hechas y si están verificados con DNI o no. Filtrá por rubro y precio promedio, y usá el botón Contratar: un asistente de 4 pasos crea el proyecto por vos.',
+      body: 'Profesionales y proveedores ordenados de mejor a peor reputación: reseñas reales con fotos, obras hechas y si están verificados con DNI o no. Filtrá por rubro y precio promedio, y usá el botón Contratar: un asistente de 4 pasos crea el proyecto por vos. Si ya publicaste el trabajo, elegilo arriba y se cargan sus datos.',
       tip: '"No verificado" también es información: decidís con todo a la vista.',
     },
     {
@@ -166,8 +166,16 @@ export const TOURS: Record<TourRole, TourStep[]> = {
       route: '/panel/profesional/proyectos',
       target: 'nav-proyectos',
       title: 'Proyectos: gestioná cada obra',
-      body: 'El corazón de tu trabajo: etapas de la obra, materiales que proponés (con precios reales comparados entre proveedores), el acuerdo de quién paga los materiales, y las facturas. Emitís factura cuando corresponde y cobrás por Mercado Pago o en efectivo (el cliente elige; vos confirmás el efectivo al recibirlo). Para cobrar por Mercado Pago conectá tu cuenta en Mi perfil: la plata entra directo y cobrás el 100%; el cargo de servicio HomIA del 1% lo paga el cliente.',
+      body: 'El corazón de tu trabajo: etapas de la obra, materiales que proponés (con precios reales comparados entre proveedores), el acuerdo de quién paga los materiales, y las facturas. Emitís factura cuando corresponde y cobrás por Mercado Pago o en efectivo (el cliente elige; vos confirmás el efectivo al recibirlo). Para cobrar por Mercado Pago conectá tu cuenta en Cobros: la plata entra directo y cobrás el 100%; el cargo de servicio HomIA del 1% lo paga el cliente.',
       tip: 'Si el cliente paga los materiales directo al proveedor, tu factura va solo con mano de obra: queda escrito para los dos. Si los adelantás vos y los cobrás en tu factura, las devoluciones de sobrantes del cliente son con vos (menú Devoluciones) y, si querés, se los devolvés a tu proveedor desde el proyecto.',
+    },
+    {
+      id: 'cobros',
+      route: '/panel/profesional/cobros',
+      target: 'nav-cobros',
+      title: 'Cobros: tu plata en un solo lugar',
+      body: 'Conectás tu Mercado Pago, ves lo cobrado este mes y lo pendiente, y seguís todas tus facturas de todos los proyectos: descargás el PDF y confirmás los cobros en efectivo cuando recibís la plata. Desde acá también vas a comprar materiales y a tus pedidos.',
+      tip: 'Con Mercado Pago conectado el cliente elige cómo pagarte; sin conexión, solo puede en efectivo.',
     },
     {
       id: 'materiales',

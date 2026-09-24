@@ -6,6 +6,7 @@ import { navigate, useRoute } from '@/lib/router'
 import { useSession } from '@/lib/store'
 import { Loading, EmptyState, UAvatar, UStars, VerifyBadge } from '@/components/app/ui-bits'
 import { ProfileGate } from '@/components/app/profile-gate'
+import ReviewsShortcut, { formatRating } from '@/components/app/reviews-shortcut'
 import HireWizard, { type HireTarget } from '@/components/app/hire-wizard'
 import { formatDate } from '@/lib/format'
 import { toast } from 'sonner'
@@ -144,10 +145,9 @@ export default function ProProfileScreen({ id }: { id: string }) {
                 {p.personType === 'empresa' && <span className="homy-pill text-[#0A2540]">Empresa</span>}
               </div>
               <p className="text-[#66DFFF] capitalize text-sm font-semibold mt-1">{p.professions.join(' · ') || 'Profesional'}</p>
-              <div className="flex items-center gap-2 mt-2.5">
-                <Star className="size-4 shrink-0 fill-[#FFC700] text-[#FFC700]" aria-hidden />
-                <span className="text-sm text-white font-bold tabular-nums">{p.rating > 0 ? p.rating : 'Nuevo en HomIA'}</span>
-                {p.rating > 0 && <span className="text-sm text-slate-300">· {p.reviewsCount} reseña{p.reviewsCount === 1 ? '' : 's'}</span>}
+              {/* atajo a las reseñas (scroll suave + foco en la sección) */}
+              <div className="mt-2">
+                <ReviewsShortcut rating={p.rating} count={p.reviewsCount} targetId="resenas-profesional" dark className="-ml-1" />
               </div>
               <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1 flex-wrap">
                 <MapPin aria-hidden className="size-3 shrink-0" /> {p.city || '—'} · radio {p.serviceRadiusKm} km · miembro desde {formatDate(p.memberSince)}
@@ -258,9 +258,9 @@ export default function ProProfileScreen({ id }: { id: string }) {
         </section>
 
         {/* reseñas desglosadas: estrellas + comentario + fotos que avalan */}
-        <section>
+        <section id="resenas-profesional" aria-labelledby="resenas-profesional-titulo" className="scroll-mt-24 rounded-3xl outline-none focus-visible:ring-2 focus-visible:ring-[#1D63B8]/40">
           <div className="homy-section-head">
-            <h2 className="homy-section-title">
+            <h2 id="resenas-profesional-titulo" className="homy-section-title">
               <span className="homy-icon-chip homy-chip-gold size-9 shrink-0 [&_svg]:size-[18px]" aria-hidden><Star /></span>
               Reseñas
               <span className="homy-pill tabular-nums">{parsedReviews.length}</span>
@@ -268,7 +268,7 @@ export default function ProProfileScreen({ id }: { id: string }) {
             {p.rating > 0 && (
               <span className="homy-pill">
                 <Star className="size-3 fill-[#FFC700] text-[#FFC700]" aria-hidden />
-                {p.rating} promedio
+                {formatRating(p.rating)} promedio
               </span>
             )}
           </div>

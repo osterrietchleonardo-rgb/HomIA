@@ -40,18 +40,15 @@ const lineSchema = z.object({
   quantity: z.coerce.number().positive('La cantidad tiene que ser mayor a cero').max(100000),
 })
 
-/** Valida una línea contra la oferta: existe, proveedor operando, no es propia, stock y paso. */
+/** Valida una línea contra la oferta: existe, proveedor operando, no es propia y paso de la unidad.
+ *  Sin stock (o más de lo que hay) se puede agregar igual: esa línea solo se puede RESERVAR (D15). */
 async function checkLine(userId: string, stockId: string, quantity: number) {
   const s = await db.providerStock.findUnique({ where: { id: stockId }, include: { element: true, provider: true } })
   if (!s) return { error: fail('Esa oferta ya no existe', 404) }
   if (s.provider.userId === userId) return { error: fail('Es un producto tuyo: no podés agregarlo a tu carrito', 400) }
   if (!puedeOperar(s.provider)) return { error: fail('Este proveedor no está operando por ahora', 409) }
-  if (s.status === 'agotado' || s.quantity <= 0) return { error: fail('Ese producto está sin stock en este momento', 409) }
   if (!qtyMatchesStep(quantity, s.element.unit)) {
     return { error: fail(`Ese producto se vende por ${s.element.unit}: elegí una cantidad válida`, 400) }
-  }
-  if (quantity > s.quantity) {
-    return { error: fail(`Solo quedan ${s.quantity} ${s.element.unit} disponibles`, 409, { available: s.quantity }) }
   }
   return { stock: s }
 }

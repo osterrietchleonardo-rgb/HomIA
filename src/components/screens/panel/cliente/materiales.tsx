@@ -2,9 +2,9 @@
 // Materiales del cliente (y del profesional) — marketplace de insumos sin contratar
 // a nadie: buscás lo que necesitás, ves TODAS las ofertas con precio, stock, reseñas
 // y distancia del proveedor y las sumás al CARRITO (de uno o varios proveedores).
-// Al confirmar el carrito, cada proveedor recibe su parte (reserva 48 h o compra con
-// 7 días para retirar), la aprueba, le pagás (Mercado Pago con el cargo de servicio
-// HomIA del 1%, o efectivo al retirar) y después de la entrega calificás la compra.
+// Con stock: "Agregar al carrito" (compra directa: sin aprobación, se paga enseguida)
+// o "Reservar" (la aprueba el proveedor); sin stock solo "Reservar" (D15). Pagás con
+// Mercado Pago (cargo de servicio HomIA del 1%) o efectivo al retirar y calificás.
 // La solapa "Mis pedidos" muestra lo mismo que /panel/<rol>/pedidos (sin duplicar lógica).
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { navigate, useRoute } from '@/lib/router'
@@ -16,11 +16,11 @@ import { addToCart, useCart } from '@/lib/cart'
 import { OrdersList } from '../pedidos'
 import { toast } from 'sonner'
 import {
-  Search, Package, ShoppingBag, Store, MapPin, X, MessageCircle, Trophy, ShoppingCart, Loader2,
+  Search, Package, ShoppingBag, Store, MapPin, X, MessageCircle, Trophy, ShoppingCart, Loader2, Clock,
 } from 'lucide-react'
 
 type Offer = {
-  stockId: string; elementId: string; price: number; quantity: number; brand: string | null
+  stockId: string; elementId: string; price: number; quantity: number; inStock?: boolean; brand: string | null
   providerId: string; businessName: string; kind: string
   providerUserId: string; providerAvatar: string | null; providerCity: string | null
   providerRating: number; providerReviews: number; providerVerified: boolean
@@ -122,7 +122,7 @@ export default function ClientMaterials({ role = 'cliente' }: { role?: 'cliente'
       const o = r.offers.find((x) => x.stockId === target)
       if (o) {
         pendingStock.current = null
-        void addToCart(o.stockId, 1, r.name)
+        void addToCart(o.stockId, 1, r.name, { mode: o.inStock === false ? 'reserva' : undefined })
         return
       }
     }
@@ -173,14 +173,14 @@ export default function ClientMaterials({ role = 'cliente' }: { role?: 'cliente'
     navigate(t === 'buscar' ? basePath : `${basePath}?tab=${t}`, { replace: true })
   }
 
-  async function agregar(offer: Offer, elementName: string) {
+  async function agregar(offer: Offer, elementName: string, mode?: 'reserva') {
     if (cartMode === 'sin_carrito') {
       toast.info('El carrito es para clientes y profesionales')
       return
     }
     setAdding(offer.stockId)
     try {
-      await addToCart(offer.stockId, 1, elementName)
+      await addToCart(offer.stockId, 1, elementName, { mode: mode ?? (offer.inStock === false ? 'reserva' : undefined) })
     } finally {
       setAdding(null)
     }
@@ -256,7 +256,7 @@ export default function ClientMaterials({ role = 'cliente' }: { role?: 'cliente'
               <>
                 {/* Ofertas con stock publicado: tarjetas completas con proveedores */}
                 <div className="space-y-4">
-                  {results?.filter((r) => r.offersCount > 0).map((r) => (
+                  {results?.filter((r) => r.offers.length > 0).map((r) => (
                     <article key={r.elementId} className="homy-glass homy-lift rounded-3xl p-4 sm:p-5">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="min-w-0">
@@ -299,16 +299,28 @@ export default function ClientMaterials({ role = 'cliente' }: { role?: 'cliente'
                                 </div>
                                 <div className="text-right">
                                   <p className="homy-num-adapt text-[17px] font-extrabold text-[#0A2540] tabular-nums">{formatARS(o.price)}</p>
-                                  <p className="text-[11px] font-bold text-slate-400">por {r.unit} · stock: {o.quantity}</p>
+                                  <p className="text-[11px] font-bold text-slate-400">por {r.unit} · {o.inStock === false ? 'sin stock' : `stock: ${o.quantity}`}</p>
                                 </div>
                               </div>
+                              {o.inStock === false && (
+                                <p className="mt-2 text-[12px] font-semibold text-[#1D63B8]">Sin stock: podés reservarlo y el proveedor te avisa</p>
+                              )}
                               <div className="mt-3 flex flex-wrap items-center gap-2">
+                                {o.inStock !== false && (
+                                  <button
+                                    onClick={() => void agregar(o, r.name)}
+                                    disabled={adding === o.stockId}
+                                    className="homy-btn-primary inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-4 text-[12px] disabled:opacity-60"
+                                  >
+                                    {adding === o.stockId ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <ShoppingCart className="size-3.5" aria-hidden />} Agregar al carrito
+                                  </button>
+                                )}
                                 <button
-                                  onClick={() => void agregar(o, r.name)}
+                                  onClick={() => void agregar(o, r.name, 'reserva')}
                                   disabled={adding === o.stockId}
-                                  className="homy-btn-primary inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-4 text-[12px] disabled:opacity-60"
+                                  className={`${o.inStock === false ? 'homy-btn-dark' : 'homy-glass-soft text-[#1D63B8] hover:bg-white'} inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-4 text-[12px] font-bold disabled:opacity-60`}
                                 >
-                                  {adding === o.stockId ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <ShoppingCart className="size-3.5" aria-hidden />} Agregar al carrito
+                                  <Clock className="size-3.5" aria-hidden /> Reservar
                                 </button>
                                 <button
                                   onClick={() => navigate(`/mensajes?c=nuevo:${o.providerUserId}`)}
@@ -326,15 +338,15 @@ export default function ClientMaterials({ role = 'cliente' }: { role?: 'cliente'
                 </div>
 
                 {/* Elementos que concuerdan pero hoy no tienen stock publicado */}
-                {results && results.some((r) => r.offersCount === 0) && (
+                {results && results.some((r) => r.offers.length === 0) && (
                   <details className="homy-glass-soft group mt-4 rounded-2xl px-4 py-3.5">
                     <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-bold text-slate-600 transition hover:text-[#1D63B8]">
                       <Package className="size-4 shrink-0 text-slate-400" aria-hidden />
-                      Ver {results.filter((r) => r.offersCount === 0).length} elemento{results.filter((r) => r.offersCount === 0).length === 1 ? '' : 's'} similar{results.filter((r) => r.offersCount === 0).length === 1 ? '' : 'es'} sin stock publicado ahora
+                      Ver {results.filter((r) => r.offers.length === 0).length} elemento{results.filter((r) => r.offers.length === 0).length === 1 ? '' : 's'} similar{results.filter((r) => r.offers.length === 0).length === 1 ? '' : 'es'} que ningún proveedor publica ahora
                       <span aria-hidden className="ml-auto text-xs text-slate-400 transition group-open:rotate-180">▾</span>
                     </summary>
                     <ul className="mt-3 space-y-1.5 border-t border-[#0A2540]/8 pt-3">
-                      {results.filter((r) => r.offersCount === 0).map((r) => (
+                      {results.filter((r) => r.offers.length === 0).map((r) => (
                         <li key={r.elementId} className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
                           <span className="font-bold text-[#0A2540]">{r.name}</span>
                           <span className="text-slate-400">· {r.categoryName}</span>
@@ -342,7 +354,7 @@ export default function ClientMaterials({ role = 'cliente' }: { role?: 'cliente'
                         </li>
                       ))}
                     </ul>
-                    <p className="mt-3 text-[12px] text-slate-400">Cuando un proveedor publique stock de estos elementos, van a aparecer arriba con su precio.</p>
+                    <p className="mt-3 text-[12px] text-slate-400">Cuando un proveedor publique estos elementos, van a aparecer arriba con su precio.</p>
                   </details>
                 )}
               </>

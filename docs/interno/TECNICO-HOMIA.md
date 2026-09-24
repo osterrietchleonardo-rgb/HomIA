@@ -152,7 +152,7 @@ lista los 34 originales.
 | | `StockReservation` (`:217`) | `status` activa/consumida/liberada | **sin uso en `src/`** (la reserva se hace descontando `quantity`) |
 | Trabajos | `JobPost` (`:230`) | `categorySlug`, `urgency`, `budgetMin/Max`, `photos`, `status` (abierto/en_proceso/cerrado/cancelado), `selectedBidId` | 1–N `JobBid`, `Project` |
 | | `JobBid` (`:254`) | `amount`, `timelineDays`, `message`, `status` (pendiente/aceptado/rechazado/retirado) | N–1 job, N–1 profesional |
-| Proyectos | `Project` (`:271`) | `status` (activo/finalizado/cancelado), `stage` (presupuesto→materiales→ejecucion→revision→finalizado), `laborCost` (0 = sin cotizar), `budgetMin/Max`, `materialsCost`, `materialsPaymentMode` (pro_adelanta/cliente_paga_proveedor), datos del asistente (`urgency`, `address`, `deadline`, `photos`) | materiales, facturas, cobros, obras |
+| Proyectos | `Project` (`:271`) | `status` (activo/finalizado/cancelado), `stage` (presupuesto→materiales→ejecucion→revision→finalizado), `laborCost` (0 = sin cotizar), `budgetMin/Max`, `materialsCost`, `materialsPaymentMode` (pro_adelanta/cliente_paga_proveedor), datos del asistente (`urgency`, `address`, `deadline`, `photos`), `parentProjectId` (subcontratación, D16) | materiales, facturas, cobros, obras; `parent`/`subcontracts` (autorrelación) |
 | | `ProjectMaterial` (`:308`) | `status` (propuesto/aprobado/rechazado/reemplazado), `quantity`, `unitPrice`, `providerId?`, `alternativeOfId`, `invoicedAt` | N–1 proyecto/elemento/proveedor |
 | | `Invoice` (`:331`) | `number` único `HOM-<año>-<n>`, `laborCost`, `materialsCost`, `total`, `status` (pendiente/pagada/vencida), `paymentMethod`, `mpPreferenceId`, `mpPaymentId` | ítems, pagos |
 | | `InvoiceItem` (`:352`) | `kind` material/mano_obra, `subtotal` | N–1 factura |
@@ -227,7 +227,167 @@ Archivos nuevos de código: `src/lib/{fees,units,activity,orders,order-view,cart
 `src/components/cart/*`, `src/components/homy/*`, `src/components/app/{mp-fee,mp-connect-card}.tsx`,
 `src/components/screens/cart-screen.tsx`, `src/components/screens/panel/{pedidos,pedido-detalle}.tsx`.
 
+### 4.3 Compra directa y reservas sin stock (D15, migración `0025`)
+
+`supabase/migrations/0025_compra_directa.sql`, **solo aditiva**, aplicada el 24/09/2026 con
+`prisma db execute --file … --url $DIRECT_URL`; el `migrate diff` posterior quedó vacío:
+
+| Columna | Qué guarda |
+|---|---|
+| `Purchase.availableFrom` `TIMESTAMP(3)` nullable | Reserva sin stock aprobada (estado `esperando_stock`): fecha aproximada que indicó el proveedor (AAAA-MM-DD guardada a las 15:00 UTC = mediodía en Argentina) |
+
+Sin columnas nuevas para el resto: el tipo sigue en `Purchase.type` (`compra` | `reserva`), el estado
+`esperando_stock` y el estado de cobro `reembolsada` son valores nuevos de columnas `String`, y la
+compra "por pagar" reusa `aprobado`.
+
+Código:
+- `src/lib/order-rules.ts` (nuevo, sin dependencias de servidor): plazos `COMPRA_PAGO_MS` (24 h),
+  `COMPRA_EFECTIVO_MS` (7 días), `RESERVA_MS` (48 h) y formato de fechas con zona
+  `America/Argentina/Buenos_Aires` (Vercel corre en UTC).
+- `src/lib/orders.ts`: `validateLines` con `mode` por línea y `inStock`; `createOrder` agrupa por
+  proveedor **y** tipo y, dentro de **una** `$transaction` (timeout 20 s), crea las compras en
+  `aprobado`, reserva el stock con `reserveItems` y crea el `ProviderCharge` (número `PRV-` calculado
+  dentro de la transacción: si choca el único, el reintento de `createWithOrderNumber` recalcula
+  pedido y cobros); devuelve `{ ok:false, reason:'stock', item }` si un ítem no alcanza
+  (`StockShortError`, rollback total). `reserveItems` y `StockShortError` se comparten con
+  `purchases/[id]`.
+- `src/app/api/purchases/[id]/route.ts`: acción nueva `disponible`; `aprobar` acepta
+  `availableFrom`; `cancelar` del proveedor con motivo obligatorio y reembolso por MP con el token
+  OAuth del proveedor (`ensureFreshSellerToken` + `refundPayment`, idempotencia
+  `purchase-cancel-<id>`) antes de cambiar el estado.
+- `src/app/api/payments/webhook/route.ts`: pago aprobado sobre un sub-pedido `cancelado`/`rechazado`
+  → `refundLatePayment` (reembolso total con el token del proveedor, idempotencia
+  `purchase-late-<paymentId>`), sin reabrir la compra.
+- `src/app/api/cron/reservations/route.ts`: mismo barrido de `aprobado` vencidos; el motivo distingue
+  compra 24 h / compra en efectivo 7 días / reserva 48 h.
+- `src/app/api/marketplace/route.ts`: lista también las ofertas con cantidad 0 (`inStock: false`, al
+  final); `offersCount`/`minPrice` cuentan solo las que tienen stock; `reservableCount` nuevo.
+- `src/lib/cart-server.ts` / `api/cart`: sin stock ya no es problema bloqueante (`inStock`,
+  `stockNote`); `src/lib/cart.ts`: `addToCart(…, { mode })` y preferencia por oferta en
+  `localStorage` (`homia_cart_modes_v1`).
+- UI: `cart-contents.tsx` (Comprar/Reservar por producto, resumen "Pagás ahora" / "El proveedor tiene
+  que aprobarla"), `pedido-detalle.tsx`, `proveedor/cobros.tsx` (sin "Aprobar" en compras, "Ya lo
+  tengo: disponible", diálogo de cancelación con motivo), `marketplace-screen.tsx`,
+  `cliente/materiales.tsx` y `search-screen.tsx` (botones "Agregar al carrito"/"Reservar" en la
+  tarjeta de material, sin salir de la búsqueda).
+
+### 4.4 Contratar desde un trabajo publicado o un proyecto activo (D16, migración `0027`)
+
+`supabase/migrations/0027_contratar_desde_existente.sql`, **solo aditiva** (sin `DROP`), aplicada el
+24/09/2026 con `prisma db execute --file … --url $DIRECT_URL`; el `migrate diff` posterior quedó
+vacío:
+
+| Cambio | Detalle |
+|---|---|
+| `Project.parentProjectId` `TEXT` nullable | En una subcontratación, el proyecto del profesional del que sale |
+| Índice `Project_parentProjectId_idx` | Para listar las subcontrataciones de un proyecto |
+| FK `Project_parentProjectId_fkey` → `Project(id)` `ON DELETE SET NULL` | Autorrelación `parent` / `subcontracts` (`@relation("ProjectSubcontracts")`) |
+
+El vínculo cliente → trabajo publicado reusa `Project.jobId` (ya existía).
+
+Código:
+- `src/lib/job-hire.ts` (nuevo): `assertJobOpen(tx, jobId)` y `closeJobWithHire(tx, {…})` — oferta
+  elegida `aceptado`, resto de pendientes `rechazado` con `notification.createMany`, trabajo
+  `en_proceso` con `selectedBidId`. Errores tipados `HireError` (`JOB_NOT_OPEN` / `BID_NOT_PENDING`)
+  que las rutas traducen a 409. Lo usan `PATCH /api/bids/[id]` (aceptar; refactor sin cambio de
+  comportamiento) y `POST /api/projects` con `jobId` (`db.$transaction`).
+- `src/app/api/projects/route.ts`: zod con `jobId` / `parentProjectId` (excluyentes, `refine`);
+  validaciones 403/404/409 antes de escribir.
+- `src/app/api/projects/hire-sources/route.ts` (nuevo): `GET` con zod en la query; solo datos del
+  usuario de la sesión (401 sin sesión).
+- `src/app/api/projects/[id]/route.ts`: `subcontractInfo()` consulta `parent`/`subcontracts` aparte
+  y solo para quien los puede ver; si esa consulta falla, el detalle se sigue sirviendo sin esas
+  secciones (y queda en el log).
+- UI: `src/components/app/hire-wizard.tsx` (selector nativo `<select>` con `optgroup`, precarga,
+  chip "Basado en"), `profesional/proyecto-detalle.tsx` (sección Subcontrataciones; si quien abre
+  el proyecto es su cliente —una subcontratación propia— delega en la vista de cliente, porque el
+  panel de cliente redirige a quien no tiene ese rol) y `cliente/proyecto-detalle.tsx` ("Parte del
+  proyecto <título>").
+- Pruebas: `scripts/e2e-integral.mjs` → `flowD16` (en D) y `flowE16` (en E); `hire-sources` en la
+  lista de lecturas privadas de N.
+- **Trampa vista el 24/09/2026:** después de `prisma generate`, un `next dev` ya levantado sigue con
+  el cliente de Prisma viejo en memoria (`Unknown field parent` / `Unknown argument
+  parentProjectId`); hay que reiniciar el dev server. En Windows el `generate` falla al renombrar
+  `query_engine-windows.dll.node` (EPERM) si el dev está corriendo, pero `index.js`/`index.d.ts` sí
+  se regeneran.
+
+### 4.5 Rendimiento de la mensajería, Cobros del profesional y atajos a reseñas (migración `0026`, 24/09/2026)
+
+**Causa raíz medida (no supuesta):**
+
+1. **Cada operación de Prisma cuesta ~4 idas y vueltas a la base.** Con `DATABASE_URL` en el pooler
+   (`?pgbouncer=true&connection_limit=1`), Prisma envuelve cada operación en
+   `BEGIN` + `DEALLOCATE ALL` + consulta + `COMMIT` (medido con `log: query`,
+   `scratch/msg-perf/count2.mjs`): `findUnique` = 4 sentencias (~200 ms desde local);
+   `findUnique` con `include` de 2 relaciones 1-1 = 6. Además `connection_limit=1` hace que las
+   consultas de requests simultáneos **se encolen** en una sola conexión: con el polling viejo
+   (hilo cada 3 s, bandeja cada 6 s, panel cada 15 s) la cola nunca se vaciaba y cada request
+   tardaba 4–9 s en dev.
+2. **N+1 y consultas sin límite:** `GET /messages/conversations` hacía 6 operaciones y su
+   `include: { messages: { take: 1 } }` traía **todos** los mensajes de todas las conversaciones
+   (Prisma pagina en memoria: la SQL sale sin `LIMIT`, `scratch/msg-perf/count-queries.mjs`).
+   `GET /messages/conversations/[id]` hacía 7; `GET /messages/unread` 2; `POST` del mensaje 6.
+3. **Re-montaje en cada clic:** la lista navegaba a `/mensajes?c=…` (ruta de primer nivel) estando en
+   `/panel/<rol>/mensajes`: se desmontaba el panel entero y la pantalla (lista en blanco,
+   "Cargando…"), `PanelLayout` volvía a pedir notificaciones y no leídos, y la pantalla volvía a
+   pedir la bandeja.
+4. **Sesión pedida 3 veces al arrancar:** `AppRoot`, `useCartSync` (carrito) y `useDuenioHomy`
+   (Homy) llamaban `refresh()` en el mismo montaje → 3× `GET /api/auth/me`; `search-screen` la
+   volvía a pedir al montar.
+
+**Lo cambiado:**
+
+| Dónde | Antes | Ahora |
+|---|---|---|
+| `api/messages/conversations` GET | 6 operaciones + todos los mensajes | **1** `$queryRaw`: `LEFT JOIN LATERAL (… ORDER BY createdAt DESC LIMIT 1)` para el último mensaje, subconsulta de no leídos, perfil pro/proveedor del otro; tope 200 conversaciones |
+| `api/messages/conversations/[id]` GET | 7 operaciones | **1** sentencia: CTE que valida acceso, CTE `UPDATE … RETURNING` que marca leídos (corre aunque nadie lea su salida), datos del otro, `readUpTo` y los mensajes (`LIMIT 300`). Con `?after=<ISO>` (zod `datetime`) trae solo los `>= after` |
+| `api/messages/conversations/[id]` POST | 6 operaciones | zod + 1 lectura de la conversación + **1** `$transaction([message.create, conversation.update, notification.create])`; el nombre sale de la sesión |
+| `api/messages/unread` | 2 | **1** `count(*)` con `JOIN` |
+| `messages-screen.tsx` | re-montaje en cada clic; polling que recargaba todo, apilable | navega con `?c=` sobre la **misma** ruta; memoria del módulo por usuario (bandeja + hilos) para mostrar al instante al volver; encabezado del hilo desde la bandeja mientras carga; polling con cursor (`?after=` del último confirmado), sin apilar (`inboxBusy`/`threadBusy`), pausado con la pestaña oculta, bandeja solo si se ve; envío optimista con id temporal y dedupe por id/cuerpo |
+| `src/lib/store.ts` | cada `refresh()` = un `/api/auth/me` | `refresh()` suma los llamados de la **misma tanda** (mismo tick) a un solo pedido y descarta respuestas viejas (número de secuencia; el logout invalida); nuevo `revalidate()` (se suma al pedido en curso o no hace nada si la sesión tiene < 30 s) usado por `search-screen`. Ninguno toca `loading` → nunca pantalla de carga si ya hay usuario |
+| Índice | `Conversation` sin índice por `userBId` (la bandeja busca por `userAId` **o** `userBId`; el unique solo cubre `userAId`) | `@@index([userBId])` — migración `0026_mensajes_indices.sql`, **solo aditiva**, aplicada el 24/09/2026; `migrate diff` posterior vacío |
+
+**Medición (Playwright, 390×844, dev server compartido `localhost:3000`, datos descartables: 3
+conversaciones × 35 mensajes; scripts `scratch/msg-perf/seed.mjs` y
+`…/scratchpad/pw/msg-perf.mjs`; resultados en `scratch/msg-perf/*.json`):** ver tabla en
+`bitacora-sesiones.md` (24/09/2026, mensajería). Requests sueltos en secuencia (curl, mediana de 5):
+bandeja 1,64 s → 0,63 s; hilo 1,44 s → 0,68 s; no leídos 0,81 s → 0,62 s. El piso que queda es
+`getSessionUser` (≈ 0,4 s: `findUnique` con 2 `include` = 6 sentencias), que no se tocó
+(`src/lib/auth.ts`, fuera del alcance).
+
+**Cobros del profesional:** `GET /api/invoices?mine=1` (`src/app/api/invoices/route.ts`) — zod en
+query, dueño por sesión (`ProfessionalProfile.userId`), `select` explícito sin tokens ni email;
+pantalla `src/components/screens/panel/profesional/cobros.tsx` (ruta `/panel/profesional/cobros`
+en `app-root.tsx`, ítem en `panel-layout.tsx`). El OAuth de MP del profesional vuelve a
+`/panel/profesional/cobros` (`api/mp/oauth/connect` y `callback`).
+
+**Atajos a reseñas:** `src/components/app/reviews-shortcut.tsx` (`scrollIntoView` suave —respeta
+`prefers-reduced-motion`— + `tabindex=-1` y `focus({preventScroll})` en la sección); usado en
+`pro-profile.tsx`, `provider-profile.tsx` y `client-summary.tsx`. Contenedor de stock del
+proveedor: `max-h-[60dvh]` (`sm:max-h-[520px]`) con `overflow-y-auto overscroll-contain`.
+
+**Pruebas:** `e2e-integral.mjs` → I (cursor `?after=`, borde incluido, no leídos por conversación,
+orden de la bandeja, `readUpTo`, `readAt` en UTC, 400/403) y E ("Cobros del profesional": solo
+propias, filtros, resumen, sin datos sensibles, 400/401/403); `/api/invoices?mine=1` en la lista de
+GET privados de N.
+
 ---
+
+### 4.6 Rendimiento general: región, sesión y pedidos (24/09/2026)
+
+- **Causa medida:** la base está en San Pablo (`aws-0-sa-east-1.pooler.supabase.com`) y las funciones
+  de Vercel corrían en Washington (`iad1`, default del proyecto). Con el pooler (`pgbouncer=true`)
+  cada consulta de Prisma son ~4 idas y vueltas, y cada una cruzaba el continente. Medido en
+  producción antes del cambio: `/api/auth/me` 1,4-1,5 s, bandeja de mensajes 4,9 s, Mis proyectos
+  4,9 s, búsqueda de materiales 5,4 s.
+- **Región:** `vercel.json` → `"regions": ["gru1"]` (San Pablo, misma región que la base). Se aplica
+  con el próximo deploy; hay que re-medir en producción después de publicar.
+- **Sesión en una consulta:** `getSessionUser` (`src/lib/auth.ts`) pasó de `findUnique` + `include`
+  de 2 relaciones (3 consultas) a un `$queryRaw` con `EXISTS` para los perfiles. Corre en cada pedido
+  autenticado. Medido en dev: ~0,49 s → ~0,36 s por pedido.
+- **Confirmar pedido:** los avisos a cada proveedor después de la transacción (chat, notificación,
+  línea de tiempo) salen en paralelo (`Promise.all`, `src/lib/orders.ts`). Medido en dev desde la PC:
+  ~4,3 s por pedido de 2 productos; la transacción sigue siendo secuencial (una conexión).
 
 ## 5. Migraciones y la base única
 
@@ -254,7 +414,8 @@ Archivos nuevos de código: `src/lib/{fees,units,activity,orders,order-view,cart
   presupuesto del proyecto, `invoicedAt`), `0020` (PKCE OAuth), `0021` (marca PRO), `0022` (carrito,
   pedidos, cargo de servicio, línea de tiempo), `0023` (confirmación de reembolso en efectivo y
   recordatorio), `0024` (sobrantes con el profesional como vendedor y pata profesional →
-  proveedor, §4.2) y `0030` (súper agente Homy: cupo y registro). La numeración salta de 0023 a 0030
+  proveedor, §4.2), `0025` (compra directa: `Purchase.availableFrom`, §4.3), `0026` (índice `Conversation.userBId` para la bandeja, §4.5), `0027` (contratar desde un trabajo o
+  proyecto: `Project.parentProjectId`, §4.4) y `0030` (súper agente Homy: cupo y registro). La numeración salta de 0023 a 0030
   porque los dos equipos reservaron rangos distintos.
 - RLS: el commit `2d3b10c` activó RLS en las tablas; script en `scripts/base/enable-rls.mjs`. La app
   accede con el usuario de Prisma (no por la API REST de Supabase), así que RLS protege solo el
@@ -459,7 +620,7 @@ de OpenAI), p50 9,3 s.
 
 ### 6.4 Vercel
 
-- **Crons** (`vercel.json`): `/api/cron/reservations` cada hora (`0 * * * *`; además corre las tareas de sobrantes de `src/lib/leftovers-cron.ts`: confirmación automática a las 72 h del reembolso en efectivo o por fuera de HomIA y recordatorio único al vendedor —proveedor o profesional— a las 72 h) y
+- **Crons** (`vercel.json`): `/api/cron/reservations` cada hora (`0 * * * *`; vence los sub-pedidos `aprobado` sin pago — compra 24 h, compra con efectivo 7 días desde la compra, reserva 48 h, D15 —; además corre las tareas de sobrantes de `src/lib/leftovers-cron.ts`: confirmación automática a las 72 h del reembolso en efectivo o por fuera de HomIA y recordatorio único al vendedor —proveedor o profesional— a las 72 h) y
   `/api/cron/subscriptions` todos los días a las 09:30 UTC (`30 9 * * *`). Ambos exigen
   `Authorization: Bearer <CRON_SECRET>`; sin secreto configurado responden 401 siempre
   (`cron/reservations/route.ts:7-11`, `cron/subscriptions/route.ts:68-72`).
@@ -585,4 +746,5 @@ Build: `npm run build` (tipos estrictos). Lint: `npm run lint`.
 | Muchos logins seguidos (pruebas) | El rate-limit (memoria o Firewall de Vercel) bloquea la IP con 429 | Espaciar pruebas; el E2E usa una IP ficticia por corrida (`e2e-integral.mjs:51`) |
 | Avisos de MP sin firma de la app | Si se rechazan, se pierden pagos reales | Se loguean y se procesan re-consultando a MP (§6.1) |
 | Pago o suscripción en el "otro" entorno | Un aviso sin `live_mode` se buscaba solo en producción | Fallback prueba ↔ producción en el webhook |
+| Contar solo requests y no consultas | Con el pooler (`pgbouncer=true`) cada operación de Prisma son ~4 sentencias (`BEGIN`/`DEALLOCATE ALL`/consulta/`COMMIT`) y con `connection_limit=1` los requests simultáneos se encolan | En rutas calientes, una sola consulta (`$queryRaw` o `$transaction([...])`); nunca `include` con `take` anidado para "el último" (Prisma trae todo y corta en memoria) (§4.5) |
 | Escribir desde local | Local = producción | Todo lo que escribe necesita OK de Leonardo; probar con cuentas demo y borrar lo creado |

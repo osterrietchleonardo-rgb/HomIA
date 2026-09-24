@@ -298,16 +298,23 @@ model Project {
   // "cliente_paga_proveedor" = el cliente paga los materiales directamente al
   // proveedor (cobro aparte) y el profesional factura solo mano de obra.
   materialsPaymentMode String    @default("pro_adelanta")
+  // Subcontratación (D16): proyecto del profesional del que sale esta contratación.
+  // Solo lo ve el profesional que subcontrata; el cliente original no.
+  parentProjectId      String?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  job       JobPost?            @relation(fields: [jobId], references: [id])
-  client    User                @relation("ProjectClient", fields: [clientId], references: [id])
-  pro       ProfessionalProfile @relation("ProjectPro", fields: [professionalId], references: [id])
-  materials ProjectMaterial[]
-  invoices  Invoice[]
-  charges   ProviderCharge[]
-  works     CompletedWork[]
+  job          JobPost?            @relation(fields: [jobId], references: [id])
+  client       User                @relation("ProjectClient", fields: [clientId], references: [id])
+  pro          ProfessionalProfile @relation("ProjectPro", fields: [professionalId], references: [id])
+  parent       Project?            @relation("ProjectSubcontracts", fields: [parentProjectId], references: [id], onDelete: SetNull)
+  subcontracts Project[]           @relation("ProjectSubcontracts")
+  materials    ProjectMaterial[]
+  invoices     Invoice[]
+  charges      ProviderCharge[]
+  works        CompletedWork[]
+
+  @@index([parentProjectId])
 }
 
 model ProjectMaterial {
@@ -500,6 +507,9 @@ model Purchase {
   pickupDeadline       String?
   reservationExpiresAt DateTime?
   approvedAt           DateTime?
+  // reserva SIN stock aprobada (estado `esperando_stock`): fecha aproximada en que el
+  // proveedor va a tener el producto. El stock se reserva recién al marcarla "disponible".
+  availableFrom        DateTime?
   chargeId             String?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
@@ -643,6 +653,9 @@ model Conversation {
   messages Message[]
 
   @@unique([userAId, userBId])
+  // la bandeja busca por userAId (lo cubre el unique) O por userBId: sin este
+  // índice, el lado B recorre la tabla entera
+  @@index([userBId])
 }
 
 model Message {

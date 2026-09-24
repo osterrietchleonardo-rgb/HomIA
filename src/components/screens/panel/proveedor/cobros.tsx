@@ -4,14 +4,19 @@
 //   directas ahí mismo. Sin conexión, sus clientes solo pueden pagarle en efectivo.
 // · Cobros: proyectos con modo "el cliente paga los materiales al proveedor" —
 //   el proveedor emite el cobro y el cliente paga con Mercado Pago o efectivo.
-// · Ventas: tu parte de cada pedido del carrito (uno o más productos) — aprobar
-//   (reserva atómica de TODOS los ítems y emite el cobro) o rechazar el pedido entero
-//   con motivo → el cliente paga (MP con el cargo de servicio 1% que paga él, o
-//   efectivo) → entregar → reseña. Cada acción queda en la línea de tiempo.
+// · Ventas: tu parte de cada pedido del carrito (uno o más productos). D15 (24/09/2026):
+//   - COMPRAS (con stock): llegan ya "por pagar" con el stock reservado y el cobro emitido,
+//     SIN botón de aprobar: preparás, entregás o cancelás con motivo (libera el stock; si ya
+//     estaba pagada por MP se devuelve completa desde tu cuenta de MP).
+//   - RESERVAS (con o sin stock): Aprobar / Rechazar. Sin stock, al aprobar indicás
+//     "Disponible aproximadamente el …" y después la marcás disponible (ahí se reserva y
+//     arrancan las 48 h). El cliente paga (MP con el 1% que paga él, o efectivo) → entregar
+//     → reseña. Cada acción queda en la línea de tiempo.
 import { useCallback, useEffect, useState } from 'react'
 import { useRoute, navigate } from '@/lib/router'
 import { StatusBadge, Loading, UAvatar, VerifyBadge } from '@/components/app/ui-bits'
 import { formatARS, formatDate } from '@/lib/format'
+import { fmtDeadline, fmtDay } from '@/lib/order-rules'
 import { toast } from 'sonner'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -46,6 +51,7 @@ type Sale = {
   id: string; elementName: string; quantity: number | null; unit: string; unitPrice: number | null; total: number; serviceFee: number; status: string
   type: 'compra' | 'reserva'; note: string | null; chargeId: string | null; createdAt: string
   stockId: string | null; paymentMethod: string | null; rejectionReason: string | null; reservationExpiresAt: string | null
+  availableFrom: string | null
   orderNumber: string | null
   lines: SaleLine[]
   events: SaleEvent[]
@@ -57,8 +63,9 @@ type CobrosTab = 'cobros' | 'ventas' | 'devoluciones'
 type MpOauth = { status: 'connected' | 'disconnected' | 'expired'; expiresAt: string | null }
 
 const SALE_META: Record<string, { label: string; tone: string }> = {
-  pendiente_aprobacion: { label: 'Pedido nuevo', tone: 'bg-[#FFC700]/12 text-[#B98A00] ring-[#FFC700]/40' },
-  aprobado: { label: 'Aprobado: esperando pago y retiro', tone: 'bg-[#1D63B8]/10 text-[#1D63B8] ring-[#1D63B8]/30' },
+  pendiente_aprobacion: { label: 'Reserva para aprobar', tone: 'bg-[#FFC700]/12 text-[#B98A00] ring-[#FFC700]/40' },
+  esperando_stock: { label: 'Aprobada: esperando tu stock', tone: 'bg-[#FFC700]/12 text-[#B98A00] ring-[#FFC700]/40' },
+  aprobado: { label: 'Por pagar', tone: 'bg-[#1D63B8]/10 text-[#1D63B8] ring-[#1D63B8]/30' },
   entregado: { label: 'Entregado: falta el pago', tone: 'bg-[#FF5A1F]/10 text-[#FF5A1F] ring-[#FF5A1F]/30' },
   pagado: { label: 'Pagado', tone: 'bg-[#0e9f6e]/10 text-[#0e9f6e] ring-[#0e9f6e]/30' },
   rechazado: { label: 'Rechazado', tone: 'bg-slate-500/10 text-slate-500 ring-slate-400/30' },
@@ -74,6 +81,7 @@ function chargeLabel(c: { status: string; method: string | null } | null | undef
   if (c.status === 'pagada') return c.method === 'efectivo' ? 'Cobrado en efectivo' : 'Cobrado por Mercado Pago'
   if (c.status === 'acordada_efectivo') return 'Efectivo acordado: confirmá al recibirlo'
   if (c.status === 'anulada') return 'Cobro anulado'
+  if (c.status === 'reembolsada') return 'Pago devuelto al cliente'
   return c.method === 'mercadopago' ? 'Esperando pago por Mercado Pago' : 'Esperando que el cliente elija cómo pagar'
 }
 
@@ -96,8 +104,11 @@ export default function ProviderCharges() {
   const [approvePrice, setApprovePrice] = useState('')
   // stock disponible por oferta de cada ítem del pedido (undefined = consultando)
   const [approveStock, setApproveStock] = useState<Record<string, StockLite> | null | undefined>(undefined)
+  const [approveDate, setApproveDate] = useState('')
   const [rejectTarget, setRejectTarget] = useState<Sale | null>(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [cancelTarget, setCancelTarget] = useState<Sale | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
   const [disconnectOpen, setDisconnectOpen] = useState(false)
 
   const load = useCallback(async () => {
@@ -199,6 +210,7 @@ export default function ProviderCharges() {
     setApproveTarget(sale)
     setApprovePrice(sale.lines.length === 1 && sale.lines[0].unitPrice > 0 ? String(sale.lines[0].unitPrice) : '')
     setApproveStock(undefined)
+    setApproveDate('')
     if (sale.lines.every((l) => !l.stockId)) { setApproveStock(null); return }
     try {
       const res = await fetch('/api/provider/stock')
@@ -216,9 +228,16 @@ export default function ProviderCharges() {
     if (needsPrice && (!price || price <= 0)) { toast.error('Fijá el precio unitario para aprobar el pedido'); return }
     const body: Record<string, unknown> = { action: 'aprobar' }
     if (price > 0) body.unitPrice = price
+    const sinStock = !!approveStock && approveTarget.lines.some((l) => !!l.stockId && (!approveStock[l.stockId] || approveStock[l.stockId].quantity < l.quantity))
+    if (sinStock) {
+      if (!approveDate) { toast.error('Indicá cuándo vas a tener el producto (fecha aproximada)'); return }
+      body.availableFrom = approveDate
+    }
     const ok = await saleAction(approveTarget, body)
     if (!ok) return
-    toast.success('Pedido aprobado', { description: 'Reservamos el stock y le avisamos al cliente que pague para retirarlo.' })
+    toast.success(sinStock ? 'Reserva aprobada sin stock' : 'Reserva aprobada', {
+      description: sinStock ? 'Le avisamos al cliente la fecha aproximada. Cuando lo tengas, marcala "disponible".' : 'Reservamos el stock y le avisamos al cliente que tiene 48 h para pagar y retirarlo.',
+    })
     setApproveTarget(null)
     void load()
   }
@@ -227,7 +246,7 @@ export default function ProviderCharges() {
     if (!rejectTarget) return
     const ok = await saleAction(rejectTarget, { action: 'rechazar', reason: rejectReason.trim() || undefined })
     if (!ok) return
-    toast.info('Pedido rechazado')
+    toast.info('Reserva rechazada')
     setRejectTarget(null); setRejectReason('')
     void load()
   }
@@ -242,10 +261,25 @@ export default function ProviderCharges() {
     void load()
   }
 
-  async function doCancel(sale: Sale) {
-    const ok = await saleAction(sale, { action: 'cancelar' })
+  async function doCancel() {
+    if (!cancelTarget) return
+    if (cancelReason.trim().length < 3) { toast.error('Contale al cliente por qué cancelás'); return }
+    const ok = await saleAction(cancelTarget, { action: 'cancelar', reason: cancelReason.trim() })
     if (!ok) return
-    toast.info('Pedido cancelado')
+    const paid = cancelTarget.charge?.status === 'pagada' || cancelTarget.status === 'pagado'
+    toast.info('Venta cancelada', {
+      description: paid
+        ? (cancelTarget.charge?.method || cancelTarget.paymentMethod) === 'mercadopago' ? 'Mercado Pago le devuelve el pago completo al cliente desde tu cuenta.' : 'Devolvele el efectivo al cliente en mano.'
+        : 'El stock reservado volvió a tu inventario.',
+    })
+    setCancelTarget(null); setCancelReason('')
+    void load()
+  }
+
+  async function doAvailable(sale: Sale) {
+    const ok = await saleAction(sale, { action: 'disponible' })
+    if (!ok) return
+    toast.success('Reserva disponible', { description: 'Reservamos el stock y le avisamos al cliente: tiene 48 h para pagar y retirarlo.' })
     void load()
   }
 
@@ -282,7 +316,7 @@ export default function ProviderCharges() {
   const abiertos = charges.filter((c) => c.status === 'pendiente' || c.status === 'acordada_efectivo')
   const pagados = charges.filter((c) => c.status === 'pagada')
   const pendingReturns = returns ? returns.filter((r) => r.status === 'solicitada').length : 0
-  const pendingSales = sales ? sales.filter((s) => ['pendiente_aprobacion', 'aprobado'].includes(s.status)).length : 0
+  const pendingSales = sales ? sales.filter((s) => ['pendiente_aprobacion', 'esperando_stock', 'aprobado'].includes(s.status)).length : 0
   const mpExpires = mp?.expiresAt ? new Date(mp.expiresAt) : null
 
   return (
@@ -443,7 +477,7 @@ export default function ProviderCharges() {
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1D63B8]/10 px-3 py-1.5 text-[11px] font-extrabold text-[#1D63B8]">
                             <Banknote className="size-3.5" aria-hidden /> Efectivo acordado
                           </span>
-                          <button disabled={busy} onClick={() => confirmCash(c.id)} className="homy-btn-primary px-4 py-2 text-sm disabled:opacity-50">
+                          <button disabled={busy} onClick={() => confirmCash(c.id)} className="homy-btn-primary min-h-[44px] px-4 py-2 text-sm disabled:opacity-50">
                             <CircleCheck className="mr-1 inline size-4" aria-hidden /> Confirmar cobro en efectivo
                           </button>
                         </>
@@ -493,12 +527,12 @@ export default function ProviderCharges() {
               <span className="homy-empty-icon homy-chip-gold" aria-hidden><ShoppingBag className="size-6" /></span>
               <h3 className="font-extrabold tracking-tight text-[#0A2540]">Todavía no tenés pedidos</h3>
               <p className="mt-1.5 max-w-md text-sm leading-relaxed text-slate-500">
-                Los clientes y profesionales suman tus productos a su <b>carrito</b> desde Materiales o tu perfil. Cuando confirmen, te llega tu parte del pedido y la gestionás acá: aprobar → cobrar → entregar → reseña.
+                Los clientes y profesionales suman tus productos a su <b>carrito</b> desde Materiales o tu perfil. Las <b>compras</b> con stock te llegan ya reservadas y listas para cobrar; las <b>reservas</b> las aprobás vos. Todo se gestiona acá: cobrar → entregar → reseña.
               </p>
             </div>
           ) : (
             <>
-              <p className="homy-page-sub -mt-2 mb-4">Así funciona tu parte de un pedido: la aprobás (se reservan TODOS los productos y se emite el cobro) o la rechazás entera con un motivo → el cliente paga por Mercado Pago o acuerda efectivo → lo entregás → te califica. Mirá la reputación del cliente antes de aprobar.</p>
+              <p className="homy-page-sub -mt-2 mb-4"><b>Compras</b>: llegan con tu stock ya reservado y el cobro emitido, sin que tengas que aprobar nada; el cliente tiene 24 h para pagar por Mercado Pago o elegir efectivo (con efectivo, 7 días para retirar). Vos preparás y entregás; si no podés cumplir, cancelás con un motivo. <b>Reservas</b>: las aprobás o rechazás; si no tenés stock, al aprobar indicás cuándo lo vas a tener. Mirá la reputación del cliente.</p>
               <div className="space-y-3">
                 {sales.map((v) => {
                   const meta = SALE_META[v.status] || SALE_META.cancelado
@@ -518,7 +552,7 @@ export default function ProviderCharges() {
                             <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-slate-500">
                               {v.client.displayName}
                               <VerifyBadge status={v.client.verificationStatus} />
-                              · {formatDate(v.createdAt)} · {v.type === 'reserva' ? 'reserva 48 h' : 'compra'}
+                              · {formatDate(v.createdAt)} · {v.type === 'reserva' ? 'reserva' : 'compra directa'}
                               {v.note ? ` · “${v.note}”` : ''}
                             </p>
                             <ClientSummaryButton userId={v.client.id} label="Reputación del cliente" />
@@ -527,7 +561,7 @@ export default function ProviderCharges() {
                         <div className="text-right">
                           <p className="homy-num-adapt text-lg font-extrabold text-[#0A2540] tabular-nums">{v.total > 0 ? formatARS(v.total) : 'A coordinar'}</p>
                           <span className={`mt-1 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-extrabold ring-1 ${meta.tone}`}>
-                            {meta.label}
+                            {v.status === 'aprobado' && chargePaid ? 'Pagada: falta entregar' : v.status === 'aprobado' && cashAgreed ? 'Efectivo al retirar' : v.status === 'aprobado' && v.type === 'reserva' ? 'Reservada: por pagar' : meta.label}
                           </span>
                         </div>
                       </div>
@@ -544,7 +578,7 @@ export default function ProviderCharges() {
                       </ul>
 
                       {/* método de pago + estado del cobro */}
-                      {!['pendiente_aprobacion', 'rechazado', 'cancelado'].includes(v.status) && (
+                      {!['pendiente_aprobacion', 'esperando_stock', 'rechazado', 'cancelado'].includes(v.status) && (
                         <p className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-slate-500">
                           <span className="inline-flex items-center gap-1 font-bold text-[#0A2540]">
                             {v.paymentMethod === 'mercadopago' ? <CreditCard className="size-3.5" aria-hidden /> : <Banknote className="size-3.5" aria-hidden />}
@@ -559,8 +593,16 @@ export default function ProviderCharges() {
                       )}
                       {v.status === 'aprobado' && expires && !chargePaid && (
                         <p className="mt-1 flex items-center gap-1.5 text-[12px] text-slate-400">
-                          <Clock className="size-3.5 shrink-0" aria-hidden /> Vence el {expires.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })} a las {expires.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} si no se paga
+                          <Clock className="size-3.5 shrink-0" aria-hidden /> Si no se paga, se cancela sola el {fmtDeadline(expires)} y el stock vuelve a tu inventario
                         </p>
+                      )}
+                      {v.status === 'esperando_stock' && (
+                        <p className="mt-2 flex items-center gap-1.5 text-[12px] font-semibold text-[#8a6700]">
+                          <Clock className="size-3.5 shrink-0" aria-hidden /> Le dijiste al cliente que lo tenés aproximadamente el {v.availableFrom ? fmtDay(v.availableFrom) : '—'}. Cuando lo tengas, marcala disponible: ahí se reserva el stock.
+                        </p>
+                      )}
+                      {v.type !== 'reserva' && v.status === 'aprobado' && !chargePaid && (
+                        <p className="mt-1 text-[11.5px] text-slate-400">Compra directa: tu stock ya está reservado para este cliente. No hace falta aprobarla.</p>
                       )}
                       {v.status === 'rechazado' && v.rejectionReason && (
                         <p className="mt-1.5 text-[12px] text-slate-500">Motivo: {v.rejectionReason}</p>
@@ -569,10 +611,10 @@ export default function ProviderCharges() {
                       <div className="mt-3 flex flex-wrap gap-2">
                         {v.status === 'pendiente_aprobacion' && (
                           <>
-                            <button disabled={busy} onClick={() => void openApprove(v)} className="homy-btn-primary min-h-[40px] px-4 py-2 text-sm disabled:opacity-50">
-                              <CircleCheck className="mr-1 inline size-4" aria-hidden /> Aprobar pedido
+                            <button disabled={busy} onClick={() => void openApprove(v)} className="homy-btn-primary min-h-[44px] px-4 py-2 text-sm disabled:opacity-50">
+                              <CircleCheck className="mr-1 inline size-4" aria-hidden /> {v.type === 'reserva' ? 'Aprobar reserva' : 'Aprobar pedido'}
                             </button>
-                            <button disabled={busy} onClick={() => { setRejectTarget(v); setRejectReason('') }} className="homy-glass-soft min-h-[40px] px-4 py-2 text-sm font-bold text-slate-500 hover:text-red-600 rounded-full transition disabled:opacity-50">
+                            <button disabled={busy} onClick={() => { setRejectTarget(v); setRejectReason('') }} className="homy-glass-soft min-h-[44px] px-4 py-2 text-sm font-bold text-slate-500 hover:text-red-600 rounded-full transition disabled:opacity-50">
                               <Undo2 className="mr-1 inline size-4" aria-hidden /> Rechazar
                             </button>
                           </>
@@ -580,22 +622,40 @@ export default function ProviderCharges() {
                         {v.status === 'aprobado' && (
                           <>
                             {cashAgreed && v.chargeId && (
-                              <button disabled={busy} onClick={() => confirmCash(v.chargeId!)} className="homy-btn-primary px-4 py-2 text-sm disabled:opacity-50">
+                              <button disabled={busy} onClick={() => confirmCash(v.chargeId!)} className="homy-btn-primary min-h-[44px] px-4 py-2 text-sm disabled:opacity-50">
                                 <Banknote className="mr-1 inline size-4" aria-hidden /> Confirmar cobro en efectivo
                               </button>
                             )}
-                            <button disabled={busy} onClick={() => void doDeliver(v)} className={`${cashAgreed ? 'homy-btn-dark' : 'homy-btn-primary'} px-4 py-2 text-sm disabled:opacity-50`}>
+                            <button disabled={busy} onClick={() => void doDeliver(v)} className={`${cashAgreed ? 'homy-btn-dark' : 'homy-btn-primary'} min-h-[44px] px-4 py-2 text-sm disabled:opacity-50`}>
                               <Truck className="mr-1 inline size-4" aria-hidden /> Entregado
                             </button>
-                            {!chargePaid && (
-                              <button disabled={busy} onClick={() => void doCancel(v)} className="homy-glass-soft px-4 py-2 text-sm font-bold text-slate-500 hover:text-red-600 rounded-full transition disabled:opacity-50">
-                                <Undo2 className="mr-1 inline size-4" aria-hidden /> Cancelar
-                              </button>
-                            )}
+                            <button disabled={busy} onClick={() => { setCancelTarget(v); setCancelReason('') }} className="homy-glass-soft min-h-[44px] px-4 py-2 text-sm font-bold text-slate-500 hover:text-red-600 rounded-full transition disabled:opacity-50">
+                              <Undo2 className="mr-1 inline size-4" aria-hidden /> {chargePaid ? 'Cancelar y devolver' : 'Cancelar'}
+                            </button>
+                          </>
+                        )}
+                        {v.status === 'esperando_stock' && (
+                          <>
+                            <button disabled={busy} onClick={() => void doAvailable(v)} className="homy-btn-primary min-h-[44px] px-4 py-2 text-sm disabled:opacity-50">
+                              <CircleCheck className="mr-1 inline size-4" aria-hidden /> Ya lo tengo: disponible
+                            </button>
+                            <button disabled={busy} onClick={() => { setCancelTarget(v); setCancelReason('') }} className="homy-glass-soft min-h-[44px] px-4 py-2 text-sm font-bold text-slate-500 hover:text-red-600 rounded-full transition disabled:opacity-50">
+                              <Undo2 className="mr-1 inline size-4" aria-hidden /> Cancelar
+                            </button>
+                          </>
+                        )}
+                        {v.status === 'pagado' && !v.events.some((e) => e.type === 'entregado') && (
+                          <>
+                            <button disabled={busy} onClick={() => void doDeliver(v)} className="homy-btn-primary min-h-[44px] px-4 py-2 text-sm disabled:opacity-50">
+                              <Truck className="mr-1 inline size-4" aria-hidden /> Entregado
+                            </button>
+                            <button disabled={busy} onClick={() => { setCancelTarget(v); setCancelReason('') }} className="homy-glass-soft min-h-[44px] px-4 py-2 text-sm font-bold text-slate-500 hover:text-red-600 rounded-full transition disabled:opacity-50">
+                              <Undo2 className="mr-1 inline size-4" aria-hidden /> Cancelar y devolver
+                            </button>
                           </>
                         )}
                         {v.status === 'entregado' && cashAgreed && v.chargeId && (
-                          <button disabled={busy} onClick={() => confirmCash(v.chargeId!)} className="homy-btn-primary px-4 py-2 text-sm disabled:opacity-50">
+                          <button disabled={busy} onClick={() => confirmCash(v.chargeId!)} className="homy-btn-primary min-h-[44px] px-4 py-2 text-sm disabled:opacity-50">
                             <Banknote className="mr-1 inline size-4" aria-hidden /> Confirmar cobro en efectivo
                           </button>
                         )}
@@ -646,9 +706,9 @@ export default function ProviderCharges() {
       <Dialog open={!!approveTarget} onOpenChange={(o) => { if (!o && !busy) setApproveTarget(null) }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Aprobar pedido{approveTarget?.orderNumber ? ` ${approveTarget.orderNumber}` : ''}</DialogTitle>
+            <DialogTitle>{approveTarget?.type === 'reserva' ? 'Aprobar reserva' : 'Aprobar pedido'}{approveTarget?.orderNumber ? ` ${approveTarget.orderNumber}` : ''}</DialogTitle>
             <DialogDescription>
-              {approveTarget ? `${approveTarget.lines.length} producto${approveTarget.lines.length === 1 ? '' : 's'} para ${approveTarget.client.displayName}.` : ''} Al aprobar, reservamos TODOS los productos juntos y emitimos el cobro al cliente. Si alguno no alcanza, no se reserva nada.
+              {approveTarget ? `${approveTarget.lines.length} producto${approveTarget.lines.length === 1 ? '' : 's'} para ${approveTarget.client.displayName}.` : ''} Si tenés stock de todo, lo reservamos junto y el cliente tiene 48 h para pagar y retirar. Si falta algo, indicá cuándo lo vas a tener: no se descuenta nada hasta que la marques disponible.
             </DialogDescription>
           </DialogHeader>
           {approveTarget && (
@@ -683,6 +743,22 @@ export default function ProviderCharges() {
                   />
                 </>
               )}
+              {approveTarget.type === 'reserva' && !!approveStock && approveTarget.lines.some((l) => !!l.stockId && (!approveStock[l.stockId] || approveStock[l.stockId].quantity < l.quantity)) && (
+                <>
+                  <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-400" htmlFor="apr-fecha">
+                    Disponible aproximadamente el…
+                  </label>
+                  <input
+                    id="apr-fecha"
+                    type="date"
+                    min={new Date().toISOString().slice(0, 10)}
+                    value={approveDate}
+                    onChange={(e) => setApproveDate(e.target.value)}
+                    className="homy-glass-input w-full rounded-2xl px-4 py-3 text-[15px]"
+                  />
+                  <p className="text-[12px] text-slate-500">No tenés stock suficiente: el cliente ve esta fecha y le avisamos cuando la marques disponible.</p>
+                </>
+              )}
               <p className="text-[12.5px] text-slate-500 tabular-nums">
                 Total del cobro: <b className="text-[#0A2540]">{formatARS(approveTarget.lines.length === 1 && parseFloat(approvePrice) > 0 ? parseFloat(approvePrice) * approveTarget.lines[0].quantity : approveTarget.total)}</b>
               </p>
@@ -692,11 +768,11 @@ export default function ProviderCharges() {
             <button type="button" disabled={busy} onClick={() => setApproveTarget(null)} className="homy-glass-soft min-h-[44px] rounded-full px-4 text-sm font-bold text-slate-500">Volver</button>
             <button
               type="button"
-              disabled={busy || (!!approveStock && approveTarget != null && approveTarget.lines.some((l) => !!l.stockId && !!approveStock[l.stockId] && approveStock[l.stockId].quantity < l.quantity))}
+              disabled={busy || (approveTarget?.type !== 'reserva' && !!approveStock && approveTarget != null && approveTarget.lines.some((l) => !!l.stockId && !!approveStock[l.stockId] && approveStock[l.stockId].quantity < l.quantity))}
               onClick={() => void doApprove()}
               className="homy-btn-primary min-h-[44px] px-5 text-sm disabled:opacity-50"
             >
-              <CircleCheck className="size-4" aria-hidden /> {busy ? 'Aprobando…' : 'Aprobar y reservar todo'}
+              <CircleCheck className="size-4" aria-hidden /> {busy ? 'Aprobando…' : approveTarget?.type === 'reserva' && !!approveStock && approveTarget.lines.some((l) => !!l.stockId && (!approveStock[l.stockId] || approveStock[l.stockId].quantity < l.quantity)) ? 'Aprobar sin stock' : 'Aprobar y reservar todo'}
             </button>
           </DialogFooter>
         </DialogContent>
@@ -706,9 +782,9 @@ export default function ProviderCharges() {
       <Dialog open={!!rejectTarget} onOpenChange={(o) => { if (!o && !busy) setRejectTarget(null) }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Rechazar el pedido entero</DialogTitle>
+            <DialogTitle>Rechazar la reserva entera</DialogTitle>
             <DialogDescription>
-              {rejectTarget ? `${rejectTarget.elementName}. ` : ''}Se rechazan todos los productos de tu parte. Contale al cliente por qué: le llega en la notificación y en su pedido.
+              {rejectTarget ? `${rejectTarget.elementName}. ` : ''}Se rechazan todos los productos de la reserva. Contale al cliente por qué: le llega en la notificación y en su pedido.
             </DialogDescription>
           </DialogHeader>
           <textarea
@@ -723,7 +799,40 @@ export default function ProviderCharges() {
           <DialogFooter>
             <button type="button" disabled={busy} onClick={() => setRejectTarget(null)} className="homy-glass-soft min-h-[44px] rounded-full px-4 text-sm font-bold text-slate-500">Volver</button>
             <button type="button" disabled={busy} onClick={() => void doReject()} className="min-h-[44px] rounded-full bg-red-600 px-5 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-50">
-              {busy ? 'Rechazando…' : 'Rechazar pedido'}
+              {busy ? 'Rechazando…' : 'Rechazar reserva'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog: cancelar una venta (motivo obligatorio) ── */}
+      <Dialog open={!!cancelTarget} onOpenChange={(o) => { if (!o && !busy) setCancelTarget(null) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{cancelTarget && (cancelTarget.charge?.status === 'pagada' || cancelTarget.status === 'pagado') ? 'Cancelar y devolver el pago' : 'Cancelar la venta'}</DialogTitle>
+            <DialogDescription>
+              {cancelTarget ? `${cancelTarget.elementName}. ` : ''}
+              {cancelTarget && (cancelTarget.charge?.status === 'pagada' || cancelTarget.status === 'pagado')
+                ? (cancelTarget.charge?.method || cancelTarget.paymentMethod) === 'mercadopago'
+                  ? 'El cliente ya pagó por Mercado Pago: se le devuelve el pago completo desde tu cuenta. '
+                  : 'El cliente ya te pagó en efectivo: devolvéselo en mano. '
+                : ''}
+              El stock reservado vuelve a tu inventario. Contale al cliente por qué: le llega en la notificación y en su pedido.
+            </DialogDescription>
+          </DialogHeader>
+          <textarea
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            rows={3}
+            maxLength={400}
+            placeholder="Ej: se rompió la bolsa en el depósito y no me quedan"
+            className="homy-glass-input w-full rounded-2xl px-4 py-3 text-sm"
+            autoFocus
+          />
+          <DialogFooter>
+            <button type="button" disabled={busy} onClick={() => setCancelTarget(null)} className="homy-glass-soft min-h-[44px] rounded-full px-4 text-sm font-bold text-slate-500">Volver</button>
+            <button type="button" disabled={busy || cancelReason.trim().length < 3} onClick={() => void doCancel()} className="min-h-[44px] rounded-full bg-red-600 px-5 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-50">
+              {busy ? 'Cancelando…' : 'Cancelar venta'}
             </button>
           </DialogFooter>
         </DialogContent>

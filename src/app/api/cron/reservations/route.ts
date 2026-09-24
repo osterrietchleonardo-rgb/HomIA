@@ -16,8 +16,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Vencen los sub-pedidos APROBADOS (reserva 48 h / compra 7 días) cuyo plazo pasó
-    // y cuyo cobro todavía no está pagado: se cancelan, devuelven al stock TODOS
+    // Vencen los sub-pedidos APROBADOS cuyo plazo pasó y cuyo cobro todavía no está pagado
+    // (D15, 24/09/2026): compra sin pagar ni elegir efectivo → 24 h; compra con efectivo
+    // acordado → 7 días desde la compra; reserva aprobada o marcada disponible → 48 h.
+    // Las reservas sin stock (`esperando_stock`) no vencen: no tienen stock reservado.
+    // Las vencidas se cancelan, devuelven al stock TODOS
     // los ítems reservados, anulan el cobro, avisan a las dos partes y queda en la
     // línea de tiempo.
     const now = new Date()
@@ -47,10 +50,14 @@ export async function GET(request: Request) {
       if (p.chargeId && chargeStatus.get(p.chargeId) === 'pagada') continue
 
       const esReserva = p.type === 'reserva'
+      const efectivo = p.paymentMethod === 'efectivo'
+      const motivo = esReserva ? 'Reserva vencida (48 h sin pagar ni retirar)'
+        : efectivo ? 'Plazo de retiro vencido (7 días con efectivo acordado)'
+          : 'Compra vencida (24 h sin pagar ni elegir efectivo)'
       // cancelar de forma atómica (por si otro proceso la tocó entre medio)
       const upd = await db.purchase.updateMany({
         where: { id: p.id, status: 'aprobado' },
-        data: { status: 'cancelado', rejectionReason: esReserva ? 'Reserva vencida (48 h)' : 'Plazo de retiro vencido (7 días)' },
+        data: { status: 'cancelado', rejectionReason: motivo },
       })
       if (upd.count === 0) continue
       cancelled++
@@ -70,24 +77,26 @@ export async function GET(request: Request) {
           {
             userId: p.clientId,
             type: 'reserva_vencida',
-            title: esReserva ? 'Tu reserva venció' : 'Tu pedido venció',
+            title: esReserva ? 'Tu reserva venció' : 'Tu compra venció',
             body: esReserva
               ? `Pasaron las 48 h de tu reserva de ${label} en ${p.provider.businessName} y se canceló. Si lo seguís necesitando, volvé a pedirlo.`
-              : `Pasaron los 7 días para pagar y retirar ${label} en ${p.provider.businessName} y el pedido se canceló. Si lo seguís necesitando, volvé a pedirlo.`,
+              : efectivo
+                ? `Pasaron los 7 días para retirar y pagar ${label} en ${p.provider.businessName} y la compra se canceló. Si lo seguís necesitando, volvé a pedirlo.`
+                : `Pasaron 24 h sin que pagaras ni eligieras efectivo para ${label} en ${p.provider.businessName}, así que la compra se canceló. Si lo seguís necesitando, volvé a pedirlo.`,
             link: `#/panel/${panel}/pedidos/${p.orderId || `${LEGACY_PREFIX}${p.id}`}`,
           },
           {
             userId: p.provider.userId,
             type: 'reserva_vencida',
-            title: esReserva ? 'Reserva vencida' : 'Pedido vencido',
-            body: `${esReserva ? 'La reserva' : 'El pedido'} de ${label} venció sin pago y se canceló. El stock volvió a tu inventario.`,
+            title: esReserva ? 'Reserva vencida' : 'Compra vencida',
+            body: `${esReserva ? 'La reserva' : 'La compra'} de ${label} venció sin pago y se canceló (${motivo.toLowerCase()}). El stock volvió a tu inventario.`,
             link: '#/panel/proveedor/cobros?tab=ventas',
           },
         ],
       })
       await logActivity({
         orderId: p.orderId, purchaseId: p.id, actorRole: 'sistema', type: 'vencido',
-        message: esReserva ? 'La reserva venció a las 48 h sin pago: se canceló y el stock volvió al proveedor.' : 'Pasaron los 7 días sin pago: el pedido se canceló y el stock volvió al proveedor.',
+        message: `${motivo}: se canceló y el stock volvió al proveedor.`,
       })
     }
 
