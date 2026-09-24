@@ -1,16 +1,16 @@
 'use client'
 // Plan del proveedor — el único rol con suscripción de pago en HomIA.
 // · Al crear la cuenta: 14 días de prueba gratis
-// · Plan Básico US$50/mes: uso completo de la plataforma
-// · Plan PRO US$100/mes: analítica del negocio + tarjeta "Recomendado" en
-//   primera fila del directorio/marketplace + logo y marca en la home (sponsor)
-import { useEffect, useState } from 'react'
-import { navigate } from '@/lib/router'
+// · Plan Básico $50.000/mes: uso completo de la plataforma
+// · Plan PRO $100.000/mes: logo y marca en la home + tarjeta "Recomendado" en
+//   marketplace y directorio + analítica de demanda de tu zona
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { navigate, useRoute } from '@/lib/router'
 import { Loading } from '@/components/app/ui-bits'
 import { formatARS } from '@/lib/format'
 import { toast } from 'sonner'
 import {
-  Crown, Sparkles, Check, Clock, TrendingUp, Star, Store, ShieldCheck, CircleAlert, BadgeCheck,
+  Crown, Sparkles, Check, Clock, TrendingUp, Star, Store, ShieldCheck, CircleAlert, BadgeCheck, Loader2, RefreshCw,
 } from 'lucide-react'
 
 type PlanState = {
@@ -23,7 +23,6 @@ type PlanState = {
 }
 type PlanData = {
   plan: PlanState
-  precios: { basic: number; pro: number }
   preciosArs: { basic: number; pro: number }
   features: { basic: string[]; pro: string[] }
   trialDays: number
@@ -31,18 +30,60 @@ type PlanData = {
   businessName: string
 }
 
+async function readJson(res: Response): Promise<Record<string, any>> {
+  try { return await res.json() } catch { return {} }
+}
+
+const POLL_MS = 5000
+const POLL_MAX_MS = 60000
+
 export default function ProviderPlan() {
+  const route = useRoute()
   const [data, setData] = useState<PlanData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [busy, setBusy] = useState<'basic' | 'pro' | null>(null)
+  // vuelta de Mercado Pago (?plan=ok o ?preapproval_id=…): confirmamos con polling
+  const returnedFromMp = !!(route.query.plan === 'ok' || route.query.preapproval_id)
+  const [confirming, setConfirming] = useState(returnedFromMp)
+  const [confirmTimedOut, setConfirmTimedOut] = useState(false)
+  const pollStart = useRef<number>(Date.now())
 
-  async function load() {
+  const load = useCallback(async (): Promise<PlanData | null> => {
     try {
       const res = await fetch('/api/provider/plan')
-      if (res.ok) setData(await res.json())
+      const d = await readJson(res)
+      if (!res.ok) { setLoadError(true); return null }
+      setData(d as PlanData)
+      setLoadError(false)
+      return d as PlanData
+    } catch {
+      setLoadError(true)
+      return null
     } finally { setLoading(false) }
-  }
-  useEffect(() => { void load() }, [])
+  }, [])
+
+  useEffect(() => { void load() }, [load])
+
+  // polling cada 5 s hasta 60 s mientras esperamos que el webhook active el plan
+  useEffect(() => {
+    if (!confirming) return
+    pollStart.current = Date.now()
+    let alive = true
+    const t = setInterval(async () => {
+      const d = await load()
+      if (!alive) return
+      if (d && (d.plan.plan === 'basic' || d.plan.plan === 'pro')) {
+        setConfirming(false)
+        toast.success(`Plan ${d.plan.plan === 'pro' ? 'PRO' : 'Básico'} activo`, { description: 'Tu suscripción quedó confirmada con Mercado Pago.' })
+        navigate('/panel/proveedor/plan', { replace: true })
+      } else if (Date.now() - pollStart.current >= POLL_MAX_MS) {
+        setConfirming(false)
+        setConfirmTimedOut(true)
+      }
+    }, POLL_MS)
+    return () => { alive = false; clearInterval(t) }
+  }, [confirming, load])
 
   async function subscribe(plan: 'basic' | 'pro') {
     setBusy(plan)
@@ -52,20 +93,17 @@ export default function ProviderPlan() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan }),
       })
-      const d = await res.json()
+      const d = await readJson(res)
       if (!res.ok) {
-        if (d.needsConfig) {
-          toast.error('Mercado Pago no está configurado en el servidor', { description: 'Agregá MP_ACCESS_TOKEN al .env y reiniciá.' })
-        } else {
-          toast.error(d.error)
-        }
+        if (d.needsConfig) toast.error('Las suscripciones por Mercado Pago no están disponibles por ahora', { description: 'Escribinos desde Ayuda y lo resolvemos.' })
+        else toast.error(d.error || 'No pudimos iniciar la suscripción')
         return
       }
-      window.open(d.initPoint, '_blank')
-      toast.info(`Te abrimos Mercado Pago para el plan ${plan === 'pro' ? 'PRO' : 'Básico'}`, {
-        description: 'Cuando se apruebe la suscripción, el plan se activa solo en tu cuenta.',
-      })
-      void load()
+      const url = d.initPoint || d.init_point
+      if (!url) { toast.error('Mercado Pago no devolvió el link de pago. Probá de nuevo'); return }
+      window.location.href = url
+    } catch {
+      toast.error('No pudimos conectar. Reintentá')
     } finally {
       setBusy(null)
     }
@@ -75,12 +113,19 @@ export default function ProviderPlan() {
   if (!data) {
     return (
       <div className="homy-page">
-        <p className="homy-page-sub">No pudimos cargar tu plan. Verificá tu sesión.</p>
+        <div className="homy-empty homy-glass-soft border border-dashed border-[#0A2540]/12">
+          <span className="homy-empty-icon homy-chip-orange" aria-hidden><CircleAlert className="size-6" /></span>
+          <h3 className="font-extrabold tracking-tight text-[#0A2540]">No pudimos cargar tu plan</h3>
+          <p className="mt-1.5 max-w-md text-sm leading-relaxed text-slate-500">{loadError ? 'Revisá tu conexión y volvé a intentar.' : 'Verificá tu sesión.'}</p>
+          <button onClick={() => { setLoading(true); void load() }} className="homy-btn-primary mt-4 min-h-[44px] px-5 text-sm">
+            <RefreshCw className="size-4" aria-hidden /> Reintentar
+          </button>
+        </div>
       </div>
     )
   }
 
-  const { plan, precios, preciosArs, features, trialDays } = data
+  const { plan, preciosArs, features, trialDays } = data
   const vencido = !plan.activo
 
   return (
@@ -93,6 +138,27 @@ export default function ProviderPlan() {
           financia la plataforma, la IA y las búsquedas que traen clientes a tu negocio.
         </p>
       </header>
+
+      {/* confirmación del pago al volver de Mercado Pago */}
+      {confirming && (
+        <section className="homy-glass rounded-2xl p-4 mb-5 flex items-center gap-3 ring-1 ring-[#1D63B8]/30" role="status" aria-live="polite">
+          <Loader2 className="size-5 shrink-0 animate-spin text-[#1D63B8]" aria-hidden />
+          <p className="text-[13.5px] leading-relaxed text-slate-600">
+            <b>Estamos confirmando tu pago con Mercado Pago.</b> Puede demorar unos segundos: no cierres esta pantalla.
+          </p>
+        </section>
+      )}
+      {confirmTimedOut && !(plan.plan === 'basic' || plan.plan === 'pro') && (
+        <section className="homy-glass rounded-2xl p-4 mb-5 flex flex-wrap items-center gap-3 ring-1 ring-[#FFC700]/45">
+          <CircleAlert className="size-5 shrink-0 text-[#B98A00]" aria-hidden />
+          <p className="min-w-0 flex-1 text-[13.5px] leading-relaxed text-slate-600">
+            Todavía no nos llegó la confirmación de Mercado Pago. Si el pago se aprobó, el plan se activa solo en unos minutos.
+          </p>
+          <button onClick={() => { setConfirmTimedOut(false); setConfirming(true) }} className="homy-glass-soft min-h-[40px] rounded-full px-4 text-sm font-bold text-[#1D63B8]">
+            <RefreshCw className="mr-1 inline size-4" aria-hidden /> Volver a verificar
+          </button>
+        </section>
+      )}
 
       {/* estado actual */}
       <section className={`homy-glass rounded-3xl p-5 sm:p-6 mb-6 ${vencido ? 'ring-2 ring-[#FF5A1F]/40' : ''}`}>
@@ -131,7 +197,6 @@ export default function ProviderPlan() {
       <div className="grid gap-4 lg:grid-cols-2 mb-6">
         <PlanCard
           nombre="Básico"
-          usd={precios.basic}
           ars={preciosArs.basic}
           desc="Para vender en HomIA con todo lo esencial."
           features={features.basic}
@@ -140,6 +205,7 @@ export default function ProviderPlan() {
           actual={plan.plan === 'basic'}
           destacado={false}
           busy={busy === 'basic'}
+          disabled={busy !== null || confirming}
           mpConfigured={data.mpConfigured}
           ctaActual="Tu plan actual"
           cta="Elegir Básico"
@@ -147,7 +213,6 @@ export default function ProviderPlan() {
         />
         <PlanCard
           nombre="PRO"
-          usd={precios.pro}
           ars={preciosArs.pro}
           desc="Máxima visibilidad + inteligencia de demanda para tu negocio."
           features={features.pro}
@@ -156,6 +221,7 @@ export default function ProviderPlan() {
           actual={plan.plan === 'pro'}
           destacado
           busy={busy === 'pro'}
+          disabled={busy !== null || confirming}
           mpConfigured={data.mpConfigured}
           ctaActual="Tu plan actual"
           cta="Pasarme a PRO"
@@ -172,8 +238,8 @@ export default function ProviderPlan() {
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <Benefit
             icon={<TrendingUp className="size-4" aria-hidden />}
-            title="Analítica del negocio"
-            desc="Qué elementos se piden más, cuántas consultas hubo sobre tu rubro y qué búsquedas te encontraron. Decidís qué reponer con datos, no a ojo."
+            title="Analítica de demanda"
+            desc="Qué elementos se piden más en tu zona, cuántas consultas hubo sobre tu rubro y qué búsquedas te encontraron. Decidís qué reponer con datos, no a ojo."
           />
           <Benefit
             icon={<Star className="size-4" aria-hidden />}
@@ -192,7 +258,7 @@ export default function ProviderPlan() {
       <section className="homy-glass-soft rounded-2xl p-4 flex items-start gap-3">
         <ShieldCheck className="mt-0.5 size-5 shrink-0 text-[#0e9f6e]" aria-hidden />
         <p className="text-[13px] leading-relaxed text-slate-600">
-          La suscripción se cobra <b>mensualmente por Mercado Pago</b> y podés cancelarla cuando quieras desde tu cuenta de MP.
+          La suscripción se cobra <b>mensualmente por Mercado Pago</b> y la cancelás cuando quieras desde tu cuenta de MP.
           Si se cancela, tu negocio vuelve a estado de prueba finalizada — tus datos, reseñas y vinculaciones se conservan.
           ¿Dudas? Escribinos desde el botón <b>?</b> de abajo.
         </p>
@@ -201,10 +267,10 @@ export default function ProviderPlan() {
   )
 }
 
-function PlanCard({ nombre, usd, ars, desc, features, icon, chip, actual, destacado, busy, mpConfigured, ctaActual, cta, onSubscribe }: {
-  nombre: string; usd: number; ars: number; desc: string; features: string[]
+function PlanCard({ nombre, ars, desc, features, icon, chip, actual, destacado, busy, disabled, mpConfigured, ctaActual, cta, onSubscribe }: {
+  nombre: string; ars: number; desc: string; features: string[]
   icon: React.ReactNode; chip: string
-  actual: boolean; destacado: boolean; busy: boolean; mpConfigured: boolean
+  actual: boolean; destacado: boolean; busy: boolean; disabled: boolean; mpConfigured: boolean
   ctaActual: string; cta: string; onSubscribe: () => void
 }) {
   return (
@@ -222,9 +288,9 @@ function PlanCard({ nombre, usd, ars, desc, features, icon, chip, actual, destac
         </div>
       </div>
       <p className="mt-4 flex flex-wrap items-baseline gap-x-2">
-        <span className="text-4xl font-extrabold tracking-tight text-[#0A2540]">US${usd}</span>
+        <span className="homy-num-adapt text-4xl font-extrabold tracking-tight text-[#0A2540] tabular-nums">{formatARS(ars)}</span>
         <span className="text-sm font-bold text-slate-400">/ mes</span>
-        <span className="w-full text-[11.5px] text-slate-400">≈ {formatARS(ars)} por mes (Mercado Pago)</span>
+        <span className="w-full text-[11.5px] text-slate-400">Se cobra por Mercado Pago, en pesos.</span>
       </p>
       <ul className="mt-4 space-y-2">
         {features.map((f) => (
@@ -241,14 +307,14 @@ function PlanCard({ nombre, usd, ars, desc, features, icon, chip, actual, destac
       ) : (
         <button
           onClick={onSubscribe}
-          disabled={busy}
+          disabled={disabled}
           className={`mt-5 w-full min-h-[48px] text-[15px] ${destacado ? 'homy-btn-primary' : 'homy-btn-dark'} disabled:opacity-50`}
         >
-          <Clock className="size-4" aria-hidden /> {busy ? 'Abriendo Mercado Pago…' : cta}
+          {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Clock className="size-4" aria-hidden />} {busy ? 'Abriendo Mercado Pago…' : cta}
         </button>
       )}
       {!mpConfigured && !actual && (
-        <p className="mt-2 text-center text-[11px] text-slate-400">(El cobro necesita MP_ACCESS_TOKEN configurado en el servidor)</p>
+        <p className="mt-2 text-center text-[11px] text-slate-400">Las suscripciones por Mercado Pago no están disponibles por ahora.</p>
       )}
     </article>
   )
@@ -266,15 +332,17 @@ function Benefit({ icon, title, desc }: { icon: React.ReactNode; title: string; 
   )
 }
 
-/** Aviso pegado arriba del dashboard del proveedor cuando el trial está vencido. */
-export function TrialExpiredBanner({ daysLeft }: { daysLeft: number | null }) {
+/** Aviso pegado arriba del dashboard del proveedor: cuenta regresiva o prueba vencida. */
+export function TrialExpiredBanner({ daysLeft, preciosArs }: { daysLeft: number | null; preciosArs?: { basic: number; pro: number } }) {
+  const basic = formatARS(preciosArs?.basic ?? 50000)
+  const pro = formatARS(preciosArs?.pro ?? 100000)
   if (daysLeft != null && daysLeft > 0) {
     return (
       <section className="homy-glass rounded-2xl p-4 mb-5 flex flex-wrap items-center gap-3 ring-1 ring-[#FFC700]/45">
         <span aria-hidden className="homy-icon-chip homy-chip-gold size-10 shrink-0 [&_svg]:size-5"><Clock /></span>
         <p className="min-w-0 flex-1 text-[13.5px] leading-relaxed text-slate-600">
           <b>Prueba gratis:</b> te quedan <b>{daysLeft} día{daysLeft === 1 ? '' : 's'}</b> con todos los beneficios. Después elegí el
-          Básico (US$50/mes) o el PRO (US$100/mes) para seguir vendiendo.
+          Básico ({basic}/mes) o el PRO ({pro}/mes) para seguir vendiendo.
         </p>
         <button onClick={() => navigate('/panel/proveedor/plan')} className="homy-btn-primary min-h-[44px] shrink-0 px-5 py-2.5 text-sm">
           <Crown className="size-4" aria-hidden /> Ver planes
@@ -287,7 +355,7 @@ export function TrialExpiredBanner({ daysLeft }: { daysLeft: number | null }) {
       <span aria-hidden className="homy-icon-chip size-10 shrink-0 [&_svg]:size-5" style={{ background: 'linear-gradient(140deg, #ffedd5 0%, #fed7aa 100%)', color: '#c2410c' }}><CircleAlert /></span>
       <p className="min-w-0 flex-1 text-[13.5px] leading-relaxed text-slate-600">
         <b>Tu prueba gratis terminó.</b> Para volver a gestionar stock, pedidos y cobros elegí tu plan:
-        Básico <b>US$50/mes</b> o PRO <b>US$100/mes</b>.
+        Básico <b>{basic}/mes</b> o PRO <b>{pro}/mes</b>.
       </p>
       <button onClick={() => navigate('/panel/proveedor/plan')} className="homy-btn-primary min-h-[44px] shrink-0 px-5 py-2.5 text-sm">
         <Crown className="size-4" aria-hidden /> Elegir plan

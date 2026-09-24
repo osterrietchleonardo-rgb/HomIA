@@ -1,8 +1,18 @@
 import { NextRequest } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { ok, fail } from '@/lib/api'
 import { db } from '@/lib/db'
 
-// GET: facturas del proyecto
+async function loadParty(userId: string, projectId: string) {
+  const project = await db.project.findUnique({
+    where: { id: projectId },
+    include: { pro: { select: { id: true, userId: true } } },
+  })
+  if (!project) return { project: null, isClient: false, isPro: false }
+  return { project, isClient: project.clientId === userId, isPro: project.pro.userId === userId }
+}
+
+// GET: facturas del proyecto (solo las partes)
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -11,6 +21,11 @@ export async function GET(
   const { getSessionUser } = await import('@/lib/auth')
   const user = await getSessionUser()
   if (!user) return fail('Necesitás iniciar sesión', 401)
+
+  const { project, isClient, isPro } = await loadParty(user.id, id)
+  if (!project) return fail('Proyecto no encontrado', 404)
+  if (!isClient && !isPro) return fail('No tenés acceso a este proyecto', 403)
+
   const invoices = await db.invoice.findMany({
     where: { projectId: id },
     include: { items: true },
@@ -19,7 +34,12 @@ export async function GET(
   return ok({ invoices })
 }
 
-// POST: generar factura automática con detalle explícito (materiales aprobados + mano de obra)
+// POST: el profesional emite la factura con detalle explícito.
+//   - una sola factura `pendiente` por proyecto a la vez
+//   - la mano de obra se factura una única vez (si ninguna factura previa la incluyó)
+//   - materiales: solo `aprobado` y todavía no facturados (invoicedAt null), según materialsPaymentMode;
+//     quedan marcados invoicedAt en la misma transacción
+//   - número HOM-<año>-<n> con reintento ante colisión (P2002)
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -32,14 +52,18 @@ export async function POST(
   const project = await db.project.findUnique({
     where: { id },
     include: {
-      materials: { where: { status: 'aprobado' } },
-      invoices: { select: { id: true } },
+      pro: { select: { id: true, userId: true } },
+      materials: { where: { status: 'aprobado', invoicedAt: null }, orderBy: { createdAt: 'asc' } },
+      invoices: { select: { id: true, status: true, laborCost: true } },
     },
   })
   if (!project) return fail('Proyecto no encontrado', 404)
-  const pro = await db.professionalProfile.findUnique({ where: { userId: user.id } })
-  if (!pro || project.professionalId !== pro.id) {
-    return fail('Solo el profesional del proyecto emite la factura', 403)
+  if (project.pro.userId !== user.id) return fail('Solo el profesional del proyecto emite la factura', 403)
+  if (project.status !== 'activo' && project.status !== 'finalizado') {
+    return fail(`El proyecto está ${project.status}: no se puede facturar`, 409)
+  }
+  if (project.invoices.some((i) => i.status === 'pendiente')) {
+    return fail('Ya hay una factura pendiente de pago', 409)
   }
   if (project.invoices.length >= 99) return fail('Límite de facturas alcanzado')
 
@@ -50,10 +74,20 @@ export async function POST(
   const clientePagaMateriales = project.materialsPaymentMode === 'cliente_paga_proveedor'
   const materialsForInvoice = clientePagaMateriales ? [] : project.materials
 
-  // Número secuencial HOM-2026-000001
-  const year = new Date().getFullYear()
-  const count = await db.invoice.count()
-  const number = `HOM-${year}-${String(count + 1).padStart(6, '0')}`
+  const laborAlreadyInvoiced = project.invoices.some((i) => i.laborCost > 0)
+  const includeLabor = project.laborCost > 0 && !laborAlreadyInvoiced
+
+  if (!includeLabor && materialsForInvoice.length === 0) {
+    if (project.laborCost <= 0 && !clientePagaMateriales) {
+      return fail('Todavía no cotizaste la mano de obra y no hay materiales aprobados sin facturar')
+    }
+    if (project.laborCost <= 0) {
+      return fail('Todavía no cotizaste la mano de obra (en este modo los materiales los cobra el proveedor directamente al cliente)')
+    }
+    return fail(laborAlreadyInvoiced
+      ? 'La mano de obra ya fue facturada y no hay materiales aprobados sin facturar'
+      : 'No hay materiales aprobados ni mano de obra para facturar')
+  }
 
   const items = materialsForInvoice.map((m) => ({
     kind: 'material',
@@ -62,7 +96,8 @@ export async function POST(
     unitPrice: m.unitPrice,
     subtotal: Math.round(m.quantity * m.unitPrice * 100) / 100,
   }))
-  if (project.laborCost > 0) {
+  const laborCost = includeLabor ? project.laborCost : 0
+  if (includeLabor) {
     items.push({
       kind: 'mano_obra',
       description: 'Mano de obra',
@@ -71,34 +106,58 @@ export async function POST(
       subtotal: project.laborCost,
     })
   }
-  if (items.length === 0) {
-    return fail(clientePagaMateriales
-      ? 'No hay mano de obra para facturar (en este modo los materiales los cobra el proveedor directamente al cliente)'
-      : 'No hay materiales aprobados ni mano de obra para facturar')
-  }
-  const materialsCost = items.filter((i) => i.kind === 'material').reduce((a, i) => a + i.subtotal, 0)
-  const total = materialsCost + project.laborCost
+  const materialsCost = Math.round(items.filter((i) => i.kind === 'material').reduce((a, i) => a + i.subtotal, 0) * 100) / 100
+  const total = Math.round((materialsCost + laborCost) * 100) / 100
+  const materialIds = materialsForInvoice.map((m) => m.id)
+  const year = new Date().getFullYear()
 
-  const invoice = await db.invoice.create({
-    data: {
-      projectId: id,
-      number,
-      clientId: project.clientId,
-      professionalId: project.professionalId,
-      laborCost: project.laborCost,
-      materialsCost,
-      total,
-      items: { create: items },
-    },
-    include: { items: true },
-  })
+  // Número secuencial HOM-2026-000001: count + 1 dentro de la transacción; si otro
+  // profesional emitió en el mismo instante, colisiona el @unique y reintentamos.
+  let invoice: Prisma.InvoiceGetPayload<{ include: { items: true } }> | null = null
+  let lastError: unknown = null
+  for (let attempt = 0; attempt < 3 && !invoice; attempt++) {
+    try {
+      invoice = await db.$transaction(async (tx) => {
+        const count = await tx.invoice.count()
+        const number = `HOM-${year}-${String(count + 1 + attempt).padStart(6, '0')}`
+        const created = await tx.invoice.create({
+          data: {
+            projectId: id,
+            number,
+            clientId: project.clientId,
+            professionalId: project.professionalId,
+            laborCost,
+            materialsCost,
+            total,
+            items: { create: items },
+          },
+          include: { items: true },
+        })
+        if (materialIds.length) {
+          await tx.projectMaterial.updateMany({
+            where: { id: { in: materialIds }, projectId: id, invoicedAt: null },
+            data: { invoicedAt: new Date() },
+          })
+        }
+        return created
+      })
+    } catch (e) {
+      lastError = e
+      const isUniqueClash = e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002'
+      if (!isUniqueClash) throw e
+    }
+  }
+  if (!invoice) {
+    console.error('[invoice] no se pudo asignar número único', lastError)
+    return fail('No pudimos numerar la factura: probá de nuevo en unos segundos', 503)
+  }
 
   await db.notification.create({
     data: {
       userId: project.clientId,
       type: 'factura_emitida',
       title: 'Nueva factura',
-      body: `${number} por ${total.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })} — "${project.title}"${clientePagaMateriales ? ' (solo mano de obra: los materiales los pagás al proveedor)' : ''}`,
+      body: `${invoice.number} por ${total.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })} — "${project.title}"${clientePagaMateriales ? ' (solo mano de obra: los materiales los pagás al proveedor)' : ''}`,
       link: `#/panel/cliente/facturas`,
     },
   })

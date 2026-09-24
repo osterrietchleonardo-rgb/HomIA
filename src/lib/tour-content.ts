@@ -25,7 +25,7 @@ export const ROLE_TOUR_META: Record<TourRole, { label: string; tourTitle: string
   profesional: {
     label: 'Profesional',
     tourTitle: 'Recorrido para profesionales',
-    tourSub: 'Conseguir trabajos, presupuestar, comprar materiales y cobrar protegido.',
+    tourSub: 'Conseguir trabajos, presupuestar, comprar materiales y cobrar por Mercado Pago o efectivo.',
   },
   proveedor: {
     label: 'Proveedor',
@@ -55,7 +55,7 @@ export const TOURS: Record<TourRole, TourStep[]> = {
       route: '/panel/cliente/publicar',
       target: 'nav-publicar',
       title: 'Publicar un trabajo (gratis)',
-      body: 'Contás qué necesitás con fotos, zona y presupuesto estimado, y tu publicación sale a la bolsa de trabajos. Los profesionales te mandan presupuestos y vos elegís. Publicar no cuesta nada: HomIA cobra comisión solo si contratás y se factura el trabajo.',
+      body: 'Contás qué necesitás con fotos, zona y presupuesto estimado, y tu publicación sale a la bolsa de trabajos. Los profesionales te mandan presupuestos y vos elegís. Publicar, recibir presupuestos y contratar no cuesta nada: HomIA solo cobra una comisión del 1% en las compras de materiales pagadas por Mercado Pago.',
       tip: 'Cuantas más fotos y detalle, mejores presupuestos recibís.',
     },
     {
@@ -71,7 +71,7 @@ export const TOURS: Record<TourRole, TourStep[]> = {
       route: '/panel/cliente/proyectos',
       target: 'nav-proyectos',
       title: 'Proyectos: tu obra, siempre a la vista',
-      body: 'Al contratar se crea un proyecto: etapas, materiales que tu profesional propone con precios reales, y el acuerdo de quién paga los materiales (si los adelanta él, van en su factura; si no, te los cobra el proveedor directo). Al finalizar, acá mismo dejás tu reseña con estrellas, comentario y fotos.',
+      body: 'Al contratar se crea un proyecto: etapas, materiales que tu profesional propone con precios reales, y el acuerdo de quién paga los materiales (si los adelanta él, van en su factura; si no, te los cobra el proveedor directo). Al finalizar, acá mismo dejás tu reseña con estrellas, comentario y fotos, y si sobró material lo cargás en Sobrantes para devolverlo al local del proveedor.',
       tip: 'Todo queda registrado en la plataforma: nada depende de la memoria de nadie.',
     },
     {
@@ -79,7 +79,7 @@ export const TOURS: Record<TourRole, TourStep[]> = {
       route: '/panel/cliente/facturas',
       target: 'nav-facturas',
       title: 'Facturas: pagá como prefieras',
-      body: 'Elegís el método en cada factura: Mercado Pago (respaldado, con escrow: el dinero se libera solo cuando aprobás la obra) o efectivo (el acuerdo queda registrado y el profesional confirma cuando lo cobra). Todas se descargan en PDF con un botón.',
+      body: 'Elegís el método en cada factura: Mercado Pago (pagás al finalizar la obra y el dinero va directo al profesional) o efectivo (el acuerdo queda registrado y el profesional confirma cuando lo cobra). Todas se descargan en PDF con un botón.',
       tip: 'Si acordás efectivo y te arrepentís, podés cancelar el acuerdo y volver a Mercado Pago.',
     },
     {
@@ -126,7 +126,7 @@ export const TOURS: Record<TourRole, TourStep[]> = {
     {
       id: 'bienvenida',
       title: '¡Bienvenido, profesional!',
-      body: 'Este recorrido te muestra tu caja de herramientas completa: conseguir trabajos, presupuestar, comprar materiales más barato, gestionar la obra y cobrar protegido. Podés repetirlo cuando quieras desde el botón de ayuda de abajo a la derecha.',
+      body: 'Este recorrido te muestra tu caja de herramientas completa: conseguir trabajos, presupuestar, comprar materiales más barato, gestionar la obra y cobrar sin comisión. Podés repetirlo cuando quieras desde el botón de ayuda de abajo a la derecha.',
       tip: 'Avanzá con las flechas ← → y salí con Esc cuando quieras.',
     },
     {
@@ -149,8 +149,8 @@ export const TOURS: Record<TourRole, TourStep[]> = {
       id: 'presupuestos',
       route: '/panel/profesional/presupuestos',
       target: 'nav-presupuestos',
-      title: 'Mis presupuestos: nada se pierde',
-      body: 'Todos tus presupuestos con su estado: enviado, visto, aceptado o rechazado. Si te aceptan uno, el proyecto se crea solo y te aparece en Proyectos.',
+      title: 'Mis ofertas: nada se pierde',
+      body: 'Todos tus presupuestos con su estado: enviado, aceptado o rechazado. Mientras está enviado podés editarlo o retirarlo. Si te aceptan uno, el proyecto se crea solo y te aparece en Proyectos.',
       tip: 'Un presupuesto rechazado también enseña: mirá qué eligió el cliente y ajustá el próximo.',
     },
     {
@@ -158,7 +158,7 @@ export const TOURS: Record<TourRole, TourStep[]> = {
       route: '/panel/profesional/proyectos',
       target: 'nav-proyectos',
       title: 'Proyectos: gestioná cada obra',
-      body: 'El corazón de tu trabajo: etapas de la obra, materiales que proponés (con precios reales comparados entre proveedores), el acuerdo de quién paga los materiales, y las facturas. Emitís factura cuando corresponde y cobrás con escrow o efectivo (el cliente elige; vos confirmás el efectivo al recibirlo).',
+      body: 'El corazón de tu trabajo: etapas de la obra, materiales que proponés (con precios reales comparados entre proveedores), el acuerdo de quién paga los materiales, y las facturas. Emitís factura cuando corresponde y cobrás por Mercado Pago o en efectivo (el cliente elige; vos confirmás el efectivo al recibirlo). Sin comisión sobre tus facturas.',
       tip: 'Si el cliente paga los materiales directo al proveedor, tu factura va solo con mano de obra: queda escrito para los dos.',
     },
     {
@@ -189,9 +189,9 @@ export const TOURS: Record<TourRole, TourStep[]> = {
       id: 'vinculaciones',
       route: '/panel/profesional/vinculaciones',
       target: 'nav-vinculaciones',
-      title: 'Cuenta de retiro: para cobrar sin fricción',
-      body: 'Acá conectás la cuenta donde querés recibir el dinero de tus trabajos. Sin esto, los cobros no pueden liquidarse a tu nombre.',
-      tip: 'Configurala hoy: la vas a necesitar en tu primer cobro.',
+      title: 'Vinculaciones: retirá materiales a cuenta',
+      body: 'Una "cuenta de retiro" es tu vínculo con un proveedor: la creás con su email (o él con el tuyo) y retirás materiales de su local a cuenta del proyecto, sin pagar en el momento. Acá ves tus vinculaciones y las pausás cuando quieras. No es una cuenta bancaria: tus cobros llegan por Mercado Pago o efectivo desde las facturas.',
+      tip: 'Vinculate con el proveedor al que más le comprás: te ahorra viajes y adelantos.',
     },
     {
       id: 'directorio',
@@ -213,14 +213,14 @@ export const TOURS: Record<TourRole, TourStep[]> = {
       id: 'verificacion',
       route: '/panel/profesional/verificacion',
       target: 'nav-verificacion',
-      title: 'Verificación y plan PRO',
-      body: 'Subí frente y dorso de tu DNI: una IA los valida y tu perfil muestra el check verde. Sin verificar, figurás como "No verificado" y perdés contrataciones. Y si querés más alcance, el plan PRO desbloquea beneficios extra para tu perfil.',
+      title: 'Verificación: tu sello de confianza',
+      body: 'Subí frente y dorso de tu DNI: una IA los valida y tu perfil muestra el check verde. Sin verificar, figurás como "No verificado" y perdés contrataciones. Es gratis y tarda 2 minutos.',
       tip: 'El check verde es la mejora de 2 minutos con mayor impacto en tu perfil.',
     },
     {
       id: 'cierre',
       title: '¿Te trabás? Nunca más',
-      body: 'El botón de ayuda de abajo a la derecha está siempre a la vista: repite este recorrido, tiene guías paso a paso de cada acción ("¿Cómo hago…?") y soluciones a los atascos típicos ("Me trabé"). Las reglas de oro: cobrás protegido con escrow, el cliente inicia los chats y las reseñas vienen de obras reales.',
+      body: 'El botón de ayuda de abajo a la derecha está siempre a la vista: repite este recorrido, tiene guías paso a paso de cada acción ("¿Cómo hago…?") y soluciones a los atascos típicos ("Me trabé"). Las reglas de oro: cobrás al finalizar y sin comisión, el cliente inicia los chats y las reseñas vienen de obras reales.',
       tip: 'Tu reputación es tu marketing: cada obra terminada bien documentada te consigue la siguiente.',
     },
   ],
@@ -253,8 +253,16 @@ export const TOURS: Record<TourRole, TourStep[]> = {
       route: '/panel/proveedor/cobros',
       target: 'nav-cobros',
       title: 'Cobros: cobrá tus materiales directo',
-      body: 'En proyectos donde el cliente te paga directamente, emitís el cobro por los materiales aprobados desde acá. El cliente paga con Mercado Pago o acuerda efectivo; si es efectivo, lo confirmás vos cuando lo recibís.',
-      tip: 'Emití el cobro apenas se aprueban los materiales: el pago llega antes.',
+      body: 'Primero tocá "Conectá Mercado Pago" para que los pagos lleguen directo a tu cuenta. Después, en proyectos donde el cliente te paga a vos, emitís el cobro por los materiales aprobados desde acá: el cliente paga con Mercado Pago o acuerda efectivo (lo confirmás vos al recibirlo). En la pestaña Devoluciones gestionás los sobrantes que te traen de vuelta.',
+      tip: 'Sin Mercado Pago conectado solo podés cobrar en efectivo: conectalo hoy.',
+    },
+    {
+      id: 'plan',
+      route: '/panel/proveedor/plan',
+      target: 'nav-plan',
+      title: 'Mi plan: 14 días gratis',
+      body: 'Probás la app completa gratis durante 14 días. Después elegís: Básico ($50.000/mes) con stock, ventas, cobros por Mercado Pago y efectivo, CRM y vinculaciones; o PRO ($100.000/mes), que suma tu logo y marca en la home, la tarjeta "Recomendado" en marketplace y directorio, y analítica de demanda.',
+      tip: 'Acá ves cuántos días de prueba te quedan y cambiás de plan cuando quieras.',
     },
     {
       id: 'crm',
@@ -268,9 +276,9 @@ export const TOURS: Record<TourRole, TourStep[]> = {
       id: 'vinculaciones',
       route: '/panel/proveedor/vinculaciones',
       target: 'nav-vinculaciones',
-      title: 'Cuenta de retiro: para cobrar sin fricción',
-      body: 'Conectás la cuenta donde querés recibir el dinero de tus ventas. Sin esto, los cobros no pueden liquidarse a tu nombre.',
-      tip: 'Configurala hoy: la vas a necesitar en tu primer cobro.',
+      title: 'Vinculaciones: profesionales que retiran a cuenta',
+      body: 'Una "cuenta de retiro" es tu vínculo con un profesional: la creás con su email (o él con el tuyo) y a partir de ahí retira materiales de tu local a cuenta de un proyecto, sin pagar en el momento. Después lo cobrás desde Cobros. No es una cuenta bancaria: el dinero llega por Mercado Pago (lo conectás en Cobros) o en efectivo.',
+      tip: 'Vinculá primero a los profesionales que ya te compran seguido: es fidelización con control.',
     },
     {
       id: 'directorio',

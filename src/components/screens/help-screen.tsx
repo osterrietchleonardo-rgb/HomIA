@@ -28,7 +28,7 @@ const GUIDES: RoleGuide[] = [
     label: 'Soy cliente',
     icon: User,
     tone: 'homy-chip-blue',
-    intro: 'Publicás lo que necesitás, comparás presupuestos, contratá con escrow y calificá a quienes trabajaron en tu casa.',
+    intro: 'Publicás lo que necesitás, comparás presupuestos, contratás y calificás a quienes trabajaron en tu casa.',
     rows: [
       { what: 'Publicar un trabajo (gratis)', where: 'Panel → Publicar trabajo', href: '/panel/cliente/publicar', hrefLabel: 'Publicar' },
       { what: 'Comparar presupuestos recibidos', where: 'Panel → Mis trabajos → elegí la publicación', href: '/panel/cliente/trabajos', hrefLabel: 'Mis trabajos' },
@@ -39,11 +39,12 @@ const GUIDES: RoleGuide[] = [
       { what: 'Ver y descargar facturas en PDF', where: 'Panel → Facturas → botón PDF', href: '/panel/cliente/facturas', hrefLabel: 'Facturas' },
       { what: 'Dejar una reseña (pro y proveedor)', where: 'Detalle de un proyecto finalizado → sección Reseñas (con fotos)', href: '/panel/cliente/proyectos', hrefLabel: 'Proyectos' },
       { what: 'Pagar materiales al proveedor', where: 'Detalle del proyecto → Pagos a proveedores (cobros de cada proveedor)', href: '/panel/cliente/proyectos', hrefLabel: 'Proyectos' },
+      { what: 'Devolver sobrantes', where: 'Detalle del proyecto → Sobrantes → cargá foto y cantidad; el proveedor los acepta y los acercás al local', href: '/panel/cliente/proyectos', hrefLabel: 'Proyectos' },
       { what: 'Chatear con profesional o proveedor', where: 'Panel → Mensajes (vos siempre iniciás la conversación)', href: '/panel/cliente/mensajes', hrefLabel: 'Mensajes' },
       { what: 'Verificar tu identidad con DNI', where: 'Panel → Verificación (la IA valida tus fotos)', href: '/panel/cliente/verificacion', hrefLabel: 'Verificación' },
     ],
     rules: [
-      { title: 'El pago queda protegido (escrow)', body: 'Elegís cómo pagar cada factura: Mercado Pago (respaldado por la plataforma) o efectivo (el profesional confirma cuando cobra). Con escrow, el dinero queda retenido hasta que des conformidad.' },
+      { title: 'Pago al finalizar la obra', body: 'Elegís cómo pagar cada factura: Mercado Pago o efectivo (el profesional confirma cuando cobra). Pagás al finalizar la obra, una vez que das tu conformidad, y el dinero va directo al profesional.' },
       { title: 'Vos iniciás el chat', body: 'Por tu seguridad, los profesionales y proveedores no pueden escribirte primero: solo pueden responder a tus mensajes.' },
       { title: 'Reseñas: solo de obras reales y finalizadas', body: 'Al finalizar el proyecto aparece la sección Reseñas: calificás a tu profesional y a cada proveedor con estrellas, comentario y hasta 4 fotos. Nadie puede reseñar sin un proyecto real entre ambos.' },
     ],
@@ -53,11 +54,11 @@ const GUIDES: RoleGuide[] = [
     label: 'Soy profesional',
     icon: HardHat,
     tone: 'homy-chip-orange',
-    intro: 'Encontrá trabajos, mandá presupuestos, comprá materiales al mejor precio y cobré protegido con escrow.',
+    intro: 'Encontrá trabajos, mandá presupuestos, comprá materiales al mejor precio y cobrá por Mercado Pago o efectivo.',
     rows: [
       { what: 'Buscar trabajos publicados', where: 'Panel → Bolsa de trabajos (filtrá por tu rubro y zona)', href: '/panel/profesional/bolsa', hrefLabel: 'Bolsa' },
       { what: 'Enviar presupuestos', where: 'Detalle del trabajo → Enviar presupuesto', href: '/panel/profesional/bolsa', hrefLabel: 'Bolsa' },
-      { what: 'Seguir tus proyectos y etapas', where: 'Panel → Proyectos → detalle (materiales, facturas, escrow)', href: '/panel/profesional/proyectos', hrefLabel: 'Proyectos' },
+      { what: 'Seguir tus proyectos y etapas', where: 'Panel → Proyectos → detalle (materiales, facturas)', href: '/panel/profesional/proyectos', hrefLabel: 'Proyectos' },
       { what: 'Proponer materiales y comparar precios', where: 'Detalle del proyecto → Materiales (comparables entre proveedores)', href: '/panel/profesional/proyectos', hrefLabel: 'Proyectos' },
       { what: 'Emitir facturas y cobrar', where: 'Detalle del proyecto → Emitir factura (el cliente paga con Mercado Pago o efectivo — confirmás el cobro)', href: '/panel/profesional/proyectos', hrefLabel: 'Proyectos' },
       { what: 'Definir quién paga los materiales', where: 'Detalle del proyecto → tarjeta ¿Quién paga los materiales?', href: '/panel/profesional/proyectos', hrefLabel: 'Proyectos' },
@@ -68,7 +69,7 @@ const GUIDES: RoleGuide[] = [
       { what: 'Verificar tu identidad con DNI', where: 'Panel → Verificación — sin verificar quedás como "No verificado" ante todos', href: '/panel/profesional/verificacion', hrefLabel: 'Verificación' },
     ],
     rules: [
-      { title: 'Cobrá protegido', body: 'Con Mercado Pago, el dinero queda retenido por la plataforma hasta que el cliente apruebe la obra. Si el cliente paga en efectivo, el acuerdo queda registrado y vos confirmás el cobro cuando lo recibís.' },
+      { title: 'Cobrás al finalizar, sin comisión', body: 'Emitís la factura cuando la obra termina y el cliente la paga con Mercado Pago (va directo a tu cuenta) o en efectivo (el acuerdo queda registrado y vos confirmás el cobro cuando lo recibís). HomIA no cobra comisión sobre tus facturas.' },
       { title: 'Los clientes escriben primero', body: 'Podés responder todos los chats que quieras, pero la conversación nueva siempre la inicia el cliente. Es la regla de confianza de HomIA.' },
       { title: 'Tu verificación vale oro', body: 'El check verde de identidad (validado por IA) multiplica tus chances de ser contratado. Si no subís tu DNI figurás como "No verificado".' },
     ],
@@ -82,7 +83,10 @@ const GUIDES: RoleGuide[] = [
     rows: [
       { what: 'Publicar materiales y precios', where: 'Panel → Stock → agregar elementos al catálogo', href: '/panel/proveedor/stock', hrefLabel: 'Stock' },
       { what: 'Alertas de reposición', where: 'Panel → Inicio (marcados "por agotar" y "agotados")', href: '/panel/proveedor', hrefLabel: 'Inicio' },
-      { what: 'Vincularte con profesionales', where: 'Panel → Vinculaciones → crear cuenta de retiro', href: '/panel/proveedor/vinculaciones', hrefLabel: 'Vinculaciones' },
+      { what: 'Vincularte con profesionales', where: 'Panel → Vinculaciones → creá el vínculo para que retiren materiales a cuenta de un proyecto', href: '/panel/proveedor/vinculaciones', hrefLabel: 'Vinculaciones' },
+      { what: 'Conectar Mercado Pago', where: 'Panel → Cobros → botón "Conectá Mercado Pago" (así los pagos van directo a tu cuenta)', href: '/panel/proveedor/cobros', hrefLabel: 'Cobros' },
+      { what: 'Mi plan (Básico o PRO)', where: 'Panel → Mi plan → 14 días gratis, después Básico $50.000/mes o PRO $100.000/mes', href: '/panel/proveedor/plan', hrefLabel: 'Mi plan' },
+      { what: 'Gestionar devoluciones de sobrantes', where: 'Panel → Cobros → Devoluciones → aceptá los ítems, marcá recibido cuando los traigan y confirmá el reembolso', href: '/panel/proveedor/cobros', hrefLabel: 'Cobros' },
       { what: 'Gestionar tratos (CRM)', where: 'Panel → CRM', href: '/panel/proveedor/crm', hrefLabel: 'CRM' },
       { what: 'Aparecer en el directorio', where: 'Tu perfil público se arma solo con tu stock y reseñas', href: '/panel/proveedor/directorio', hrefLabel: 'Directorio' },
       { what: 'Recibir reseñas de clientes', where: 'Los clientes califican tu entrega al finalizar proyectos con tus materiales', href: '/panel/proveedor/directorio', hrefLabel: 'Directorio' },
@@ -100,8 +104,8 @@ const GUIDES: RoleGuide[] = [
 
 const FAQ = [
   {
-    q: '¿Qué es el escrow y por qué es más seguro?',
-    a: 'Cuando el cliente paga una factura, el dinero queda retenido por HomIA (no va directo al profesional). Se libera cuando el cliente aprueba el trabajo terminado. Así el profesional sabe que el dinero existe, y el cliente sabe que solo se libera si la obra salió bien.',
+    q: '¿Cómo funciona el pago al finalizar la obra?',
+    a: 'Cuando la obra termina, el profesional emite la factura y el cliente la paga. El dinero va directo al profesional. Así el cliente sabe que paga recién cuando aprueba el trabajo terminado.',
   },
   {
     q: '¿Dónde dejo una reseña, a quién y en qué momento?',
@@ -109,11 +113,11 @@ const FAQ = [
   },
   {
     q: '¿Cómo pago una factura: Mercado Pago o efectivo?',
-    a: 'El cliente elige el método al pagar: Mercado Pago (el pago queda respaldado por la plataforma) o efectivo. Con efectivo, el acuerdo queda registrado: el profesional ve que va a cobrar en efectivo y confirma desde su panel cuando recibe el dinero — recién ahí la factura queda pagada. Podés cancelar el acuerdo antes de la confirmación y elegir otro método.',
+    a: 'El cliente elige el método al pagar: Mercado Pago (el dinero va directo a la cuenta de quien cobra) o efectivo. Con efectivo, el acuerdo queda registrado: el profesional ve que va a cobrar en efectivo y confirma desde su panel cuando recibe el dinero — recién ahí la factura queda pagada. Podés cancelar el acuerdo antes de la confirmación y elegir otro método.',
   },
   {
     q: '¿Quién paga los materiales?',
-    a: 'Lo acuerdan profesional y cliente en cada proyecto y lo ven los dos siempre: (1) los adelanta el profesional y los cobra junto con la mano de obra en su factura, o (2) el cliente los paga directamente al proveedor: el proveedor emite el cobro desde su panel (Panel → Cobros) y el cliente paga con Mercado Pago o acuerda efectivo. En el modo 2, la factura del profesional cubre solo mano de obra y la garantía (escrow) retiene solo ese monto.',
+    a: 'Lo acuerdan profesional y cliente en cada proyecto y lo ven los dos siempre: (1) los adelanta el profesional y los cobra junto con la mano de obra en su factura, o (2) el cliente los paga directamente al proveedor: el proveedor emite el cobro desde su panel (Panel → Cobros) y el cliente paga con Mercado Pago o acuerda efectivo. En el modo 2, la factura del profesional cubre solo mano de obra.',
   },
   {
     q: '¿Por qué hay usuarios "No verificados"?',
@@ -125,7 +129,15 @@ const FAQ = [
   },
   {
     q: '¿Publicar un trabajo cuesta algo?',
-    a: 'No. Publicar, recibir presupuestos y chatear es gratis para el cliente. HomIA cobra comisión solo cuando se ejecuta y factura un trabajo.',
+    a: 'No. Publicar, recibir presupuestos, contratar y chatear es gratis para el cliente, y también para el profesional. HomIA cobra una comisión del 1% únicamente en las compras de materiales pagadas por Mercado Pago; las facturas de trabajos no tienen comisión.',
+  },
+  {
+    q: '¿Qué hago con los materiales que sobraron?',
+    a: 'Los devolvés al local del proveedor. Desde el detalle del proyecto (o desde Mis compras, si fue una compra directa) cargás cada sobrante con foto y cantidad. El proveedor acepta todos o algunos ítems, los acercás al local y él confirma la recepción. Si pagaste con Mercado Pago, el reembolso vuelve solo a tu medio de pago; si pagaste en efectivo, te lo devuelven en el mostrador y lo confirmás en la app. Tenés hasta 30 días desde el pago.',
+  },
+  {
+    q: '¿Cuánto cuesta HomIA para un proveedor?',
+    a: 'Los primeros 14 días son gratis. Después, el plan Básico cuesta $50.000/mes e incluye la app completa: stock, ventas, cobros por Mercado Pago y efectivo, CRM y vinculaciones. El plan PRO cuesta $100.000/mes y suma tu logo y marca en la home, la tarjeta "Recomendado" en marketplace y directorio, y analítica de demanda. Lo gestionás desde Panel → Mi plan.',
   },
   {
     q: '¿Cómo funciona "Contratar" desde el directorio?',
@@ -163,7 +175,7 @@ export default function HelpScreen({ embedded = false }: { embedded?: boolean })
   const guide = visibleGuides.find((g) => g.id === tab) || visibleGuides[0] || GUIDES[0]
 
   return (
-    <div className={embedded ? 'homy-page' : 'mx-auto w-full max-w-5xl px-4 pt-24 pb-10 sm:pb-14'}>
+    <div className={embedded ? 'homy-page' : 'mx-auto w-full max-w-5xl px-4 pt-8 pb-10 sm:pb-14'}>
       <header className="homy-page-head">
         <div className="min-w-0">
           <span className="homy-eyebrow">Centro de ayuda</span>
@@ -189,17 +201,19 @@ export default function HelpScreen({ embedded = false }: { embedded?: boolean })
           </div>
         </div>
         <div className="relative mt-4 flex flex-wrap gap-2">
-          {visibleTourRoles.map((r) => (
-            <button key={r.id} onClick={() => startTour({ role: r.id })}
-              title={`Empezar el recorrido ${r.label}`}
-              className="homy-focus inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-white px-4 py-2.5 text-sm font-extrabold text-[#0A2540] shadow-lg transition hover:bg-slate-100">
-              <Play className="size-4 text-[#1D63B8]" aria-hidden />
-              Tour {r.label}
-            </button>
-          ))}
-          {!user && (
+          {user ? (
+            visibleTourRoles.map((r) => (
+              <button key={r.id} onClick={() => startTour({ role: r.id })}
+                title={`Empezar el recorrido ${r.label}`}
+                className="homy-focus inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-white px-4 py-2.5 text-sm font-extrabold text-[#0A2540] shadow-lg transition hover:bg-slate-100">
+                <Play className="size-4 text-[#1D63B8]" aria-hidden />
+                Tour {r.label}
+              </button>
+            ))
+          ) : (
+            // El recorrido señala secciones del panel: sin sesión no hay panel que recorrer.
             <button onClick={() => navigate('/registrarse')} className="homy-focus inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-white px-4 py-2.5 text-sm font-extrabold text-[#0A2540] shadow-lg transition hover:bg-slate-100">
-              Crear cuenta para empezar <ArrowRight className="size-4 text-[#1D63B8]" aria-hidden />
+              Creá tu cuenta para hacer el recorrido <ArrowRight className="size-4 text-[#1D63B8]" aria-hidden />
             </button>
           )}
         </div>
@@ -297,7 +311,7 @@ export default function HelpScreen({ embedded = false }: { embedded?: boolean })
           Los 4 pilares de confianza HomIA
         </h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <TrustCard icon={Wallet} tone="text-[#0e9f6e]" title="Escrow real" body="El dinero se retiene y se libera solo cuando el trabajo se aprueba." />
+          <TrustCard icon={Wallet} tone="text-[#0e9f6e]" title="Pagás al finalizar" body="Pagás cuando la obra termina, con Mercado Pago o efectivo. El dinero va directo a quien trabajó." />
           <TrustCard icon={BadgeCheck} tone="text-[#0e9f6e]" title="Identidad por IA" body="DNI frente + dorso analizados por IA de visión. Verificado o No verificado, a la vista de todos." />
           <TrustCard icon={Star} tone="text-[#B98A00]" title="Reseñas con fotos" body="Estrellas + comentario + fotos del trabajo: decisiones con evidencia, no con promesas." />
           <TrustCard icon={MessageCircle} tone="text-[#1D63B8]" title="Chat seguro" body="El cliente siempre inicia la conversación. Nadie puede escribirte sin tu consentimiento previo." />

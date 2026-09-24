@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { parseJson } from '@/lib/api'
 import { withinRadius, type WithGeo } from '@/lib/geo'
 import { matchTerms, canonicalCategoria } from '@/lib/search-match'
+import { puedeOperar } from '@/lib/plans'
 
 // Búsqueda dual HomIA
 // mode=cliente    → profesionales + trabajos abiertos + MATERIALES en proveedores
@@ -33,9 +34,10 @@ export async function GET(req: NextRequest) {
     },
   })
 
-  let matched = stock
+  // proveedores con prueba vencida / sin plan no aparecen en las búsquedas
+  let matched = stock.filter((s) => puedeOperar(s.provider))
   if (q) {
-    matched = stock.filter((s) => {
+    matched = matched.filter((s) => {
       const hay = [s.element.name, ...parseJson<string[]>(s.element.aliases, []), s.element.description || '', s.brand || '', s.provider.businessName].join(' ').toLowerCase()
       return matchTerms(q, hay)
     })

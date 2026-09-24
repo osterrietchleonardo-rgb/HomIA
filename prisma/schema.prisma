@@ -15,48 +15,49 @@ datasource db {
 // ─────────────────────────── IDENTIDAD ───────────────────────────
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  passwordHash  String
-  roles         String   @default("[]") // JSON: ["cliente","profesional","proveedor"]
-  displayName   String
-  phone         String?
-  avatarUrl     String?
-  howFoundUs    String?  // google|redes|recomendacion|publicidad|otro
-  birthday      String?  // ISO date
-  address       String?
-  city          String?
-  lat           Float?
-  lng           Float?
-  locationShared Boolean @default(false)
-  searchRadiusKm Float   @default(10)
-  rating        Float    @default(0)
-  reviewsCount  Int      @default(0)
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  passwordHash       String
+  roles              String    @default("[]") // JSON: ["cliente","profesional","proveedor"]
+  displayName        String
+  phone              String?
+  avatarUrl          String?
+  howFoundUs         String? // google|redes|recomendacion|publicidad|otro
+  birthday           String? // ISO date
+  address            String?
+  city               String?
+  lat                Float?
+  lng                Float?
+  locationShared     Boolean   @default(false)
+  searchRadiusKm     Float     @default(10)
+  rating             Float     @default(0)
+  reviewsCount       Int       @default(0)
   // Verificación de identidad por DNI + IA: none (no subió) | en_revision | verificado | rechazado
   // Se muestra PÚBLICamente junto al nombre (directorio, perfiles, mensajes).
-  verificationStatus String @default("none")
-  verifiedAt    DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  verificationStatus String    @default("none")
+  verifiedAt         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  documents      IdentityDocument[]
-  professional   ProfessionalProfile?
-  provider       ProviderProfile?
-  jobPosts       JobPost[]
-  projectsAsClient Project[]          @relation("ProjectClient")
-  chargesAsClient  ProviderCharge[]   @relation("ChargeClient")
-  worksAuthored   CompletedWork[]
-  reviewsGiven    Review[]           @relation("ReviewAuthor")
-  reviewsReceived Review[]           @relation("ReviewTarget")
-  pipelines       CrmPipeline[]
-  notifications   Notification[]
-  homySessions    HomySession[]
-  favorites       Favorite[]
-  dealsCounterparty CrmDeal[]    @relation("DealCounterparty")
-  conversationsA  Conversation[] @relation("ConversationA")
-  conversationsB  Conversation[] @relation("ConversationB")
-  messagesSent    Message[]      @relation("MessageSender")
-  purchases       Purchase[]     @relation("PurchaseClient")
+  documents         IdentityDocument[]
+  professional      ProfessionalProfile?
+  provider          ProviderProfile?
+  jobPosts          JobPost[]
+  projectsAsClient  Project[]            @relation("ProjectClient")
+  chargesAsClient   ProviderCharge[]     @relation("ChargeClient")
+  worksAuthored     CompletedWork[]
+  reviewsGiven      Review[]             @relation("ReviewAuthor")
+  reviewsReceived   Review[]             @relation("ReviewTarget")
+  pipelines         CrmPipeline[]
+  notifications     Notification[]
+  homySessions      HomySession[]
+  favorites         Favorite[]
+  dealsCounterparty CrmDeal[]            @relation("DealCounterparty")
+  conversationsA    Conversation[]       @relation("ConversationA")
+  conversationsB    Conversation[]       @relation("ConversationB")
+  messagesSent      Message[]            @relation("MessageSender")
+  purchases         Purchase[]           @relation("PurchaseClient")
+  leftoverReturns   LeftoverReturn[]
 }
 
 model IdentityDocument {
@@ -67,103 +68,115 @@ model IdentityDocument {
   backUrl   String?
   status    String   @default("en_revision") // en_revision|verificado|rechazado
   // Dictamen del modelo de IA de visión que analiza frente+dorso
-  aiVerdict String?  // JSON: { esDocumento, pareceReal, legible, mismoTitular, motivo... }
-  aiScore   Float?   // confianza 0..1 de que sea un documento real
+  aiVerdict String? // JSON: { esDocumento, pareceReal, legible, mismoTitular, motivo... }
+  aiScore   Float? // confianza 0..1 de que sea un documento real
   aiNotes   String?
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model ProfessionalProfile {
-  id             String   @id @default(cuid())
-  userId         String   @unique
-  personType     String   @default("persona") // persona|empresa
-  professions    String   @default("[]") // JSON slugs: ["plomeria","gasistas"]
-  skills         String   @default("[]") // JSON strings
-  experienceYears Int     @default(0)
-  bio            String?
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  personType          String    @default("persona") // persona|empresa
+  professions         String    @default("[]") // JSON slugs: ["plomeria","gasistas"]
+  skills              String    @default("[]") // JSON strings
+  experienceYears     Int       @default(0)
+  bio                 String?
   // Persona
-  dniCuil        String?
+  dniCuil             String?
   // Empresa
-  companyName    String?
-  companyCuit    String?
-  companyWebsite String?
-  employeesCount Int?
+  companyName         String?
+  companyCuit         String?
+  companyWebsite      String?
+  employeesCount      Int?
   // Operativa
-  serviceRadiusKm Float  @default(15)
-  verified       Boolean  @default(false)
-  rating         Float    @default(0)
-  reviewsCount   Int      @default(0)
-  worksCount     Int      @default(0)
-  lat            Float?
-  lng            Float?
-  city           String?
-  subscription   String   @default("free") // free|pro
-  mpPreapprovalId String?  // id de preapproval de Mercado Pago (suscripción PRO)
-  proSince       DateTime? // desde cuándo está activo el plan PRO
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  serviceRadiusKm     Float     @default(15)
+  verified            Boolean   @default(false)
+  rating              Float     @default(0)
+  reviewsCount        Int       @default(0)
+  worksCount          Int       @default(0)
+  lat                 Float?
+  lng                 Float?
+  city                String?
+  subscription        String    @default("free") // free|pro
+  mpPreapprovalId     String? // id de preapproval de Mercado Pago (suscripción PRO)
+  proSince            DateTime? // desde cuándo está activo el plan PRO
+  // OAuth Mercado Pago — cobro directo al profesional
+  mpOauthAccessToken  String?
+  mpOauthRefreshToken String?
+  mpOauthExpiresAt    DateTime?
+  mpOauthStatus       String    @default("disconnected") // connected | disconnected
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bids  JobBid[] @relation("BidProfessional")
-  proProjects Project[] @relation("ProjectPro")
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bids          JobBid[]       @relation("BidProfessional")
+  proProjects   Project[]      @relation("ProjectPro")
   providerLinks ProviderLink[]
 }
 
 model ProviderProfile {
-  id           String   @id @default(cuid())
-  userId       String   @unique
-  businessName String
-  kind         String   @default("multi") // corralon|ferreteria|electricidad|pintura|sanitarios|gas|maderera|carpinteria|aberturas|techos|jardineria|limpieza|climatizacion|herramientas|muebles|pisos|seguridad|multi
-  cuit         String?
-  description  String?
-  address      String?
-  city         String?
-  lat          Float?
-  lng          Float?
-  verified     Boolean  @default(false)
-  rating       Float    @default(0)
-  reviewsCount Int      @default(0)
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  businessName        String
+  kind                String    @default("multi") // corralon|ferreteria|electricidad|pintura|sanitarios|gas|maderera|carpinteria|aberturas|techos|jardineria|limpieza|climatizacion|herramientas|muebles|pisos|seguridad|multi
+  cuit                String?
+  description         String?
+  address             String?
+  city                String?
+  lat                 Float?
+  lng                 Float?
+  verified            Boolean   @default(false)
+  rating              Float     @default(0)
+  reviewsCount        Int       @default(0)
   // Planes del proveedor (único rol con suscripción de pago):
   // trial (14 días gratis desde el alta) | basic (US$50/mes, usar la plataforma) | pro (US$100/mes, analítica + destacado + sponsor)
-  subscription  String   @default("trial")
-  trialEndsAt   DateTime? // fin de la prueba gratis de 14 días (null → se calcula desde createdAt)
-  mpPreapprovalId String?  // id de preapproval de Mercado Pago (plan basic o pro)
-  proSince      DateTime? // desde cuándo está activo el plan de pago
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  subscription        String    @default("trial")
+  trialEndsAt         DateTime? // fin de la prueba gratis de 14 días (null → se calcula desde createdAt)
+  mpPreapprovalId     String? // id de preapproval de Mercado Pago (plan basic o pro)
+  proSince            DateTime? // desde cuándo está activo el plan de pago
+  // OAuth Mercado Pago — cobro directo al proveedor
+  mpOauthAccessToken  String?
+  mpOauthRefreshToken String?
+  mpOauthExpiresAt    DateTime?
+  mpOauthStatus       String    @default("disconnected") // connected | disconnected
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  stock  ProviderStock[]
-  links  ProviderLink[]
-  stockMaterials ProjectMaterial[]
-  charges ProviderCharge[]
-  purchases Purchase[]
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stock           ProviderStock[]
+  links           ProviderLink[]
+  stockMaterials  ProjectMaterial[]
+  charges         ProviderCharge[]
+  purchases       Purchase[]
+  leftoverReturns LeftoverReturn[]
 }
 
 // ─────────────────────────── CATÁLOGO + STOCK ───────────────────────────
 
 model Category {
-  id        String @id @default(cuid())
-  slug      String @unique
+  id        String           @id @default(cuid())
+  slug      String           @unique
   name      String
-  icon      String @default("wrench")
-  sortOrder Int    @default(0)
+  icon      String           @default("wrench")
+  sortOrder Int              @default(0)
   elements  CatalogElement[]
 }
 
 model CatalogElement {
   id          String  @id @default(cuid())
   categoryId  String
-  name        String  // nombre estándar normalizado
+  name        String // nombre estándar normalizado
   aliases     String  @default("[]") // JSON: nombres alternativos (cómo lo llama la gente)
   description String  @default("") // explicación natural: qué es, para qué sirve, dónde se usa
   unit        String  @default("unidad") // unidad|metro|m2|m3|kg|litro|bolsa|paquete|caja|rollo|placa|par|juego|pack|tira|tambor|barra|bobina|millar|lata
   active      Boolean @default(true)
 
-  category   Category          @relation(fields: [categoryId], references: [id])
-  stock      ProviderStock[]
-  materials  ProjectMaterial[]
+  category      Category          @relation(fields: [categoryId], references: [id])
+  stock         ProviderStock[]
+  materials     ProjectMaterial[]
+  leftoverItems LeftoverItem[]
 }
 
 model ProviderStock {
@@ -175,61 +188,62 @@ model ProviderStock {
   minStock   Float    @default(5)
   status     String   @default("disponible") // disponible|por_agotar|agotado (derivado)
   brand      String?
+  imageUrl   String?
   updatedAt  DateTime @updatedAt
   createdAt  DateTime @default(now())
 
-  provider    ProviderProfile  @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  element     CatalogElement   @relation(fields: [elementId], references: [id])
-  movements   StockMovement[]
+  provider     ProviderProfile    @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  element      CatalogElement     @relation(fields: [elementId], references: [id])
+  movements    StockMovement[]
   reservations StockReservation[]
 
   @@unique([providerId, elementId])
 }
 
 model StockMovement {
-  id        String   @id @default(cuid())
+  id        String        @id @default(cuid())
   stockId   String
   type      String // entrada|salida|ajuste|reserva|liberacion|consumo
   quantity  Float
   note      String?
-  createdAt DateTime @default(now())
+  createdAt DateTime      @default(now())
   stock     ProviderStock @relation(fields: [stockId], references: [id], onDelete: Cascade)
 }
 
 model StockReservation {
-  id         String   @id @default(cuid())
-  stockId    String
-  projectId  String?
-  userId     String
-  quantity   Float
-  status     String   @default("activa") // activa|consumida|liberada
-  createdAt  DateTime @default(now())
-  stock      ProviderStock @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  id        String        @id @default(cuid())
+  stockId   String
+  projectId String?
+  userId    String
+  quantity  Float
+  status    String        @default("activa") // activa|consumida|liberada
+  createdAt DateTime      @default(now())
+  stock     ProviderStock @relation(fields: [stockId], references: [id], onDelete: Cascade)
 }
 
 // ─────────────────────────── BOLSA DE TRABAJOS ───────────────────────────
 
 model JobPost {
-  id          String   @id @default(cuid())
-  userId      String
-  title       String
-  description String
-  categorySlug String
-  urgency     String   @default("normal") // baja|normal|alta|urgente
-  budgetMin   Float?
-  budgetMax   Float?
-  address     String?
-  city        String?
-  lat         Float?
-  lng         Float?
-  photos      String   @default("[]") // JSON urls
-  status      String   @default("abierto") // abierto|en_proceso|cerrado|cancelado
+  id            String   @id @default(cuid())
+  userId        String
+  title         String
+  description   String
+  categorySlug  String
+  urgency       String   @default("normal") // baja|normal|alta|urgente
+  budgetMin     Float?
+  budgetMax     Float?
+  address       String?
+  city          String?
+  lat           Float?
+  lng           Float?
+  photos        String   @default("[]") // JSON urls
+  status        String   @default("abierto") // abierto|en_proceso|cerrado|cancelado
   selectedBidId String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bids    JobBid[]
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bids     JobBid[]
   projects Project[]
 }
 
@@ -251,38 +265,35 @@ model JobBid {
 // ─────────────────────────── PROYECTOS + MATERIALES ───────────────────────────
 
 model Project {
-  id             String   @id @default(cuid())
-  jobId          String?
-  clientId       String
-  professionalId String
-  title          String
-  description    String?
-  status         String   @default("activo") // activo|finalizado|cancelado
-  stage          String   @default("presupuesto") // presupuesto|materiales|ejecucion|revision|finalizado
-  laborCost      Float    @default(0)
-  materialsCost  Float    @default(0)
+  id                   String    @id @default(cuid())
+  jobId                String?
+  clientId             String
+  professionalId       String
+  title                String
+  description          String?
+  status               String    @default("activo") // activo|finalizado|cancelado
+  stage                String    @default("presupuesto") // presupuesto|materiales|ejecucion|revision|finalizado
+  laborCost            Float     @default(0)
+  budgetMin            Float? // presupuesto estimado del cliente (wizard), solo referencia
+  budgetMax            Float?
+  materialsCost        Float     @default(0)
   // Contratación guiada desde el directorio (wizard "Contratar")
-  urgency        String? // ya|esta_semana|normal
-  address        String?
-  deadline       DateTime?
-  photos         String? // JSON de URLs (fotos del trabajo a realizar)
-  // Escrow Mercado Pago: el cliente retiene el pago hasta dar conformidad
-  escrowStatus   String   @default("none") // none|retained|released
-  escrowPaymentId String?  // payment id de MP del depósito en garantía
-  escrowAmount   Float    @default(0)
-  escrowReleasedAt DateTime?
-  lat            Float?
-  lng            Float?
+  urgency              String? // ya|esta_semana|normal
+  address              String?
+  deadline             DateTime?
+  photos               String? // JSON de URLs (fotos del trabajo a realizar)
+  lat                  Float?
+  lng                  Float?
   // Quién paga los materiales: "pro_adelanta" = el profesional adelanta los
   // materiales y los cobra junto con la mano de obra en la factura;
   // "cliente_paga_proveedor" = el cliente paga los materiales directamente al
   // proveedor (cobro aparte) y el profesional factura solo mano de obra.
-  materialsPaymentMode String @default("pro_adelanta")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  materialsPaymentMode String    @default("pro_adelanta")
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  job       JobPost?          @relation(fields: [jobId], references: [id])
-  client    User              @relation("ProjectClient", fields: [clientId], references: [id])
+  job       JobPost?            @relation(fields: [jobId], references: [id])
+  client    User                @relation("ProjectClient", fields: [clientId], references: [id])
   pro       ProfessionalProfile @relation("ProjectPro", fields: [professionalId], references: [id])
   materials ProjectMaterial[]
   invoices  Invoice[]
@@ -291,25 +302,26 @@ model Project {
 }
 
 model ProjectMaterial {
-  id               String   @id @default(cuid())
-  projectId        String
-  elementId        String?
-  name             String // snapshot del nombre
-  providerId       String?
-  quantity         Float
-  unit             String   @default("unidad")
-  unitPrice        Float
-  status           String   @default("propuesto") // propuesto|aprobado|rechazado|reemplazado
-  alternativeOfId  String?
-  note             String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id              String   @id @default(cuid())
+  projectId       String
+  elementId       String?
+  name            String // snapshot del nombre
+  providerId      String?
+  quantity        Float
+  unit            String   @default("unidad")
+  unitPrice       Float
+  status          String   @default("propuesto") // propuesto|aprobado|rechazado|reemplazado
+  alternativeOfId String?
+  note            String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  element      CatalogElement?  @relation(fields: [elementId], references: [id])
-  provider     ProviderProfile? @relation(fields: [providerId], references: [id])
-  alternatives ProjectMaterial[] @relation("MaterialAlternative")
-  alternativeOf ProjectMaterial? @relation("MaterialAlternative", fields: [alternativeOfId], references: [id])
+  project       Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  element       CatalogElement?   @relation(fields: [elementId], references: [id])
+  provider      ProviderProfile?  @relation(fields: [providerId], references: [id])
+  alternatives  ProjectMaterial[] @relation("MaterialAlternative")
+  alternativeOf ProjectMaterial?  @relation("MaterialAlternative", fields: [alternativeOfId], references: [id])
+  invoicedAt    DateTime? // ya incluido en una factura (no se refactura)
 }
 
 model Invoice {
@@ -322,60 +334,66 @@ model Invoice {
   materialsCost  Float     @default(0)
   total          Float     @default(0)
   status         String    @default("pendiente") // pendiente|pagada|vencida
-  paymentMethod  String?   // mercadopago|efectivo (método elegido para liquidar)
+  paymentMethod  String? // mercadopago|efectivo (método elegido para liquidar)
   mpPreferenceId String?
   mpPaymentId    String?
   paidAt         DateTime?
   issuedAt       DateTime  @default(now())
 
-  project Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  items   InvoiceItem[]
+  project  Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items    InvoiceItem[]
   payments Payment[]
 }
 
 model InvoiceItem {
-  id        String @id @default(cuid())
-  invoiceId String
-  kind      String // material|mano_obra
+  id          String @id @default(cuid())
+  invoiceId   String
+  kind        String // material|mano_obra
   description String
-  quantity  Float
-  unitPrice Float
-  subtotal  Float
+  quantity    Float
+  unitPrice   Float
+  subtotal    Float
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 }
 
 model Payment {
-  id          String   @id @default(cuid())
-  invoiceId   String
-  method      String   @default("mercadopago") // mercadopago|efectivo
-  mpPaymentId String?
-  status      String   // approved|acordado|confirmado|rejected, etc.
-  amount      Float
-  confirmedAt DateTime? // efectivo: cuándo el profesional confirmó que cobró
-  createdAt   DateTime @default(now())
-  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  id             String    @id @default(cuid())
+  invoiceId      String? // factura de proyecto (null si es cobro directo o compra)
+  chargeId       String? // ProviderCharge (cobro de materiales / venta directa)
+  purchaseId     String? // Purchase (compra directa)
+  method         String    @default("mercadopago") // mercadopago|efectivo
+  mpPaymentId    String?   @unique
+  refundedAmount Float     @default(0) // suma de reembolsos MP (sobrantes)
+  status         String // approved|acordado|confirmado|rejected, etc.
+  amount         Float
+  confirmedAt    DateTime? // efectivo: cuándo el profesional confirmó que cobró
+  createdAt      DateTime  @default(now())
+  invoice        Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([chargeId])
+  @@index([purchaseId])
 }
 
 // Cobro de materiales del proveedor al cliente (modo "cliente_paga_proveedor"):
 // el proveedor emite el cobro por los materiales aprobados de un proyecto y el
 // cliente lo paga con Mercado Pago o acuerda efectivo (el proveedor confirma).
 model ProviderCharge {
-  id             String   @id @default(cuid())
-  projectId      String?  // null → cobro de venta directa (compra sin proyecto)
+  id             String    @id @default(cuid())
+  projectId      String? // null → cobro de venta directa (compra sin proyecto)
   providerId     String
   clientId       String
-  number         String   @unique
+  number         String    @unique
   description    String
-  materialIds    String   @default("[]") // JSON: ids de ProjectMaterial incluidos (evita doble cobro)
+  materialIds    String    @default("[]") // JSON: ids de ProjectMaterial incluidos (evita doble cobro)
   amount         Float
-  status         String   @default("pendiente") // pendiente|acordada_efectivo|pagada
-  method         String?  // mercadopago|efectivo
+  status         String    @default("pendiente") // pendiente|acordada_efectivo|pagada
+  method         String? // mercadopago|efectivo
   mpPreferenceId String?
   mpPaymentId    String?
   paidAt         DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   project  Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
@@ -417,22 +435,22 @@ model CompletedWork {
 }
 
 model Review {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   authorId     String
   targetUserId String
-  context      String   @default("proyecto") // proyecto|obra|perfil|compra
+  context      String    @default("proyecto") // proyecto|obra|perfil|compra
   projectId    String?
   workId       String?
-  purchaseId   String?  // reseña de una compra directa de insumos
+  purchaseId   String? // reseña de una compra directa de insumos
   rating       Int
   comment      String
-  photos       String   @default("[]") // JSON: URLs de fotos que avalan la reseña
+  photos       String    @default("[]") // JSON: URLs de fotos que avalan la reseña
   reply        String?
   replyAt      DateTime?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
 
-  author  User @relation("ReviewAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  target  User @relation("ReviewTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  author User @relation("ReviewAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  target User @relation("ReviewTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
 }
 
 // ── COMPRAS DIRECTAS DE INSUMOS (cliente compra a proveedor sin proyecto) ──
@@ -440,21 +458,29 @@ model Review {
 // proveedor lo acepta/entrega y el pago corre por los mismos rieles que los
 // cobros de materiales (Mercado Pago o efectivo). Habilita reseña context=compra.
 model Purchase {
-  id          String   @id @default(cuid())
-  clientId    String
-  providerId  String
-  stockId     String?
-  elementId   String
-  elementName String
-  quantity    Float
-  unit        String   @default("unidad")
-  unitPrice   Float
-  total       Float
-  note        String?  // aclaración del cliente (medida, color, cuándo lo necesita)
-  status      String   @default("solicitado") // solicitado|aceptado|entregado|pagado|cancelado
-  chargeId    String?  // ProviderCharge emitido por la entrega (pago MP/efectivo)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                   String    @id @default(cuid())
+  clientId             String
+  providerId           String
+  stockId              String?
+  elementId            String
+  elementName          String
+  quantity             Float
+  unit                 String    @default("unidad")
+  unitPrice            Float
+  total                Float
+  note                 String?
+  type                 String    @default("compra") // "compra" | "reserva"
+  status               String    @default("pendiente_aprobacion")
+  paymentMethod        String? // "mercadopago" | "efectivo" | null
+  mpPreferenceId       String?
+  mpPaymentId          String?
+  rejectionReason      String?
+  pickupDeadline       String?
+  reservationExpiresAt DateTime?
+  approvedAt           DateTime?
+  chargeId             String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   client   User            @relation("PurchaseClient", fields: [clientId], references: [id], onDelete: Cascade)
   provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
@@ -463,7 +489,7 @@ model Purchase {
 // ─────────────────────────── CRM ───────────────────────────
 
 model CrmPipeline {
-  id        String @id @default(cuid())
+  id        String   @id @default(cuid())
   ownerId   String
   ownerRole String // profesional|proveedor
   name      String
@@ -486,22 +512,22 @@ model CrmStage {
 }
 
 model CrmDeal {
-  id             String  @id @default(cuid())
+  id             String   @id @default(cuid())
   pipelineId     String
   stageId        String
   title          String
-  value          Float   @default(0)
+  value          Float    @default(0)
   counterpartyId String? // User id del cliente/profesional
   jobId          String?
   projectId      String?
   note           String?
-  position       Int     @default(0)
+  position       Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  pipeline CrmPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-  stage    CrmStage    @relation(fields: [stageId], references: [id], onDelete: Cascade)
-  counterparty User?   @relation("DealCounterparty", fields: [counterpartyId], references: [id])
+  pipeline     CrmPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stage        CrmStage    @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  counterparty User?       @relation("DealCounterparty", fields: [counterpartyId], references: [id])
 }
 
 // ─────────────────────────── MENSAJES DIRECTOS ───────────────────────────
@@ -589,7 +615,66 @@ model Favorite {
   targetUserId String
   createdAt    DateTime @default(now())
 
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, targetUserId])
+}
+
+model OAuthState {
+  id         String   @id @default(cuid())
+  state      String   @unique
+  sellerId   String // profileId del proveedor o profesional
+  sellerKind String // "provider" | "professional"
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+}
+
+// ── Sobrantes: devolución de materiales al proveedor con reembolso ──
+model LeftoverReturn {
+  id            String          @id @default(cuid())
+  requesterId   String // User que pide (cliente o profesional del proyecto)
+  providerId    String // ProviderProfile que vendió
+  projectId     String? // origen: proyecto…
+  purchaseId    String? // …o compra directa
+  chargeId      String? // ProviderCharge del pago original
+  invoiceId     String? // Invoice del pago original (materiales facturados en proyecto)
+  status        String          @default("solicitada") // solicitada|aceptada|aceptada_parcial|rechazada|cancelada|recibida|reembolsada|reembolso_fallido
+  paymentMethod String? // mercadopago|efectivo (del pago original)
+  mpPaymentId   String? // pago a reembolsar
+  mpRefundId    String?
+  refundTotal   Float           @default(0)
+  providerNote  String?
+  requestedAt   DateTime        @default(now())
+  respondedAt   DateTime?
+  receivedAt    DateTime?
+  refundedAt    DateTime?
+  items         LeftoverItem[]
+  requester     User            @relation(fields: [requesterId], references: [id])
+  provider      ProviderProfile @relation(fields: [providerId], references: [id])
+
+  @@index([providerId, status])
+  @@index([requesterId])
+  @@index([projectId])
+  @@index([purchaseId])
+}
+
+model LeftoverItem {
+  id            String         @id @default(cuid())
+  returnId      String
+  elementId     String
+  materialId    String? // ProjectMaterial origen
+  purchaseId    String? // Purchase origen
+  qtyRequested  Float
+  qtyAccepted   Float?
+  qtyReceived   Float?
+  unitPricePaid Float
+  refundAmount  Float? // fijado por el proveedor al aceptar
+  condition     String // sin_abrir|abierto_sin_usar
+  photoUrl      String
+  note          String?
+  status        String         @default("propuesto") // propuesto|aceptado|rechazado
+  return        LeftoverReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  element       CatalogElement @relation(fields: [elementId], references: [id])
+
+  @@index([returnId])
 }

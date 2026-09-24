@@ -1,9 +1,10 @@
 'use client'
 // Componentes compartidos HomIA — nivel Signature
 // (usados por los 3 paneles: al elevar acá, se eleva todo el sistema)
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { Avatar as ShadAvatar } from '@/components/ui/avatar'
-import { Loader2, BadgeCheck, ShieldAlert, ShieldQuestion, ShieldX } from 'lucide-react'
+import { Loader2, BadgeCheck, ShieldAlert, ShieldQuestion, ShieldX, Upload } from 'lucide-react'
 import { initials, stars, URGENCY_COLOR, URGENCY_LABEL } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -289,6 +290,53 @@ export function StatCard({
         {value}
       </p>
       {hint && <p className="text-xs text-slate-400 mt-1.5 leading-snug">{hint}</p>}
+    </div>
+  )
+}
+
+/* Uploader de foto de perfil (Avatar) */
+export function AvatarUploader({
+  url,
+  name,
+  onUpload,
+  size = 64
+}: {
+  url?: string | null
+  name: string
+  onUpload: (url: string) => Promise<void>
+  size?: number
+}) {
+  const [loading, setLoading] = useState(false)
+  const ref = useRef<HTMLInputElement>(null)
+
+  const handleFile = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    const file = files[0]
+    setLoading(true)
+    const formData = new FormData()
+    formData.append('file', file)
+    try {
+      const res = await fetch('/api/uploads', { method: 'POST', body: formData })
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      await onUpload(data.url)
+    } catch (error) {
+      toast.error('No se pudo subir la foto')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="relative inline-flex flex-col items-center gap-2 group cursor-pointer" onClick={() => !loading && ref.current?.click()}>
+      <div className="relative">
+        <UAvatar name={name} url={url} size={size} />
+        <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+          {loading ? <Loader2 className="size-5 text-white animate-spin" /> : <Upload className="size-5 text-white" />}
+        </div>
+      </div>
+      <p className="text-xs font-bold text-[#1D63B8] group-hover:underline">Cambiar foto</p>
+      <input ref={ref} type="file" className="hidden" accept="image/*" onChange={(e) => handleFile(e.target.files)} />
     </div>
   )
 }

@@ -15,8 +15,8 @@ const VALUE_PROPS = [
   },
   {
     icon: ShieldCheck,
-    title: 'Tu pago protegido en escrow',
-    desc: 'El dinero se libera recién cuando aprobás el trabajo. Sin letra chica, con garantía real.',
+    title: 'Pagás al finalizar',
+    desc: 'Aprobás el presupuesto y pagás cuando el trabajo está terminado, por Mercado Pago o en efectivo. Sin adelantos ni letra chica.',
     tone: 'homy-chip-blue',
   },
   {
@@ -78,7 +78,7 @@ export function AuthShell({
 
         <div className="relative z-10 flex items-center gap-3 text-[13px] font-semibold text-white/50">
           <Recycle className="size-4 text-ai" aria-hidden />
-          Sobrantes de materiales devueltos y reembolsados automáticamente
+          ¿Te sobró material? Lo devolvés al local del proveedor y recuperás la plata
         </div>
       </aside>
 

@@ -1,12 +1,13 @@
 import { NextRequest } from 'next/server'
-import { ok, fail, body } from '@/lib/api'
+import { z } from 'zod'
+import { ok, fail, parseBody, appUrl } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
-import { createProviderPlanPreapproval, mpConfigured } from '@/lib/mercadopago'
-import { planState, PLAN_PRICE_USD, MP_PLAN_PRICE_ARS, PLAN_FEATURES, TRIAL_DAYS, type ProviderPlan } from '@/lib/plans'
+import { createProviderPlanPreapproval, cancelPreapproval, mpSubConfigured } from '@/lib/mercadopago'
+import { planState, PLAN_PRICE_ARS, PLAN_FEATURES, TRIAL_DAYS } from '@/lib/plans'
 
 // ── Plan del proveedor — el único rol con suscripción de pago ──
-// trial: 14 días gratis desde el alta · basic US$50/mes · pro US$100/mes
+// trial: 14 días gratis desde el alta · basic $50.000/mes · pro $100.000/mes
 export async function GET() {
   const user = await getSessionUser()
   if (!user) return fail('Necesitás iniciar sesión', 401)
@@ -16,15 +17,19 @@ export async function GET() {
   const state = planState(prov)
   return ok({
     plan: state,
-    precios: PLAN_PRICE_USD,
-    preciosArs: MP_PLAN_PRICE_ARS,
+    preciosArs: PLAN_PRICE_ARS,
     features: PLAN_FEATURES,
     trialDays: TRIAL_DAYS,
-    mpConfigured: mpConfigured(),
+    mpConfigured: mpSubConfigured(),
     businessName: prov.businessName,
     socioDesde: prov.proSince,
+    mpPreapprovalId: prov.mpPreapprovalId,
   })
 }
+
+const schema = z.object({
+  plan: z.enum(['basic', 'pro'], { message: 'Elegí un plan válido: basic o pro' }),
+})
 
 // POST { plan: 'basic'|'pro' } → suscripción Mercado Pago (preapproval mensual)
 export async function POST(req: NextRequest) {
@@ -33,29 +38,43 @@ export async function POST(req: NextRequest) {
   const prov = await db.providerProfile.findUnique({ where: { userId: user.id } })
   if (!prov) return fail('Solo los proveedores pueden elegir un plan', 403)
 
-  const d = await body<{ plan?: ProviderPlan }>(req)
-  if (d.plan !== 'basic' && d.plan !== 'pro') {
-    return fail('Elegí un plan válido: basic (US$50/mes) o pro (US$100/mes)')
-  }
-  if (prov.subscription === d.plan) return fail(`Ya estás en el plan ${d.plan === 'pro' ? 'PRO' : 'Básico'}`)
+  const parsed = await parseBody(req, schema)
+  if (parsed.error) return parsed.error
+  const { plan } = parsed.data
+  if (prov.subscription === plan) return fail(`Ya estás en el plan ${plan === 'pro' ? 'PRO' : 'Básico'}`, 409)
 
-  if (!mpConfigured()) {
-    return fail('Mercado Pago no está configurado. Agregá MP_ACCESS_TOKEN en el archivo .env del servidor.', 503, { needsConfig: true })
+  if (!mpSubConfigured()) {
+    return fail('Las suscripciones por Mercado Pago no están disponibles por ahora. Escribinos desde Ayuda y lo resolvemos.', 503, { needsConfig: true })
   }
 
-  const url = new URL(req.url)
-  const baseUrl = `${url.protocol}//${url.host}`
-  const pre = await createProviderPlanPreapproval({
-    profileId: prov.id,
-    plan: d.plan,
-    payerEmail: user.email,
-    baseUrl,
-  })
+  // cambio de plan con una suscripción vigente: cancelar la anterior antes de crear la nueva
+  if (prov.mpPreapprovalId && (prov.subscription === 'basic' || prov.subscription === 'pro')) {
+    try {
+      await cancelPreapproval(prov.mpPreapprovalId)
+    } catch (e) {
+      console.error('[provider/plan] cancelPreapproval', e)
+      return fail('No pudimos cancelar tu suscripción actual en Mercado Pago. Probá de nuevo en un rato.', 503)
+    }
+  }
+
+  // back_url: `${appUrl()}/panel/proveedor/plan?plan=ok` (lo arma mercadopago.ts a partir de baseUrl)
+  let pre: { id: string; initPoint: string; priceArs: number }
+  try {
+    pre = await createProviderPlanPreapproval({
+      profileId: prov.id,
+      plan,
+      payerEmail: user.email,
+      baseUrl: appUrl(),
+    })
+  } catch (e) {
+    console.error('[provider/plan] createProviderPlanPreapproval', e)
+    return fail('Mercado Pago no respondió. Probá de nuevo en un rato.', 503)
+  }
 
   await db.providerProfile.update({
     where: { id: prov.id },
     data: { mpPreapprovalId: pre.id },
   })
 
-  return ok({ initPoint: pre.initPoint, preapprovalId: pre.id, plan: d.plan, priceArs: MP_PLAN_PRICE_ARS[d.plan] }, 201)
+  return ok({ initPoint: pre.initPoint, init_point: pre.initPoint, preapprovalId: pre.id, plan, priceArs: PLAN_PRICE_ARS[plan] }, 201)
 }

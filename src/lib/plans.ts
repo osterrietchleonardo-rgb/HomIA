@@ -1,45 +1,32 @@
 // Planes de suscripción de HomIA — SOLO los proveedores pagan.
 // El cliente y el profesional usan la plataforma gratis, siempre.
 //
-// ── Plan Básico: US$50/mes ──
+// ── Plan Básico: $50.000/mes ──
 //   · 14 días de prueba gratis desde el alta del proveedor
-//   · Uso completo de la plataforma: stock, CRM, cobros, mensajería, marketplace
-// ── Plan PRO: US$100/mes ──
+//   · Uso completo de la plataforma: stock, ventas directas, cobros, CRM, vinculaciones
+// ── Plan PRO: $100.000/mes ──
 //   · Todo lo del Básico, más:
-//   · Analítica en el panel: elementos más pedidos, consultas del rubro,
-//     búsquedas que encontraron tu negocio, tendencias
-//   · Tarjeta destacada "Recomendado" en primera fila del directorio,
-//     del marketplace de materiales y de la búsqueda
-//   · Logo y marca en la home como proveedor sponsor de confianza
+//   · Logo y marca en la home como proveedor sponsor
+//   · Tarjeta destacada "Recomendado" en marketplace y directorio
+//   · Analítica de demanda de tu zona (elementos más pedidos, consultas del rubro)
 
 export type ProviderPlan = 'trial' | 'basic' | 'pro'
 
 export const TRIAL_DAYS = 14
 
-// Precios canónicos del producto (USD) — lo que ve el proveedor
-export const PLAN_PRICE_USD: Record<'basic' | 'pro', number> = {
-  basic: 50,
-  pro: 100,
-}
-
-// Equivalente en ARS para cobrar con Mercado Pago (configurable por env;
-// default ≈ US$1 = $1500 ARS)
-export const MP_PLAN_PRICE_ARS: Record<'basic' | 'pro', number> = {
-  basic: Number(process.env.MP_PROVIDER_BASIC_ARS || 75000),
-  pro: Number(process.env.MP_PROVIDER_PRO_ARS || 150000),
+// Precios mensuales en pesos argentinos (lo que cobra Mercado Pago).
+// Configurables por env: MP_PROVIDER_BASIC_ARS / MP_PROVIDER_PRO_ARS.
+export const PLAN_PRICE_ARS: Record<'basic' | 'pro', number> = {
+  basic: Number(process.env.MP_PROVIDER_BASIC_ARS || 50000),
+  pro: Number(process.env.MP_PROVIDER_PRO_ARS || 100000),
 }
 
 export const PLAN_FEATURES: Record<'basic' | 'pro', string[]> = {
   basic: [
-    'Uso completo de la plataforma: stock, pedidos, cobros y mensajería',
-    'Aparecés en el directorio y en el marketplace de materiales',
-    'Cobrás con Mercado Pago o efectivo con registro de cada venta',
+    'Usá la app completa: stock ilimitado, ventas directas, cobros por Mercado Pago y efectivo, CRM, vinculaciones',
   ],
   pro: [
-    'Todo lo del plan Básico',
-    'Analítica del negocio: elementos más pedidos, consultas de tu rubro y búsquedas que te encontraron',
-    'Tarjeta destacada con etiqueta “Recomendado” en primera fila del directorio y del marketplace',
-    'Tu logo y marca en la home como proveedor sponsor de confianza',
+    'Todo lo del Básico + tu logo y marca en la home, tarjeta Recomendado en marketplace y directorio, analítica de demanda de tu zona',
   ],
 }
 
@@ -83,7 +70,7 @@ export function planState(
   }
 }
 
-/** ¿El proveedor puede operar (escribir stock, cobrar, gestionar pedidos)? */
+/** ¿El proveedor puede operar (escribir stock, cobrar, gestionar pedidos, aparecer en búsquedas)? */
 export function puedeOperar(prov: { subscription: string; trialEndsAt?: Date | null; createdAt: Date | string }): boolean {
   return planState(prov).activo
 }

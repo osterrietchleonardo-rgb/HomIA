@@ -29,6 +29,7 @@ export function timeAgo(d: string | Date): string {
 }
 
 export function initials(name: string): string {
+  if (!name) return ''
   return name
     .split(' ')
     .filter(Boolean)

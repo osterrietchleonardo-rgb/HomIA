@@ -1,12 +1,20 @@
 'use client'
 // Detalle de trabajo publicado — profesional ve detalles y deja presupuesto; cliente ve sus presupuestos
 import { useEffect, useState } from 'react'
-import { navigate, useRoute } from '@/lib/router'
+import { navigate } from '@/lib/router'
 import { useSession } from '@/lib/store'
 import { Loading, EmptyState, UrgencyBadge, StatusBadge, UAvatar, UStars } from '@/components/app/ui-bits'
 import { formatARS, formatDate } from '@/lib/format'
 import { toast } from 'sonner'
-import { ChevronLeft, Send, Star, BadgeCheck, Search, FileText, Clock, HardHat, MapPin } from 'lucide-react'
+import { ChevronLeft, Send, BadgeCheck, Search, FileText, Clock, HardHat, MapPin, Undo2 } from 'lucide-react'
+
+// Estado de mi oferta, en palabras (JobBid.status)
+const MY_BID_STATUS: Record<string, string> = {
+  pendiente: 'Enviado: el cliente lo está revisando',
+  aceptado: 'Aceptado: el proyecto ya está creado',
+  rechazado: 'Rechazado por el cliente',
+  retirado: 'Retiraste tu oferta',
+}
 
 type Job = {
   id: string; title: string; description: string; categorySlug: string; urgency: string
@@ -26,7 +34,6 @@ type Bid = {
 }
 
 export default function JobDetailScreen({ id }: { id: string }) {
-  const route = useRoute()
   const { user, refresh } = useSession()
   const [job, setJob] = useState<Job | null>(null)
   const [bids, setBids] = useState<Bid[]>([])
@@ -52,8 +59,15 @@ export default function JobDetailScreen({ id }: { id: string }) {
           const data = await resBids.json()
           setBids(data.bids || [])
           setIsOwner(data.isOwner)
-          const mine = (data.bids as Bid[]).find((b) => user.hasProfessional && b)
-          if (mine && !data.isOwner) setMyBid(mine)
+          // mi oferta = la del perfil profesional de mi usuario (GET /api/jobs/[id]/bids devuelve professional.userId)
+          const mine = ((data.bids || []) as Bid[]).find((b) => b.professional?.userId === user.id) || null
+          setMyBid(!data.isOwner ? mine : null)
+          if (mine && !data.isOwner) {
+            // precargar el formulario para editar
+            setBidAmount(String(mine.amount))
+            setBidDays(String(mine.timelineDays))
+            setBidMessage(mine.message || '')
+          }
         }
       }
     } finally {
@@ -78,6 +92,31 @@ export default function JobDetailScreen({ id }: { id: string }) {
       await refresh()
       load()
     } finally { setBusy(false) }
+  }
+
+  async function withdraw() {
+    if (!myBid || myBid.status !== 'pendiente') return
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/bids/${myBid.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'retirar' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(data.error || 'No se pudo retirar la oferta'); return }
+      toast.success('Oferta retirada')
+      load()
+    } catch {
+      toast.error('No se pudo retirar la oferta. Probá de nuevo.')
+    } finally { setBusy(false) }
+  }
+
+  function goBack() {
+    if (window.history.length > 1) { window.history.back(); return }
+    if (user?.hasProfessional) navigate('/panel/profesional/bolsa')
+    else if (user) navigate('/panel/cliente/trabajos')
+    else navigate('/buscar?mode=profesional')
   }
 
   async function decide(bidId: string, action: 'aceptar' | 'rechazar') {
@@ -116,8 +155,8 @@ export default function JobDetailScreen({ id }: { id: string }) {
         <span aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(58% 90% at 88% -10%, rgba(0,196,255,0.18) 0%, transparent 62%), radial-gradient(45% 70% at -5% 110%, rgba(255,90,31,0.14) 0%, transparent 55%)' }} />
         <div className="relative max-w-3xl mx-auto pt-6 pb-12 sm:pb-16 px-4">
           <div className="mb-4 -ml-3.5">
-            <button onClick={() => navigate('/buscar?mode=profesional')} className="homy-focus inline-flex items-center gap-1.5 rounded-full min-h-[44px] pl-4 pr-4 text-slate-300 hover:text-white text-sm font-semibold bg-white/[0.06] hover:bg-white/10 border border-white/10 transition">
-              <ChevronLeft className="size-4" aria-hidden /> Volver a resultados
+            <button onClick={goBack} className="homy-focus inline-flex items-center gap-1.5 rounded-full min-h-[44px] pl-4 pr-4 text-slate-300 hover:text-white text-sm font-semibold bg-white/[0.06] hover:bg-white/10 border border-white/10 transition">
+              <ChevronLeft className="size-4" aria-hidden /> Volver
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -186,9 +225,6 @@ export default function JobDetailScreen({ id }: { id: string }) {
                           <button onClick={() => navigate(`/profesional/${b.professional.id}`)} className="homy-focus font-bold text-[#0A2540] hover:text-[#1D63B8] truncate transition-colors">
                             {b.professional.companyName || b.professional.displayName}
                           </button>
-                          {b.professional.subscription === 'pro' && (
-                            <Star aria-label="Suscripción Pro" className="size-3.5 shrink-0 text-[#FFC700] fill-[#FFC700]" />
-                          )}
                         </span>
                         <div className="flex items-center gap-2 flex-wrap mt-0.5">
                           <UStars rating={b.professional.rating} />
@@ -237,7 +273,28 @@ export default function JobDetailScreen({ id }: { id: string }) {
                 {myBid ? 'Tu presupuesto' : 'Dejar presupuesto'}
               </h2>
             </div>
-            {myBid && <p className="text-xs text-slate-400 mb-3 tabular-nums">Ya ofertaste: {formatARS(myBid.amount)} — podés editarlo.</p>}
+            {myBid && (
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl homy-glass-soft p-3.5">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge status={myBid.status} />
+                    <span className="text-sm font-bold text-[#0A2540] tabular-nums">{formatARS(myBid.amount)} · {myBid.timelineDays} días</span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {MY_BID_STATUS[myBid.status] || myBid.status}
+                    {myBid.status === 'pendiente' && job.status === 'abierto' ? ' — podés editarlo o retirarlo.' : ''}
+                  </p>
+                </div>
+                {myBid.status === 'pendiente' && (
+                  <button disabled={busy} onClick={withdraw}
+                    className="homy-focus inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-[#0A2540]/15 bg-white/60 px-3.5 text-xs font-bold text-slate-600 transition hover:border-red-400 hover:text-red-500 disabled:opacity-50">
+                    <Undo2 className="size-3.5" aria-hidden /> Retirar oferta
+                  </button>
+                )}
+              </div>
+            )}
+            {myBid && (myBid.status === 'aceptado' || myBid.status === 'retirado') ? null : (
+            <>
             <div className="grid sm:grid-cols-3 gap-3.5 mt-1">
               <div>
                 <label htmlFor="bid-amount" className="text-sm font-semibold text-[#0A2540]">Monto (ARS) *</label>
@@ -259,8 +316,10 @@ export default function JobDetailScreen({ id }: { id: string }) {
               onClick={sendBid} disabled={busy || !bidAmount}
               className="homy-btn-primary homy-focus mt-5 w-full py-3.5 min-h-[48px] text-sm disabled:opacity-50"
             >
-              <Send className="size-4" aria-hidden /> {myBid ? 'Actualizar presupuesto' : 'Enviar presupuesto'}
+              <Send className="size-4" aria-hidden /> {myBid && myBid.status === 'pendiente' ? 'Actualizar presupuesto' : 'Enviar presupuesto'}
             </button>
+            </>
+            )}
           </div>
         )}
 

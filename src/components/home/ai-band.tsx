@@ -16,8 +16,8 @@ const AGENT_NODES = [
   { icon: Bot, label: "Homy interpreta", hint: "lenguaje natural" },
   { icon: ScanSearch, label: "Matching inteligente", hint: "geolocalizado" },
   { icon: ClipboardList, label: "Presupuesto integral", hint: "obra + materiales" },
-  { icon: ShieldCheck, label: "Pago en escrow", hint: "protección total" },
-  { icon: Recycle, label: "Logística inversa", hint: "sobrantes" },
+  { icon: ShieldCheck, label: "Pago al finalizar", hint: "Mercado Pago o efectivo" },
+  { icon: Recycle, label: "Devolución de sobrantes", hint: "al local del proveedor" },
   { icon: Star, label: "Reputación 360°", hint: "confianza" },
 ];
 
@@ -105,9 +105,9 @@ export function AiBand() {
                 Automatización real, de punta a punta
               </p>
               <p className="max-w-md text-[13px] leading-relaxed text-white/50">
-                Presupuestos que se arman solos, pagos que se retienen solos y
-                sobrantes que se devuelven solos. La tecnología trabaja; vos
-                vivís tu casa.
+                Homy interpreta tu pedido, arma el presupuesto con materiales
+                reales de proveedores y verifica identidades con IA. Vos
+                aprobás, pagás al finalizar y vivís tu casa.
               </p>
             </div>
           </div>

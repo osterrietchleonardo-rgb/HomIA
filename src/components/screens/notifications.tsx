@@ -5,7 +5,8 @@ import { navigate } from '@/lib/router'
 import { useSession } from '@/lib/store'
 import { Loading } from '@/components/app/ui-bits'
 import { timeAgo } from '@/lib/format'
-import { Bell, BellRing, ChevronLeft, FileText, Package, PackageCheck, PackageX, ArrowLeftRight, ReceiptText, CircleCheck, Milestone, Trophy, type LucideIcon } from 'lucide-react'
+import { apiFetch, NETWORK_ERROR } from '@/lib/api-client'
+import { Bell, BellRing, ChevronLeft, FileText, Package, PackageCheck, PackageX, ArrowLeftRight, ReceiptText, CircleCheck, Milestone, Trophy, CheckCheck, RefreshCw, WifiOff, type LucideIcon } from 'lucide-react'
 
 type Notification = { id: string; type: string; title: string; body: string | null; link: string | null; read: boolean; createdAt: string }
 
@@ -28,15 +29,34 @@ export default function NotificationsScreen() {
   const { user, loading: sessionLoading } = useSession()
   const [items, setItems] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [markingAll, setMarkingAll] = useState(false)
 
+  // abrir la pantalla NO marca nada como leído: se marca al tocar cada aviso o con "Marcar todas"
   async function load() {
     setLoading(true)
+    setError(null)
+    const r = await apiFetch<{ notifications: Notification[] }>('/api/notifications', { silent: true })
+    if (r.ok) setItems(r.data?.notifications || [])
+    else setError(r.error || NETWORK_ERROR)
+    setLoading(false)
+  }
+
+  async function markAll() {
+    setMarkingAll(true)
     try {
-      const res = await fetch('/api/notifications')
-      const data = await res.json()
-      setItems(data.notifications || [])
-      await fetch('/api/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ all: true }) })
-    } finally { setLoading(false) }
+      const r = await apiFetch('/api/notifications', { method: 'PATCH', json: { all: true } })
+      if (r.ok) setItems((cur) => cur.map((n) => ({ ...n, read: true })))
+    } finally { setMarkingAll(false) }
+  }
+
+  function open(n: Notification) {
+    if (!n.read) {
+      setItems((cur) => cur.map((x) => (x.id === n.id ? { ...x, read: true } : x)))
+      // sin await: la navegación no espera a la red; si falla, vuelve a aparecer como no leída al recargar
+      apiFetch('/api/notifications', { method: 'PATCH', json: { id: n.id }, silent: true })
+    }
+    if (n.link) navigate(n.link.replace(/^#/, ''))
   }
 
   useEffect(() => {
@@ -79,14 +99,27 @@ export default function NotificationsScreen() {
             <p className="homy-page-sub">Todo lo que pasa en tus trabajos y proyectos, avisado acá.</p>
           </div>
           {unread.length > 0 && (
-            <span className="homy-pill homy-badge-pop shrink-0">
-              <span className="homy-pill-dot bg-[#00C4FF]" aria-hidden />
-              {unread.length} nueva{unread.length === 1 ? '' : 's'}
-            </span>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <span className="homy-pill homy-badge-pop">
+                <span className="homy-pill-dot bg-[#00C4FF]" aria-hidden />
+                {unread.length} nueva{unread.length === 1 ? '' : 's'}
+              </span>
+              <button onClick={markAll} disabled={markingAll}
+                className="homy-glass-soft homy-focus inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-3.5 text-xs font-bold text-[#1D63B8] transition hover:text-[#0A2540] disabled:opacity-50">
+                <CheckCheck className="size-4" aria-hidden /> {markingAll ? 'Marcando…' : 'Marcar todas como leídas'}
+              </button>
+            </div>
           )}
         </div>
         {loading ? (
           <Loading />
+        ) : error ? (
+          <div className="homy-empty homy-glass-soft border border-dashed border-red-300/60" role="alert">
+            <span className="homy-empty-icon homy-icon-chip homy-chip-orange" aria-hidden><WifiOff className="size-6" /></span>
+            <h3 className="font-bold text-[#0A2540] text-lg tracking-tight">No pudimos cargar tus notificaciones</h3>
+            <p className="text-sm text-slate-500 mt-1.5 max-w-sm">{error}</p>
+            <button onClick={load} className="homy-btn-dark mt-5 min-h-[44px] px-5 text-sm"><RefreshCw className="size-4" aria-hidden /> Reintentar</button>
+          </div>
         ) : items.length === 0 ? (
           <div className="homy-empty homy-glass-soft">
             <span className="homy-empty-icon homy-icon-chip homy-chip-blue" aria-hidden><BellRing className="size-6" /></span>
@@ -105,7 +138,7 @@ export default function NotificationsScreen() {
                   </h2>
                 </div>
                 <div className="homy-stagger space-y-2.5">
-                  {unread.map((n) => <NotifRow key={n.id} n={n} unread />)}
+                  {unread.map((n) => <NotifRow key={n.id} n={n} unread onOpen={open} />)}
                 </div>
               </section>
             )}
@@ -119,7 +152,7 @@ export default function NotificationsScreen() {
                   </h2>
                 </div>
                 <div className="space-y-2.5">
-                  {read.map((n) => <NotifRow key={n.id} n={n} />)}
+                  {read.map((n) => <NotifRow key={n.id} n={n} onOpen={open} />)}
                 </div>
               </section>
             )}
@@ -131,12 +164,12 @@ export default function NotificationsScreen() {
 }
 
 /* Fila de notificación: no leída = vidrio pleno + barra y punto azul; leída = vidrio susurrado */
-function NotifRow({ n, unread = false }: { n: Notification; unread?: boolean }) {
+function NotifRow({ n, unread = false, onOpen }: { n: Notification; unread?: boolean; onOpen: (n: Notification) => void }) {
   const meta = NOTIF_ICON[n.type] || { icon: Bell, tone: 'homy-chip-blue' }
   const Icon = meta.icon
   return (
     <button
-      onClick={() => { if (n.link?.startsWith('#')) { window.location.hash = n.link } else if (n.link) { navigate(n.link.replace(/^#/, '')) } }}
+      onClick={() => onOpen(n)}
       className={
         unread
           ? 'relative overflow-hidden w-full text-left rounded-2xl homy-glass homy-lift homy-card-glow p-4 pl-5 flex items-start gap-3.5'

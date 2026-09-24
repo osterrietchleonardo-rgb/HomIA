@@ -25,7 +25,7 @@ const STEPS = [
     icon: ShieldCheck,
     num: "03",
     title: "Aprobás y HomIA coordina",
-    body: "Tu pago queda protegido en escrow y se libera recién cuando aprobás el trabajo. ¿Sobró material? Se devuelve al proveedor y tu reembolso se procesa automáticamente.",
+    body: "Pagás al finalizar el trabajo, por Mercado Pago o en efectivo, directo al profesional. ¿Sobró material? Lo cargás en la app, lo devolvés al local del proveedor y, si pagaste con Mercado Pago, el reembolso vuelve a tu medio de pago.",
     accent: "text-tech",
     chipBg: "bg-tech/10",
   },

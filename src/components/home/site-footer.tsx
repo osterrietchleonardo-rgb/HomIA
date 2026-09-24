@@ -7,10 +7,11 @@ const FOOTER_COLUMNS = [
   {
     title: "Plataforma",
     links: [
-      { label: "Buscar servicios", href: "#", route: "/buscar" },
-      { label: "Soy profesional", href: "#comunidad", route: "#comunidad" },
-      { label: "Soy proveedor", href: "#comunidad", route: "#comunidad" },
-      { label: "Bolsa de trabajo", href: "#comunidad", route: "#comunidad" },
+      { label: "Buscar servicios", href: "/#/buscar", route: "/buscar" },
+      { label: "Comprar materiales", href: "/#/materiales", route: "/materiales" },
+      { label: "Soy profesional", href: "/#/registrarse?rol=profesional", route: "/registrarse?rol=profesional" },
+      { label: "Soy proveedor", href: "/#/registrarse?rol=proveedor", route: "/registrarse?rol=proveedor" },
+      { label: "Bolsa de trabajo", href: "/#/buscar?mode=profesional", route: "/buscar?mode=profesional" },
     ],
   },
   {
@@ -19,16 +20,16 @@ const FOOTER_COLUMNS = [
       { label: "Cómo funciona", href: "#como-funciona", route: "#como-funciona" },
       { label: "Motor IA", href: "#motor-ia", route: "#motor-ia" },
       { label: "Beneficios", href: "#beneficios", route: "#beneficios" },
-      { label: "Directorio de la comunidad", href: "#", route: "/directorio" },
+      { label: "Directorio de la comunidad", href: "/#/directorio", route: "/directorio" },
     ],
   },
   {
     title: "Ayuda y confianza",
     links: [
-      { label: "Centro de ayuda: dónde hago cada cosa", href: "#", route: "/ayuda" },
-      { label: "Escrow y pagos protegidos", href: "#", route: "/ayuda" },
-      { label: "Verificación de identidad por IA", href: "#", route: "/ayuda" },
-      { label: "Reseñas con fotos", href: "#", route: "/ayuda" },
+      { label: "Centro de ayuda: dónde hago cada cosa", href: "/#/ayuda", route: "/ayuda" },
+      { label: "Pagos con Mercado Pago o efectivo", href: "/#/ayuda", route: "/ayuda" },
+      { label: "Verificación de identidad por IA", href: "/#/ayuda", route: "/ayuda" },
+      { label: "Reseñas con fotos", href: "/#/ayuda", route: "/ayuda" },
     ],
   },
 ];
@@ -36,10 +37,16 @@ const FOOTER_COLUMNS = [
 export function SiteFooter() {
   function go(e: React.MouseEvent, route: string) {
     if (route.startsWith("#") && route !== "#") {
-      // ancla de la home: scroll nativo
-      const el = document.getElementById(route.slice(1));
+      // ancla de la home: si la sección está montada, scroll nativo;
+      // si no (estamos en otra pantalla de la SPA), volvemos a la home con el ancla.
+      const id = route.slice(1);
+      const el = document.getElementById(id);
       e.preventDefault();
-      el?.scrollIntoView({ behavior: "smooth" });
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth" });
+      } else {
+        window.location.assign("/#" + id);
+      }
       return;
     }
     if (route.startsWith("/")) {

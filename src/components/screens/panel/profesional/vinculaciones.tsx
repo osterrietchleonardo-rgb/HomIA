@@ -1,11 +1,11 @@
 'use client'
 // Cuentas de retiro: vinculación del profesional con proveedores para retirar materiales a cuenta del proyecto
 import { useEffect, useState } from 'react'
-import { StatusBadge, Loading } from '@/components/app/ui-bits'
+import { Loading } from '@/components/app/ui-bits'
 import { formatDate } from '@/lib/format'
 import { toast } from 'sonner'
-import { Switch } from '@/components/ui/switch'
-import { Truck, Plus, Store, Link2, ClipboardPen } from 'lucide-react'
+import { apiFetch, NETWORK_ERROR } from '@/lib/api-client'
+import { Truck, Plus, Store, Link2, ClipboardPen, PauseCircle, Clock, CircleCheck, RefreshCw, WifiOff } from 'lucide-react'
 
 type LinkRow = {
   id: string; accountLabel: string; notes: string | null; active: boolean; createdAt: string
@@ -23,12 +23,15 @@ export default function ProLinks() {
   const [accountLabel, setAccountLabel] = useState('')
   const [notes, setNotes] = useState('')
 
+  const [error, setError] = useState<string | null>(null)
+
   async function load() {
     setLoading(true)
-    try {
-      const res = await fetch('/api/provider/links')
-      if (res.ok) setLinks((await res.json()).asProfessional || [])
-    } finally { setLoading(false) }
+    setError(null)
+    const r = await apiFetch<{ asProfessional: LinkRow[] }>('/api/provider/links?as=profesional', { silent: true })
+    if (r.ok) setLinks(r.data?.asProfessional || [])
+    else setError(r.error || NETWORK_ERROR)
+    setLoading(false)
   }
   useEffect(() => { load() }, [])
 
@@ -36,28 +39,25 @@ export default function ProLinks() {
     if (!email.trim() || !accountLabel.trim()) { toast.error('Email del proveedor y nombre de cuenta son obligatorios'); return }
     setBusy(true)
     try {
-      const res = await fetch('/api/provider/links', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), accountLabel: accountLabel.trim(), notes: notes.trim() || undefined }),
+      const r = await apiFetch('/api/provider/links', {
+        method: 'POST',
+        json: { email: email.trim(), accountLabel: accountLabel.trim(), notes: notes.trim() || undefined, as: 'profesional' },
       })
-      const d = await res.json()
-      if (!res.ok) { toast.error(d.error); return }
-      toast.success('Vinculación creada — el proveedor fue notificado')
+      if (!r.ok) return
+      toast.success('Solicitud enviada: el proveedor tiene que aprobarla para que puedas retirar')
       setShowForm(false); setEmail(''); setAccountLabel(''); setNotes('')
       load()
     } finally { setBusy(false) }
   }
 
-  async function toggleActive(link: LinkRow) {
+  // el profesional solo puede pausar la suya; reactivarla la decide el proveedor
+  async function pause(link: LinkRow) {
     setBusy(true)
     try {
-      const res = await fetch('/api/provider/links', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: link.id, active: !link.active }),
-      })
-      if (!res.ok) { toast.error((await res.json()).error); return }
-      toast.success(link.active ? 'Cuenta pausada' : 'Cuenta reactivada')
-      setLinks((cur) => cur.map((l) => (l.id === link.id ? { ...l, active: !l.active } : l)))
+      const r = await apiFetch('/api/provider/links', { method: 'PATCH', json: { id: link.id, active: false } })
+      if (!r.ok) return
+      toast.success('Cuenta pausada. Para reactivarla, pedíselo al proveedor.')
+      setLinks((cur) => cur.map((l) => (l.id === link.id ? { ...l, active: false } : l)))
     } finally { setBusy(false) }
   }
 
@@ -67,9 +67,9 @@ export default function ProLinks() {
         {/* Encabezado */}
         <header className="homy-page-head">
           <div className="min-w-0">
-            <span className="homy-eyebrow">Escrow de materiales</span>
+            <span className="homy-eyebrow">Compra de materiales</span>
             <h1 className="homy-page-title mt-1.5">Cuentas de retiro</h1>
-            <p className="homy-page-sub">Vinculaciones con proveedores para retirar materiales a cuenta del proyecto.</p>
+            <p className="homy-page-sub">Proveedores que te habilitan a retirar materiales a cuenta de tus proyectos.</p>
           </div>
           <button onClick={() => setShowForm(!showForm)} className="homy-btn-primary min-h-[44px] shrink-0 px-5 py-2.5 text-sm">
             <Plus className="size-4" /> Vincularme
@@ -84,10 +84,10 @@ export default function ProLinks() {
             ¿Qué es una cuenta de retiro?
           </h2>
           <p className="relative text-sm text-slate-300 mt-3 leading-relaxed max-w-2xl">
-            Es tu cuenta corriente con un proveedor: retirás materiales del local sin pagar en el momento y el gasto se
-            factura <b className="text-white">al proyecto del cliente</b>. El cliente aprueba cada material antes desde su panel,
-            y al final todo queda detallado en la factura que pagás con Mercado Pago. Sin efectivo de por medio y con
-            precios comparables entre proveedores.
+            Es un acuerdo con un proveedor para <b className="text-white">retirar materiales del local a cuenta de un proyecto</b>.
+            El cliente aprueba cada material desde su panel y el cobro de esos materiales se arregla por el proyecto.
+            <b className="text-white"> No es una cuenta bancaria</b> ni guarda plata: solo te identifica frente a ese proveedor.
+            La solicitás vos y el proveedor la activa; mientras no la active, no podés retirar.
           </p>
         </div>
 
@@ -98,7 +98,7 @@ export default function ProLinks() {
               <span className="homy-icon-chip homy-chip-blue size-8 [&_svg]:size-4" aria-hidden><Store /></span>
               Vincularme con un proveedor
             </h2>
-            <p className="text-sm text-slate-500 mb-4">Ingresá el email del proveedor registrado en HomIA y el nombre que le querés dar a tu cuenta de retiro.</p>
+            <p className="text-sm text-slate-500 mb-4">Ingresá el email con el que el proveedor está registrado en HomIA. Le llega tu solicitud y la tiene que aprobar.</p>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Email del proveedor</span>
@@ -118,7 +118,7 @@ export default function ProLinks() {
             </div>
             <div className="flex justify-end gap-2 mt-4 flex-wrap">
               <button onClick={() => setShowForm(false)} className="homy-glass-soft rounded-full min-h-[44px] px-4 py-2.5 text-sm font-bold text-slate-500 hover:text-red-500 transition">Cancelar</button>
-              <button disabled={busy} onClick={createLink} className="homy-btn-primary min-h-[44px] px-5 py-2.5 text-sm disabled:opacity-50">Crear vinculación</button>
+              <button disabled={busy} onClick={createLink} className="homy-btn-primary min-h-[44px] px-5 py-2.5 text-sm disabled:opacity-50">{busy ? 'Enviando…' : 'Enviar solicitud'}</button>
             </div>
           </div>
         )}
@@ -126,6 +126,15 @@ export default function ProLinks() {
         {/* lista de vinculaciones */}
         {loading ? (
           <Loading text="Cargando cuentas de retiro…" />
+        ) : error ? (
+          <div className="homy-empty homy-glass-soft border border-dashed border-red-300/60" role="alert">
+            <span className="homy-empty-icon homy-chip-orange" aria-hidden><WifiOff className="size-7" /></span>
+            <h3 className="font-bold text-[#0A2540] text-lg tracking-tight">No pudimos cargar tus cuentas de retiro</h3>
+            <p className="text-sm text-slate-500 mt-1.5 max-w-md leading-relaxed">{error}</p>
+            <div className="mt-5">
+              <button onClick={load} className="homy-btn-dark min-h-[44px] px-5 py-2.5 text-sm"><RefreshCw className="size-4" aria-hidden /> Reintentar</button>
+            </div>
+          </div>
         ) : links.length === 0 ? (
           <Empty action={
             <button onClick={() => setShowForm(true)} className="homy-btn-primary min-h-[44px] px-5 py-2.5 text-sm">Vincularme con un proveedor</button>
@@ -151,12 +160,21 @@ export default function ProLinks() {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <StatusBadge status={l.active ? 'activo' : 'cerrado'} label={l.active ? 'activa' : 'inactiva'} />
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-slate-400">{l.active ? 'Activa' : 'Pausada'}</span>
-                    <Switch checked={l.active} onCheckedChange={() => toggleActive(l)} disabled={busy} aria-label={`Cuenta ${l.accountLabel}`} />
-                  </div>
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  {l.active ? (
+                    <>
+                      <span className="homy-pill"><CircleCheck className="size-3.5 text-emerald-600" aria-hidden /> Activa</span>
+                      <button onClick={() => pause(l)} disabled={busy}
+                        className="homy-glass-soft homy-focus inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-3.5 text-xs font-bold text-slate-500 transition hover:text-[#0A2540] disabled:opacity-50">
+                        <PauseCircle className="size-4" aria-hidden /> Pausar
+                      </button>
+                    </>
+                  ) : (
+                    <span className="homy-pill max-w-full" title="El proveedor todavía no la activó o la pausó">
+                      <Clock className="size-3.5 shrink-0 text-amber-600" aria-hidden />
+                      <span className="whitespace-normal">Pendiente de aprobación del proveedor / pausada</span>
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
@@ -166,8 +184,8 @@ export default function ProLinks() {
         {/* nota sobre el flujo */}
         {links.length > 0 && (
           <p className="mt-5 text-xs text-slate-400 leading-relaxed">
-            Tip: en cada proyecto, los materiales que propongas con proveedor vinculado reservan stock automáticamente y
-            aparecen en la sección &quot;Cuentas de retiro vinculadas&quot; del detalle.
+            Solo las cuentas activas te habilitan a retirar. Si una figura como pendiente o pausada, hablá con el proveedor:
+            es él quien la activa.
           </p>
         )}
       </div>
@@ -175,15 +193,15 @@ export default function ProLinks() {
   )
 }
 
-/* Estado vacío: explica el flujo escrow antes de vincular */
+/* Estado vacío: explica el flujo de materiales antes de vincular */
 function Empty({ action }: { action?: React.ReactNode }) {
   return (
     <div className="homy-empty homy-glass-soft border border-dashed border-[#0A2540]/12">
       <span className="homy-empty-icon homy-chip-blue" aria-hidden><Link2 className="size-7" /></span>
       <h3 className="font-bold text-[#0A2540] text-lg tracking-tight">No tenés cuentas de retiro vinculadas</h3>
       <p className="text-sm text-slate-500 mt-1.5 max-w-md leading-relaxed">
-        Pedile al proveedor su email de registro en HomIA y creá la cuenta acá. Después vas a poder retirar materiales
-        y cargarlos directo al proyecto, con la aprobación del cliente y el dinero protegido en escrow.
+        Pedile al proveedor su email de registro en HomIA y mandale la solicitud desde acá. Cuando la active, vas a poder
+        retirar materiales a cuenta de tus proyectos, con la aprobación del cliente.
       </p>
       {action && <div className="mt-5">{action}</div>}
     </div>

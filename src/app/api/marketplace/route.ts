@@ -6,6 +6,7 @@ import { parseJson } from '@/lib/api'
 import { withinRadius } from '@/lib/geo'
 import { matchScore, canonicalCategoria } from '@/lib/search-match'
 import { matchTerms } from '@/lib/search-match'
+import { puedeOperar } from '@/lib/plans'
 
 // ── MARKETPLACE DE MATERIALES ──
 // El cliente (o cualquier usuario) busca lo que necesita comprar — sin
@@ -33,7 +34,10 @@ export async function GET(req: NextRequest) {
     include: {
       category: true,
       stock: {
-        select: { quantity: true, status: true, brand: true, provider: { select: { businessName: true } } },
+        select: {
+          quantity: true, status: true, brand: true,
+          provider: { select: { businessName: true, subscription: true, trialEndsAt: true, createdAt: true } },
+        },
       },
     },
   })
@@ -45,9 +49,11 @@ export async function GET(req: NextRequest) {
       const aliases = parseJson<string[]>(e.aliases, [])
       const hayName = norm(e.name)
       const hayAll = norm([e.name, ...aliases, e.description || ''].join(' · '))
+      // solo cuenta el stock de proveedores operativos (plan activo o prueba vigente)
+      const stockOperativo = e.stock.filter((s) => puedeOperar(s.provider))
       // marcas y nombres de proveedores que publican este elemento
-      const brandsProvs = norm(e.stock.map((s) => `${s.brand || ''} ${s.provider.businessName}`).join(' · '))
-      const hasStock = e.stock.some((s) => s.quantity > 0 && s.status === 'disponible')
+      const brandsProvs = norm(stockOperativo.map((s) => `${s.brand || ''} ${s.provider.businessName}`).join(' · '))
+      const hasStock = stockOperativo.some((s) => s.quantity > 0 && s.status === 'disponible')
       let score = 0
       if (!qn) {
         // navegación sin búsqueda: todos los elementos con stock disponible
@@ -97,8 +103,13 @@ export async function GET(req: NextRequest) {
     lat: number | null; lng: number | null
   }
 
+  const kindFilter = sp.get('kind') || ''
+
   const byElement = new Map<string, Offer[]>()
   for (const s of stocks) {
+    if (kindFilter && s.provider.kind !== kindFilter) continue
+    // prueba vencida / sin plan → el proveedor no aparece en el marketplace
+    if (!puedeOperar(s.provider)) continue
     const base: Offer = {
       stockId: s.id,
       elementId: s.elementId,
@@ -129,6 +140,14 @@ export async function GET(req: NextRequest) {
     lat, lng, radius
   ) as (Offer & { distanceKm?: number })[]
   const geoMap = new Map(withGeo.map((o) => [o.stockId, o]))
+  // con ubicación: solo ofertas dentro del radio (withinRadius ya excluyó las lejanas)
+  if (lat != null && lng != null) {
+    for (const [elementId, list] of byElement) {
+      const dentro = list.filter((o) => geoMap.has(o.stockId))
+      if (dentro.length) byElement.set(elementId, dentro)
+      else byElement.delete(elementId)
+    }
+  }
   for (const [, list] of byElement) {
     list.sort((a, b) => {
       const ga = geoMap.get(a.stockId)?.distanceKm
@@ -162,21 +181,26 @@ export async function GET(req: NextRequest) {
   })
 
   // ── 3. Registrar la búsqueda (analítica de demanda para proveedores PRO) ──
-  try {
-    await db.searchEvent.create({
-      data: {
-        userId: user?.id || null,
-        mode: 'materiales',
-        query: q || `(categoría: ${cat || 'todo'})`,
-        intent: JSON.stringify({ cat, radius }),
-        results: JSON.stringify({
-          count: results.reduce((a, r) => a + r.offersCount, 0),
-          providerIds: [...new Set(results.flatMap((r) => r.offers.map((o) => o.providerId)))],
-          elementIds,
-        }),
-      },
-    })
-  } catch { /* la analítica nunca bloquea la búsqueda */ }
+  // Solo consultas reales (3+ letras): evita ruido de cada tecla y de la navegación por categoría.
+  if (q.length >= 3) {
+    try {
+      await db.searchEvent.create({
+        data: {
+          userId: user?.id || null,
+          mode: 'materiales',
+          query: q,
+          intent: JSON.stringify({ cat, radius }),
+          results: JSON.stringify({
+            count: results.reduce((a, r) => a + r.offersCount, 0),
+            providerIds: [...new Set(results.flatMap((r) => r.offers.map((o) => o.providerId)))],
+            elementIds,
+          }),
+        },
+      })
+    } catch { /* la analítica nunca bloquea la búsqueda */ }
+  }
 
-  return ok({ results, q, cat })
+  const categories = await db.category.findMany({ select: { slug: true, name: true, icon: true }, orderBy: { name: 'asc' } })
+  
+  return ok({ results, categories, q, cat })
 }

@@ -13,6 +13,7 @@ import { formatARS, formatDate } from '@/lib/format'
 import { toast } from 'sonner'
 import { Search, Star, MapPin, HardHat, Package, ArrowRight, Users, Store, Heart, SlidersHorizontal, Compass, BriefcaseBusiness } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 type ProCard = {
   kind: 'profesional'; id: string; userId: string; href: string; name: string
@@ -61,7 +62,7 @@ const RATINGS = [
 
 // buckets de precio promedio de presupuestos (profesionales)
 const BID_BUCKETS = [
-  { v: '', label: 'Todo precio', min: null, max: null },
+  { v: 'todos', label: 'Todo precio', min: null, max: null },
   { v: 'b1', label: 'Hasta $100 mil', min: null, max: 100000 },
   { v: 'b2', label: '$100 mil – $300 mil', min: 100000, max: 300000 },
   { v: 'b3', label: 'Más de $300 mil', min: 300000, max: null },
@@ -69,7 +70,7 @@ const BID_BUCKETS = [
 
 // buckets de precio promedio de stock (proveedores)
 const PRICE_BUCKETS = [
-  { v: '', label: 'Todo precio', min: null, max: null },
+  { v: 'todos', label: 'Todo precio', min: null, max: null },
   { v: 'p1', label: 'Hasta $20 mil', min: null, max: 20000 },
   { v: 'p2', label: '$20 mil – $60 mil', min: 20000, max: 60000 },
   { v: 'p3', label: 'Más de $60 mil', min: 60000, max: null },
@@ -86,7 +87,7 @@ export default function DirectoryScreen({ embedded = false }: { embedded?: boole
   const [cat, setCat] = useState('')
   const [sort, setSort] = useState<string>('reviews')
   const [minRating, setMinRating] = useState('0')
-  const [bucket, setBucket] = useState('') // presupuesto (pro) o stock (prov)
+  const [bucket, setBucket] = useState('todos') // presupuesto (pro) o stock (prov)
   const [q, setQ] = useState('')
   const [favs, setFavs] = useState<Set<string>>(new Set())
   const [onlyFavs, setOnlyFavs] = useState(false)
@@ -107,7 +108,7 @@ export default function DirectoryScreen({ embedded = false }: { embedded?: boole
     if (c) sp.set('cat', c)
     if (s) sp.set('sort', s)
     if (mr !== '0') sp.set('minRating', mr)
-    if (b) {
+    if (b && b !== 'todos') {
       const isProv = k === 'proveedor'
       const table = isProv ? PRICE_BUCKETS : BID_BUCKETS
       const found = table.find((x) => x.v === b)
@@ -189,13 +190,13 @@ export default function DirectoryScreen({ embedded = false }: { embedded?: boole
   return (
     <div className={embedded ? 'homy-page' : 'min-h-screen'}>
       {/* banda de encabezado */}
-      <div className={embedded ? 'mb-6' : 'relative max-w-7xl mx-auto pt-28 pb-8 px-4 sm:px-6 lg:px-8'}>
+      <div className={embedded ? 'mb-6' : 'relative max-w-7xl mx-auto pt-8 pb-8 px-4 sm:px-6 lg:px-8'}>
         <p className="homy-eyebrow">Directorio HomIA</p>
         <h1 className={embedded ? 'homy-page-title mt-1' : 'mt-2 text-3xl sm:text-4xl font-extrabold tracking-tight text-navy leading-tight'}>
           Toda la comunidad, en un solo lugar
         </h1>
         <p className={`max-w-2xl text-[15px] leading-relaxed text-slate-500 ${embedded ? 'mt-1.5' : 'mt-3'}`}>
-          Profesionales y proveedores verificados de la app, ordenados por sus reseñas. Abrí una tarjeta para ver toda su experiencia y escribirle por mensaje directo.
+          Profesionales y proveedores de tu zona, ordenados por sus reseñas. Abrí una tarjeta para ver toda su experiencia y escribirle por mensaje directo.
         </p>
       </div>
 
@@ -262,14 +263,14 @@ export default function DirectoryScreen({ embedded = false }: { embedded?: boole
               <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-400">
                 <SlidersHorizontal className="size-3.5" aria-hidden />
                 <span className="sr-only sm:not-sr-only">Ordenar</span>
-                <select
-                  value={sort}
-                  onChange={(e) => onFilter({ s: e.target.value })}
-                  className="homy-glass-input rounded-full px-3.5 py-2 text-xs font-bold text-slate-600"
-                  aria-label="Ordenar directorio"
-                >
-                  {SORTS.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}
-                </select>
+                <Select value={sort} onValueChange={(val) => onFilter({ s: val })}>
+                  <SelectTrigger className="homy-glass-input rounded-full px-3.5 py-2 text-xs font-bold text-slate-600 border-none min-w-[140px]">
+                    <SelectValue placeholder="Ordenar directorio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SORTS.map((s) => <SelectItem key={s.v} value={s.v}>{s.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </label>
               <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Rating mínimo">
                 {RATINGS.map((r) => (
@@ -325,7 +326,7 @@ export default function DirectoryScreen({ embedded = false }: { embedded?: boole
             <EmptyState
               icon={<Compass />}
               title={onlyFavs ? 'Todavía no marcaste favoritos' : 'Nadie coincide con esos filtros'}
-              hint={onlyFavs ? 'Tocá el corazón en cualquier tarjeta para guardla acá.' : 'Probá con otro rubro, quitá el filtro de rating o ampliá la búsqueda.'}
+              hint={onlyFavs ? 'Tocá el corazón en cualquier tarjeta para guardarla acá.' : 'Probá con otro rubro, quitá el filtro de rating o ampliá la búsqueda.'}
             />
           ) : (
             <div className="homy-stagger grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -370,9 +371,6 @@ export default function DirectoryScreen({ embedded = false }: { embedded?: boole
                           <VerifyBadge status={c.verificationStatus} />
                           {c.isPro && c.kind === 'proveedor' && (
                             <span className="rounded-full bg-gradient-to-r from-[#FFC700] to-[#ffd84d] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-[#6b4d00] shadow-sm">★ Recomendado</span>
-                          )}
-                          {c.isPro && c.kind === 'profesional' && (
-                            <span className="rounded-full bg-[#FFC700]/15 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-[#B98A00] ring-1 ring-[#FFC700]/40">PRO</span>
                           )}
                         </div>
                         <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-400">

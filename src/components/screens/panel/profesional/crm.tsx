@@ -5,6 +5,7 @@ import { Loading, UAvatar } from '@/components/app/ui-bits'
 import { formatARS } from '@/lib/format'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ChevronLeft, ChevronRight, Plus, Trash2, BarChart3, Handshake } from 'lucide-react'
 
 type Stage = { id: string; name: string; color: string; sortOrder: number }
@@ -124,10 +125,16 @@ export default function ProCRM() {
           <p className="homy-page-sub">Seguí tus oportunidades de trabajo columna por columna.</p>
         </div>
         {pipelines.length > 1 && (
-          <select value={pipeline.id} onChange={(e) => setPipelineId(e.target.value)} aria-label="Pipeline"
-            className="homy-glass-input rounded-xl px-3 py-2.5 text-sm font-semibold cursor-pointer shrink-0 min-h-[44px]">
-            {pipelines.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          <div className="shrink-0">
+            <Select value={pipeline.id} onValueChange={setPipelineId}>
+              <SelectTrigger className="homy-glass-input rounded-xl px-3 py-2.5 text-sm font-semibold cursor-pointer min-h-[44px] min-w-[140px] border-none" aria-label="Pipeline">
+                <SelectValue placeholder="Seleccionar pipeline" />
+              </SelectTrigger>
+              <SelectContent>
+                {pipelines.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         )}
       </header>
 

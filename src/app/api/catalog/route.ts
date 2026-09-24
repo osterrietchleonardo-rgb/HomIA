@@ -5,6 +5,9 @@ import { ok, fail, parseJson, body } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
 
+// El alta con IA puede tardar: margen de ejecución en serverless.
+export const maxDuration = 60
+
 // Catálogo estándar de elementos (para formularios, stock, buscador y agente IA)
 // Devuelve también la descripción natural (qué es, para qué sirve) para que la
 // UI pueda explicar cada elemento y la IA pueda recomendarlo por necesidad.

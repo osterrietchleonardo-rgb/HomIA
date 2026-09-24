@@ -136,7 +136,12 @@ export default function MessagesScreen({ embedded = false }: { embedded?: boolea
         setThread((prev) => (prev ? { ...prev, messages: [...prev.messages, d.message] } : prev))
         setDraft('')
         setConvs((prev) => (prev || []).map((c) => (c.id === active ? { ...c, lastMessage: { body: text, senderId: user!.id, senderName: user!.displayName, createdAt: d.message.createdAt, mine: true }, lastMessageAt: d.message.createdAt } : c)))
+      } else {
+        const d = await res.json().catch(() => ({}))
+        toast.error(d.error || 'No se pudo enviar el mensaje. Probá de nuevo.')
       }
+    } catch {
+      toast.error('No se pudo enviar el mensaje. Revisá tu conexión y probá de nuevo.')
     } finally { setSending(false) }
   }
 
@@ -155,7 +160,7 @@ export default function MessagesScreen({ embedded = false }: { embedded?: boolea
           )}
         </div>
         <p className="mt-1.5 max-w-2xl text-[15px] leading-relaxed text-slate-500">
-          Charlá directo con clientes, profesionales y proveedores de la comunidad — todos los roles se escriben entre sí.
+          Respondé a quien te escribió. Las conversaciones nuevas las inicia el cliente; profesionales y proveedores responden.
         </p>
       </div>
 
@@ -175,7 +180,7 @@ export default function MessagesScreen({ embedded = false }: { embedded?: boolea
               <div className="px-4 py-10 text-center">
                 <span aria-hidden className="homy-icon-chip homy-chip-blue size-12 mx-auto"><Compass /></span>
                 <p className="mt-3 text-sm font-bold text-[#0A2540]">Todavía no tenés chats</p>
-                <p className="mx-auto mt-1.5 max-w-[240px] text-[13px] leading-relaxed text-slate-500">Abrí una tarjeta del directorio y toqués “Contactar” para empezar una conversación.</p>
+                <p className="mx-auto mt-1.5 max-w-[240px] text-[13px] leading-relaxed text-slate-500">Abrí una tarjeta del directorio y tocá “Contactar” para empezar una conversación.</p>
                 <button onClick={() => navigate('/directorio')} className="homy-btn-dark mt-4 px-5 py-2.5 min-h-[44px] text-sm">Ir al directorio</button>
               </div>
             ) : (

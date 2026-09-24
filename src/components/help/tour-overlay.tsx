@@ -1,12 +1,11 @@
 'use client'
 // Motor del tour guiado HomIA — overlay con foco (spotlight) sobre cada sección
 // real de la plataforma. Los pasos navegan por la SPA, iluminan el elemento con
-// data-tour correspondiente y explican qué se hace ahí. Se arranca solo en el
-// primer ingreso al panel de cada rol, y se puede repetir desde el botón de
-// ayuda, el checklist o el centro de ayuda.
+// data-tour correspondiente y explican qué se hace ahí. NO arranca solo: se
+// ofrece desde el checklist de primeros pasos ("Ver tour guiado"), el botón de
+// ayuda o el centro de ayuda (evento homy:start-tour).
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRoute, navigate } from '@/lib/router'
-import { useSession } from '@/lib/store'
 import { TOURS, ROLE_TOUR_META, type TourRole, type TourStep } from '@/lib/tour-content'
 import { toast } from 'sonner'
 import {
@@ -22,9 +21,6 @@ export function startTour(detail: { role: TourRole; stepId?: string }) {
   window.dispatchEvent(new CustomEvent(START_EVENT, { detail }))
 }
 
-function isTourDone(role: string) {
-  try { return localStorage.getItem(`homy_tour_done_${role}`) === '1' } catch { return false }
-}
 function markTourDone(role: string) {
   try { localStorage.setItem(`homy_tour_done_${role}`, '1') } catch { /* modo privado */ }
 }
@@ -37,11 +33,11 @@ type Run = { role: TourRole; index: number }
 
 export default function TourOverlay() {
   const route = useRoute()
-  const { user } = useSession()
   const [run, setRun] = useState<Run | null>(null)
   const [rect, setRect] = useState<DOMRect | null>(null)
+  // clave del paso cuyo ancla no está en pantalla (ej: en el celu vive dentro de "Más")
+  const [missingKey, setMissingKey] = useState<string | null>(null)
   const runRef = useRef<Run | null>(null)
-  const autoRef = useRef(false)
 
   const step: TourStep | null = run ? (TOURS[run.role]?.[run.index] ?? null) : null
 
@@ -89,14 +85,16 @@ export default function TourOverlay() {
     }
     let alive = true
     let tries = 0
+    const key = `${run.role}:${run.index}:${route.path}`
     const tick = () => {
       if (!alive) return
-      if (measureOnce() || tries > 18) return
+      if (measureOnce()) return
+      if (tries > 18) { if (step.target) setMissingKey(key); return }
       tries += 1
       setTimeout(tick, 110)
     }
-    tick()
-    return () => { alive = false }
+    const t0 = setTimeout(tick, 0)
+    return () => { alive = false; clearTimeout(t0) }
   }, [run, route.path, measureOnce])
 
   // Reposicionar en scroll/resize (el foco sigue al elemento).
@@ -148,19 +146,6 @@ export default function TourOverlay() {
     return () => window.removeEventListener('keydown', h)
   }, [run, goNext, goPrev, end])
 
-  // Arranque automático: primer ingreso a la raíz del panel de cada rol.
-  useEffect(() => {
-    if (!user || autoRef.current) return
-    const s = route.segments
-    if (s[0] !== 'panel' || !s[1] || s[2]) return
-    const role = s[1]
-    if (!(role === 'cliente' || role === 'profesional' || role === 'proveedor')) return
-    if (isTourDone(role)) return
-    autoRef.current = true
-    const t = setTimeout(() => setRun({ role, index: 0 }), 900)
-    return () => clearTimeout(t)
-  }, [user, route.path])
-
   // Escuchar pedidos de arranque desde el dock / checklist / centro de ayuda.
   useEffect(() => {
     const h = (e: Event) => {
@@ -183,6 +168,10 @@ export default function TourOverlay() {
   const isLast = run.index === total - 1
   const vw = rect ? window.innerWidth : 0
   const compact = rect ? vw < 640 : false
+  // en móvil (sin sidebar) las secciones que no están en la barra inferior viven en "Más"
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024
+  const missing = !rect && missingKey === `${run.role}:${run.index}:${route.path}`
+  const hint = missing && isMobile ? 'Abrí «Más» (abajo a la derecha) para encontrar esta sección' : null
 
   // Posición de la tarjeta: debajo del foco si hay lugar, si no arriba.
   let cardStyle: React.CSSProperties = {}
@@ -198,8 +187,9 @@ export default function TourOverlay() {
 
   return (
     <>
-      {/* bloquea clicks sobre la app mientras el tour corre (el oscurecido lo pinta el foco) */}
-      <div className="fixed inset-0 z-[61] bg-transparent" aria-hidden />
+      {/* con foco: bloquea clicks sobre la app (el oscurecido lo pinta el foco).
+          Sin foco (tarjeta centrada) la app sigue usable detrás. */}
+      {rect && <div className="fixed inset-0 z-[61] bg-transparent" aria-hidden />}
       {rect && (
         <div
           aria-hidden
@@ -217,18 +207,18 @@ export default function TourOverlay() {
 
       <div
         role="dialog"
-        aria-modal="true"
+        aria-modal={!!rect}
         aria-label={`Tour guiado: ${step.title}`}
         className={
           compact
             ? 'fixed inset-x-2 bottom-3 z-[63]'
             : rect
               ? 'fixed z-[63] w-[350px]'
-              : 'fixed inset-0 z-[63] flex items-center justify-center px-4'
+              : 'pointer-events-none fixed inset-0 z-[63] flex items-center justify-center px-4'
         }
         style={cardStyle}
       >
-        <div className="homy-glass-strong max-h-[86vh] w-full overflow-y-auto rounded-3xl p-5 shadow-[0_30px_80px_-24px_rgba(10,37,64,0.55)]">
+        <div className="homy-glass-strong pointer-events-auto max-h-[86vh] w-full max-w-md overflow-y-auto rounded-3xl p-5 shadow-[0_30px_80px_-24px_rgba(10,37,64,0.55)]">
           <div className="flex items-center gap-2.5">
             <span className="homy-icon-chip homy-chip-blue size-9 shrink-0 [&_svg]:size-4.5" aria-hidden><Icon /></span>
             <div className="min-w-0 flex-1">
@@ -246,6 +236,13 @@ export default function TourOverlay() {
           </div>
 
           <p className="mt-3 text-[13.5px] leading-relaxed text-slate-600">{step.body}</p>
+
+          {hint && (
+            <p className="mt-3 flex items-start gap-2 rounded-2xl bg-[#FFC700]/15 px-3 py-2.5 text-xs font-bold leading-relaxed text-[#0A2540]">
+              <Compass className="mt-0.5 size-4 shrink-0 text-[#B98A00]" aria-hidden />
+              <span className="min-w-0">{hint}</span>
+            </p>
+          )}
 
           {step.tip && (
             <p className="mt-3 flex items-start gap-2 rounded-2xl bg-[#00C4FF]/10 px-3 py-2.5 text-xs font-semibold leading-relaxed text-[#0A2540] [overflow-wrap:anywhere]">

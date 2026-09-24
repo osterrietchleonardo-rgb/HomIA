@@ -83,13 +83,26 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     const store = await cookies()
     const token = store.get(COOKIE)?.value
     if (!token) return null
-    const { payload } = await jwtVerify(token, SECRET)
-    const userId = payload.sub as string
+    // Token inválido/expirado → null silencioso (es el caso normal de "no logueado").
+    let userId: string | undefined
+    try {
+      const { payload } = await jwtVerify(token, SECRET)
+      userId = payload.sub
+    } catch {
+      return null
+    }
     if (!userId) return null
-    const user = await db.user.findUnique({
-      where: { id: userId },
-      include: { professional: { select: { id: true } }, provider: { select: { id: true } } },
-    })
+    // Error de DB → se loguea (no es un "no logueado": es infraestructura caída).
+    let user
+    try {
+      user = await db.user.findUnique({
+        where: { id: userId },
+        include: { professional: { select: { id: true } }, provider: { select: { id: true } } },
+      })
+    } catch (e) {
+      console.error('[auth] DB error', e)
+      return null
+    }
     if (!user) return null
     return {
       id: user.id,

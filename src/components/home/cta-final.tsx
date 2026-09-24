@@ -1,13 +1,11 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
 import { Sparkles, MessagesSquare } from "lucide-react";
 import { Homy } from "@/components/homy/homy-character";
+import { navigate } from "@/lib/router";
 
 export function CtaFinal() {
-  const { toast } = useToast();
-
   const openHomy = () => window.dispatchEvent(new CustomEvent("homy:open"));
 
   return (
@@ -44,13 +42,7 @@ export function CtaFinal() {
                 <Button
                   size="lg"
                   className="h-13 rounded-full bg-action px-8 text-base font-bold text-white shadow-[0_16px_36px_-12px_rgba(255,90,31,0.8)] transition-all hover:bg-action-2 hover:shadow-[0_20px_44px_-12px_rgba(255,90,31,0.9)] active:scale-[0.98]"
-                  onClick={() =>
-                    toast({
-                      title: "Muy pronto: creación de cuentas",
-                      description:
-                        "Estamos puliendo cada detalle para recibirte como te merecés. Un poquito más de paciencia.",
-                    })
-                  }
+                  onClick={() => navigate("/registrarse")}
                 >
                   <Sparkles className="size-5" aria-hidden />
                   Crear cuenta gratis

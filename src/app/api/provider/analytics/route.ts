@@ -19,13 +19,14 @@ export async function GET(req: NextRequest) {
     return fail('Tu prueba gratis terminó: elegí un plan para acceder a tu panel', 403, { needsPlan: true })
   }
   if (state.plan !== 'pro') {
-    return fail('La analítica del negocio es exclusiva del Plan PRO (US$100/mes)', 403, {
+    return fail('La analítica del negocio es exclusiva del Plan PRO', 403, {
       needsPro: true,
       plan: state.plan,
     })
   }
 
-  const days = parseInt(req.nextUrl.searchParams.get('days') || '30', 10)
+  const rawDays = parseInt(req.nextUrl.searchParams.get('days') || '30', 10)
+  const days = Number.isFinite(rawDays) ? Math.min(365, Math.max(1, rawDays)) : 30
   const since = new Date(Date.now() - days * 86400000)
 
   // ── 1. Elementos más pedidos (compras directas + materiales de obras) ──
@@ -132,7 +133,7 @@ export async function GET(req: NextRequest) {
       _sum: { total: true },
     }),
     db.providerStock.count({ where: { providerId: prov.id } }),
-    db.purchase.count({ where: { providerId: prov.id, status: { in: ['solicitado', 'aceptado'] } } }),
+    db.purchase.count({ where: { providerId: prov.id, status: { in: ['pendiente_aprobacion', 'aprobado'] } } }),
   ])
 
   return ok({
@@ -143,7 +144,7 @@ export async function GET(req: NextRequest) {
     consultasRubro: {
       total: consultasRubro,
       topQueries: topQueriesRubro,
-      categories: myStock.slice(0, 1).map((s) => s.element.category.name),
+      categories: [...new Set(myStock.map((s) => s.element.category.name))],
     },
     teEncontraron: {
       total: busquedasQueTeEncontraron,

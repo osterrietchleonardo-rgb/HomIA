@@ -4,13 +4,14 @@ import { useEffect, useState } from 'react'
 import { navigate } from '@/lib/router'
 import { StatusBadge, UrgencyBadge, Loading, AutoFitValue } from '@/components/app/ui-bits'
 import { formatARS } from '@/lib/format'
-import { Plus, ArrowRight, Wrench, Megaphone, FileText, FolderKanban, CircleCheck } from 'lucide-react'
+import { Plus, ArrowRight, Wrench, Megaphone, FileText, FolderKanban, CircleCheck, RefreshCw, WifiOff } from 'lucide-react'
 import { VerificationPrompt } from '../verificacion'
-import OnboardingCard, { type OnboardingTask } from '../onboarding-card'
+import OnboardingCard, { isOnboardingDismissed, type OnboardingTask } from '../onboarding-card'
 import { useSession } from '@/lib/store'
+import { apiFetch, NETWORK_ERROR } from '@/lib/api-client'
 
 type Project = { id: string; title: string; stage: string; status: string; laborCost: number; materialsCost: number; materialsPending: number; updatedAt: string }
-type Job = { id: string; title: string; status: string; urgency: string; bids: { id: string; amount: number; professional: { user: { displayName: string } } }[]; createdAt: string }
+type Job = { id: string; title: string; status: string; urgency: string; bids: { id: string; amount: number; status: string; professional: { user: { displayName: string } } }[]; createdAt: string }
 
 export default function ClientDashboard() {
   const { user } = useSession()
@@ -19,26 +20,46 @@ export default function ClientDashboard() {
   const [loading, setLoading] = useState(true)
   const [myReviews, setMyReviews] = useState<{ projectId: string | null }[]>([])
   const [convCount, setConvCount] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+  const [checklistHidden, setChecklistHidden] = useState(() => isOnboardingDismissed('cliente'))
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [resP, resJ] = await Promise.all([fetch('/api/projects?role=cliente'), fetch('/api/jobs?mine=1')])
-        if (resP.ok) setProjects((await resP.json()).asClient || [])
-        if (resJ.ok) setJobs((await resJ.json()).jobs || [])
+  async function load() {
+    setLoading(true)
+    setError(null)
+    try {
+      const [rP, rJ, rRev, rConv] = await Promise.all([
+        apiFetch<{ asClient: Project[] }>('/api/projects?role=cliente', { silent: true }),
+        apiFetch<{ jobs: Job[] }>('/api/jobs?mine=1', { silent: true }),
         // guía: reseñas escritas por mí y chats iniciados (para el checklist)
-        const resRev = await fetch('/api/reviews?mine=1')
-        if (resRev.ok) setMyReviews((await resRev.json()).reviews || [])
-        const resConv = await fetch('/api/messages/conversations')
-        if (resConv.ok) setConvCount(((await resConv.json()).conversations || []).length)
-      } finally { setLoading(false) }
-    })()
-  }, [])
+        apiFetch<{ reviews: { projectId: string | null }[] }>('/api/reviews?mine=1', { silent: true }),
+        apiFetch<{ conversations: unknown[] }>('/api/messages/conversations', { silent: true }),
+      ])
+      if (!rP.ok || !rJ.ok) { setError(rP.error || rJ.error || NETWORK_ERROR); return }
+      setProjects(rP.data?.asClient || [])
+      setJobs(rJ.data?.jobs || [])
+      if (rRev.ok) setMyReviews(rRev.data?.reviews || [])
+      if (rConv.ok) setConvCount((rConv.data?.conversations || []).length)
+    } finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, [])
 
   if (loading) return <Loading />
+  if (error) {
+    return (
+      <div className="homy-page">
+        <div className="homy-empty homy-glass-soft border border-dashed border-red-300/60" role="alert">
+          <span className="homy-empty-icon homy-chip-orange" aria-hidden><WifiOff className="size-6" /></span>
+          <h3 className="font-extrabold tracking-tight text-[#0A2540]">No pudimos cargar tu panel</h3>
+          <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-slate-500">{error}</p>
+          <button onClick={load} className="homy-btn-dark mt-5 px-5 py-3 text-sm sm:py-2.5"><RefreshCw className="size-4" aria-hidden /> Reintentar</button>
+        </div>
+      </div>
+    )
+  }
   const openJobs = jobs.filter((j) => j.status === 'abierto')
   const totalPending = projects.filter((p) => p.status === 'activo').length
-  const bidsToReview = openJobs.reduce((a, j) => a + j.bids.length, 0)
+  // solo ofertas que todavía esperan tu decisión (no las ya aceptadas/rechazadas/retiradas)
+  const bidsToReview = openJobs.reduce((a, j) => a + j.bids.filter((b) => b.status === 'pendiente').length, 0)
   const doneProjects = projects.filter((p) => p.status === 'finalizado').length
 
   // checklist guiado con estado real del sistema
@@ -75,8 +96,9 @@ export default function ClientDashboard() {
 
   return (
     <div className="homy-page">
-      <VerificationPrompt role="cliente" />
-      <OnboardingCard role="cliente" tasks={onboardingTasks} />
+      {/* un solo aviso de verificación: si el checklist está visible ya lo incluye */}
+      {checklistHidden && <VerificationPrompt role="cliente" />}
+      <OnboardingCard role="cliente" tasks={onboardingTasks} onDismiss={() => setChecklistHidden(true)} />
       <header className="homy-page-head">
         <div className="min-w-0">
           <span className="homy-eyebrow">Panel del cliente</span>

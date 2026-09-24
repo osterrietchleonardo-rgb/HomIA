@@ -20,12 +20,15 @@ export type OnboardingTask = {
   blocked?: boolean
 }
 
-export default function OnboardingCard({ role, tasks }: { role: string; tasks: OnboardingTask[] }) {
+/** ¿El usuario ocultó el checklist de este rol? (para no apilar avisos repetidos) */
+export function isOnboardingDismissed(role: string): boolean {
+  if (typeof window === 'undefined') return false
+  try { return localStorage.getItem(`homy_onboarding_done_${role}`) === '1' } catch { return false }
+}
+
+export default function OnboardingCard({ role, tasks, onDismiss }: { role: string; tasks: OnboardingTask[]; onDismiss?: () => void }) {
   const storageKey = `homy_onboarding_done_${role}`
-  const [dismissed, setDismissed] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return localStorage.getItem(storageKey) === '1'
-  })
+  const [dismissed, setDismissed] = useState(() => isOnboardingDismissed(role))
   const [expanded, setExpanded] = useState(true)
 
   if (dismissed) return null
@@ -34,8 +37,9 @@ export default function OnboardingCard({ role, tasks }: { role: string; tasks: O
   const allDone = doneCount === tasks.length
 
   function dismiss() {
-    localStorage.setItem(storageKey, '1')
+    try { localStorage.setItem(storageKey, '1') } catch { /* modo privado */ }
     setDismissed(true)
+    onDismiss?.()
   }
 
   return (
@@ -67,7 +71,7 @@ export default function OnboardingCard({ role, tasks }: { role: string; tasks: O
       </div>
 
       {/* Tour y Guía en su propia fila: en el celu nunca aprietan el título
-          y quedan a la altura del pulgar (fix de texto amontonado en móvil) */}
+          y quedan a la altura del pulgar. El tour NO arranca solo: se ofrece acá. */}
       <div className="relative mt-3 flex gap-2">
         <button type="button" onClick={() => startTour({ role: role as TourRole })}
           className="homy-focus inline-flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-full bg-[#1D63B8] px-3.5 py-2 text-xs font-bold text-white shadow-[0_10px_22px_-10px_rgba(29,99,184,0.8)] transition hover:brightness-110">

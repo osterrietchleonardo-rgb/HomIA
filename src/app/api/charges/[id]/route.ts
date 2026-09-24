@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { ok, fail, body } from '@/lib/api'
+import { ok, fail, body, appUrl } from '@/lib/api'
 import { db } from '@/lib/db'
 import { createChargePreference, mpConfigured } from '@/lib/mercadopago'
 
@@ -88,8 +88,7 @@ export async function POST(
   if (!mpConfigured()) {
     return fail('Mercado Pago no está configurado. Agregá MP_ACCESS_TOKEN en el archivo .env del servidor.', 503, { needsConfig: true })
   }
-  const url = new URL(req.url)
-  const baseUrl = `${url.protocol}//${url.host}`
+  const baseUrl = appUrl()
   const preference = await createChargePreference({
     chargeId: charge.id,
     chargeNumber: charge.number,
@@ -131,8 +130,12 @@ export async function PATCH(
     data: { status: 'pagada', method: 'efectivo', paidAt: new Date() },
   })
   // si el cobro nació de una compra directa, la compra queda pagada → habilita reseña
+  // (Purchase no tiene paidAt: la fecha de cobro vive en charge.paidAt)
   if (charge.projectId == null) {
-    await db.purchase.updateMany({ where: { chargeId: charge.id }, data: { status: 'pagado' } })
+    await db.purchase.updateMany({
+      where: { chargeId: charge.id, status: { notIn: ['cancelado', 'rechazado'] } },
+      data: { status: 'pagado', paymentMethod: 'efectivo' },
+    })
   }
   await db.notification.create({
     data: {

@@ -4,19 +4,9 @@ import { useState } from 'react'
 import { navigate } from '@/lib/router'
 import { toast } from 'sonner'
 import { useLocation } from '@/lib/store'
-import {
-  CloudUpload, X, Megaphone, MapPin, PenLine, AlarmClock, Camera,
-  Droplets, Flame, Zap, BrickWall, PaintRoller, Hammer, Anvil, Sparkles, Sprout, AirVent, Warehouse, DoorClosed,
-} from 'lucide-react'
-
-const CATEGORIES = [
-  { slug: 'plomeria', name: 'Plomería', icon: Droplets }, { slug: 'gasistas', name: 'Gas', icon: Flame },
-  { slug: 'electricistas', name: 'Electricidad', icon: Zap }, { slug: 'albanileria', name: 'Albañilería', icon: BrickWall },
-  { slug: 'pintura', name: 'Pintura', icon: PaintRoller }, { slug: 'carpinteria', name: 'Carpintería', icon: Hammer },
-  { slug: 'herreria', name: 'Herrería', icon: Anvil }, { slug: 'limpieza', name: 'Limpieza', icon: Sparkles },
-  { slug: 'jardineria', name: 'Jardinería', icon: Sprout }, { slug: 'climatizacion', name: 'Climatización', icon: AirVent },
-  { slug: 'techos', name: 'Techos', icon: Warehouse }, { slug: 'cerramientos', name: 'Cerramientos', icon: DoorClosed },
-]
+import { apiFetch } from '@/lib/api-client'
+import { useCategories, categoryIcon } from '@/lib/categories'
+import { CloudUpload, X, Megaphone, MapPin, PenLine, AlarmClock, Camera } from 'lucide-react'
 
 const URGENCIES = [
   { value: 'baja', label: 'Tranquilo', dot: 'bg-slate-400' },
@@ -36,52 +26,64 @@ export default function PublishJob() {
   const [address, setAddress] = useState('')
   const [city, setCity] = useState('')
   const [photos, setPhotos] = useState<string[]>([])
-  const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [publishing, setPublishing] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const { categories } = useCategories()
 
   async function uploadPhotos(files: FileList) {
-    setBusy(true)
+    const room = 4 - photos.length
+    if (room <= 0) { toast.error('Ya tenés 4 fotos: quitá alguna para subir otra'); return }
+    const list = Array.from(files).slice(0, room)
+    if (files.length > room) toast.error(`Solo se suben ${room} foto${room === 1 ? '' : 's'} más (máximo 4)`)
+    setUploading(true)
     try {
-      for (const file of Array.from(files).slice(0, 4)) {
+      for (const file of list) {
         const fd = new FormData()
         fd.append('file', file)
         fd.append('folder', 'trabajos')
-        const res = await fetch('/api/uploads', { method: 'POST', body: fd })
-        if (res.ok) {
-          const data = await res.json()
-          setPhotos((p) => [...p, data.url])
-        } else {
-          toast.error(`No se pudo subir ${file.name}`)
-        }
+        const r = await apiFetch<{ url: string }>('/api/uploads', { method: 'POST', body: fd, silent: true })
+        if (r.ok && r.data?.url) setPhotos((p) => [...p, r.data!.url])
+        else toast.error(`No se pudo subir ${file.name}${r.error ? `: ${r.error}` : ''}`)
       }
-    } finally { setBusy(false) }
+    } finally { setUploading(false) }
   }
+
+  // presupuesto orientativo: opcional, pero si se carga tiene que ser coherente
+  const minN = budgetMin.trim() === '' ? null : Number(budgetMin)
+  const maxN = budgetMax.trim() === '' ? null : Number(budgetMax)
+  const budgetError =
+    (minN !== null && (Number.isNaN(minN) || minN < 0)) || (maxN !== null && (Number.isNaN(maxN) || maxN < 0))
+      ? 'El presupuesto no puede ser negativo'
+      : minN !== null && maxN !== null && minN > maxN
+        ? 'El mínimo no puede ser mayor que el máximo'
+        : null
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!title || !description || !category) {
+    if (!title.trim() || !description.trim() || !category) {
       toast.error('Título, descripción y categoría son obligatorios')
       return
     }
-    setBusy(true)
+    if (budgetError) { toast.error(budgetError); return }
+    if (uploading) { toast.error('Esperá a que terminen de subir las fotos'); return }
+    setPublishing(true)
     try {
-      const res = await fetch('/api/jobs', {
+      const r = await apiFetch('/api/jobs', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title, description, categorySlug: category, urgency,
-          budgetMin: budgetMin ? parseFloat(budgetMin) : undefined,
-          budgetMax: budgetMax ? parseFloat(budgetMax) : undefined,
+        json: {
+          title: title.trim(), description: description.trim(), categorySlug: category, urgency,
+          budgetMin: minN ?? undefined,
+          budgetMax: maxN ?? undefined,
           address, city,
           lat: location.lat || undefined, lng: location.lng || undefined,
           photos,
-        }),
+        },
       })
-      const data = await res.json()
-      if (!res.ok) { toast.error(data.error); return }
+      if (!r.ok) return
       toast.success('¡Trabajo publicado! Los profesionales de tu zona ya lo están viendo.')
       navigate('/panel/cliente/trabajos')
-    } finally { setBusy(false) }
+    } finally { setPublishing(false) }
   }
 
   return (
@@ -117,13 +119,16 @@ export default function PublishJob() {
           <div>
             <p className="flex items-center gap-1 text-sm font-semibold text-[#0A2540]">Categoría <span className="text-[#FF5A1F]" aria-hidden>*</span></p>
             <div role="group" aria-label="Elegir categoría" className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-              {CATEGORIES.map((c) => (
-                <button key={c.slug} type="button" onClick={() => setCategory(c.slug)} aria-pressed={category === c.slug}
-                  className="homy-tab homy-focus w-full justify-start gap-2">
-                  <c.icon className="size-4 shrink-0" aria-hidden />
-                  <span className="line-clamp-1">{c.name}</span>
-                </button>
-              ))}
+              {categories.map((c) => {
+                const Icon = categoryIcon(c.icon)
+                return (
+                  <button key={c.slug} type="button" onClick={() => setCategory(c.slug)} aria-pressed={category === c.slug}
+                    className="homy-tab homy-focus w-full justify-start gap-2 text-left">
+                    <Icon className="size-4 shrink-0" aria-hidden />
+                    <span className="line-clamp-2 leading-tight">{c.name}</span>
+                  </button>
+                )
+              })}
             </div>
           </div>
         </section>
@@ -155,7 +160,8 @@ export default function PublishJob() {
                 <label htmlFor="budget-min" className="sr-only">Presupuesto mínimo</label>
                 <div className="relative">
                   <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400" aria-hidden>$</span>
-                  <input id="budget-min" type="number" value={budgetMin} onChange={(e) => setBudgetMin(e.target.value)} placeholder="mínimo" inputMode="numeric"
+                  <input id="budget-min" type="number" min={0} value={budgetMin} onChange={(e) => setBudgetMin(e.target.value)} placeholder="mínimo" inputMode="numeric"
+                    aria-invalid={!!budgetError} aria-describedby={budgetError ? 'budget-error' : undefined}
                     className="homy-glass-input w-full rounded-xl py-3 pl-8 pr-4 outline-none tabular-nums" />
                 </div>
               </div>
@@ -163,11 +169,13 @@ export default function PublishJob() {
                 <label htmlFor="budget-max" className="sr-only">Presupuesto máximo</label>
                 <div className="relative">
                   <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400" aria-hidden>$</span>
-                  <input id="budget-max" type="number" value={budgetMax} onChange={(e) => setBudgetMax(e.target.value)} placeholder="máximo" inputMode="numeric"
+                  <input id="budget-max" type="number" min={0} value={budgetMax} onChange={(e) => setBudgetMax(e.target.value)} placeholder="máximo" inputMode="numeric"
+                    aria-invalid={!!budgetError} aria-describedby={budgetError ? 'budget-error' : undefined}
                     className="homy-glass-input w-full rounded-xl py-3 pl-8 pr-4 outline-none tabular-nums" />
                 </div>
               </div>
             </div>
+            {budgetError && <p id="budget-error" role="alert" className="mt-2 text-xs font-semibold text-red-600">{budgetError}</p>}
           </div>
         </section>
 
@@ -207,9 +215,10 @@ export default function PublishJob() {
             onDrop={(e) => { e.preventDefault(); setDragging(false); if (e.dataTransfer.files?.length) uploadPhotos(e.dataTransfer.files) }}
             className={`homy-glass-soft flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed py-8 transition ${dragging ? 'border-[#00A8E0]' : 'border-[#0A2540]/15 hover:border-[#00A8E0]'}`}>
             <span className="homy-icon-chip homy-chip-ai size-11 [&_svg]:size-5" aria-hidden><CloudUpload /></span>
-            <span className="mt-2.5 text-sm font-semibold text-slate-500">{busy ? 'Subiendo…' : 'Arrastrá fotos acá o hacé clic para elegirlas'}</span>
+            <span className="mt-2.5 text-sm font-semibold text-slate-500" aria-live="polite">{uploading ? 'Subiendo fotos…' : 'Arrastrá fotos acá o tocá para elegirlas'}</span>
             <span className="mt-1 text-xs text-slate-400">JPG, PNG o WebP · hasta 4 fotos</span>
-            <input type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => e.target.files && uploadPhotos(e.target.files)} />
+            <input type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" disabled={uploading}
+              onChange={(e) => { if (e.target.files) uploadPhotos(e.target.files); e.target.value = '' }} />
           </label>
           {photos.length > 0 && (
             <div className="flex flex-wrap gap-2.5">
@@ -228,8 +237,8 @@ export default function PublishJob() {
 
         <div className="flex flex-col gap-3 border-t border-[#0A2540]/5 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <p className="max-w-xs text-xs leading-relaxed text-slate-400">Los profesionales de tu zona van a ver tu publicación y mandarte presupuestos.</p>
-          <button type="submit" disabled={busy} className="homy-btn-primary homy-focus w-full py-3.5 text-[0.95rem] sm:w-auto sm:px-7">
-            <Megaphone className="size-4" aria-hidden /> {busy ? 'Publicando…' : 'Publicar trabajo'}
+          <button type="submit" disabled={publishing || uploading} className="homy-btn-primary homy-focus w-full py-3.5 text-[0.95rem] disabled:opacity-60 sm:w-auto sm:px-7">
+            <Megaphone className="size-4" aria-hidden /> {publishing ? 'Publicando…' : uploading ? 'Subiendo fotos…' : 'Publicar trabajo'}
           </button>
         </div>
       </form>

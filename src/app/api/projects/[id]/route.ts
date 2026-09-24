@@ -1,6 +1,23 @@
 import { NextRequest } from 'next/server'
-import { ok, fail, body, parseJson } from '@/lib/api'
+import { z } from 'zod'
+import type { Prisma } from '@prisma/client'
+import { ok, fail, parseBody } from '@/lib/api'
 import { db } from '@/lib/db'
+
+// Orden de etapas: solo se avanza, nunca se retrocede.
+const STAGES = ['presupuesto', 'materiales', 'ejecucion', 'revision', 'finalizado'] as const
+type Stage = (typeof STAGES)[number]
+const STAGE_LABEL: Record<Stage, string> = {
+  presupuesto: 'Presupuesto',
+  materiales: 'Materiales',
+  ejecucion: 'Ejecución',
+  revision: 'Revisión',
+  finalizado: 'Finalizado',
+}
+
+function pairKey(a: string, b: string) {
+  return a < b ? { userAId: a, userBId: b } : { userAId: b, userBId: a }
+}
 
 // Detalle de proyecto: materiales, facturas, participantes, eventos
 export async function GET(
@@ -15,8 +32,8 @@ export async function GET(
   const project = await db.project.findUnique({
     where: { id },
     include: {
-      client: { select: { id: true, displayName: true, avatarUrl: true, phone: true, email: true } },
-      pro: { include: { user: { select: { id: true, displayName: true, avatarUrl: true, phone: true, email: true } } } },
+      client: { select: { id: true, displayName: true, avatarUrl: true, phone: true, email: true, verificationStatus: true } },
+      pro: { include: { user: { select: { id: true, displayName: true, avatarUrl: true, phone: true, email: true, verificationStatus: true } } } },
       materials: {
         include: {
           provider: { include: { user: { select: { id: true, displayName: true } } } },
@@ -44,6 +61,12 @@ export async function GET(
       })
     : []
 
+  // conversación cliente↔profesional (si el cliente ya la abrió): atajo "Abrir chat"
+  const conv = await db.conversation.findUnique({
+    where: { userAId_userBId: pairKey(project.clientId, project.pro.userId) },
+    select: { id: true },
+  })
+
   return ok({
     project: {
       id: project.id,
@@ -52,10 +75,11 @@ export async function GET(
       status: project.status,
       stage: project.stage,
       laborCost: project.laborCost,
+      budgetMin: project.budgetMin,
+      budgetMax: project.budgetMax,
       materialsCost: project.materialsCost,
       materialsPaymentMode: project.materialsPaymentMode,
-      escrowStatus: project.escrowStatus,
-      escrowAmount: project.escrowAmount,
+      conversationId: conv?.id || null,
       createdAt: project.createdAt,
       job: project.job,
       client: project.client,
@@ -69,6 +93,7 @@ export async function GET(
         userId: project.pro.userId,
         displayName: project.pro.user.displayName,
         avatarUrl: project.pro.user.avatarUrl,
+        verificationStatus: project.pro.user.verificationStatus,
         personType: project.pro.personType,
         companyName: project.pro.companyName,
         phone: project.pro.user.phone,
@@ -90,6 +115,8 @@ export async function GET(
       providerId: m.providerId,
       providerName: m.provider?.businessName || null,
       providerUserId: m.provider?.user?.id || null,
+      alternativeOfId: m.alternativeOfId,
+      invoicedAt: m.invoicedAt,
       createdAt: m.createdAt,
     })),
     links,
@@ -107,7 +134,22 @@ export async function GET(
   })
 }
 
-// PATCH: actualizar etapa/estado (finalizar proyecto dispara flujo de reseñas y obras)
+// ── PATCH: máquina de estados del proyecto ──
+//   stage: presupuesto → materiales → ejecucion → revision → finalizado (solo hacia adelante;
+//          salir de presupuesto exige mano de obra cotizada; finalizado solo el cliente
+//          y solo desde ejecucion/revision).
+//   status: únicamente 'cancelado' (en presupuesto/materiales, con motivo, cualquiera de las partes).
+//   laborCost: solo el profesional, solo en presupuesto.
+//   materialsPaymentMode: inmutable una vez que hay factura o cobro de proveedor.
+// Nada cambia si el proyecto no está activo.
+const patchSchema = z.object({
+  stage: z.enum(STAGES, 'Etapa inválida').optional(),
+  status: z.literal('cancelado', 'El estado solo se puede cambiar a "cancelado"; para finalizar usá la etapa').optional(),
+  materialsPaymentMode: z.enum(['pro_adelanta', 'cliente_paga_proveedor'], 'Modo de pago de materiales inválido').optional(),
+  laborCost: z.number().positive('La mano de obra tiene que ser mayor a 0').max(1_000_000_000).optional(),
+  cancelReason: z.string().trim().max(500).optional(),
+})
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -117,71 +159,173 @@ export async function PATCH(
   const user = await getSessionUser()
   if (!user) return fail('Necesitás iniciar sesión', 401)
 
-  const project = await db.project.findUnique({ where: { id } })
+  const parsed = await parseBody(req, patchSchema)
+  if (parsed.error) return parsed.error
+  const d = parsed.data
+
+  const project = await db.project.findUnique({
+    where: { id },
+    include: { pro: { select: { id: true, userId: true } } },
+  })
   if (!project) return fail('Proyecto no encontrado', 404)
-  const pro = await db.professionalProfile.findUnique({ where: { userId: user.id } })
   const isClient = project.clientId === user.id
-  const isPro = pro && project.professionalId === pro.id
+  const isPro = project.pro.userId === user.id
   if (!isClient && !isPro) return fail('Sin permiso', 403)
 
-  const d = await body<{ stage?: string; status?: string; materialsPaymentMode?: string }>(req)
+  if (project.status !== 'activo') {
+    return fail(`El proyecto está ${project.status}: ya no se puede modificar`, 409)
+  }
+
+  const otherUserId = isClient ? project.pro.userId : project.clientId
+  const otherRole = isClient ? 'profesional' : 'cliente'
+  const projectLink = `#/panel/${otherRole}/proyectos/${id}`
+
+  // ── Cancelación (exclusiva: no se combina con otros cambios) ──
+  if (d.status === 'cancelado') {
+    if (d.stage || d.laborCost !== undefined || d.materialsPaymentMode) {
+      return fail('Para cancelar mandá solo el motivo, sin otros cambios')
+    }
+    if (project.stage !== 'presupuesto' && project.stage !== 'materiales') {
+      return fail('Solo se puede cancelar en las etapas de presupuesto o materiales. Si la obra ya empezó, coordiná por el chat.', 409)
+    }
+    const reason = (d.cancelReason || '').trim()
+    if (reason.length < 3) return fail('Contá brevemente el motivo de la cancelación')
+
+    // Materiales aprobados con proveedor: su stock quedó reservado al aprobar → se libera.
+    const reserved = await db.projectMaterial.findMany({
+      where: { projectId: id, status: 'aprobado', providerId: { not: null }, elementId: { not: null } },
+    })
+    await db.$transaction(async (tx) => {
+      for (const m of reserved) {
+        const stock = await tx.providerStock.findUnique({
+          where: { providerId_elementId: { providerId: m.providerId!, elementId: m.elementId! } },
+        })
+        if (!stock) continue
+        await tx.providerStock.update({ where: { id: stock.id }, data: { quantity: { increment: m.quantity } } })
+        await tx.stockMovement.create({
+          data: { stockId: stock.id, type: 'liberacion', quantity: m.quantity, note: `Proyecto cancelado: ${project.title}` },
+        })
+        await deriveStockStatus(tx, stock.id)
+      }
+      await tx.project.update({ where: { id }, data: { status: 'cancelado' } })
+    })
+
+    const who = isClient ? 'El cliente' : 'El profesional'
+    await db.notification.create({
+      data: {
+        userId: otherUserId,
+        type: 'proyecto_cancelado',
+        title: 'Proyecto cancelado',
+        body: `${who} canceló "${project.title}". Motivo: ${reason}`,
+        link: projectLink,
+      },
+    })
+    // El motivo queda también en el chat, si el cliente ya lo abrió (no hay campo en el modelo).
+    const conv = await db.conversation.findUnique({
+      where: { userAId_userBId: pairKey(project.clientId, project.pro.userId) },
+      select: { id: true },
+    })
+    if (conv) {
+      await db.message.create({
+        data: { conversationId: conv.id, senderId: user.id, body: `Cancelé el proyecto "${project.title}". Motivo: ${reason}`.slice(0, 2000) },
+      })
+      await db.conversation.update({ where: { id: conv.id }, data: { lastMessageAt: new Date() } })
+    }
+    return ok({ success: true, status: 'cancelado' })
+  }
+
+  if (d.stage === undefined && d.laborCost === undefined && d.materialsPaymentMode === undefined) {
+    return fail('No hay nada para actualizar')
+  }
+
   const data: Record<string, unknown> = {}
-  if (d.stage) {
-    if (!['presupuesto', 'materiales', 'ejecucion', 'revision', 'finalizado'].includes(d.stage)) {
-      return fail('Etapa inválida')
-    }
-    data.stage = d.stage
-    if (d.stage === 'finalizado') data.status = 'finalizado'
+  const notifications: { type: string; title: string; body: string }[] = []
+  let laborCost = project.laborCost
+
+  // ── Cotización de mano de obra ──
+  if (d.laborCost !== undefined) {
+    if (!isPro) return fail('Solo el profesional del proyecto cotiza la mano de obra', 403)
+    if (project.stage !== 'presupuesto') return fail('La mano de obra se cotiza en la etapa de presupuesto', 409)
+    laborCost = Math.round(d.laborCost * 100) / 100
+    data.laborCost = laborCost
+    notifications.push({
+      type: 'mano_obra_cotizada',
+      title: 'Te cotizaron la mano de obra',
+      body: `Te cotizaron la mano de obra: ${laborCost.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })} — "${project.title}"`,
+    })
   }
-  if (d.status) data.status = d.status
-  if (d.materialsPaymentMode) {
-    if (!['pro_adelanta', 'cliente_paga_proveedor'].includes(d.materialsPaymentMode)) {
-      return fail('Modo de pago de materiales inválido')
+
+  // ── Modo de pago de materiales (inmutable con factura o cobro emitido) ──
+  if (d.materialsPaymentMode !== undefined && d.materialsPaymentMode !== project.materialsPaymentMode) {
+    const [invoiceCount, chargeCount] = await Promise.all([
+      db.invoice.count({ where: { projectId: id } }),
+      db.providerCharge.count({ where: { projectId: id } }),
+    ])
+    if (invoiceCount > 0 || chargeCount > 0) {
+      return fail('Ya hay facturas o cobros emitidos en este proyecto: el modo de pago de materiales no se puede cambiar', 409)
     }
-    if (project.status !== 'activo') return fail('El proyecto ya no está activo: no se puede cambiar el modo de pago')
     data.materialsPaymentMode = d.materialsPaymentMode
-  }
-
-  await db.project.update({ where: { id }, data })
-
-  // Notificar cambio de modo de materiales (quién paga qué queda explícito para ambos)
-  const proProfile = await db.professionalProfile.findUnique({ where: { id: project.professionalId }, select: { userId: true } })
-  const notifyUserId = isClient ? proProfile?.userId : project.clientId
-  if (d.materialsPaymentMode && notifyUserId) {
     const modoLabel = d.materialsPaymentMode === 'pro_adelanta'
       ? 'El profesional adelanta los materiales y los cobra en la factura'
       : 'El cliente paga los materiales directamente al proveedor'
-    await db.notification.create({
-      data: {
-        userId: notifyUserId,
-        type: 'modo_materiales',
-        title: 'Modo de pago de materiales actualizado',
-        body: `"${project.title}": ${modoLabel}.`,
-        link: `#/panel/${isClient ? 'profesional' : 'cliente'}/proyectos/${id}`,
-      },
-    })
-  }
-  if (notifyUserId && d.stage === 'finalizado') {
-    await db.notification.create({
-      data: {
-        userId: notifyUserId,
-        type: 'proyecto_finalizado',
-        title: 'Proyecto finalizado',
-        body: `"${project.title}" finalizó. Publiquen la obra y dejen reseñas.`,
-        link: `#/panel/${isClient ? 'cliente' : 'profesional'}/proyectos/${id}`,
-      },
-    })
-  } else if (d.stage && notifyUserId) {
-    await db.notification.create({
-      data: {
-        userId: notifyUserId,
-        type: 'proyecto_etapa',
-        title: `Proyecto → ${d.stage}`,
-        body: `"${project.title}" pasó a la etapa ${d.stage}`,
-        link: `#/panel/${isClient ? 'cliente' : 'profesional'}/proyectos/${id}`,
-      },
+    notifications.push({
+      type: 'modo_materiales',
+      title: 'Modo de pago de materiales actualizado',
+      body: `"${project.title}": ${modoLabel}.`,
     })
   }
 
-  return ok({ success: true })
+  // ── Avance de etapa ──
+  if (d.stage !== undefined) {
+    const from = STAGES.indexOf(project.stage as Stage)
+    const to = STAGES.indexOf(d.stage)
+    if (to <= from) return fail(`El proyecto ya está en ${STAGE_LABEL[project.stage as Stage] || project.stage}: las etapas no retroceden`, 409)
+    if (d.stage === 'finalizado') {
+      if (!isClient) return fail('Solo el cliente puede dar por finalizada la obra', 403)
+      if (project.stage !== 'ejecucion' && project.stage !== 'revision') {
+        return fail('La obra se finaliza desde ejecución o revisión', 409)
+      }
+    }
+    if (project.stage === 'presupuesto' && laborCost <= 0) {
+      return fail('Antes de avanzar, el profesional tiene que cotizar la mano de obra', 409)
+    }
+    data.stage = d.stage
+    if (d.stage === 'finalizado') {
+      data.status = 'finalizado'
+      notifications.push({
+        type: 'proyecto_finalizado',
+        title: 'Proyecto finalizado',
+        body: `"${project.title}" finalizó. Publiquen la obra y dejen reseñas.`,
+      })
+    } else {
+      notifications.push({
+        type: 'proyecto_etapa',
+        title: `Proyecto → ${STAGE_LABEL[d.stage]}`,
+        body: `"${project.title}" pasó a la etapa ${STAGE_LABEL[d.stage].toLowerCase()}`,
+      })
+    }
+  }
+
+  if (Object.keys(data).length === 0) return ok({ success: true, unchanged: true })
+
+  const updated = await db.project.update({ where: { id }, data })
+  if (notifications.length) {
+    await db.notification.createMany({
+      data: notifications.map((n) => ({ ...n, userId: otherUserId, link: projectLink })),
+    })
+  }
+
+  return ok({
+    success: true,
+    project: { id: updated.id, stage: updated.stage, status: updated.status, laborCost: updated.laborCost, materialsPaymentMode: updated.materialsPaymentMode },
+  })
+}
+
+async function deriveStockStatus(tx: Prisma.TransactionClient, stockId: string) {
+  const s = await tx.providerStock.findUnique({ where: { id: stockId } })
+  if (!s) return
+  let status = 'disponible'
+  if (s.quantity <= 0) status = 'agotado'
+  else if (s.quantity <= s.minStock) status = 'por_agotar'
+  await tx.providerStock.update({ where: { id: stockId }, data: { status } })
 }

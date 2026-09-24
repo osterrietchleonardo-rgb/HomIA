@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { ok, fail } from '@/lib/api'
+import { ok, fail, appUrl } from '@/lib/api'
 import { db } from '@/lib/db'
 import { createInvoicePreference, mpConfigured } from '@/lib/mercadopago'
 
@@ -57,8 +57,7 @@ export async function POST(
     return fail('Mercado Pago no está configurado. Agregá MP_ACCESS_TOKEN en el archivo .env del servidor.', 503, { needsConfig: true })
   }
 
-  const url = new URL(req.url)
-  const baseUrl = `${url.protocol}//${url.host}`
+  const baseUrl = appUrl()
   const preference = await createInvoicePreference({
     invoiceId: invoice.id,
     invoiceNumber: invoice.number,

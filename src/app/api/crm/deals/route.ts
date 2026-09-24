@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     jobId?: string
     projectId?: string
   }>(req)
-  if (!d.pipelineId || !d.stageId || !d.title) return fail('Faltan datos del trato')
+  if (!d.stageId || !d.title) return fail('Faltan datos del trato')
 
   const stage = await db.crmStage.findUnique({ where: { id: d.stageId }, include: { pipeline: true } })
   if (!stage || stage.pipeline.ownerId !== user.id) return fail('Etapa inválida', 403)
@@ -25,7 +25,9 @@ export async function POST(req: NextRequest) {
   const maxPos = await db.crmDeal.aggregate({ where: { stageId: d.stageId }, _max: { position: true } })
   const deal = await db.crmDeal.create({
     data: {
-      pipelineId: d.pipelineId,
+      // el pipeline sale SIEMPRE de la etapa validada (nunca del body: evita colgar
+      // un trato en el pipeline de otro usuario)
+      pipelineId: stage.pipelineId,
       stageId: d.stageId,
       title: d.title,
       value: d.value || 0,

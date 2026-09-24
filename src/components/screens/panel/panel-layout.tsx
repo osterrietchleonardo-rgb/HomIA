@@ -8,52 +8,74 @@ import { VerifyBadge } from '@/components/app/ui-bits'
 import RoleSwitcher from '@/components/app/role-switcher'
 import { Homy, HomIAWordmark } from '@/components/homy/homy-character'
 import { toast } from 'sonner'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import {
   LayoutDashboard, Briefcase, FolderKanban, FileText, User, Bell, LogOut,
   Search, Boxes, Users, Link2, HardHat, ClipboardList, Home, Sparkles,
-  Compass, MessageCircle, ShieldCheck, LifeBuoy, HandCoins, Package, Crown,
+  Compass, MessageCircle, ShieldCheck, LifeBuoy, HandCoins, Package, Crown, MoreHorizontal,
 } from 'lucide-react'
 
-type NavItem = { to: string; label: string; icon: React.ComponentType<{ className?: string }>; m?: boolean }
+/** `short`: etiqueta para la barra inferior móvil (≥11px, sin truncar) */
+type NavItem = { to: string; label: string; short?: string; icon: React.ComponentType<{ className?: string }> }
+
+// Barra inferior móvil: 4 accesos fijos por rol + "Más" (el resto va al Sheet).
+const MOBILE_PRIMARY: Record<string, string[]> = {
+  cliente: ['/panel/cliente', '/panel/cliente/trabajos', '/panel/cliente/proyectos', '/panel/cliente/mensajes'],
+  profesional: ['/panel/profesional', '/panel/profesional/bolsa', '/panel/profesional/proyectos', '/panel/profesional/mensajes'],
+  proveedor: ['/panel/proveedor', '/panel/proveedor/stock', '/panel/proveedor/cobros', '/panel/proveedor/mensajes'],
+}
+
+// ancla estable para el tour guiado (nav-inicio, nav-bolsa, nav-plan…)
+function tourKeyOf(to: string): string {
+  const parts = to.split('/').filter(Boolean)
+  return parts[0] === 'panel' ? (parts[2] || 'inicio') : parts[0]
+}
+
+// activo también en sub-rutas (ej: /panel/cliente/proyectos/abc marca "Proyectos")
+function isActivePath(current: string, to: string): boolean {
+  if (current === to) return true
+  const depth = to.split('/').filter(Boolean).length
+  return depth >= 3 && current.startsWith(`${to}/`)
+}
 
 const NAV: Record<string, NavItem[]> = {
   cliente: [
-    { to: '/panel/cliente', label: 'Inicio', icon: LayoutDashboard, m: true },
-    { to: '/panel/cliente/publicar', label: 'Publicar trabajo', icon: Briefcase, m: true },
-    { to: '/panel/cliente/trabajos', label: 'Mis trabajos', icon: ClipboardList, m: true },
-    { to: '/panel/cliente/materiales', label: 'Materiales', icon: Package, m: true },
-    { to: '/panel/cliente/proyectos', label: 'Proyectos', icon: FolderKanban, m: true },
+    { to: '/panel/cliente', label: 'Inicio', icon: LayoutDashboard },
+    { to: '/panel/cliente/publicar', label: 'Publicar trabajo', icon: Briefcase },
+    { to: '/panel/cliente/trabajos', label: 'Mis trabajos', short: 'Trabajos', icon: ClipboardList },
+    { to: '/panel/cliente/materiales', label: 'Materiales', icon: Package },
+    { to: '/panel/cliente/proyectos', label: 'Proyectos', icon: FolderKanban },
     { to: '/panel/cliente/facturas', label: 'Facturas', icon: FileText },
     { to: '/panel/cliente/directorio', label: 'Directorio', icon: Compass },
-    { to: '/panel/cliente/mensajes', label: 'Mensajes', icon: MessageCircle, m: true },
+    { to: '/panel/cliente/mensajes', label: 'Mensajes', icon: MessageCircle },
     { to: '/panel/cliente/verificacion', label: 'Verificación', icon: ShieldCheck },
     { to: '/panel/cliente/perfil', label: 'Mi perfil', icon: User },
     { to: '/ayuda', label: 'Ayuda', icon: LifeBuoy },
   ],
   profesional: [
-    { to: '/panel/profesional', label: 'Inicio', icon: LayoutDashboard, m: true },
-    { to: '/panel/profesional/bolsa', label: 'Bolsa de trabajos', icon: Search, m: true },
+    { to: '/panel/profesional', label: 'Inicio', icon: LayoutDashboard },
+    { to: '/panel/profesional/bolsa', label: 'Bolsa de trabajos', short: 'Bolsa', icon: Search },
     { to: '/panel/profesional/materiales', label: 'Materiales', icon: Boxes },
-    { to: '/panel/profesional/presupuestos', label: 'Mis presupuestos', icon: FileText },
-    { to: '/panel/profesional/proyectos', label: 'Proyectos', icon: FolderKanban, m: true },
-    { to: '/panel/profesional/crm', label: 'CRM clientes', icon: Users, m: true },
+    { to: '/panel/profesional/presupuestos', label: 'Mis ofertas', icon: FileText },
+    { to: '/panel/profesional/proyectos', label: 'Proyectos', icon: FolderKanban },
+    { to: '/panel/profesional/crm', label: 'CRM clientes', icon: Users },
     { to: '/panel/profesional/obras', label: 'Mis obras', icon: HardHat },
     { to: '/panel/profesional/vinculaciones', label: 'Cuentas de retiro', icon: Link2 },
     { to: '/panel/profesional/directorio', label: 'Directorio', icon: Compass },
-    { to: '/panel/profesional/mensajes', label: 'Mensajes', icon: MessageCircle, m: true },
+    { to: '/panel/profesional/mensajes', label: 'Mensajes', icon: MessageCircle },
     { to: '/panel/profesional/verificacion', label: 'Verificación', icon: ShieldCheck },
     { to: '/panel/profesional/perfil', label: 'Mi perfil', icon: User },
     { to: '/ayuda', label: 'Ayuda', icon: LifeBuoy },
   ],
   proveedor: [
-    { to: '/panel/proveedor', label: 'Inicio', icon: LayoutDashboard, m: true },
-    { to: '/panel/proveedor/stock', label: 'Stock', icon: Boxes, m: true },
-    { to: '/panel/proveedor/cobros', label: 'Cobros', icon: HandCoins, m: true },
+    { to: '/panel/proveedor', label: 'Inicio', icon: LayoutDashboard },
+    { to: '/panel/proveedor/stock', label: 'Stock', icon: Boxes },
+    { to: '/panel/proveedor/cobros', label: 'Cobros', icon: HandCoins },
     { to: '/panel/proveedor/plan', label: 'Mi plan', icon: Crown },
     { to: '/panel/proveedor/crm', label: 'CRM', icon: Users },
     { to: '/panel/proveedor/vinculaciones', label: 'Vinculaciones', icon: Link2 },
     { to: '/panel/proveedor/directorio', label: 'Directorio', icon: Compass },
-    { to: '/panel/proveedor/mensajes', label: 'Mensajes', icon: MessageCircle, m: true },
+    { to: '/panel/proveedor/mensajes', label: 'Mensajes', icon: MessageCircle },
     { to: '/panel/proveedor/verificacion', label: 'Verificación', icon: ShieldCheck },
     { to: '/panel/proveedor/perfil', label: 'Mi perfil', icon: User },
     { to: '/ayuda', label: 'Ayuda', icon: LifeBuoy },
@@ -70,10 +92,17 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
   const { user, logout } = useSession()
   const [unread, setUnread] = useState(0)
   const [msgUnread, setMsgUnread] = useState(0)
+  const [moreOpen, setMoreOpen] = useState(false)
+  // estado del plan del proveedor (pill en la topbar: prueba con días restantes / plan vencido)
+  const [providerPlan, setProviderPlan] = useState<{ plan: string; activo: boolean; trialDaysLeft: number | null } | null>(null)
 
   const role = (route.segments[0] === 'panel' ? route.segments[1] : undefined) || user?.roles?.[0] || 'cliente'
   const items = NAV[role] || NAV.cliente
   const currentPath = route.path
+  const primaryPaths = MOBILE_PRIMARY[role] || MOBILE_PRIMARY.cliente
+  const mobilePrimary = primaryPaths.map((p) => items.find((i) => i.to === p)).filter((i): i is NavItem => !!i)
+  const mobileMore = items.filter((i) => !primaryPaths.includes(i.to))
+  const moreActive = mobileMore.some((i) => isActivePath(currentPath, i.to))
 
   useEffect(() => {
     async function poll() {
@@ -88,6 +117,18 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
     return () => clearInterval(t)
   }, [currentPath])
 
+  // plan del proveedor para el pill de la topbar (solo en el panel proveedor)
+  const isProviderPanel = role === 'proveedor' && !!user?.roles.includes('proveedor')
+  useEffect(() => {
+    if (!isProviderPanel) return
+    let alive = true
+    fetch('/api/provider/plan')
+      .then(async (r) => (r.ok ? (await r.json()).plan : null))
+      .then((p) => { if (alive) setProviderPlan(p || null) })
+      .catch(() => { /* silencioso: el pill simplemente no se muestra */ })
+    return () => { alive = false }
+  }, [isProviderPanel, currentPath])
+
   // si el rol no corresponde al usuario, corregir
   useEffect(() => {
     if (!user) return
@@ -97,9 +138,14 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
   }, [user, role])
 
   async function doLogout() {
-    await logout()
-    toast.success('Sesión cerrada')
-    navigate('/')
+    setMoreOpen(false)
+    try {
+      await logout()
+      toast.success('Sesión cerrada')
+      navigate('/')
+    } catch {
+      toast.error('No pudimos cerrar la sesión. Reintentá en unos segundos')
+    }
   }
 
   const otherRoles = user?.roles.filter((r) => r !== role) || []
@@ -136,10 +182,27 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
             >
               <Search className="size-4 transition-colors group-hover:text-[#66dfff]" aria-hidden />
               {searchHint}
-              <kbd className="ml-auto hidden lg:inline rounded-md border border-white/15 bg-white/5 px-1.5 py-0.5 text-[10px] font-bold text-slate-400">⌘K</kbd>
             </Link>
           </div>
           <div className="flex items-center gap-1">
+            {isProviderPanel && providerPlan && (providerPlan.plan === 'trial' || !providerPlan.activo) && (
+              <Link
+                to="/panel/proveedor/plan"
+                className={`inline-flex max-w-[46vw] items-center gap-1.5 truncate rounded-full border px-2.5 py-1.5 text-[11px] font-extrabold transition sm:max-w-none ${
+                  providerPlan.activo
+                    ? 'border-[#FFC700]/50 bg-[#FFC700]/15 text-[#FFC700] hover:bg-[#FFC700]/25'
+                    : 'border-[#FF5A1F]/60 bg-[#FF5A1F]/20 text-[#ffb08a] hover:bg-[#FF5A1F]/30'
+                }`}
+                aria-label={providerPlan.activo ? `Prueba gratis: quedan ${providerPlan.trialDaysLeft} días. Elegí tu plan` : 'Plan vencido. Elegí tu plan'}
+              >
+                <Crown className="size-3.5 shrink-0" aria-hidden />
+                <span className="truncate">
+                  {providerPlan.activo
+                    ? `Prueba: quedan ${providerPlan.trialDaysLeft ?? 0} día${providerPlan.trialDaysLeft === 1 ? '' : 's'}`
+                    : 'Plan vencido → Elegí tu plan'}
+                </span>
+              </Link>
+            )}
             <button
               onClick={() => navigate('/notificaciones')}
               data-tour="top-notificaciones"
@@ -187,11 +250,10 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
               </div>
             )}
             {items.map((item) => {
-              const active = currentPath === item.to
+              const active = isActivePath(currentPath, item.to)
               const Icon = item.icon
-              // data-tour: ancla estable para el tour guiado (nav-inicio, nav-publicar…)
-              const parts = item.to.split('/').filter(Boolean)
-              const tourKey = parts[0] === 'panel' ? (parts[2] || 'inicio') : parts[0]
+              // data-tour: ancla estable para el tour guiado (nav-inicio, nav-publicar, nav-plan…)
+              const tourKey = tourKeyOf(item.to)
               return (
                 <Link
                   key={item.to}
@@ -218,7 +280,7 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
               )
             })}
             <div className="my-2 h-px bg-[#0a2540]/8" aria-hidden />
-            <Link to="/buscar" className="flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-600 hover:translate-x-0.5 hover:bg-white/70 hover:text-[#0A2540] transition-all duration-300">
+            <Link to="/" className="flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-600 hover:translate-x-0.5 hover:bg-white/70 hover:text-[#0A2540] transition-all duration-300">
               <Home className="size-4.5" aria-hidden /> Ir a la home
             </Link>
           </nav>
@@ -228,38 +290,85 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
         <main id="homy-app-main" className="homy-app-main px-4 py-5 sm:px-6 lg:px-8 lg:pt-7 lg:pb-10 pb-28">{children}</main>
       </div>
 
-      {/* bottom nav mobile — vidrio fuerte flotante */}
+      {/* bottom nav mobile — vidrio fuerte flotante: 4 accesos del rol + "Más" */}
       <nav className="homy-glass-strong lg:hidden fixed bottom-3 inset-x-3 z-40 rounded-[1.65rem] shadow-[0_18px_50px_-18px_rgba(10,37,64,0.45)]" aria-label="Navegación inferior" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        <div className="flex justify-around px-1 py-1">
-          {(items.some((i) => i.m) ? items.filter((i) => i.m) : items).slice(0, 5).map((item) => {
-            const active = currentPath === item.to
+        <div className="grid grid-cols-5 px-1 py-1">
+          {mobilePrimary.map((item) => {
+            const active = isActivePath(currentPath, item.to)
             const Icon = item.icon
-            // ancla para el tour guiado en móvil (la sidebar está oculta acá)
-            const bparts = item.to.split('/').filter(Boolean)
-            const btourKey = bparts[0] === 'panel' ? (bparts[2] || 'inicio') : bparts[0]
+            const isMsgs = item.to.endsWith('/mensajes')
             return (
-              <Link key={item.to} to={item.to} data-tour-m={`nav-${btourKey}`} aria-current={active ? 'page' : undefined} className="relative flex flex-col items-center justify-center rounded-2xl px-2 py-1.5 text-[10px] font-bold min-w-[54px] transition-all duration-300 will-change-transform">
-                <span
-                  aria-hidden
-                  className={`pointer-events-none absolute inset-x-1 inset-y-0.5 rounded-2xl transition-all duration-300 ${
-                    active
-                      ? 'bg-gradient-to-br from-[#1D63B8]/14 to-[#00C4FF]/14 ring-1 ring-[#1D63B8]/25 opacity-100'
-                      : 'opacity-0'
-                  }`}
-                />
-                <Icon className={`relative size-5 transition-all duration-300 ${active ? 'text-[#1D63B8] -translate-y-px' : 'text-slate-400'}`} aria-hidden />
-                <span className={`relative truncate max-w-[66px] transition-colors duration-300 ${active ? 'text-[#1D63B8]' : 'text-slate-400'}`}>{item.label}</span>
-                {item.label === 'Mensajes' && msgUnread > 0 && (
-                  <span className="homy-badge-pop absolute -top-0.5 right-1.5 grid min-w-[16px] h-[16px] place-items-center rounded-full bg-gradient-to-br from-[#FF5A1F] to-[#ff8a3d] px-1 text-[9px] font-extrabold text-white ring-2 ring-white">{msgUnread > 9 ? '9+' : msgUnread}</span>
+              <Link key={item.to} to={item.to} data-tour-m={`nav-${tourKeyOf(item.to)}`} aria-current={active ? 'page' : undefined}
+                aria-label={isMsgs && msgUnread > 0 ? `${item.short || item.label}, ${msgUnread} sin leer` : undefined}
+                className="relative flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-2xl px-0.5 py-1.5 transition-all duration-300">
+                <BottomPill active={active} />
+                <Icon className={`relative size-5 transition-all duration-300 ${active ? 'text-[#1D63B8] -translate-y-px' : 'text-slate-500'}`} aria-hidden />
+                <span className={`relative text-[11px] font-bold leading-tight whitespace-nowrap transition-colors duration-300 ${active ? 'text-[#1D63B8]' : 'text-slate-500'}`}>{item.short || item.label}</span>
+                {isMsgs && msgUnread > 0 && (
+                  <span aria-hidden className="homy-badge-pop absolute top-0.5 right-[18%] grid min-w-[16px] h-[16px] place-items-center rounded-full bg-gradient-to-br from-[#FF5A1F] to-[#ff8a3d] px-1 text-[9px] font-extrabold text-white ring-2 ring-white">{msgUnread > 9 ? '9+' : msgUnread}</span>
                 )}
               </Link>
             )
           })}
+          <button type="button" onClick={() => setMoreOpen(true)} aria-haspopup="dialog" aria-expanded={moreOpen}
+            aria-current={moreActive ? 'page' : undefined} data-tour-m="nav-mas"
+            className="relative flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-2xl px-0.5 py-1.5 transition-all duration-300">
+            <BottomPill active={moreActive || moreOpen} />
+            <MoreHorizontal className={`relative size-5 transition-all duration-300 ${moreActive || moreOpen ? 'text-[#1D63B8]' : 'text-slate-500'}`} aria-hidden />
+            <span className={`relative text-[11px] font-bold leading-tight whitespace-nowrap ${moreActive || moreOpen ? 'text-[#1D63B8]' : 'text-slate-500'}`}>Más</span>
+          </button>
         </div>
       </nav>
+
+      {/* "Más": el resto de las secciones del rol + cerrar sesión (solo móvil) */}
+      <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
+        <SheetContent side="bottom" className="lg:hidden max-h-[85vh] overflow-y-auto rounded-t-[1.75rem] px-4 pt-5" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}>
+          <SheetHeader className="p-0 pr-8 text-left">
+            <SheetTitle className="text-base font-extrabold text-[#0A2540]">Más secciones</SheetTitle>
+            <SheetDescription className="text-xs text-slate-500">
+              {user?.displayName ? `${user.displayName} · ` : ''}{ROLE_LABEL[role] || role}
+            </SheetDescription>
+          </SheetHeader>
+          <ul className="grid grid-cols-2 gap-2">
+            {mobileMore.map((item) => {
+              const active = isActivePath(currentPath, item.to)
+              const Icon = item.icon
+              return (
+                <li key={item.to}>
+                  <Link to={item.to} onClick={() => setMoreOpen(false)} aria-current={active ? 'page' : undefined}
+                    className={`flex min-h-[48px] items-center gap-2.5 rounded-2xl px-3 py-2.5 text-[13px] font-bold transition ${
+                      active ? 'bg-gradient-to-r from-[#1D63B8] to-[#2b7fd0] text-white' : 'homy-glass-soft text-[#0A2540] hover:bg-white/80'
+                    }`}>
+                    <Icon className="size-4.5 shrink-0" aria-hidden />
+                    <span className="min-w-0 leading-snug">{item.label}</span>
+                  </Link>
+                </li>
+              )
+            })}
+            <li>
+              <Link to="/" onClick={() => setMoreOpen(false)}
+                className="homy-glass-soft flex min-h-[48px] items-center gap-2.5 rounded-2xl px-3 py-2.5 text-[13px] font-bold text-[#0A2540] transition hover:bg-white/80">
+                <Home className="size-4.5 shrink-0" aria-hidden /> Ir a la home
+              </Link>
+            </li>
+          </ul>
+          <button type="button" onClick={doLogout}
+            className="mt-1 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50/70 px-4 text-sm font-bold text-red-600 transition hover:bg-red-100">
+            <LogOut className="size-4.5" aria-hidden /> Cerrar sesión
+          </button>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
 
-// helper para los paneles: sirve Wrench en nav de cliente "Publicar"
-export { Wrench } from 'lucide-react'
+function BottomPill({ active }: { active: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={`pointer-events-none absolute inset-x-1 inset-y-0.5 rounded-2xl transition-all duration-300 ${
+        active ? 'bg-gradient-to-br from-[#1D63B8]/14 to-[#00C4FF]/14 ring-1 ring-[#1D63B8]/25 opacity-100' : 'opacity-0'
+      }`}
+    />
+  )
+}

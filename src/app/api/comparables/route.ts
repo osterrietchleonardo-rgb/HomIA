@@ -3,6 +3,7 @@ import { ok } from '@/lib/api'
 import { db } from '@/lib/db'
 import { parseJson } from '@/lib/api'
 import { withinRadius } from '@/lib/geo'
+import { puedeOperar } from '@/lib/plans'
 
 // Comparables de materiales: mismo elemento entre todos los proveedores, ordenado por precio
 export async function GET(req: NextRequest) {
@@ -23,7 +24,8 @@ export async function GET(req: NextRequest) {
     orderBy: { price: 'asc' },
   })
 
-  let matched = stock
+  // proveedores con prueba vencida / sin plan no aparecen en los comparables
+  let matched = stock.filter((s) => puedeOperar(s.provider))
   if (!elementId && q) {
     matched = stock.filter((s) => {
       const hay = [s.element.name, ...parseJson<string[]>(s.element.aliases, []), s.brand || ''].join(' ').toLowerCase()

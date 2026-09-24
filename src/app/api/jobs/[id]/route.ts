@@ -1,13 +1,23 @@
 import { NextRequest } from 'next/server'
 import { ok, fail, body, parseJson } from '@/lib/api'
 import { db } from '@/lib/db'
+import { getSessionUser } from '@/lib/auth'
+
+/** Redondea a 2 decimales (~1 km): ubicación aproximada para anónimos. */
+function coarse(v: number | null | undefined): number | null {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return null
+  return Math.round(v * 100) / 100
+}
 
 // Detalle de trabajo. Público resumido; presupuestos solo del dueño.
+// Sin sesión: sin dirección exacta, lat/lng aproximados y sin datos de contacto
+// del cliente (el detalle público no filtra dónde vive nadie).
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
+  const viewer = await getSessionUser()
   const job = await db.jobPost.findUnique({
     where: { id },
     include: {
@@ -17,6 +27,7 @@ export async function GET(
   })
   if (!job) return fail('Trabajo no encontrado', 404)
   const bids = await db.jobBid.count({ where: { jobId: id } })
+  const isPublic = !viewer
   return ok({
     job: {
       id: job.id,
@@ -26,10 +37,10 @@ export async function GET(
       urgency: job.urgency,
       budgetMin: job.budgetMin,
       budgetMax: job.budgetMax,
-      address: job.address,
+      address: isPublic ? null : job.address,
       city: job.city || job.user.city,
-      lat: job.lat,
-      lng: job.lng,
+      lat: isPublic ? coarse(job.lat) : job.lat,
+      lng: isPublic ? coarse(job.lng) : job.lng,
       photos: parseJson<string[]>(job.photos, []),
       status: job.status,
       createdAt: job.createdAt,
@@ -54,7 +65,6 @@ export async function PATCH(
 ) {
   const { id } = await params
   const { status } = await body<{ status: string }>(req)
-  const { getSessionUser } = await import('@/lib/auth')
   const user = await getSessionUser()
   if (!user) return fail('Necesitás iniciar sesión', 401)
   const job = await db.jobPost.findUnique({ where: { id } })

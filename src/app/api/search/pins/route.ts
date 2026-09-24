@@ -3,6 +3,7 @@ import { ok } from '@/lib/api'
 import { db } from '@/lib/db'
 import { parseJson } from '@/lib/api'
 import { withinRadius } from '@/lib/geo'
+import { puedeOperar } from '@/lib/plans'
 
 // Pines para el mapa de búsqueda: profesionales, trabajos y materiales con coords reales
 export async function GET(req: NextRequest) {
@@ -52,9 +53,10 @@ export async function GET(req: NextRequest) {
       },
       take: 500,
     })
-    let matched = stock
+    // proveedores con prueba vencida / sin plan no aparecen en el mapa
+    let matched = stock.filter((s) => puedeOperar(s.provider))
     if (q) {
-      matched = stock.filter((s) => {
+      matched = matched.filter((s) => {
         const hay = [s.element.name, ...parseJson<string[]>(s.element.aliases, []), s.brand || '', s.provider.businessName].join(' ').toLowerCase()
         return hay.includes(q) || q.split(/\s+/).some((t) => t && hay.includes(t))
       })

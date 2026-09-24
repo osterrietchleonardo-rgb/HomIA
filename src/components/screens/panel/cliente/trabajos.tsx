@@ -1,11 +1,13 @@
 'use client'
 // Mis trabajos (cliente): publicaciones + presupuestos recibidos
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { navigate } from '@/lib/router'
 import { StatusBadge, UrgencyBadge, UAvatar, UStars, Loading } from '@/components/app/ui-bits'
 import { formatARS, formatDate } from '@/lib/format'
 import { toast } from 'sonner'
-import { Plus, Megaphone, Star, BadgeCheck, XCircle, RotateCcw, Clock, FileText, CalendarDays } from 'lucide-react'
+import { apiFetch, NETWORK_ERROR } from '@/lib/api-client'
+import { useCategories, categoryName } from '@/lib/categories'
+import { Plus, Megaphone, Star, BadgeCheck, XCircle, RotateCcw, Clock, FileText, CalendarDays, FolderKanban, RefreshCw, WifiOff } from 'lucide-react'
 
 type Bid = {
   id: string; amount: number; timelineDays: number; message: string | null; status: string; createdAt: string
@@ -18,65 +20,100 @@ type Bid = {
 type Job = {
   id: string; title: string; description: string; status: string; urgency: string; categorySlug: string
   budgetMin: number | null; budgetMax: number | null; createdAt: string
+  selectedBidId?: string | null
   bids: Bid[]
 }
+type ProjectLite = { id: string; jobId: string | null }
 
 const FILTERS = [
   { key: 'todas', label: 'Todas' },
   { key: 'abiertas', label: 'Abiertas' },
+  { key: 'proyecto', label: 'En proyecto' },
   { key: 'cerradas', label: 'Cerradas' },
 ] as const
+type FilterKey = (typeof FILTERS)[number]['key']
+const FILTER_STATUS: Record<Exclude<FilterKey, 'todas'>, string[]> = {
+  abiertas: ['abierto'],
+  proyecto: ['en_proceso'],
+  cerradas: ['cerrado', 'cancelado'],
+}
+const JOB_STATUS_LABEL: Record<string, string> = {
+  abierto: 'abierto', en_proceso: 'en proyecto', cerrado: 'cerrado', cancelado: 'cancelado',
+}
 
-export default function MyJobs() {
+export default function MyJobs({ highlightId }: { highlightId?: string }) {
   const [jobs, setJobs] = useState<Job[]>([])
+  const [projectByJob, setProjectByJob] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [filter, setFilter] = useState<'todas' | 'abiertas' | 'cerradas'>('todas')
+  const [closingId, setClosingId] = useState<string | null>(null)
+  const [filter, setFilter] = useState<FilterKey>('todas')
+  const { categories } = useCategories()
+  const scrolledRef = useRef(false)
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
-    try {
-      const res = await fetch('/api/jobs?mine=1')
-      if (res.ok) setJobs((await res.json()).jobs || [])
-    } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [])
+    setError(null)
+    const [rJ, rP] = await Promise.all([
+      apiFetch<{ jobs: Job[] }>('/api/jobs?mine=1', { silent: true }),
+      apiFetch<{ asClient: ProjectLite[] }>('/api/projects?role=cliente', { silent: true }),
+    ])
+    if (rJ.ok) setJobs(rJ.data?.jobs || [])
+    else setError(rJ.error || NETWORK_ERROR)
+    if (rP.ok) {
+      const map: Record<string, string> = {}
+      for (const p of rP.data?.asClient || []) if (p.jobId && !map[p.jobId]) map[p.jobId] = p.id
+      setProjectByJob(map)
+    }
+    setLoading(false)
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  // llegó desde una notificación (#/panel/cliente/trabajos/<jobId>): resaltar y scrollear
+  useEffect(() => {
+    if (!highlightId || loading || scrolledRef.current) return
+    const el = document.getElementById(`job-${highlightId}`)
+    if (!el) return
+    scrolledRef.current = true
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [highlightId, loading, jobs])
 
   async function decide(bidId: string, action: 'aceptar' | 'rechazar') {
     setBusy(true)
     try {
-      const res = await fetch(`/api/bids/${bidId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
-      })
-      const data = await res.json()
-      if (!res.ok) { toast.error(data.error); return }
-      if (action === 'aceptar' && data.project) {
+      const r = await apiFetch<{ project?: { id: string } }>(`/api/bids/${bidId}`, { method: 'PATCH', json: { action } })
+      if (!r.ok) { if (r.status === 409) load(); return }
+      if (action === 'aceptar' && r.data?.project) {
         toast.success('Presupuesto aceptado → proyecto creado')
-        navigate(`/panel/cliente/proyectos/${data.project.id}`)
+        navigate(`/panel/cliente/proyectos/${r.data.project.id}`)
       } else {
-        toast.success('Listo')
+        toast.success('Presupuesto rechazado')
         load()
       }
     } finally { setBusy(false) }
   }
 
   async function closeJob(jobId: string, status: 'cerrado' | 'abierto') {
-    const res = await fetch(`/api/jobs/${jobId}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }),
-    })
-    if (res.ok) { toast.success(status === 'cerrado' ? 'Publicación cerrada' : 'Reabierta'); load() }
+    if (closingId) return
+    setClosingId(jobId)
+    try {
+      const r = await apiFetch(`/api/jobs/${jobId}`, { method: 'PATCH', json: { status } })
+      if (!r.ok) return
+      toast.success(status === 'cerrado' ? 'Publicación cerrada' : 'Publicación reabierta')
+      load()
+    } finally { setClosingId(null) }
   }
 
   if (loading) return <Loading />
 
-  const counts = {
+  const counts: Record<FilterKey, number> = {
     todas: jobs.length,
-    abiertas: jobs.filter((j) => j.status === 'abierto').length,
-    cerradas: jobs.filter((j) => j.status === 'cerrado').length,
+    abiertas: jobs.filter((j) => FILTER_STATUS.abiertas.includes(j.status)).length,
+    proyecto: jobs.filter((j) => FILTER_STATUS.proyecto.includes(j.status)).length,
+    cerradas: jobs.filter((j) => FILTER_STATUS.cerradas.includes(j.status)).length,
   }
-  const visible = filter === 'todas' ? jobs : jobs.filter((j) => j.status === (filter === 'abiertas' ? 'abierto' : 'cerrado'))
+  const visible = filter === 'todas' ? jobs : jobs.filter((j) => FILTER_STATUS[filter].includes(j.status))
 
   return (
     <div className="homy-page">
@@ -91,7 +128,14 @@ export default function MyJobs() {
         </button>
       </header>
 
-      {jobs.length === 0 ? (
+      {error ? (
+        <div className="homy-empty homy-glass-soft border border-dashed border-red-300/60" role="alert">
+          <span className="homy-empty-icon homy-chip-orange" aria-hidden><WifiOff className="size-6" /></span>
+          <h3 className="font-extrabold tracking-tight text-[#0A2540]">No pudimos cargar tus trabajos</h3>
+          <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-slate-500">{error}</p>
+          <button onClick={load} className="homy-btn-dark mt-5 px-5 py-3 text-sm sm:py-2.5"><RefreshCw className="size-4" aria-hidden /> Reintentar</button>
+        </div>
+      ) : jobs.length === 0 ? (
         <div className="homy-empty homy-glass-soft border border-dashed border-[#0A2540]/12">
           <span className="homy-empty-icon homy-chip-orange" aria-hidden><Megaphone className="size-6" /></span>
           <h3 className="font-extrabold tracking-tight text-[#0A2540]">Todavía no publicaste trabajos</h3>
@@ -110,14 +154,23 @@ export default function MyJobs() {
           </div>
 
           <div className="space-y-4 homy-stagger">
-            {visible.map((job) => (
-              <article key={job.id} className="homy-glass homy-card-glow overflow-hidden rounded-3xl">
+            {visible.length === 0 && (
+              <div className="homy-glass-soft rounded-2xl border border-dashed border-[#0A2540]/12 p-5 text-sm text-slate-500">
+                No tenés publicaciones en este filtro.
+              </div>
+            )}
+            {visible.map((job) => {
+              const projectId = projectByJob[job.id]
+              const highlighted = highlightId === job.id
+              return (
+              <article key={job.id} id={`job-${job.id}`}
+                className={`homy-glass homy-card-glow overflow-hidden rounded-3xl scroll-mt-4 ${highlighted ? 'ring-2 ring-[#00C4FF] ring-offset-2 ring-offset-transparent' : ''}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#0A2540]/5 p-5 sm:p-6">
                   <div className="min-w-0 flex-1">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <StatusBadge status={job.status} />
+                      <StatusBadge status={job.status} label={JOB_STATUS_LABEL[job.status]} />
                       <UrgencyBadge urgency={job.urgency} />
-                      <span className="text-[0.68rem] font-bold uppercase tracking-[0.09em] text-[#1D63B8]">{job.categorySlug}</span>
+                      <span className="text-[0.68rem] font-bold uppercase tracking-[0.09em] text-[#1D63B8]">{categoryName(categories, job.categorySlug)}</span>
                       <span className="homy-pill">
                         <FileText className="size-3 text-[#1D63B8]" aria-hidden />
                         {job.bids.length} presupuesto{job.bids.length === 1 ? '' : 's'}
@@ -132,15 +185,28 @@ export default function MyJobs() {
                       ) : null}
                     </p>
                   </div>
-                  {job.status === 'abierto' && job.bids.length > 0 && (
-                    <button onClick={() => closeJob(job.id, 'cerrado')} className="homy-glass-soft homy-focus inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-slate-500 transition hover:text-red-500">
-                      <XCircle className="size-3.5" aria-hidden /> Cerrar
+                  {job.status === 'abierto' && (
+                    <button onClick={() => closeJob(job.id, 'cerrado')} disabled={closingId === job.id}
+                      className="homy-glass-soft homy-focus inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold text-slate-500 transition hover:text-red-500 disabled:opacity-50">
+                      <XCircle className="size-3.5" aria-hidden /> {closingId === job.id ? 'Cerrando…' : 'Cerrar'}
                     </button>
                   )}
                   {job.status === 'cerrado' && (
-                    <button onClick={() => closeJob(job.id, 'abierto')} className="homy-glass-soft homy-focus inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-[#1D63B8] transition hover:text-[#0A2540]">
-                      <RotateCcw className="size-3.5" aria-hidden /> Reabrir
+                    <button onClick={() => closeJob(job.id, 'abierto')} disabled={closingId === job.id}
+                      className="homy-glass-soft homy-focus inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold text-[#1D63B8] transition hover:text-[#0A2540] disabled:opacity-50">
+                      <RotateCcw className="size-3.5" aria-hidden /> {closingId === job.id ? 'Reabriendo…' : 'Reabrir'}
                     </button>
+                  )}
+                  {job.status === 'en_proceso' && (
+                    projectId ? (
+                      <button onClick={() => navigate(`/panel/cliente/proyectos/${projectId}`)} className="homy-btn-primary min-h-[40px] px-4 py-2 text-xs">
+                        <FolderKanban className="size-3.5" aria-hidden /> Ver proyecto
+                      </button>
+                    ) : (
+                      <button onClick={() => navigate('/panel/cliente/proyectos')} className="homy-glass-soft homy-focus inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-3.5 text-xs font-bold text-[#1D63B8]">
+                        <FolderKanban className="size-3.5" aria-hidden /> Ver proyectos
+                      </button>
+                    )
                   )}
                 </div>
                 <div className="divide-y divide-[#0A2540]/5">
@@ -190,7 +256,8 @@ export default function MyJobs() {
                   )}
                 </div>
               </article>
-            ))}
+              )
+            })}
           </div>
         </>
       )}

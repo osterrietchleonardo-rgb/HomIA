@@ -4,9 +4,9 @@ import { BadgeCheck, Recycle, ShieldCheck, Star } from "lucide-react";
 import { HeroSearch } from "@/components/home/hero-search";
 
 const TRUST_CHIPS = [
-  { icon: ShieldCheck, label: "Pagos protegidos con escrow" },
+  { icon: ShieldCheck, label: "Pagás al finalizar: Mercado Pago o efectivo" },
   { icon: BadgeCheck, label: "Profesionales verificados" },
-  { icon: Recycle, label: "Sobrantes devueltos y reembolsados" },
+  { icon: Recycle, label: "Devolvé los sobrantes al local" },
   { icon: Star, label: "Reseñas 360°" },
 ];
 
@@ -50,9 +50,9 @@ export function Hero() {
 
           <p className="mt-6 max-w-2xl text-pretty text-base leading-relaxed text-navy/60 sm:text-lg">
             Contale qué necesitás, en tus palabras. Los agentes de HomIA
-            encuentran al profesional verificado, arman el presupuesto completo
-            —mano de obra y materiales— y cuidan tu pago hasta que estés
-            conforme.
+            encuentran al profesional con DNI verificado y reseñas reales, arman
+            el presupuesto completo —mano de obra y materiales— y vos pagás al
+            finalizar, por Mercado Pago o en efectivo.
           </p>
 
           {/* Barra de búsqueda con Homy */}

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { ok, parseJson } from '@/lib/api'
 import { db } from '@/lib/db'
 import { PROVIDER_KINDS } from '@/lib/search-match'
+import { puedeOperar } from '@/lib/plans'
 
 // Directorio HomIA: todos los profesionales y proveedores registrados,
 // ordenables por reseñas/rating/trabajos y filtrables por rubro, rating
@@ -129,7 +130,8 @@ export async function GET(req: NextRequest) {
       if (s.element?.category?.slug) acc.cats.add(s.element.category.slug)
       stockMap.set(s.providerId, acc)
     }
-    provs = rows.map((p) => {
+    // proveedores con prueba vencida / sin plan no figuran en el directorio
+    provs = rows.filter((p) => puedeOperar(p)).map((p) => {
       const acc = stockMap.get(p.id) || { n: 0, sum: 0, cats: new Set<string>() }
       return {
         kind: 'proveedor' as const,

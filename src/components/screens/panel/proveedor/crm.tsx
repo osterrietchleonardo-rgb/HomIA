@@ -10,6 +10,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Plus, ChevronLeft, ChevronRight, Trash2, UserRound, Handshake } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 type Stage = { id: string; name: string; color: string; sortOrder: number }
 
@@ -255,10 +256,16 @@ export default function ProviderCRM() {
             </div>
             <div>
               <label htmlFor="deal-stage" className="text-[13px] font-bold text-[#0A2540]">Etapa</label>
-              <select id="deal-stage" value={stageId || stages[0]?.id || ''} onChange={(e) => setStageId(e.target.value)}
-                className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-3 min-h-[44px] text-sm">
-                {stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <div className="mt-1.5">
+                <Select value={stageId || stages[0]?.id || ''} onValueChange={setStageId}>
+                  <SelectTrigger id="deal-stage" className="homy-glass-input w-full rounded-xl px-3 py-3 min-h-[44px] text-sm border-none">
+                    <SelectValue placeholder="Elegí una etapa…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stages.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

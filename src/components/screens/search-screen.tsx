@@ -45,6 +45,7 @@ type AgentReply = {
   results?: { professionals?: ProResult[]; jobs?: JobResult[]; materials?: MaterialResult[]; comparables?: MaterialResult[]; elements?: ElementResult[] }
   steps?: { thought: string; action: string; found: number }[]
   error?: string
+  needsLogin?: boolean
 }
 
 const CATEGORY_TABS = [
@@ -87,6 +88,8 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [steps, setSteps] = useState<{ thought: string; action: string; found: number }[]>([])
+  // la IA pidió login: se muestra el gate honesto (la búsqueda directa sigue funcionando)
+  const [loginGate, setLoginGate] = useState(false)
   const [showMap, setShowMap] = useState(true)
   const convRef = useRef<{ role: 'user' | 'homy'; content: string }[]>([])
 
@@ -134,10 +137,21 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
         }),
       })
       const data: AgentReply = await res.json()
+      if (res.status === 401 && data.needsLogin) {
+        // Homy (IA) es para usuarios registrados: gate honesto, sin inventar respuesta
+        setLoginGate(true)
+        setAiMessage('Para usar Homy creá tu cuenta gratis (1 minuto). Mientras tanto, abajo tenés los resultados reales de tu búsqueda.')
+        setSuggestions([])
+        setQuestion(null)
+        setSteps([])
+        setAiState('idle')
+        return
+      }
       if (!data.ok) {
         toast.error(data.error || 'El superagente no pudo responder')
         return
       }
+      setLoginGate(false)
       setSessionId((data as unknown as { sessionId?: string }).sessionId || sessionId)
       setAiMessage(data.message)
       setSuggestions(data.suggestions || [])
@@ -192,7 +206,7 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
           contenido que scrollea por detrás no se meta con la lectura).
           En el app-shell el topbar vive FUERA del scroller: top-0 ancla el
           header al borde visible del marco, igual que .homy-page-head. */}
-      <header className="homy-glass-dark sticky top-0 z-40 overflow-hidden">
+      <header className={`homy-glass-dark sticky ${embedded ? 'top-0' : 'top-20'} z-40 overflow-hidden`}>
         <span
           aria-hidden
           className="pointer-events-none absolute inset-0"
@@ -315,6 +329,22 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
               <div className="flex-1 min-w-0">
                 <p className="homy-eyebrow mb-1.5">Superagente Homy</p>
                 {aiMessage && <p className="text-[#0A2540] leading-relaxed font-medium">{aiMessage}</p>}
+                {loginGate && (
+                  <div className="mt-3.5 flex flex-col gap-2 sm:flex-row">
+                    <button
+                      onClick={() => navigate(`/registrarse?volver=${encodeURIComponent(route.raw || '/buscar')}`)}
+                      className="homy-btn-primary homy-focus min-h-[44px] px-5 py-2.5 text-sm"
+                    >
+                      <Lock className="size-4" aria-hidden /> Crear cuenta gratis
+                    </button>
+                    <button
+                      onClick={() => navigate(`/ingresar?volver=${encodeURIComponent(route.raw || '/buscar')}`)}
+                      className="homy-btn-dark homy-focus min-h-[44px] px-5 py-2.5 text-sm"
+                    >
+                      Ya tengo cuenta
+                    </button>
+                  </div>
+                )}
                 {question && !questionDuplicatesMessage && (
                   <div className="mt-4">
                     <p className="font-bold text-[#0A2540]">{question.pregunta}</p>

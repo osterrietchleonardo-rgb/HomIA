@@ -128,7 +128,7 @@ export default function ProProfileScreen({ id }: { id: string }) {
         <span aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(58% 90% at 88% -10%, rgba(0,196,255,0.18) 0%, transparent 62%), radial-gradient(45% 70% at -5% 110%, rgba(255,90,31,0.14) 0%, transparent 55%)' }} />
         <div className="relative max-w-4xl mx-auto pt-6 pb-14 sm:pb-16 px-4">
           <div className="mb-5 -ml-3.5">
-            <button onClick={() => navigate('/buscar?mode=cliente')} className="homy-focus inline-flex items-center gap-1.5 rounded-full min-h-[44px] px-4 text-slate-300 hover:text-white text-sm font-semibold bg-white/[0.06] hover:bg-white/10 border border-white/10 transition">
+            <button onClick={() => { if (window.history.length > 1) window.history.back(); else navigate('/directorio') }} className="homy-focus inline-flex items-center gap-1.5 rounded-full min-h-[44px] px-4 text-slate-300 hover:text-white text-sm font-semibold bg-white/[0.06] hover:bg-white/10 border border-white/10 transition">
               <ChevronLeft className="size-4" aria-hidden /> Volver
             </button>
           </div>
@@ -142,9 +142,6 @@ export default function ProProfileScreen({ id }: { id: string }) {
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
                 <VerifyBadge status={p.verificationStatus} dark compact={false} />
                 {p.personType === 'empresa' && <span className="homy-pill text-[#0A2540]">Empresa</span>}
-                {p.subscription === 'pro' && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[#FFC700]/15 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-widest text-[#FFC700] ring-1 ring-[#FFC700]/40">PRO</span>
-                )}
               </div>
               <p className="text-[#66DFFF] capitalize text-sm font-semibold mt-1">{p.professions.join(' · ') || 'Profesional'}</p>
               <div className="flex items-center gap-2 mt-2.5">

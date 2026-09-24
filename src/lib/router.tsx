@@ -31,16 +31,22 @@ export function navigate(to: string, opts?: { replace?: boolean }) {
   // Navegación real al catch-all ([[...slug]]), que arranca la SPA y hace el
   // redirect pathname→hash. Aplica a CTAs del header/footer/hero de la home.
   // (La SPA nunca corre con pathname '/': esa ruta es de page.tsx.)
-  if (typeof window !== 'undefined' && window.location.pathname === '/') {
+  if (typeof window !== 'undefined' && window.location.pathname === '/' && !window.location.hash && !opts?.replace) {
+    // Navigating from home to a hash for the first time
     window.location.assign(to.startsWith('/') ? to : `/${to}`)
     return
   }
   const target = `#${to.startsWith('/') ? to : `/${to}`}`
   if (opts?.replace) {
-    window.history.replaceState(null, '', target)
+    window.history.replaceState(null, '', `/${target}`)
     window.dispatchEvent(new HashChangeEvent('hashchange'))
   } else {
-    window.location.hash = target
+    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+      window.history.pushState(null, '', `/${target}`)
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    } else {
+      window.location.hash = target
+    }
   }
   // App-shell: el panel scrollea dentro de #homy-app-main, no en la ventana.
   // Toda navegación arranca desde arriba en ambos contenedores.

@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import ZAI from "@/lib/ai";
 import { HomyReplySchema, type HomyReply } from "@/lib/homy";
+import { getSessionUser } from "@/lib/auth";
 
 export const runtime = "nodejs";
+// Llamada a IA: margen de ejecución en serverless.
+export const maxDuration = 60;
 
 const BodySchema = z.object({
   message: z.string().min(1).max(600),
@@ -31,7 +34,7 @@ Reglas:
 - "summary": el pedido resumido en menos de 12 palabras.
 - "suggestions": exactamente 3 frases cortas (máximo 8 palabras cada una) que el usuario podría querer pedirte a continuación.
 - Si el mensaje no tiene que ver con el hogar, redirigí con amabilidad dentro de "message", usá category "otro" y urgency "baja".
-- Si preguntan qué es HomIA, explicalo en "message" con simpleza: conecta clientes con profesionales verificados, presupuestos integrales de mano de obra y materiales, pagos protegidos y devolución de sobrantes.`;
+- Si preguntan qué es HomIA, explicalo en "message" con simpleza: conecta clientes con profesionales verificados, presupuestos integrales de mano de obra y materiales, pago al finalizar por Mercado Pago o efectivo, y devolución de sobrantes al local del proveedor.`;
 
 function fallbackReply(): HomyReply {
   return {
@@ -65,6 +68,16 @@ function extractJson(raw: string): unknown {
 }
 
 export async function POST(request: NextRequest) {
+  // Homy consume IA paga: solo usuarios logueados (el widget de la home pide
+  // login con un gate honesto; el hero anónimo usa /api/search sin IA).
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json(
+      { ok: false, error: "Iniciá sesión para hablar con Homy", needsLogin: true },
+      { status: 401, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();

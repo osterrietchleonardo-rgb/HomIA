@@ -51,7 +51,7 @@ export function ProfileGate({ path, kind }: { path: string; kind?: string }) {
             </button>
           </div>
           <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-[11px] font-bold text-slate-400" aria-label="Confianza HomIA">
-            <li className="flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-[#1D63B8]" aria-hidden />Escrow</li>
+            <li className="flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-[#1D63B8]" aria-hidden />Pago con Mercado Pago o efectivo</li>
             <li className="flex items-center gap-1.5"><BadgeCheck className="size-3.5 text-[#0e9f6e]" aria-hidden />Verificación</li>
             <li className="flex items-center gap-1.5"><Sparkles className="size-3.5 text-[#0092c4]" aria-hidden />IA</li>
           </ul>

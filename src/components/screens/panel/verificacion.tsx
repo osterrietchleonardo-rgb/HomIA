@@ -7,13 +7,18 @@ import { useEffect, useRef, useState } from 'react'
 import { useSession } from '@/lib/store'
 import { Loading, EmptyState, VerifyBadge } from '@/components/app/ui-bits'
 import { toast } from 'sonner'
-import { navigate } from '@/lib/router'
+import { navigate, useRoute } from '@/lib/router'
 import {
   ShieldCheck, ShieldQuestion, ShieldX, IdCard, UploadCloud, ScanFace, BadgeCheck,
   ArrowRight, CheckCircle2, AlertTriangle, Sparkles,
 } from 'lucide-react'
 
-type Verdict = { esDocumento: boolean; pareceReal: boolean; legible: boolean; mismoTitular: boolean; tipo: string; confianza: number; motivo: string } | null
+type Verdict = {
+  esDocumento: boolean; pareceReal: boolean; legible: boolean
+  mismoTitular: boolean | null // null → el modelo no lo afirmó
+  tipo: string; confianza: number; motivo: string
+  nombreDetectado?: string | null; dniDetectado?: string | null
+} | null
 type Doc = {
   id: string; frontUrl: string | null; backUrl: string | null; status: string
   aiNotes: string | null; aiScore: number | null; aiVerdict: Verdict; createdAt: string
@@ -74,7 +79,8 @@ export function VerificationPrompt({ role }: { role: string }) {
 }
 
 export default function VerificationScreen() {
-  const { user } = useSession()
+  const { user, refresh } = useSession()
+  const route = useRoute()
   const [data, setData] = useState<VerificationData | null>(null)
   const [loading, setLoading] = useState(true)
   const [front, setFront] = useState<string | null>(null)
@@ -101,8 +107,9 @@ export default function VerificationScreen() {
       fd.append('file', file)
       fd.append('folder', 'dni')
       const res = await fetch('/api/uploads', { method: 'POST', body: fd })
-      const d = await res.json()
-      if (!res.ok) { toast.error(d.error); return }
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error ?? 'No pudimos subir la foto, probá de nuevo'); return }
+      // d.url = "dni-docs/<userId>/dni/<archivo>" (path privado que espera POST /api/verification/dni)
       if (slot === 'front') setFront(d.url)
       else setBack(d.url)
       toast.success(slot === 'front' ? 'Frente listo' : 'Dorso listo')
@@ -119,18 +126,22 @@ export default function VerificationScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ frontUrl: front, backUrl: back }),
       })
-      const d = await res.json()
-      if (!res.ok) { toast.error(d.error); return }
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error ?? 'No pudimos procesar el documento, probá de nuevo'); return }
       setResult(d)
       toast.success('Análisis de IA terminado')
       const refreshed = await fetch('/api/verification/dni')
       if (refreshed.ok) setData(await refreshed.json())
       setFront(null); setBack(null)
+      // el badge del header/topbar sale de la sesión: refrescarla con el dictamen
+      await refresh()
     } finally { setAnalyzing(false) }
   }
 
   if (loading) return <div className="homy-page"><Loading /></div>
-  const role = user?.roles?.[0] || 'cliente'
+  // rol del panel actual (/panel/<rol>/verificacion), no el primero de la lista
+  const routeRole = route.segments[0] === 'panel' ? route.segments[1] : undefined
+  const role = routeRole && ['cliente', 'profesional', 'proveedor'].includes(routeRole) ? routeRole : (user?.roles?.[0] || 'cliente')
   const status = data?.verificationStatus || 'none'
   const copy = STATUS_COPY[status] || STATUS_COPY.none
   const doc = data?.document
@@ -191,8 +202,9 @@ export default function VerificationScreen() {
                   </span>
                 )}
                 {doc.aiVerdict.mismoTitular !== undefined && (
-                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10.5px] font-bold ${doc.aiVerdict.mismoTitular ? 'bg-[#0e9f6e]/10 text-[#0e9f6e]' : 'bg-red-500/10 text-red-600'}`}>
-                    {doc.aiVerdict.mismoTitular ? <CheckCircle2 className="size-3" aria-hidden /> : <AlertTriangle className="size-3" aria-hidden />} Datos consistentes frente/dorso
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10.5px] font-bold ${doc.aiVerdict.mismoTitular === true ? 'bg-[#0e9f6e]/10 text-[#0e9f6e]' : doc.aiVerdict.mismoTitular === false ? 'bg-red-500/10 text-red-600' : 'bg-[#FFC700]/12 text-[#8a6d00]'}`}>
+                    {doc.aiVerdict.mismoTitular === true ? <CheckCircle2 className="size-3" aria-hidden /> : <AlertTriangle className="size-3" aria-hidden />}
+                    {doc.aiVerdict.mismoTitular === null ? 'Datos frente/dorso sin confirmar' : 'Datos consistentes frente/dorso'}
                   </span>
                 )}
                 <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10.5px] font-bold ${doc.aiVerdict.pareceReal ? 'bg-[#0e9f6e]/10 text-[#0e9f6e]' : 'bg-[#FFC700]/12 text-[#8a6d00]'}`}>
@@ -237,10 +249,12 @@ export default function VerificationScreen() {
                   className={`homy-focus group relative flex h-40 w-full items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition ${value ? 'border-[#0e9f6e]/40' : 'border-[#0A2540]/15 hover:border-[#1D63B8]/45 hover:bg-white/60'}`}
                 >
                   {value ? (
-                    <>
-                      <img src={value} alt={`Foto del ${label} del DNI`} className="absolute inset-0 h-full w-full object-cover" />
-                      <span className="absolute bottom-2 right-2 rounded-full bg-[#0A2540]/75 px-2.5 py-1 text-[10px] font-bold text-white">Tocá para cambiar</span>
-                    </>
+                    // la foto queda en un bucket privado (sin URL pública): se confirma sin previsualizar
+                    <span className="flex flex-col items-center gap-2 p-4 text-center">
+                      <CheckCircle2 className="size-7 text-[#0e9f6e]" aria-hidden />
+                      <span className="text-[13px] font-bold text-[#0e9f6e]">{label} listo</span>
+                      <span className="text-[11px] font-semibold text-slate-400">Tocá para cambiar</span>
+                    </span>
                   ) : (
                     <span className="flex flex-col items-center gap-2 p-4 text-center">
                       <ScanFace className="size-7 text-slate-300 transition group-hover:text-[#1D63B8]" aria-hidden />
@@ -249,7 +263,7 @@ export default function VerificationScreen() {
                   )}
                 </button>
                 <input
-                  ref={ref} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                  ref={ref} type="file" accept="image/*" className="hidden"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f, slot) }}
                 />
               </div>

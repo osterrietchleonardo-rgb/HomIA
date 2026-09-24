@@ -1116,6 +1116,46 @@
   transform: translateY(0) scale(0.98);
 }
 
+/* Botón fantasma (secundario): mismo tamaño que .homy-btn-dark, sin relleno */
+.homy-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  font-weight: 700;
+  color: #0a2540;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgba(10, 37, 64, 0.15);
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+.homy-btn-ghost:hover {
+  background-color: rgba(10, 37, 64, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(10, 37, 64, 0.25);
+}
+.homy-btn-ghost:active {
+  transform: scale(0.98);
+}
+.homy-btn-ghost:focus-visible {
+  outline: 2px solid #1d63b8;
+  outline-offset: 2px;
+}
+/* Sobre vidrio nocturno (.homy-glass-dark) el fantasma pasa a blanco */
+.homy-glass-dark .homy-btn-ghost {
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+.homy-glass-dark .homy-btn-ghost:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+.homy-glass-dark .homy-btn-ghost:focus-visible {
+  outline-color: #00c4ff;
+}
+
 /* Chip de icono: azulejo de gradiente para lucide icons */
 .homy-icon-chip {
   display: grid;

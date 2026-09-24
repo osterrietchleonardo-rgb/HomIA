@@ -45,8 +45,8 @@ const FEATURES = [
   {
     icon: ShieldCheck,
     tag: null,
-    title: "Tu dinero, protegido",
-    body: "El pago queda retenido en escrow y se libera recién cuando aprobás el trabajo terminado. La tranquilidad de pagar con garantía real.",
+    title: "Pagás al finalizar",
+    body: "Aprobás el presupuesto y pagás recién cuando el trabajo está terminado, por Mercado Pago o en efectivo. Sin adelantos ni intermediarios: el dinero va directo a quien hizo el trabajo.",
     accent: "text-tech",
     chip: "homy-chip-mint",
     glow: "group-hover:shadow-[0_24px_54px_-20px_rgba(29,99,184,0.4)]",
@@ -55,8 +55,8 @@ const FEATURES = [
   {
     icon: Recycle,
     tag: "Circular",
-    title: "Logística inversa de sobrantes",
-    body: "¿Sobró pintura, caños o cables? Se marcan en la app, el proveedor los recibe de vuelta y tu reembolso se procesa automáticamente.",
+    title: "Devolvé los sobrantes al local",
+    body: "¿Sobró pintura, caños o cables? Los cargás en la app con foto y cantidad, el proveedor los acepta y los acercás al local. Si pagaste con Mercado Pago, el reembolso vuelve solo a tu medio de pago; si pagaste en efectivo, te lo devuelven en el mostrador.",
     accent: "text-action",
     chip: "homy-chip-orange",
     glow: "group-hover:shadow-[0_24px_54px_-20px_rgba(255,90,31,0.4)]",
@@ -85,7 +85,7 @@ export function Features() {
         <SectionHeading
           kicker="Beneficios"
           title="La seriedad de un servicio profesional, con la inteligencia de la IA."
-          description="Cada detalle de HomIA está pensado para que confiar sea lo más fácil: tecnología que trabaja, reglas claras y tu dinero siempre protegido."
+          description="Cada detalle de HomIA está pensado para que confiar sea lo más fácil: tecnología que trabaja, reglas claras y pagos sin vueltas."
         />
 
         <div className="mt-16 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">

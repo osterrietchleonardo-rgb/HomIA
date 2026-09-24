@@ -6,17 +6,19 @@ import { StatusBadge, Loading, AutoFitValue } from '@/components/app/ui-bits'
 import { formatARS, timeAgo } from '@/lib/format'
 import {
   Search, Boxes, Users, ArrowRight, BriefcaseBusiness, ClipboardPen,
-  FolderKanban, Star, Package, HardHat, Zap, LayoutGrid, MapPin,
+  FolderKanban, Star, Package, HardHat, Zap, LayoutGrid, MapPin, RefreshCw, WifiOff,
 } from 'lucide-react'
 import { VerificationPrompt } from '../verificacion'
-import OnboardingCard, { type OnboardingTask } from '../onboarding-card'
+import OnboardingCard, { isOnboardingDismissed, type OnboardingTask } from '../onboarding-card'
 import { useSession } from '@/lib/store'
+import { apiFetch, NETWORK_ERROR } from '@/lib/api-client'
 
 type Project = {
   id: string; title: string; status: string; stage: string
   laborCost: number; materialsCost: number; materialsPending: number; updatedAt: string
 }
 type SearchJob = { id: string; title: string; categorySlug: string; urgency: string; budgetMin: number | null; budgetMax: number | null; bidsCount: number; city: string | null; clientName: string }
+type MyBid = { id: string; amount: number; status: string; createdAt: string; job: { id: string; title: string } }
 
 export default function ProDashboard() {
   const { user } = useSession()
@@ -26,37 +28,57 @@ export default function ProDashboard() {
   const [rating, setRating] = useState(0)
   const [profileBio, setProfileBio] = useState<string | null>(null)
   const [worksCount, setWorksCount] = useState<number | null>(null)
+  const [bids, setBids] = useState<MyBid[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [checklistHidden, setChecklistHidden] = useState(() => isOnboardingDismissed('profesional'))
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [resP, resS, resMe] = await Promise.all([
-          fetch('/api/projects'),
-          fetch('/api/search?mode=profesional'),
-          fetch('/api/profiles/me'),
-        ])
-        if (resP.ok) setProjects((await resP.json()).asPro || [])
-        if (resS.ok) setJobs((await resS.json()).jobs || [])
-        if (resMe.ok) {
-          const me = await resMe.json()
-          const pro = me.user?.professional
-          if (pro) {
-            try { setMyProfessions(JSON.parse(pro.professions || '[]')) } catch { /* professions vacío */ }
-            setRating(pro.rating || 0)
-            setProfileBio(pro.bio || null)
-          }
-        }
+  async function load() {
+    setLoading(true)
+    setError(null)
+    try {
+      const [rP, rS, rMe, rB, rW] = await Promise.all([
+        apiFetch<{ asPro: Project[] }>('/api/projects?role=profesional', { silent: true }),
+        apiFetch<{ jobs: SearchJob[] }>('/api/search?mode=profesional', { silent: true }),
+        apiFetch<{ user?: { professional?: { professions?: string | string[]; rating?: number; bio?: string | null } } }>('/api/profiles/me', { silent: true }),
+        apiFetch<{ bids: MyBid[] }>('/api/bids?mine=1', { silent: true }),
         // guía: obras cargadas (para el checklist)
-        const resW = await fetch('/api/works')
-        if (resW.ok) setWorksCount(((await resW.json()).works || []).length)
-      } finally { setLoading(false) }
-    })()
-  }, [])
+        apiFetch<{ works: unknown[] }>('/api/works', { silent: true }),
+      ])
+      if (!rP.ok || !rB.ok) { setError(rP.error || rB.error || NETWORK_ERROR); return }
+      setProjects(rP.data?.asPro || [])
+      setBids(rB.data?.bids || [])
+      if (rS.ok) setJobs(rS.data?.jobs || [])
+      const pro = rMe.ok ? rMe.data?.user?.professional : null
+      if (pro) {
+        try { setMyProfessions(Array.isArray(pro.professions) ? pro.professions : JSON.parse(pro.professions || '[]')) } catch { /* professions vacío */ }
+        setRating(pro.rating || 0)
+        setProfileBio(pro.bio || null)
+      }
+      if (rW.ok) setWorksCount((rW.data?.works || []).length)
+    } finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, [])
 
   if (loading) return <Loading />
+  if (error) {
+    return (
+      <div className="homy-page">
+        <div className="homy-empty homy-glass-soft border border-dashed border-red-300/60" role="alert">
+          <span className="homy-empty-icon homy-chip-orange" aria-hidden><WifiOff className="size-7" /></span>
+          <h3 className="font-bold text-[#0A2540] text-lg tracking-tight">No pudimos cargar tu panel</h3>
+          <p className="text-sm text-slate-500 mt-1.5 max-w-md leading-relaxed">{error}</p>
+          <div className="mt-5">
+            <button onClick={load} className="homy-btn-dark min-h-[44px] px-5 py-2.5 text-sm"><RefreshCw className="size-4" aria-hidden /> Reintentar</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
-  const quotesSent = projects.filter((p) => p.stage === 'presupuesto' && p.status !== 'cancelado')
+  // ofertas reales de la bolsa (JobBid), no proyectos
+  const pendingBids = bids.filter((b) => b.status === 'pendiente')
+  const quotesSent = projects.filter((p) => p.stage === 'presupuesto' && p.status === 'activo')
   const active = projects.filter((p) => p.status === 'activo')
   const toApprove = projects.filter((p) => p.materialsPending > 0 && p.status === 'activo')
   const inMyField = myProfessions.length > 0 ? jobs.filter((j) => myProfessions.includes(j.categorySlug)) : jobs
@@ -89,14 +111,15 @@ export default function ProDashboard() {
     {
       id: 'bids', label: 'Enviá tu primer presupuesto',
       desc: 'Mirá la bolsa de trabajos y respondé a un cliente: los clientes escriben primero, vos respondés con tu precio.',
-      done: quotesSent.length > 0 || projects.length > 0, href: '/panel/profesional/bolsa', cta: 'Ver bolsa de trabajos',
+      done: bids.length > 0, href: '/panel/profesional/bolsa', cta: 'Ver bolsa de trabajos',
     },
   ]
 
   return (
     <div className="homy-page">
-      <VerificationPrompt role="profesional" />
-      <OnboardingCard role="profesional" tasks={onboardingTasks} />
+      {/* un solo aviso de verificación: si el checklist está visible ya lo incluye */}
+      {checklistHidden && <VerificationPrompt role="profesional" />}
+      <OnboardingCard role="profesional" tasks={onboardingTasks} onDismiss={() => setChecklistHidden(true)} />
       {/* Encabezado */}
       <header className="homy-page-head">
         <div className="min-w-0">
@@ -111,10 +134,13 @@ export default function ProDashboard() {
 
       {/* KPIs */}
       <div className="homy-stagger grid grid-cols-2 lg:grid-cols-4 gap-3 mb-7">
-        <Kpi
-          glow="#1D63B8" valueColor="#1D63B8" chip="homy-chip-blue" icon={<ClipboardPen />}
-          label="Presupuestos enviados" value={String(quotesSent.length)} hint="esperando respuesta"
-        />
+        <button type="button" onClick={() => navigate('/panel/profesional/presupuestos')} className="homy-focus rounded-3xl text-left">
+          <Kpi
+            glow="#1D63B8" valueColor="#1D63B8" chip="homy-chip-blue" icon={<ClipboardPen />}
+            label="Presupuestos enviados" value={String(pendingBids.length)}
+            hint={bids.length > 0 ? `pendientes · ${bids.length} en total` : 'todavía no ofertaste'}
+          />
+        </button>
         <Kpi
           glow="#10B981" chip="homy-chip-mint" icon={<FolderKanban />}
           label="Proyectos activos" value={String(active.length)}
@@ -146,8 +172,10 @@ export default function ProDashboard() {
           {actions.length === 0 ? (
             <Empty
               icon={<BriefcaseBusiness className="size-7" />}
-              title="Todo al día, campeón"
-              hint="Cuando envíes presupuestos o propongas materiales, vas a ver acá lo que necesita tu atención."
+              title="Todo al día"
+              hint={pendingBids.length > 0
+                ? `Tenés ${pendingBids.length} oferta${pendingBids.length === 1 ? '' : 's'} esperando respuesta del cliente. Las seguís en Mis ofertas.`
+                : 'Cuando tengas proyectos en curso o materiales por aprobar, vas a ver acá lo que necesita tu atención.'}
             />
           ) : (
             <div className="homy-stagger space-y-2">

@@ -97,6 +97,13 @@ export async function POST(req: NextRequest) {
   if (!d.title || !d.description || !d.categorySlug) {
     return fail('Título, descripción y categoría son obligatorios')
   }
+  const bMin = d.budgetMin ?? null
+  const bMax = d.budgetMax ?? null
+  if ((bMin !== null && (typeof bMin !== 'number' || !Number.isFinite(bMin) || bMin < 0)) ||
+      (bMax !== null && (typeof bMax !== 'number' || !Number.isFinite(bMax) || bMax < 0))) {
+    return fail('El presupuesto no puede ser negativo')
+  }
+  if (bMin !== null && bMax !== null && bMin > bMax) return fail('El mínimo no puede ser mayor que el máximo')
 
   const user = await db.user.findUnique({ where: { id: auth.user.id } })
   const job = await db.jobPost.create({

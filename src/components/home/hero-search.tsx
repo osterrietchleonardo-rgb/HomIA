@@ -9,11 +9,11 @@ import {
   type FormEvent,
 } from "react";
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
-import { ArrowRight, BadgeCheck, Briefcase, Loader2, MapPin, Package, Sparkles, Star, Wrench, X } from "lucide-react";
+import { ArrowRight, BadgeCheck, Briefcase, Loader2, Lock, MapPin, Package, Sparkles, Star, Wrench, X } from "lucide-react";
 import { Homy, type HomyState } from "@/components/homy/homy-character";
 import { formatARS } from "@/lib/format";
 import { navigate } from "@/lib/router";
-import { useLocation } from "@/lib/store";
+import { useLocation, useSession } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */
@@ -34,14 +34,62 @@ type AgentReply = {
     comparables?: { stockId: string; elementName: string; price: number; unit: string; providerName: string; providerId: string }[];
   };
   error?: string;
+  /** true cuando la IA pidió login: la respuesta vino del buscador sin IA */
+  needsLogin?: boolean;
 };
 
 const INTENT_CTA: Record<AgentIntent, { label: string; href: string; icon: typeof Wrench }> = {
   contratar: { label: "Ver profesionales en el mapa", href: "/buscar?mode=cliente", icon: MapPin },
   trabajar: { label: "Ver la bolsa de trabajos", href: "/buscar?mode=profesional", icon: Briefcase },
-  materiales: { label: "Comparar precios de materiales", href: "/buscar?mode=profesional", icon: Package },
+  materiales: { label: "Comparar precios de materiales", href: "/materiales", icon: Package },
   ayuda: { label: "Abrir el buscador inteligente", href: "/buscar", icon: Sparkles },
 };
+
+/** Ruta SPA actual (hash) para volver después de registrarse/ingresar. */
+function currentPath(): string {
+  if (typeof window === "undefined") return "/";
+  return window.location.hash.replace(/^#/, "") || "/";
+}
+
+/* Búsqueda SIN IA para anónimos: mismos resultados reales del directorio,
+   sin gastar modelo. Homy (IA) queda detrás del registro gratis. */
+async function searchWithoutAi(q: string, lat?: number | null, lng?: number | null): Promise<AgentReply> {
+  const sp = new URLSearchParams({ q, mode: "cliente" });
+  if (lat != null && lng != null) {
+    sp.set("lat", String(lat));
+    sp.set("lng", String(lng));
+    sp.set("radius", "25");
+  }
+  const res = await fetch(`/api/search?${sp.toString()}`);
+  if (!res.ok) throw new Error("search");
+  const data = (await res.json()) as {
+    professionals?: { id: string; displayName: string; city: string | null; rating: number; reviewsCount: number; verified: boolean }[];
+    jobs?: { id: string; title: string; categorySlug: string; budgetMin: number | null; budgetMax: number | null; city: string | null }[];
+    materials?: { id: string; name: string; price: number; unit: string; providerName: string; providerId: string }[];
+  };
+  const professionals = (data.professionals ?? []).slice(0, 4).map((p) => ({
+    id: p.id, displayName: p.displayName, city: p.city, rating: p.rating, reviewsCount: p.reviewsCount, verified: p.verified,
+  }));
+  const jobs = (data.jobs ?? []).slice(0, 4).map((j) => ({
+    id: j.id, title: j.title, categorySlug: j.categorySlug, budgetMin: j.budgetMin, budgetMax: j.budgetMax, city: j.city,
+  }));
+  const materials = (data.materials ?? []).slice(0, 4).map((m) => ({
+    stockId: m.id, elementName: m.name, price: m.price, unit: m.unit, providerName: m.providerName, providerId: m.providerId,
+  }));
+  const total = professionals.length + jobs.length + materials.length;
+  const intent: AgentIntent = materials.length > 0 && professionals.length === 0 ? "materiales" : "contratar";
+  return {
+    ok: true,
+    needsLogin: true,
+    intent,
+    message:
+      total > 0
+        ? `Esto es lo que encontré para «${q}» en HomIA. Para que Homy interprete tu pedido con IA y te arme el paso a paso, creá tu cuenta gratis (1 minuto).`
+        : `No encontré resultados para «${q}» en el directorio. Para que Homy interprete tu pedido con IA, creá tu cuenta gratis (1 minuto).`,
+    suggestions: [],
+    results: { professionals, jobs, materials },
+  };
+}
 
 /* ------------------------------------------------------------------ */
 /*  Ejemplos clickeables: demuestran el razonamiento de intención      */
@@ -50,7 +98,7 @@ const EXAMPLES = [
   "Necesito un plomero urgente",
   "¿Qué hay para plomeros?",
   "Precio del cemento de 50kg",
-  "¿Cómo funciona el escrow?",
+  "¿Cómo funcionan los pagos?",
 ];
 
 /* Coreografía ambiental del hero (máquina de vidrio): la consulta VUELA desde
@@ -64,16 +112,16 @@ const EXAMPLES = [
    aparecer: sigue aunque enfoques, escribas o pases el mouse — solo cede el
    escenario mientras una consulta real está en curso. */
 /* Pares ambientales: cubren el POTENCIAL completo del producto rotando los 3
-   roles — cliente (emergencia, presupuesto IA, escrow, reseñas, categorías,
-   mudanza), profesional (bolsa, cobro con escrow, sobrantes) y proveedor
+   roles — cliente (emergencia, presupuesto IA, pago, reseñas, categorías,
+   mudanza), profesional (bolsa, cobro, sobrantes) y proveedor
    (precios, plan PRO, stock compartido). Sin números inventados. */
 const DEMO_PAIRS = [
   { q: "Necesito un plomero urgente", a: "Encontré plomeros verificados cerca tuyo" },
   { q: "¿Qué hay para plomeros?", a: "Hay trabajos de plomería en la bolsa" },
   { q: "Precio del cemento de 50kg", a: "Comparé precios entre proveedores" },
-  { q: "¿Cómo funciona el escrow?", a: "Protegido hasta que des conformidad" },
+  { q: "¿Cómo funcionan los pagos?", a: "Pagás al finalizar" },
   { q: "¿Cuánto sale pintar un departamento?", a: "Presupuesto completo: obra y materiales" },
-  { q: "¿Cómo cobro sin riesgos?", a: "Escrow: el pago ya está depositado" },
+  { q: "¿Cómo cobro sin riesgos?", a: "Acordás el pago al finalizar el trabajo" },
   { q: "Busco un electricista de confianza", a: "Perfiles verificados y con reseñas reales" },
   { q: "¿Cómo vendo más materiales?", a: "Con el plan PRO destacás primero" },
   { q: "Me sobraron ladrillos de la obra", a: "Devolvelos y recuperá tu dinero" },
@@ -171,6 +219,7 @@ export function HeroSearch() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const happyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const location = useLocation();
+  const { user } = useSession();
 
   // Geometría de la escena: la respuesta tiene que posarse afuera de la barra
   // y desvanecerse contra el borde REAL de la página → se mide la barra, el
@@ -217,6 +266,11 @@ export function HeroSearch() {
       setLastQuery(trimmed);
       setFlight({ text: trimmed, stage: "in" });
       try {
+        if (!user) {
+          // Anónimo: resultados reales sin IA + invitación honesta a registrarse
+          setReply(await searchWithoutAi(trimmed, lat, lng));
+          return;
+        }
         const res = await fetch("/api/homy/agent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -228,6 +282,11 @@ export function HeroSearch() {
           }),
         });
         const data = (await res.json()) as AgentReply;
+        if (res.status === 401 && data.needsLogin) {
+          // la sesión venció en el medio: mismo camino que un anónimo
+          setReply(await searchWithoutAi(trimmed, lat, lng));
+          return;
+        }
         if (!res.ok || !data.ok) {
           setReply({
             ok: false,
@@ -248,28 +307,22 @@ export function HeroSearch() {
         });
         setDegraded(true);
       } finally {
+        // el texto queda en la barra: el usuario puede releer y corregir su pedido
         setPhase("done");
-        setValue("");
         inputRef.current?.blur();
         setFlight((f) => (f ? { ...f, stage: "out" } : null));
         if (happyTimer.current) clearTimeout(happyTimer.current);
         happyTimer.current = setTimeout(() => setPhase("idle"), 1900);
       }
     },
-    []
+    [user]
   );
 
+  // Sin auto-envío: la consulta sale solo con Enter o el botón (nunca por
+  // inactividad, que gastaba IA sin que el usuario lo pidiera).
   const onChange = (next: string) => {
     setValue(next);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (next.trim().length >= 8) {
-      // Auto-envío con pausa MUY larga (20s sin teclear, pedido del usuario):
-      // el tiempo sobra para releer y corregir; Enter sigue enviando al instante.
-      debounceRef.current = setTimeout(
-        () => void askHomy(next, location.lat, location.lng),
-        20000
-      );
-    }
   };
 
   const onSubmit = (e: FormEvent) => {
@@ -680,6 +733,31 @@ export function HeroSearch() {
               <p className="mt-4 text-[15px] leading-relaxed text-navy/85">
                 {reply.message}
               </p>
+
+              {/* Gate honesto: la IA de Homy es para usuarios registrados (gratis) */}
+              {reply.needsLogin && (
+                <div className="mt-4 rounded-2xl border border-tech/20 bg-white/70 p-4">
+                  <p className="flex items-center gap-2 text-sm font-bold text-navy">
+                    <Lock className="size-4 shrink-0 text-tech" aria-hidden />
+                    Para usar Homy creá tu cuenta gratis (1 minuto)
+                  </p>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <button
+                      onClick={() => navigate(`/registrarse?volver=${encodeURIComponent(currentPath())}`)}
+                      className="homy-btn-primary min-h-[44px] px-5 py-2.5 text-sm"
+                    >
+                      Crear cuenta gratis
+                      <ArrowRight className="size-4" aria-hidden />
+                    </button>
+                    <button
+                      onClick={() => navigate(`/ingresar?volver=${encodeURIComponent(currentPath())}`)}
+                      className="homy-btn-dark min-h-[44px] px-5 py-2.5 text-sm"
+                    >
+                      Ya tengo cuenta
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Pregunta de aclaración del agente (loop de razonamiento) */}
               {reply.question && reply.question.opciones.length > 0 && (

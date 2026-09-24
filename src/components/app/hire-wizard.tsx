@@ -102,9 +102,15 @@ export default function HireWizard({
     (!budgetMin && Number(budgetMax) > 0) ||
     (Number(budgetMin) > 0 && Number(budgetMax) > 0 && Number(budgetMax) >= Number(budgetMin))
 
+  const proName = target.companyName || target.displayName
+  const rubroSel = rubro || target.professions[0] || null
+
   async function confirm() {
+    if (busy) return
     setBusy(true)
     try {
+      // El presupuesto del cliente viaja como referencia (budgetMin/Max); la mano de obra
+      // NO se manda: la cotiza el profesional en la etapa de presupuesto.
       const res = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -112,7 +118,9 @@ export default function HireWizard({
           professionalProfileId: target!.id,
           title: title.trim(),
           description: desc.trim(),
-          laborCost: Number(budgetMax) > 0 ? Number(budgetMax) : Number(budgetMin) > 0 ? Number(budgetMin) : undefined,
+          budgetMin: Number(budgetMin) > 0 ? Number(budgetMin) : undefined,
+          budgetMax: Number(budgetMax) > 0 ? Number(budgetMax) : undefined,
+          categorySlug: rubroSel || undefined,
           urgency,
           address: address.trim() || undefined,
           city: city.trim() || undefined,
@@ -121,15 +129,24 @@ export default function HireWizard({
           firstMessage: note.trim() || undefined,
         }),
       })
-      const d = await res.json()
+      const d = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(d.error || 'No se pudo crear la contratación'); return }
       setCreated(d)
       setStep(4)
+    } catch {
+      toast.error('No pudimos conectar con HomIA. Revisá tu conexión y probá de nuevo.')
     } finally { setBusy(false) }
   }
 
-  const proName = target.companyName || target.displayName
-  const rubroSel = rubro || target.professions[0] || null
+  // Enter en cualquier input avanza el paso (o confirma en el resumen)
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (busy || uploading) return
+    if (step === 0 && step1Ok) setStep(1)
+    else if (step === 1) setStep(2)
+    else if (step === 2 && budgetOk) setStep(3)
+    else if (step === 3 && budgetOk) confirm()
+  }
 
   return (
     <AnimatePresence>
@@ -184,23 +201,26 @@ export default function HireWizard({
               )}
             </div>
 
-            {/* cuerpo */}
+            {/* cuerpo + footer en un form: Enter avanza el paso */}
+            <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7">
               {step === 0 && (
                 <div className="space-y-4">
-                  <Field label="¿Qué trabajo necesitás?">
+                  <Field label="¿Qué trabajo necesitás?" htmlFor="hire-title">
                     <input
+                      id="hire-title" autoFocus
                       value={title} onChange={(e) => setTitle(e.target.value)}
                       placeholder="Ej: Renovar instalación eléctrica del living"
-                      className="homy-input w-full" maxLength={90}
+                      className="homy-glass-input rounded-xl px-3.5 py-3 min-h-[44px] text-sm w-full" maxLength={90}
                     />
                   </Field>
-                  <Field label="Contale los detalles" hint={`${desc.length}/600`}>
+                  <Field label="Contale los detalles" hint={`${desc.length}/600`} htmlFor="hire-desc">
                     <textarea
+                      id="hire-desc"
                       value={desc} onChange={(e) => setDesc(e.target.value.slice(0, 600))}
                       rows={4}
                       placeholder="Contale qué hay que hacer, el estado actual, medidas, si tenés los materiales…"
-                      className="homy-input w-full resize-none leading-relaxed"
+                      className="homy-glass-input rounded-xl px-3.5 py-3 min-h-[44px] text-sm w-full resize-none leading-relaxed"
                     />
                   </Field>
                   {target.professions.length > 0 && (
@@ -208,7 +228,7 @@ export default function HireWizard({
                       <div className="flex flex-wrap gap-2">
                         {target.professions.slice(0, 6).map((r) => (
                           <button
-                            key={r} onClick={() => setRubro(r)}
+                            key={r} type="button" onClick={() => setRubro(r)}
                             aria-pressed={rubroSel === r}
                             className={`homy-focus rounded-full px-3.5 py-2 text-xs font-bold capitalize transition ${rubroSel === r ? 'bg-[#1D63B8] text-white shadow-[0_4px_14px_rgba(29,99,184,0.35)]' : 'homy-glass-soft text-slate-500 hover:text-[#1D63B8]'}`}
                           >{r}</button>
@@ -222,6 +242,7 @@ export default function HireWizard({
                         <div key={p.url} className="group relative size-20 overflow-hidden rounded-xl ring-1 ring-[#0A2540]/10">
                           <img src={p.url} alt={`Foto ${i + 1} del trabajo`} className="size-full object-cover" />
                           <button
+                            type="button"
                             onClick={() => setPhotos((ps) => ps.filter((x) => x.url !== p.url))}
                             aria-label={`Quitar foto ${i + 1}`}
                             className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-[#0A2540]/75 text-white transition hover:bg-red-500"
@@ -230,6 +251,7 @@ export default function HireWizard({
                       ))}
                       {photos.length < 4 && (
                         <button
+                          type="button"
                           onClick={() => fileRef.current?.click()} disabled={uploading}
                           className="grid size-20 place-items-center rounded-xl border-2 border-dashed border-[#0A2540]/15 text-slate-400 transition hover:border-[#1D63B8]/40 hover:text-[#1D63B8] disabled:opacity-50"
                           aria-label="Agregar foto del trabajo"
@@ -249,7 +271,7 @@ export default function HireWizard({
                     <div className="grid gap-2.5 sm:grid-cols-3">
                       {URGENCIAS.map((u) => (
                         <button
-                          key={u.id} onClick={() => setUrgency(u.id)} aria-pressed={urgency === u.id}
+                          key={u.id} type="button" onClick={() => setUrgency(u.id)} aria-pressed={urgency === u.id}
                           className={`homy-focus rounded-2xl p-3.5 text-left transition ${urgency === u.id ? 'bg-[#1D63B8] text-white shadow-[0_6px_18px_rgba(29,99,184,0.35)]' : 'homy-glass-soft hover:ring-1 hover:ring-[#1D63B8]/30'}`}
                         >
                           <u.icon className={`size-5 ${urgency === u.id ? 'text-[#66DFFF]' : 'text-[#1D63B8]'}`} aria-hidden />
@@ -260,17 +282,17 @@ export default function HireWizard({
                     </div>
                   </Field>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Fecha deseada (opcional)">
-                      <input type="date" value={deadline} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setDeadline(e.target.value)} className="homy-input w-full" />
+                    <Field label="Fecha deseada (opcional)" htmlFor="hire-deadline">
+                      <input id="hire-deadline" type="date" value={deadline} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setDeadline(e.target.value)} className="homy-glass-input rounded-xl px-3.5 py-3 min-h-[44px] text-sm w-full" />
                     </Field>
-                    <Field label="Localidad">
-                      <input value={city} onChange={(e) => setCity(e.target.value)} placeholder={target.city || viewerCity || 'Ciudad'} className="homy-input w-full" />
+                    <Field label="Localidad" htmlFor="hire-city">
+                      <input id="hire-city" value={city} onChange={(e) => setCity(e.target.value)} placeholder={target.city || viewerCity || 'Ciudad'} className="homy-glass-input rounded-xl px-3.5 py-3 min-h-[44px] text-sm w-full" />
                     </Field>
                   </div>
-                  <Field label="Dirección del trabajo (opcional)">
+                  <Field label="Dirección del trabajo (opcional)" htmlFor="hire-address">
                     <div className="relative">
                       <MapPin className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" aria-hidden />
-                      <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Calle, número, piso/depto" className="homy-input w-full pl-10" />
+                      <input id="hire-address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Calle, número, piso/depto" className="homy-glass-input rounded-xl px-3.5 py-3 min-h-[44px] text-sm w-full pl-10" />
                     </div>
                   </Field>
                 </div>
@@ -290,12 +312,13 @@ export default function HireWizard({
                       Es una referencia para agilizar el presupuesto final: el profesional te manda el precio cerrado después de ver el detalle.
                     </p>
                   </Field>
-                  <Field label="Mensaje para el profesional (opcional)">
+                  <Field label="Mensaje para el profesional (opcional)" htmlFor="hire-note">
                     <textarea
+                      id="hire-note"
                       value={note} onChange={(e) => setNote(e.target.value.slice(0, 500))}
                       rows={3}
                       placeholder={`Hola ${target.displayName}, te contrato para… (se envía con tu brief)`}
-                      className="homy-input w-full resize-none leading-relaxed"
+                      className="homy-glass-input rounded-xl px-3.5 py-3 min-h-[44px] text-sm w-full resize-none leading-relaxed"
                     />
                     <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400">
                       <MessageSquare className="size-3.5 shrink-0" aria-hidden /> Si lo escribís, se abre el chat con este mensaje.
@@ -332,7 +355,7 @@ export default function HireWizard({
                     </SummaryRow>
                   )}
                   <p className="rounded-2xl homy-glass-soft px-4 py-3 text-xs leading-relaxed text-slate-500">
-                    Al confirmar, <strong className="text-[#0A2540]">{proName}</strong> recibe la notificación con tu brief y aparece en <strong className="text-[#0A2540]">Mis proyectos</strong>. El pago queda protegido con escrow hasta dar conformidad.
+                    Al confirmar, <strong className="text-[#0A2540]">{proName}</strong> recibe la notificación con tu brief y aparece en <strong className="text-[#0A2540]">Mis proyectos</strong>. Pagás al finalizar, con Mercado Pago o efectivo.
                   </p>
                 </div>
               )}
@@ -348,18 +371,25 @@ export default function HireWizard({
                   </motion.span>
                   <h3 className="mt-4 text-xl font-extrabold tracking-tight text-[#0A2540]">¡Contratación enviada!</h3>
                   <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-slate-500">
-                    <strong className="text-[#0A2540]">{proName}</strong> ya tiene tu brief de <strong className="text-[#0A2540]">{created.project.title}</strong> y le llegó la notificación. Te va a responder por chat o con un presupuesto.
+                    <strong className="text-[#0A2540]">{proName}</strong> ya tiene tu brief de <strong className="text-[#0A2540]">{created.project.title}</strong> y le llegó la notificación. Va a cotizar la mano de obra en tu proyecto.
                   </p>
+                  {!created.conversationId && (
+                    <p className="mx-auto mt-3 max-w-sm rounded-2xl homy-glass-soft px-4 py-3 text-xs font-semibold leading-relaxed text-slate-600">
+                      Abrí el chat para coordinar: el profesional no puede escribirte primero.
+                    </p>
+                  )}
                   <div className="mx-auto mt-6 grid max-w-sm gap-2.5">
-                    {created.conversationId && (
-                      <button onClick={() => { close(); navigate(`/mensajes?c=${created.conversationId}`) }} className="homy-btn-dark w-full px-6 py-3.5 text-sm">
-                        <MessageSquare className="size-4" aria-hidden /> Abrir el chat
-                      </button>
-                    )}
-                    <button onClick={() => { close(); navigate(`/panel/cliente/proyectos/${created.project.id}`) }} className="homy-btn-primary w-full px-6 py-3.5 text-sm">
+                    <button
+                      type="button"
+                      onClick={() => { close(); navigate(created.conversationId ? `/mensajes?c=${created.conversationId}` : `/mensajes?c=nuevo:${target.userId}`) }}
+                      className={`${created.conversationId ? 'homy-btn-dark' : 'homy-btn-primary'} w-full px-6 py-3.5 text-sm`}
+                    >
+                      <MessageSquare className="size-4" aria-hidden /> Abrir el chat
+                    </button>
+                    <button type="button" onClick={() => { close(); navigate(`/panel/cliente/proyectos/${created.project.id}`) }} className={`${created.conversationId ? 'homy-btn-primary' : 'homy-btn-dark'} w-full px-6 py-3.5 text-sm`}>
                       Ver el proyecto
                     </button>
-                    <button onClick={() => { close(); navigate('/directorio') }} className="homy-focus rounded-xl px-6 py-3 text-sm font-bold text-[#1D63B8] transition hover:bg-[#1D63B8]/5">
+                    <button type="button" onClick={() => { close(); navigate('/directorio') }} className="homy-focus rounded-xl px-6 py-3 text-sm font-bold text-[#1D63B8] transition hover:bg-[#1D63B8]/5">
                       Seguir explorando el directorio
                     </button>
                   </div>
@@ -371,26 +401,27 @@ export default function HireWizard({
             {step < 4 && (
               <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[#0A2540]/8 bg-white/50 px-5 py-4 sm:px-7">
                 {step > 0 ? (
-                  <button onClick={() => setStep((s) => s - 1)} className="homy-focus inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-500 transition hover:bg-[#0A2540]/5 hover:text-[#0A2540]">
+                  <button type="button" onClick={() => setStep((s) => s - 1)} className="homy-focus inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-500 transition hover:bg-[#0A2540]/5 hover:text-[#0A2540]">
                     <ChevronLeft className="size-4" aria-hidden /> Atrás
                   </button>
                 ) : <span />}
                 {step < 3 ? (
                   <button
-                    onClick={() => setStep((s) => s + 1)}
+                    type="submit"
                     disabled={(step === 0 && !step1Ok) || (step === 2 && !budgetOk)}
                     className="homy-btn-primary inline-flex items-center gap-1.5 px-6 py-3 text-sm disabled:opacity-40"
                   >
                     Continuar <ChevronRight className="size-4" aria-hidden />
                   </button>
                 ) : (
-                  <button onClick={confirm} disabled={busy || !budgetOk} className="homy-btn-primary inline-flex items-center gap-2 px-6 py-3 text-sm disabled:opacity-50">
+                  <button type="submit" disabled={busy || !budgetOk} className="homy-btn-primary inline-flex items-center gap-2 px-6 py-3 text-sm disabled:opacity-50">
                     {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}
                     {busy ? 'Enviando…' : 'Confirmar contratación'}
                   </button>
                 )}
               </div>
             )}
+            </form>
           </motion.div>
         </motion.div>
       )}
@@ -398,30 +429,38 @@ export default function HireWizard({
   )
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+// Field NO envuelve en <label>: adentro puede haber grupos de botones (rubro, urgencia, fotos)
+// y un <label> alrededor de botones rompe el foco/click. Con `htmlFor` se asocia al input.
+function Field({ label, hint, htmlFor, children }: { label: string; hint?: string; htmlFor?: string; children: React.ReactNode }) {
+  const head = (
+    <>
+      {label}
+      {hint && <span className="font-semibold normal-case tracking-normal text-slate-400">{hint}</span>}
+    </>
+  )
+  const headClass = 'mb-1.5 flex items-center justify-between text-xs font-extrabold uppercase tracking-[0.1em] text-[#0A2540]/70'
   return (
-    <label className="block">
-      <span className="mb-1.5 flex items-center justify-between text-xs font-extrabold uppercase tracking-[0.1em] text-[#0A2540]/70">
-        {label}
-        {hint && <span className="font-semibold normal-case tracking-normal text-slate-400">{hint}</span>}
-      </span>
+    <div className="block">
+      {htmlFor ? <label htmlFor={htmlFor} className={headClass}>{head}</label> : <p className={headClass}>{head}</p>}
       {children}
-    </label>
+    </div>
   )
 }
 
 function MoneyInput({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+  const id = `hire-money-${label.toLowerCase()}`
   return (
-    <label className="block">
-      <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
+    <div className="block">
+      <label htmlFor={id} className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">{label}</label>
       <span className="relative block">
         <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">$</span>
         <input
+          id={id}
           type="number" min={0} inputMode="numeric" value={value} onChange={(e) => onChange(e.target.value)}
-          placeholder="0" className="homy-num homy-input w-full pl-8"
+          placeholder="0" className="homy-num homy-glass-input rounded-xl px-3.5 py-3 min-h-[44px] text-sm w-full pl-8"
         />
       </span>
-    </label>
+    </div>
   )
 }
 

@@ -51,6 +51,7 @@ export async function GET(req: NextRequest) {
       aliases: parseJson<string[]>(s.element.aliases, []),
       description: s.element.description || null,
       brand: s.brand,
+      imageUrl: s.imageUrl,
       price: s.price,
       quantity: s.quantity,
       minStock: s.minStock,
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
     return fail('Tu prueba gratis terminó: elegí un plan (Básico US$50/mes o PRO US$100/mes) para seguir gestionando tu stock', 403, { needsPlan: true })
   }
 
-  const d = await body<{ elementId: string; price: number; quantity: number; minStock?: number; brand?: string }>(req)
+  const d = await body<{ elementId: string; price: number; quantity: number; minStock?: number; brand?: string; imageUrl?: string }>(req)
   if (!d.elementId || d.price === undefined) return fail('Elemento y precio son obligatorios')
 
   const el = await db.catalogElement.findUnique({ where: { id: d.elementId } })
@@ -91,6 +92,7 @@ export async function POST(req: NextRequest) {
       quantity: d.quantity || 0,
       minStock: d.minStock ?? 5,
       brand: d.brand || null,
+      imageUrl: d.imageUrl || null,
       status: (d.quantity || 0) <= 0 ? 'agotado' : (d.quantity || 0) <= (d.minStock ?? 5) ? 'por_agotar' : 'disponible',
     },
   })
@@ -117,6 +119,7 @@ export async function PATCH(req: NextRequest) {
     quantity?: number
     minStock?: number
     brand?: string
+    imageUrl?: string
     movementType?: 'entrada' | 'salida' | 'ajuste'
   }>(req)
   if (!d.id) return fail('Falta el id')
@@ -128,6 +131,7 @@ export async function PATCH(req: NextRequest) {
   if (d.price !== undefined) data.price = d.price
   if (d.minStock !== undefined) data.minStock = d.minStock
   if (d.brand !== undefined) data.brand = d.brand
+  if (d.imageUrl !== undefined) data.imageUrl = d.imageUrl
   if (d.quantity !== undefined) {
     data.quantity = d.quantity
     await db.stockMovement.create({

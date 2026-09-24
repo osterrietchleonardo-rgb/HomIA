@@ -9,7 +9,7 @@ import { BadgeCheck, Eye, EyeOff, Loader2, Lock, LogIn, Mail, ShieldCheck, Spark
 
 // Micro-detalle de confianza (espeja los value props del panel de marca)
 const TRUST_POINTS = [
-  { icon: ShieldCheck, label: 'Pago escrow', tone: 'text-[#1D63B8]' },
+  { icon: ShieldCheck, label: 'Pagás al finalizar', tone: 'text-[#1D63B8]' },
   { icon: BadgeCheck, label: 'Verificación', tone: 'text-[#0e9f6e]' },
   { icon: Sparkles, label: 'IA', tone: 'text-[#0092c4]' },
 ]
@@ -53,7 +53,7 @@ export default function LoginScreen() {
           Que tu hogar vuelva a <span className="homy-gradient-text">funcionar</span>, hoy.
         </>
       }
-      sub="Ingresá para seguir tus trabajos, aprobar presupuestos y pagar con la tranquilidad del escrow."
+      sub="Ingresá para seguir tus trabajos, aprobar presupuestos y pagar con total tranquilidad."
     >
       <div className="homy-glass-strong homy-stagger rounded-[28px] p-6 sm:p-8">
         <header>

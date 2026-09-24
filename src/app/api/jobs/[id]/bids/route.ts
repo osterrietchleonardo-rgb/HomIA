@@ -79,15 +79,31 @@ export async function POST(
     where: { jobId: id, professionalId: pro.id },
   })
   if (existing) {
+    // Una oferta aceptada no se edita (ya hay proyecto). Rechazada o retirada
+    // se reactiva como pendiente (re-oferta); pendiente se actualiza en el lugar.
+    if (existing.status === 'aceptado') return fail('Esta oferta ya fue aceptada: los cambios van por el proyecto', 409)
+    const reactivated = existing.status === 'rechazado' || existing.status === 'retirado'
     const updated = await db.jobBid.update({
       where: { id: existing.id },
       data: {
         amount: d.amount,
         timelineDays: d.timelineDays || existing.timelineDays,
-        message: d.message ?? existing.message,
-        status: existing.status === 'rechazado' ? 'pendiente' : existing.status,
+        // no pisar el mensaje anterior con vacío
+        message: d.message?.trim() ? d.message : existing.message,
+        status: reactivated ? 'pendiente' : existing.status,
       },
     })
+    if (reactivated) {
+      await db.notification.create({
+        data: {
+          userId: job.userId,
+          type: 'nuevo_presupuesto',
+          title: 'Presupuesto actualizado en tu trabajo',
+          body: `${pro.companyName || user.displayName} volvió a ofertar por "${job.title}"`,
+          link: `#/panel/cliente/trabajos/${job.id}`,
+        },
+      })
+    }
     return ok({ bid: updated })
   }
 

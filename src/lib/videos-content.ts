@@ -27,7 +27,7 @@ export const VIDEOS: VideoItem[] = [
     id: 'cli-contratar',
     role: 'cliente',
     title: 'Publicar y contratar',
-    desc: 'De contarle a Homy qué necesitás hasta contratar con pago protegido.',
+    desc: 'De contarle a Homy qué necesitás hasta contratar y pagar al finalizar.',
   },
   {
     id: 'cli-materiales',
@@ -45,7 +45,7 @@ export const VIDEOS: VideoItem[] = [
     id: 'pro-bienvenida',
     role: 'profesional',
     title: 'Tu cuenta profesional',
-    desc: 'Tu vidriera, la verificación con DNI y el plan PRO.',
+    desc: 'Tu vidriera, la verificación con DNI y tus obras publicadas.',
   },
   {
     id: 'pro-presupuestos',
@@ -56,8 +56,8 @@ export const VIDEOS: VideoItem[] = [
   {
     id: 'pro-cobros',
     role: 'profesional',
-    title: 'Cobrar con protección',
-    desc: 'Escrow, efectivo registrado y el modo A con todo junto.',
+    title: 'Cobrar tus facturas',
+    desc: 'Modos de pago, efectivo y el modo A con todo junto.',
   },
   {
     id: 'pro-materiales',

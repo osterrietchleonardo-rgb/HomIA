@@ -10,9 +10,9 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.somoshomia.com"),
   title: "HomIA — Tu hogar en buenas manos",
-  description:
-    "HomIA conecta tu hogar con profesionales verificados mediante agentes de inteligencia artificial: presupuestos integrales de mano de obra y materiales, pagos protegidos con escrow y devolución automática de sobrantes.",
+  description: "HomIA conecta tu hogar con profesionales y proveedores de tu zona: buscás con lenguaje natural, aprobás un presupuesto integral de mano de obra y materiales, pagás al finalizar por Mercado Pago o efectivo y devolvés los sobrantes al local.",
   keywords: [
     "HomIA",
     "servicios para el hogar",
@@ -25,7 +25,8 @@ export const metadata: Metadata = {
   openGraph: {
     title: "HomIA — Tu hogar en buenas manos",
     description:
-      "Contale qué necesita tu hogar y los agentes de IA de HomIA se ocupan del resto: profesionales verificados, presupuesto integral y pagos protegidos.",
+      "Contale qué necesita tu hogar y Homy te conecta con profesionales verificados con DNI y reseñas reales. Presupuesto integral, pago al finalizar por Mercado Pago o efectivo.",
+    url: "https://www.somoshomia.com",
     siteName: "HomIA",
     type: "website",
     locale: "es_AR",
@@ -34,7 +35,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "HomIA — Tu hogar en buenas manos",
     description:
-      "El ecosistema del hogar potenciado por agentes de inteligencia artificial.",
+      "Profesionales y proveedores del hogar en Argentina. Presupuesto integral, pago al finalizar, reseñas con foto.",
   },
 };
 

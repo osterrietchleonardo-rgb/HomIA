@@ -1,10 +1,12 @@
 'use client'
 // Perfil del cliente: datos personales + ubicación
-import { useEffect, useState } from 'react'
-import { Loading, UAvatar } from '@/components/app/ui-bits'
+import { useEffect, useId, useRef, useState } from 'react'
+import { Loading, AvatarUploader, VerifyBadge } from '@/components/app/ui-bits'
 import { useSession, useLocation, syncLocationToServer } from '@/lib/store'
+import { navigate } from '@/lib/router'
+import { apiFetch, NETWORK_ERROR } from '@/lib/api-client'
 import { toast } from 'sonner'
-import { MapPin, UserRound, Phone, Building2, Cake, Save } from 'lucide-react'
+import { MapPin, UserRound, Phone, Building2, Cake, Save, ShieldCheck, ArrowRight, RefreshCw } from 'lucide-react'
 
 export default function ClientProfile() {
   const { user, refresh } = useSession()
@@ -16,39 +18,69 @@ export default function ClientProfile() {
   const [birthday, setBirthday] = useState('')
   const [busy, setBusy] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [nameError, setNameError] = useState<string | null>(null)
+  // slider de radio: se muestra en vivo pero se guarda al soltar (debounce 500 ms)
+  const [radiusDraft, setRadiusDraft] = useState<number | null>(null)
+  const radiusTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => {
-    (async () => {
-      const res = await fetch('/api/profiles/me')
-      if (res.ok) {
-        const data = await res.json()
-        if (data.user) {
-          setDisplayName(data.user.displayName || '')
-          setPhone(data.user.phone || '')
-          setAddress(data.user.address || '')
-          setCity(data.user.city || '')
-          setBirthday((data.user.birthday || '').slice(0, 10))
-        }
+  async function loadProfile() {
+    setLoadError(null)
+    const r = await apiFetch<{ user?: { displayName?: string; phone?: string; address?: string; city?: string; birthday?: string } }>('/api/profiles/me', { silent: true })
+    if (r.ok) {
+      const u = r.data?.user
+      if (u) {
+        setDisplayName(u.displayName || '')
+        setPhone(u.phone || '')
+        setAddress(u.address || '')
+        setCity(u.city || '')
+        setBirthday((u.birthday || '').slice(0, 10))
       }
-      setLoaded(true)
-    })()
-  }, [])
+    } else {
+      setLoadError(r.error || NETWORK_ERROR)
+    }
+    setLoaded(true)
+  }
+  useEffect(() => { loadProfile() }, [])
+  useEffect(() => () => { if (radiusTimer.current) clearTimeout(radiusTimer.current) }, [])
+
+  function validateName(v: string): string | null {
+    const t = v.trim()
+    if (!t) return 'Tu nombre es obligatorio: es lo que ven los profesionales'
+    if (t.length < 2) return 'El nombre tiene que tener al menos 2 letras'
+    if (t.length > 80) return 'El nombre es demasiado largo'
+    return null
+  }
 
   async function save() {
+    const err = validateName(displayName)
+    setNameError(err)
+    if (err) { toast.error(err); return }
     setBusy(true)
     try {
-      const res = await fetch('/api/profiles/me', {
+      const r = await apiFetch('/api/profiles/me', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ displayName, phone, address, city, birthday }),
+        json: { displayName: displayName.trim(), phone, address, city, birthday },
       })
-      if (!res.ok) { toast.error((await res.json()).error); return }
+      if (!r.ok) return
       await refresh()
       toast.success('Perfil actualizado')
     } finally { setBusy(false) }
   }
 
+  function onRadiusChange(km: number) {
+    setRadiusDraft(km)
+    location.setRadius(km)
+    if (radiusTimer.current) clearTimeout(radiusTimer.current)
+    radiusTimer.current = setTimeout(() => {
+      if (location.lat && location.lng) syncLocationToServer(location.lat, location.lng, km)
+      setRadiusDraft(null)
+    }, 500)
+  }
+
   if (!loaded) return <Loading />
+  const radius = radiusDraft ?? location.radiusKm
+  const vStatus = user?.verificationStatus || 'none'
 
   return (
     <div className="homy-page">
@@ -61,10 +93,51 @@ export default function ClientProfile() {
       </header>
 
       <div className="max-w-2xl mx-auto space-y-5">
+        {loadError && (
+          <div role="alert" className="homy-glass-soft rounded-2xl border border-red-300/60 p-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-slate-600">No pudimos cargar tus datos: {loadError}</p>
+            <button onClick={() => { setLoaded(false); loadProfile() }} className="homy-btn-dark min-h-[40px] px-4 text-sm">
+              <RefreshCw className="size-4" aria-hidden /> Reintentar
+            </button>
+          </div>
+        )}
+
+        {/* estado de verificación de identidad (nunca se oculta) */}
+        <button type="button" onClick={() => navigate('/panel/cliente/verificacion')}
+          className="homy-glass homy-lift homy-focus group flex w-full items-center gap-3.5 rounded-2xl p-4 text-left">
+          <span className={`homy-icon-chip size-10 shrink-0 [&_svg]:size-5 ${vStatus === 'verificado' ? 'homy-chip-mint' : 'homy-chip-gold'}`} aria-hidden><ShieldCheck /></span>
+          <span className="min-w-0 flex-1">
+            <span className="flex flex-wrap items-center gap-2 text-sm font-extrabold text-[#0A2540]">
+              Verificación de identidad <VerifyBadge status={vStatus} />
+            </span>
+            <span className="mt-0.5 block text-[12.5px] leading-snug text-slate-500">
+              {vStatus === 'verificado'
+                ? 'Tu DNI está verificado: los profesionales ven tu check verde.'
+                : vStatus === 'pendiente'
+                  ? 'Tu DNI está en revisión. Te avisamos cuando termine.'
+                  : vStatus === 'rechazado'
+                    ? 'La verificación no pasó: revisá el motivo y volvé a subir tu DNI.'
+                    : 'Subí frente y dorso de tu DNI para mostrar el check verde.'}
+            </span>
+          </span>
+          <ArrowRight className="size-5 shrink-0 text-slate-300 transition-transform duration-300 group-hover:translate-x-1 group-hover:text-[#1D63B8]" aria-hidden />
+        </button>
+
         {/* identidad + datos */}
         <section className="homy-glass rounded-3xl p-6 sm:p-7">
           <div className="flex items-center gap-4">
-            <UAvatar name={displayName || user?.displayName || ''} url={user?.avatarUrl} size={64} />
+            <AvatarUploader
+              name={displayName || user?.displayName || ''}
+              url={user?.avatarUrl}
+              size={64}
+              onUpload={async (url) => {
+                const r = await apiFetch('/api/profiles/me', { method: 'PUT', json: { avatarUrl: url } })
+                if (r.ok) {
+                  await refresh()
+                  toast.success('Foto actualizada')
+                }
+              }}
+            />
             <div className="min-w-0">
               <p className="truncate font-extrabold text-[#0A2540]">{user?.email}</p>
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -86,8 +159,10 @@ export default function ClientProfile() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Nombre y apellido" value={displayName} onChange={setDisplayName} icon={<UserRound />} />
-            <Field label="Celular" value={phone} onChange={setPhone} placeholder="+54 9 …" icon={<Phone />} />
+            <Field label="Nombre y apellido" value={displayName} required error={nameError}
+              onChange={(v) => { setDisplayName(v); if (nameError) setNameError(validateName(v)) }}
+              onBlur={() => setNameError(validateName(displayName))} icon={<UserRound />} />
+            <Field label="Celular" value={phone} onChange={setPhone} placeholder="+54 9 …" type="tel" icon={<Phone />} />
             <Field label="Dirección" value={address} onChange={setAddress} icon={<MapPin />} />
             <Field label="Ciudad" value={city} onChange={setCity} icon={<Building2 />} />
             <Field label="Cumpleaños" value={birthday} onChange={setBirthday} type="date" icon={<Cake />} />
@@ -112,14 +187,14 @@ export default function ClientProfile() {
           {location.shared ? (
             <>
               <p className="text-sm text-slate-500">
-                Radio de búsqueda <span className="font-bold text-[#0A2540] tabular-nums">{location.radiusKm} km</span>
+                Radio de búsqueda <span className="font-bold text-[#0A2540] tabular-nums">{radius} km</span>
               </p>
               <input
-                type="range" min={1} max={100} value={location.radiusKm}
-                onChange={(e) => { location.setRadius(parseInt(e.target.value)); if (location.lat && location.lng) syncLocationToServer(location.lat, location.lng, parseInt(e.target.value)) }}
+                type="range" min={1} max={100} value={radius}
+                onChange={(e) => onRadiusChange(parseInt(e.target.value))}
                 className="homy-range mt-3 w-full"
-                style={{ '--range-progress': `${((location.radiusKm - 1) / 99) * 100}%` } as React.CSSProperties}
-                aria-label="Radio de búsqueda" />
+                style={{ '--range-progress': `${((radius - 1) / 99) * 100}%` } as React.CSSProperties}
+                aria-label="Radio de búsqueda en kilómetros" />
               <div className="mt-1 flex justify-between text-[0.68rem] font-bold text-slate-400 tabular-nums">
                 <span>1 km</span>
                 <span>100 km</span>
@@ -141,15 +216,23 @@ export default function ClientProfile() {
   )
 }
 
-function Field({ label, value, onChange, type = 'text', placeholder, icon }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string; icon?: React.ReactNode }) {
+function Field({ label, value, onChange, onBlur, type = 'text', placeholder, icon, required, error }: {
+  label: string; value: string; onChange: (v: string) => void; onBlur?: () => void; type?: string
+  placeholder?: string; icon?: React.ReactNode; required?: boolean; error?: string | null
+}) {
+  const id = useId()
+  const errId = `${id}-error`
   return (
     <div>
-      <label className="flex items-center gap-2 text-sm font-semibold text-[#0A2540]">
+      <label htmlFor={id} className="flex items-center gap-2 text-sm font-semibold text-[#0A2540]">
         {icon && <span className="text-slate-400 [&_svg]:size-4" aria-hidden>{icon}</span>}
         {label}
+        {required && <span className="text-[#FF5A1F]" aria-hidden>*</span>}
       </label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="homy-glass-input mt-2 w-full rounded-xl px-4 py-3 outline-none" />
+      <input id={id} type={type} value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} placeholder={placeholder}
+        required={required} aria-invalid={!!error} aria-describedby={error ? errId : undefined}
+        className={`homy-glass-input mt-2 w-full rounded-xl px-4 py-3 outline-none ${error ? 'ring-1 ring-red-400' : ''}`} />
+      {error && <p id={errId} role="alert" className="mt-1.5 text-xs font-semibold text-red-600">{error}</p>}
     </div>
   )
 }

@@ -5,6 +5,8 @@ import { getSessionUser } from '@/lib/auth'
 import { runHomyAgent, type AgentMode } from '@/lib/homy-agent'
 
 export const runtime = 'nodejs'
+// Loop ReAct con varias llamadas a IA: margen de ejecución en serverless.
+export const maxDuration = 60
 
 const BodySchema = z.object({
   message: z.string().min(1).max(800),
@@ -16,27 +18,37 @@ const BodySchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
+  // El superagente consume IA paga: solo usuarios logueados.
+  const user = await getSessionUser()
+  if (!user) {
+    return NextResponse.json(
+      { ok: false, error: 'Iniciá sesión para usar el buscador inteligente', needsLogin: true },
+      { status: 401, headers: { 'Cache-Control': 'no-store' } }
+    )
+  }
+
   const parsed = BodySchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
     return NextResponse.json({ ok: false, error: 'Datos inválidos' }, { status: 400 })
   }
   const { message, mode, lat, lng } = parsed.data
   const sessionId = parsed.data.sessionId ?? undefined
-  const user = await getSessionUser()
 
   try {
-    // historial de la sesión (persistente)
+    // historial de la sesión (persistente): solo si la sesión es del usuario logueado
     let history: { role: 'user' | 'homy'; content: string }[] = []
-    let session: Awaited<ReturnType<typeof db.homySession.findUnique>> = null
+    let session: Awaited<ReturnType<typeof db.homySession.findFirst>> = null
     if (sessionId) {
-      session = await db.homySession.findUnique({ where: { id: sessionId } })
+      session = await db.homySession.findFirst({ where: { id: sessionId, userId: user.id } })
       if (session) {
+        // los ÚLTIMOS 10 mensajes (no los primeros): desc + revertir
         const msgs = await db.homyMessage.findMany({
           where: { sessionId },
-          orderBy: { createdAt: 'asc' },
+          orderBy: { createdAt: 'desc' },
           take: 10,
         })
         history = msgs
+          .reverse()
           .filter((m) => m.role !== 'tool')
           .map((m) => ({ role: m.role as 'user' | 'homy', content: m.content }))
       }

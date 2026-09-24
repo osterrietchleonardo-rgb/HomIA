@@ -10,6 +10,7 @@ import {
   ArrowRight, BadgeCheck, Building2, Check, ChevronLeft, CircleCheck, HardHat,
   House, Loader2, MapPin, ShieldCheck, Sparkles, Store, Upload, UserRound,
 } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 type Role = 'cliente' | 'profesional' | 'proveedor'
 
@@ -170,13 +171,11 @@ export default function RegisterScreen() {
     }
     setBusy(true)
     try {
-      // subir DNI si el usuario adjuntó
-      let dniFrontUrl: string | null = null
-      let dniBackUrl: string | null = null
+      // el DNI se sube DESPUÉS de crear la cuenta (la subida exige sesión)
       const inputFront = document.getElementById('dni-front') as HTMLInputElement | null
       const inputBack = document.getElementById('dni-back') as HTMLInputElement | null
-      if (inputFront?.files?.[0]) dniFrontUrl = await uploadFile(inputFront.files[0], 'dni')
-      if (inputBack?.files?.[0]) dniBackUrl = await uploadFile(inputBack.files[0], 'dni')
+      const dniFrontFile = inputFront?.files?.[0] || null
+      const dniBackFile = inputBack?.files?.[0] || null
 
       const rolesPayload = [...roles]
       // un profesional también puede contratar a otros: rol cliente incluido
@@ -204,13 +203,24 @@ export default function RegisterScreen() {
         toast.error(data.error || 'No pudimos crear tu cuenta')
         return
       }
-      // guardar documentos de identidad si se subieron
-      if (dniFrontUrl || dniBackUrl) {
-        await fetch('/api/profiles/documents', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'dni', frontUrl: dniFrontUrl, backUrl: dniBackUrl }),
-        }).catch(() => null)
+      // DNI (opcional): ya con sesión, subir las 2 fotos al bucket privado y
+      // mandarlas a la verificación con IA. Si algo falla, se sigue igual.
+      if (dniFrontFile && dniBackFile) {
+        try {
+          const frontUrl = await uploadFile(dniFrontFile, 'dni')
+          const backUrl = await uploadFile(dniBackFile, 'dni')
+          if (!frontUrl || !backUrl) throw new Error('upload')
+          const ver = await fetch('/api/verification/dni', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ frontUrl, backUrl }),
+          })
+          if (!ver.ok) throw new Error('verification')
+        } catch {
+          toast('Podés verificar tu DNI después desde tu perfil')
+        }
+      } else if (dniFrontFile || dniBackFile) {
+        toast('Faltó una de las dos fotos del DNI: podés verificarlo después desde tu perfil')
       }
       if (location.shared) syncLocationToServer(location.lat!, location.lng!, location.radiusKm)
       await refresh()
@@ -315,10 +325,16 @@ export default function RegisterScreen() {
             <div>
               <label className="block text-sm font-semibold text-navy">
                 ¿Cómo nos encontraste?
-                <select value={howFoundUs} onChange={(e) => setHowFoundUs(e.target.value)} className="homy-glass-input mt-1.5 w-full rounded-xl px-4 py-2.5 text-[15px] outline-none">
-                  <option value="">Elegí una opción…</option>
-                  {HOW_FOUND.map((h) => <option key={h.value} value={h.value}>{h.label}</option>)}
-                </select>
+                <div className="mt-1.5">
+                  <Select value={howFoundUs} onValueChange={setHowFoundUs}>
+                    <SelectTrigger className="homy-glass-input w-full rounded-xl px-4 py-2.5 text-[15px] outline-none border-none">
+                      <SelectValue placeholder="Elegí una opción…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {HOW_FOUND.map((h) => <SelectItem key={h.value} value={h.value}>{h.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </label>
             </div>
           </div>
@@ -399,8 +415,8 @@ export default function RegisterScreen() {
               </div>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-3">
-              <UploadBox id="dni-front" label="Frente" uploaded={dniFront} />
-              <UploadBox id="dni-back" label="Reverso" uploaded={dniBack} />
+              <UploadBox id="dni-front" label="Frente" uploaded={dniFront} onPick={(f) => setDniFront(f ? f.name : null)} />
+              <UploadBox id="dni-back" label="Reverso" uploaded={dniBack} onPick={(f) => setDniBack(f ? f.name : null)} />
             </div>
           </section>
 
@@ -486,6 +502,14 @@ export default function RegisterScreen() {
 
           {role === 'proveedor' && (
             <div className="mt-6 grid gap-4">
+              <div className="flex items-start gap-3 rounded-2xl border border-[#FFC700]/45 bg-gradient-to-br from-[#FFC700]/12 to-[#FFC700]/4 p-4">
+                <span className="homy-icon-chip homy-chip-gold size-10 shrink-0 !rounded-xl" aria-hidden>
+                  <Sparkles className="size-5" />
+                </span>
+                <p className="text-sm leading-relaxed text-slate-600">
+                  <b className="text-[#0A2540]">14 días gratis para probar.</b> Después: Básico <b>$50.000/mes</b> o PRO <b>$100.000/mes</b>. Cancelás cuando quieras.
+                </p>
+              </div>
               <Field label="Nombre del local o negocio *" value={businessName} onChange={setBusinessName} placeholder="Ferretería El Tornillo" />
               <Field label="CUIT" value={cuit} onChange={setCuit} placeholder="30-12345678-9" />
               <div>
@@ -558,7 +582,7 @@ function Field({
   )
 }
 
-function UploadBox({ id, label, uploaded }: { id: string; label: string; uploaded: string | null }) {
+function UploadBox({ id, label, uploaded, onPick }: { id: string; label: string; uploaded: string | null; onPick?: (file: File | null) => void }) {
   const [name, setName] = useState<string | null>(null)
   return (
     <label
@@ -570,11 +594,15 @@ function UploadBox({ id, label, uploaded }: { id: string; label: string; uploade
       </span>
       <span className="mt-1.5 text-sm font-extrabold text-navy">DNI {label}</span>
       <span className={`mt-0.5 text-xs font-semibold ${uploaded ? 'text-[#0e9f6e]' : 'text-slate-400'}`}>
-        {uploaded ? 'Subido' : name ? name : 'JPG, PNG o PDF'}
+        {uploaded ? 'Listo' : name ? name : 'JPG, PNG o WEBP'}
       </span>
       <input
-        id={id} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden"
-        onChange={(e) => setName(e.target.files?.[0]?.name || null)}
+        id={id} type="file" accept="image/*" className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0] || null
+          setName(f?.name || null)
+          onPick?.(f)
+        }}
       />
     </label>
   )

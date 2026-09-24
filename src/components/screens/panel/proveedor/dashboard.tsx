@@ -13,6 +13,7 @@ import { VerificationPrompt } from '../verificacion'
 import OnboardingCard, { type OnboardingTask } from '../onboarding-card'
 import { TrialExpiredBanner } from './plan'
 import { useSession } from '@/lib/store'
+import { toast } from 'sonner'
 
 type StockItem = {
   id: string; elementId: string; name: string; unit: string; category: string; categorySlug: string
@@ -45,8 +46,10 @@ export default function ProviderDashboard() {
   const { user } = useSession()
   const [stock, setStock] = useState<StockItem[]>([])
   const [links, setLinks] = useState<ProviderLink[]>([])
-  const [profileBio, setProfileBio] = useState<string | null>(null)
+  const [profileDescription, setProfileDescription] = useState<string | null>(null)
+  const [mpConnected, setMpConnected] = useState(false)
   const [plan, setPlan] = useState<PlanState | null>(null)
+  const [preciosArs, setPreciosArs] = useState<{ basic: number; pro: number } | undefined>(undefined)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -57,8 +60,18 @@ export default function ProviderDashboard() {
         ])
         if (resS.ok) setStock((await resS.json()).stock || [])
         if (resL.ok) setLinks((await resL.json()).asProvider || [])
-        if (resMe.ok) setProfileBio((await resMe.json()).user?.provider?.bio || null)
-        if (resPlan.ok) setPlan((await resPlan.json()).plan)
+        if (resMe.ok) {
+          const prov = (await resMe.json()).user?.provider
+          setProfileDescription(prov?.description || null)
+          setMpConnected(prov?.mpOauthStatus === 'connected')
+        }
+        if (resPlan.ok) {
+          const d = await resPlan.json()
+          setPlan(d.plan)
+          setPreciosArs(d.preciosArs)
+        }
+      } catch {
+        toast.error('No pudimos cargar tu panel. Reintentá')
       } finally { setLoading(false) }
     })()
   }, [])
@@ -81,7 +94,12 @@ export default function ProviderDashboard() {
     {
       id: 'profile', label: 'Completá tu perfil de negocio',
       desc: 'Presentá tu empresa y zona de despacho: los profesionales te van a encontrar en el directorio.',
-      done: !!profileBio, href: '/panel/proveedor/perfil', cta: 'Completar perfil',
+      done: !!profileDescription, href: '/panel/proveedor/perfil', cta: 'Completar perfil',
+    },
+    {
+      id: 'mp', label: 'Conectá Mercado Pago',
+      desc: 'Cobrá tus ventas directas en tu propia cuenta. Sin conexión, tus clientes solo pueden pagarte en efectivo.',
+      done: mpConnected, href: '/panel/proveedor/cobros', cta: 'Conectar',
     },
     {
       id: 'stock', label: 'Publicá tu catálogo de stock',
@@ -99,7 +117,7 @@ export default function ProviderDashboard() {
     <div className="homy-page">
       <VerificationPrompt role="proveedor" />
       {/* estado del plan: cuenta regresiva de la prueba o aviso de vencimiento */}
-      {plan && plan.plan === 'trial' && <TrialExpiredBanner daysLeft={plan.trialDaysLeft} />}
+      {plan && plan.plan === 'trial' && <TrialExpiredBanner daysLeft={plan.trialDaysLeft} preciosArs={preciosArs} />}
       <OnboardingCard role="proveedor" tasks={onboardingTasks} />
       {/* Encabezado */}
       <header className="homy-page-head">
@@ -282,7 +300,7 @@ export default function ProviderDashboard() {
             />
             <QuickLink
               icon={Crown} chip="homy-chip-gold" title="Mi plan de suscripción"
-              desc="Prueba gratis, Básico US$50/mes o PRO US$100/mes con analítica y destacado."
+              desc={`Prueba gratis, Básico ${formatARS(preciosArs?.basic ?? 50000)}/mes o PRO ${formatARS(preciosArs?.pro ?? 100000)}/mes con analítica y destacado.`}
               onClick={() => navigate('/panel/proveedor/plan')}
             />
             <QuickLink
@@ -391,6 +409,25 @@ function AnalyticsSection({ plan }: { plan: PlanState | null }) {
           <p className="text-sm text-slate-500">No pudimos cargar la analítica ahora. Probá de nuevo en un rato.</p>
         ) : (
           <div className="mt-4 grid gap-4 lg:grid-cols-3">
+            {/* resumen de ventas del período */}
+            <div className="rounded-2xl bg-[#0A2540]/3 p-4 lg:col-span-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Ventas cobradas</p>
+                <AutoFitValue className="mt-1 text-2xl font-extrabold text-[#0A2540]" value={formatARS(data.ventas.total)} />
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Pedidos entregados</p>
+                <p className="mt-1 text-2xl font-extrabold text-[#0A2540] tabular-nums">{data.ventas.pedidos}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Pedidos en curso</p>
+                <p className="mt-1 text-2xl font-extrabold text-[#FF5A1F] tabular-nums">{data.ventas.pendientes}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Elementos publicados</p>
+                <p className="mt-1 text-2xl font-extrabold text-[#0A2540] tabular-nums">{data.ventas.stockCount}</p>
+              </div>
+            </div>
             {/* elementos más pedidos */}
             <div className="rounded-2xl bg-[#0A2540]/3 p-4 lg:col-span-1">
               <p className="flex items-center gap-2 text-sm font-extrabold text-[#0A2540]">

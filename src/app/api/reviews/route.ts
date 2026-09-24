@@ -2,6 +2,15 @@ import { NextRequest } from 'next/server'
 import { ok, fail, body } from '@/lib/api'
 import { db } from '@/lib/db'
 
+/** Fotos de reseña: máx 4, solo subidas reales de HomIA (bucket de Supabase
+ *  `https://…` o legado `/uploads/…`), extensión de imagen. */
+function sanitizePhotos(arr: unknown): string[] {
+  if (!Array.isArray(arr)) return []
+  return arr
+    .filter((p): p is string => typeof p === 'string' && p.length < 500 && /^(https?:\/\/.+|\/uploads\/.+)\.(jpg|jpeg|png|webp)$/i.test(p))
+    .slice(0, 4)
+}
+
 // POST: dejar reseña 360° (cliente→profesional, profesional→cliente, cliente→proveedor).
 // REGLA DE CONFIANZA: solo pueden reseñarse participantes reales de una obra,
 // y recién cuando la obra finalizó. Toda reseña exige un proyecto real.
@@ -50,9 +59,7 @@ export async function POST(req: NextRequest) {
     const dup = await db.review.findFirst({ where: { authorId: user.id, purchaseId: purchase.id } })
     if (dup) return fail('Ya dejaste una reseña por esta compra', 409)
 
-    const photos = Array.isArray(d.photos)
-      ? d.photos.filter((p) => typeof p === 'string' && /^\/uploads\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_/-]+\.(jpg|jpeg|png|webp)$/i.test(p)).slice(0, 4)
-      : []
+    const photos = sanitizePhotos(d.photos)
 
     const review = await db.review.create({
       data: {
@@ -84,7 +91,7 @@ export async function POST(req: NextRequest) {
         type: 'nueva_reseña',
         title: 'Nueva reseña de una compra',
         body: `${user.displayName} calificó su compra de ${purchase.elementName} con ${d.rating}★`,
-        link: '#/panel/proveedor/crm',
+        link: '#/panel/proveedor/cobros',
       },
     })
     return ok({ review }, 201)
@@ -126,9 +133,7 @@ export async function POST(req: NextRequest) {
   }
 
   // fotos: máx 4, solo rutas de subida reales de HomIA
-  const photos = Array.isArray(d.photos)
-    ? d.photos.filter((p) => typeof p === 'string' && p.length < 500 && /^(https?:\/\/.+|\/uploads\/.+)\.(jpg|jpeg|png|webp)$/i.test(p)).slice(0, 4)
-    : []
+  const photos = sanitizePhotos(d.photos)
 
   const target = await db.user.findUnique({ where: { id: d.targetUserId } })
   if (!target) return fail('Usuario no encontrado', 404)
@@ -176,7 +181,13 @@ export async function POST(req: NextRequest) {
       type: 'nueva_reseña',
       title: 'Nueva reseña',
       body: `${user.displayName} te calificó con ${d.rating}★${photos.length ? ` con ${photos.length} foto${photos.length > 1 ? 's' : ''}` : ''}`,
-      link: '#/panel',
+      // al detalle del proyecto en el panel del rol reseñado (el proveedor no tiene
+      // detalle de proyecto: sus reseñas de obra se siguen desde Cobros)
+      link: d.targetUserId === project.pro.userId
+        ? `#/panel/profesional/proyectos/${project.id}`
+        : d.targetUserId === project.clientId
+          ? `#/panel/cliente/proyectos/${project.id}`
+          : '#/panel/proveedor/cobros',
     },
   })
 

@@ -5,22 +5,15 @@ import { Loading } from '@/components/app/ui-bits'
 import { formatDate } from '@/lib/format'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Plus, ImageIcon, X, HardHat } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Plus, ImageIcon, X, HardHat, Trash2, RefreshCw, WifiOff } from 'lucide-react'
+import { apiFetch, NETWORK_ERROR } from '@/lib/api-client'
+import { useCategories, categoryName } from '@/lib/categories'
 
-const CATEGORIES = [
-  { slug: 'plomeria', name: 'Plomería' },
-  { slug: 'gasistas', name: 'Gasistas' },
-  { slug: 'electricistas', name: 'Electricistas' },
-  { slug: 'albanileria', name: 'Albañilería' },
-  { slug: 'pintura', name: 'Pintura' },
-  { slug: 'carpinteria', name: 'Carpintería' },
-  { slug: 'herreria', name: 'Herrería' },
-  { slug: 'limpieza', name: 'Limpieza' },
-  { slug: 'jardineria', name: 'Jardinería' },
-  { slug: 'climatizacion', name: 'Climatización' },
-  { slug: 'techos', name: 'Techos' },
-  { slug: 'cerramientos', name: 'Cerramientos' },
-]
 
 type Work = {
   id: string; title: string; description: string; photos: string
@@ -49,15 +42,23 @@ export default function ProWorks() {
   const [files, setFiles] = useState<File[]>([])
   const [previews, setPreviews] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Work | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const { categories: CATEGORIES } = useCategories()
 
   async function load() {
     setLoading(true)
-    try {
-      const res = await fetch('/api/works')
-      if (res.ok) setWorks((await res.json()).works || [])
-    } finally { setLoading(false) }
+    setError(null)
+    const r = await apiFetch<{ works: Work[] }>('/api/works', { silent: true })
+    if (r.ok) setWorks(r.data?.works || [])
+    else setError(r.error || NETWORK_ERROR)
+    setLoading(false)
   }
   useEffect(() => { load() }, [])
+
+  // liberar los object URLs de las previews (evita fugas de memoria en el celu)
+  useEffect(() => () => { previews.forEach((u) => URL.revokeObjectURL(u)) }, [previews])
 
   function pickPhotos(list: FileList | null) {
     if (!list) return
@@ -69,40 +70,55 @@ export default function ProWorks() {
 
   function clearForm() {
     setTitle(''); setDescription(''); setCategorySlug(''); setFiles([]); setPreviews([])
+    if (fileRef.current) fileRef.current.value = ''
   }
 
   async function uploadPhoto(file: File): Promise<string | null> {
     const form = new FormData()
     form.append('file', file)
     form.append('folder', 'obras')
-    const res = await fetch('/api/uploads', { method: 'POST', body: form })
-    if (!res.ok) {
-      toast.error(`No se pudo subir una foto: ${(await res.json()).error}`)
+    const r = await apiFetch<{ url: string }>('/api/uploads', { method: 'POST', body: form, silent: true })
+    if (!r.ok || !r.data?.url) {
+      toast.error(`No se pudo subir “${file.name}”: ${r.error || 'reintentá'}. No publicamos la obra para que no quede incompleta.`)
       return null
     }
-    return (await res.json()).url
+    return r.data.url
   }
 
   async function publish() {
-    if (!title.trim() || !description.trim()) { toast.error('Completá título y descripción'); return }
+    if (title.trim().length < 3) { toast.error('Poné un título de al menos 3 letras'); return }
+    if (description.trim().length < 10) { toast.error('Contá un poco más de la obra (mínimo 10 caracteres)'); return }
     setBusy(true)
     try {
       const urls: string[] = []
       for (const f of files) {
         const url = await uploadPhoto(f)
-        if (url) urls.push(url)
+        // si falla una foto, abortamos: nada de obras publicadas a medias
+        if (!url) return
+        urls.push(url)
       }
-      const res = await fetch('/api/works', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: title.trim(), description: description.trim(), photos: urls, categorySlug: categorySlug || undefined }),
+      const r = await apiFetch('/api/works', {
+        method: 'POST',
+        json: { title: title.trim(), description: description.trim(), photos: urls, categorySlug: categorySlug || undefined },
       })
-      const d = await res.json()
-      if (!res.ok) { toast.error(d.error); return }
+      if (!r.ok) return
       toast.success('¡Obra publicada! Ya aparece en tu perfil.')
       setOpen(false)
       clearForm()
       load()
     } finally { setBusy(false) }
+  }
+
+  async function removeWork() {
+    if (!deleteTarget || deleting) return
+    setDeleting(true)
+    try {
+      const r = await apiFetch(`/api/works/${deleteTarget.id}`, { method: 'DELETE' })
+      if (!r.ok) return
+      toast.success('Obra eliminada de tu perfil')
+      setWorks((cur) => cur.filter((w) => w.id !== deleteTarget.id))
+      setDeleteTarget(null)
+    } finally { setDeleting(false) }
   }
 
   if (loading) return <Loading />
@@ -121,13 +137,22 @@ export default function ProWorks() {
         </button>
       </header>
 
-      {works.length === 0 ? (
+      {error ? (
+        <div className="homy-empty homy-glass-soft border border-dashed border-red-300/60" role="alert">
+          <span className="homy-empty-icon homy-chip-orange" aria-hidden><WifiOff className="size-7" /></span>
+          <h3 className="font-bold text-[#0A2540] text-lg tracking-tight">No pudimos cargar tus obras</h3>
+          <p className="text-sm text-slate-500 mt-1.5 max-w-md leading-relaxed">{error}</p>
+          <div className="mt-5">
+            <button onClick={load} className="homy-btn-dark min-h-[44px] px-5 py-2.5 text-sm"><RefreshCw className="size-4" aria-hidden /> Reintentar</button>
+          </div>
+        </div>
+      ) : works.length === 0 ? (
         <Empty onPublish={() => setOpen(true)} />
       ) : (
         <div className="columns-1 sm:columns-2 xl:columns-3 gap-4">
           {works.map((w) => {
             const photos = parsePhotos(w.photos)
-            const catName = CATEGORIES.find((c) => c.slug === w.categorySlug)?.name
+            const catName = w.categorySlug ? categoryName(CATEGORIES, w.categorySlug) : ''
             return (
               <article key={w.id} className="homy-glass homy-lift homy-card-glow rounded-3xl overflow-hidden flex flex-col mb-4 break-inside-avoid">
                 {photos.length > 0 ? (
@@ -154,6 +179,13 @@ export default function ProWorks() {
                   </div>
                   <h3 className="font-extrabold text-[#0A2540] leading-snug tracking-tight">{w.title}</h3>
                   <p className="text-sm text-slate-500 mt-1.5 line-clamp-4 leading-relaxed">{w.description}</p>
+                  <div className="mt-3 flex justify-end">
+                    <button type="button" onClick={() => setDeleteTarget(w)}
+                      className="homy-glass-soft homy-focus inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-3.5 text-xs font-bold text-slate-500 transition hover:text-red-600"
+                      aria-label={`Eliminar la obra ${w.title}`}>
+                      <Trash2 className="size-3.5" aria-hidden /> Eliminar
+                    </button>
+                  </div>
                 </div>
               </article>
             )
@@ -182,11 +214,16 @@ export default function ProWorks() {
             </label>
             <label className="block">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Categoría</span>
-              <select value={categorySlug} onChange={(e) => setCategorySlug(e.target.value)}
-                className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm cursor-pointer">
-                <option value="">Elegí una categoría…</option>
-                {CATEGORIES.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
-              </select>
+              <div className="mt-1.5">
+                <Select value={categorySlug} onValueChange={setCategorySlug}>
+                  <SelectTrigger className="homy-glass-input w-full rounded-xl px-3 py-2.5 text-sm cursor-pointer border-none">
+                    <SelectValue placeholder="Elegí una categoría…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map((c) => <SelectItem key={c.slug} value={c.slug}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </label>
             <div>
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Fotos ({files.length}/4)</span>
@@ -199,10 +236,11 @@ export default function ProWorks() {
                     <div key={url} className="relative">
                       <img src={url} alt={`Preview ${i + 1}`} className="size-16 rounded-xl object-cover border border-slate-200" />
                       <button
+                        type="button"
                         onClick={() => {
                           const nf = files.filter((_, j) => j !== i)
                           setFiles(nf)
-                          setPreviews((p) => p.filter((_, j) => j !== i))
+                          setPreviews(nf.map((file) => URL.createObjectURL(file)))
                         }}
                         className="absolute -top-1.5 -right-1.5 rounded-full bg-[#0A2540] text-white p-0.5 hover:bg-red-500 transition"
                         aria-label={`Quitar foto ${i + 1}`}>
@@ -217,12 +255,29 @@ export default function ProWorks() {
               <button onClick={() => { setOpen(false); clearForm() }} className="homy-glass-soft rounded-full min-h-[44px] px-4 py-2.5 text-sm font-bold text-slate-500 hover:text-red-500 transition">Cancelar</button>
               <button disabled={busy} onClick={publish} className="homy-btn-primary min-h-[44px] px-5 py-2.5 text-sm disabled:opacity-50 flex items-center gap-2">
                 {busy && <span className="size-4 rounded-full border-2 border-white/40 border-t-white animate-spin" aria-hidden />}
-                Publicar obra
+                {busy ? (files.length > 0 ? 'Subiendo fotos…' : 'Publicando…') : 'Publicar obra'}
               </button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(v) => { if (!v && !deleting) setDeleteTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar “{deleteTarget?.title}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              La obra deja de verse en tu perfil público y en el directorio. Las reseñas que recibiste no se tocan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); removeWork() }} disabled={deleting} className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-60">
+              {deleting ? 'Eliminando…' : 'Eliminar obra'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

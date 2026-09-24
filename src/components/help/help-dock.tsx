@@ -112,8 +112,8 @@ export default function HelpDock() {
                 Creá tu cuenta gratis y te llevamos de la mano.
               </p>
               <ul className="mt-3 space-y-2 text-sm font-semibold text-[#0A2540]">
-                <li className="homy-glass-soft flex items-center gap-2 rounded-2xl px-3.5 py-2.5"><User className="size-4 shrink-0 text-[#1D63B8]" aria-hidden /> Cliente: publicás, comparás y contratás con escrow</li>
-                <li className="homy-glass-soft flex items-center gap-2 rounded-2xl px-3.5 py-2.5"><HardHat className="size-4 shrink-0 text-[#FF5A1F]" aria-hidden /> Profesional: presupuestás y cobrás protegido</li>
+                <li className="homy-glass-soft flex items-center gap-2 rounded-2xl px-3.5 py-2.5"><User className="size-4 shrink-0 text-[#1D63B8]" aria-hidden /> Cliente: publicás, comparás, contratás y pagás al finalizar</li>
+                <li className="homy-glass-soft flex items-center gap-2 rounded-2xl px-3.5 py-2.5"><HardHat className="size-4 shrink-0 text-[#FF5A1F]" aria-hidden /> Profesional: presupuestás y cobrás por Mercado Pago o efectivo</li>
                 <li className="homy-glass-soft flex items-center gap-2 rounded-2xl px-3.5 py-2.5"><Boxes className="size-4 shrink-0 text-[#0092c4]" aria-hidden /> Proveedor: tu stock es tu vidriera</li>
               </ul>
             </div>

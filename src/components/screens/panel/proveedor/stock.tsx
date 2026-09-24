@@ -3,9 +3,10 @@
 // El picker de elementos es un combobox con búsqueda difusa (sin acentos ni
 // mayúsculas, por aliases y descripción) y permite AGREGAR AL CATÁLOGO el
 // elemento faltante con explicación generada por IA (N7.1.1 + N7.1.2).
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { StatusBadge, Loading } from '@/components/app/ui-bits'
 import { toast } from 'sonner'
+import { apiFetch } from '@/lib/api-client'
 import { matchTerms, matchScore } from '@/lib/search-match'
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
@@ -15,12 +16,13 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
-  Plus, Search, Minus, Check, Trash2, Info, Package, PackageOpen, Sparkles,
+  Plus, Search, Minus, Check, Trash2, Info, Package, PackageOpen, Sparkles, Loader2, Upload, Camera,
 } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 type StockItem = {
   id: string; elementId: string; name: string; unit: string; category: string; categorySlug: string
-  aliases: string[]; description: string | null; brand: string | null; price: number; quantity: number; minStock: number
+  aliases: string[]; description: string | null; brand: string | null; imageUrl?: string | null; price: number; quantity: number; minStock: number
   status: string; updatedAt: string
 }
 
@@ -31,7 +33,7 @@ type CatalogCategory = {
 
 const UNIT_OPTIONS = ['unidad', 'metro', 'm2', 'm3', 'kg', 'litro', 'bolsa', 'paquete', 'caja', 'rollo', 'placa', 'par', 'juego', 'pack', 'tira', 'tambor', 'barra', 'bobina', 'millar', 'lata']
 
-type Draft = { price?: string; qty?: string }
+type Draft = { price?: string; qty?: string; min?: string; brand?: string }
 
 const STATUS_OPTIONS = [
   { value: 'disponible', label: 'Disponible' },
@@ -43,6 +45,7 @@ export default function ProviderStock() {
   const [stock, setStock] = useState<StockItem[]>([])
   const [catalog, setCatalog] = useState<CatalogCategory[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   // filtros
   const [q, setQ] = useState('')
@@ -71,18 +74,23 @@ export default function ProviderStock() {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<StockItem | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   async function load() {
-    const res = await fetch('/api/provider/stock')
-    if (res.ok) setStock((await res.json()).stock || [])
+    const r = await apiFetch<{ stock: StockItem[] }>('/api/provider/stock')
+    if (r.ok) { setStock(r.data?.stock || []); setLoadError(null) }
   }
 
   useEffect(() => {
     (async () => {
       try {
-        const [resS, resC] = await Promise.all([fetch('/api/provider/stock'), fetch('/api/catalog')])
-        if (resS.ok) setStock((await resS.json()).stock || [])
-        if (resC.ok) setCatalog((await resC.json()).categories || [])
+        const [rS, rC] = await Promise.all([
+          apiFetch<{ stock: StockItem[] }>('/api/provider/stock', { silent: true }),
+          apiFetch<{ categories: CatalogCategory[] }>('/api/catalog', { silent: true }),
+        ])
+        if (rS.ok) setStock(rS.data?.stock || [])
+        else setLoadError(rS.error)
+        if (rC.ok) setCatalog(rC.data?.categories || [])
       } finally { setLoading(false) }
     })()
   }, [])
@@ -114,15 +122,12 @@ export default function ProviderStock() {
   async function patch(id: string, data: Record<string, unknown>, okMsg?: string) {
     setSavingId(id)
     try {
-      const res = await fetch('/api/provider/stock', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, ...data }),
-      })
-      if (!res.ok) { toast.error((await res.json()).error); return }
-      const d = await res.json()
-      if (d.stock) {
+      const r = await apiFetch<{ stock?: StockItem }>('/api/provider/stock', { method: 'PATCH', json: { id, ...data } })
+      if (!r.ok) return
+      const st = r.data?.stock
+      if (st) {
         setStock((prev) => prev.map((s) => s.id === id
-          ? { ...s, price: d.stock.price, quantity: d.stock.quantity, minStock: d.stock.minStock, status: d.stock.status, brand: d.stock.brand }
+          ? { ...s, price: st.price, quantity: st.quantity, minStock: st.minStock, status: st.status, brand: st.brand, imageUrl: st.imageUrl }
           : s))
       }
       if (okMsg) toast.success(okMsg)
@@ -147,6 +152,26 @@ export default function ProviderStock() {
     if (n === item.quantity) { clearDraft(item.id, 'qty'); return }
     patch(item.id, { quantity: n })
     clearDraft(item.id, 'qty')
+  }
+
+  function saveMin(item: StockItem) {
+    const raw = drafts[item.id]?.min
+    if (raw === undefined) return
+    const n = Number(raw)
+    if (raw === '' || Number.isNaN(n) || n < 0 || !Number.isInteger(n)) { toast.error('Ingresá un stock mínimo válido (número entero)'); clearDraft(item.id, 'min'); return }
+    if (n === item.minStock) { clearDraft(item.id, 'min'); return }
+    patch(item.id, { minStock: n }, 'Stock mínimo actualizado')
+    clearDraft(item.id, 'min')
+  }
+
+  function saveBrand(item: StockItem) {
+    const raw = drafts[item.id]?.brand
+    if (raw === undefined) return
+    const v = raw.trim()
+    if (v.length > 80) { toast.error('La marca puede tener hasta 80 caracteres'); return }
+    if (v === (item.brand || '')) { clearDraft(item.id, 'brand'); return }
+    patch(item.id, { brand: v }, v ? 'Marca actualizada' : 'Marca quitada')
+    clearDraft(item.id, 'brand')
   }
 
   function bump(item: StockItem, delta: number) {
@@ -182,12 +207,15 @@ export default function ProviderStock() {
   }
 
   async function remove() {
-    if (!deleteTarget) return
-    const res = await fetch(`/api/provider/stock?id=${deleteTarget.id}`, { method: 'DELETE' })
-    if (!res.ok) { toast.error((await res.json()).error); setDeleteTarget(null); return }
-    toast.success('Elemento eliminado')
-    setDeleteTarget(null)
-    load()
+    if (!deleteTarget || deleting) return
+    setDeleting(true)
+    try {
+      const r = await apiFetch(`/api/provider/stock?id=${deleteTarget.id}`, { method: 'DELETE' })
+      if (!r.ok) return
+      toast.success('Elemento eliminado')
+      setDeleteTarget(null)
+      load()
+    } finally { setDeleting(false) }
   }
 
   async function reloadCatalog() {
@@ -268,11 +296,17 @@ export default function ProviderStock() {
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre…"
                 className="homy-glass-input w-full rounded-xl pl-10 pr-4 py-2.5 min-h-[44px] text-sm" aria-label="Buscar elemento por nombre" />
             </div>
-            <select value={cat} onChange={(e) => setCat(e.target.value)} aria-label="Filtrar por categoría"
-              className="homy-glass-input rounded-xl px-3 py-2.5 min-h-[44px] text-sm font-semibold text-[#0A2540]">
-              <option value="">Todas las categorías</option>
-              {catOptions.map(([slug, name]) => <option key={slug} value={slug}>{name}</option>)}
-            </select>
+            <div className="shrink-0">
+              <Select value={cat || 'todas'} onValueChange={(v) => setCat(v === 'todas' ? '' : v)}>
+                <SelectTrigger className="homy-glass-input rounded-xl px-3 py-2.5 min-h-[44px] text-sm font-semibold text-[#0A2540] border-none" aria-label="Filtrar por categoría">
+                  <SelectValue placeholder="Todas las categorías" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas las categorías</SelectItem>
+                  {catOptions.map(([slug, name]) => <SelectItem key={slug} value={slug}>{name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div role="group" aria-label="Filtrar por estado" className="flex gap-2 overflow-x-auto no-scrollbar mt-3.5 pt-3.5 border-t border-[#0A2540]/8">
             {[{ value: '', label: 'Todos' }, ...STATUS_OPTIONS].map((o) => (
@@ -286,7 +320,18 @@ export default function ProviderStock() {
         </div>
 
         {/* listado */}
-        {stock.length === 0 ? (
+        {loadError ? (
+          <Empty
+            icon={<Info className="size-7" />}
+            title="No pudimos cargar tu stock"
+            hint={loadError}
+            action={
+              <button onClick={() => { load() }} className="homy-btn-dark homy-focus min-h-[44px] px-5 py-2.5 text-sm">
+                Reintentar
+              </button>
+            }
+          />
+        ) : stock.length === 0 ? (
           <Empty
             icon={<PackageOpen className="size-7" />}
             title="Todavía no publicaste elementos"
@@ -314,12 +359,26 @@ export default function ProviderStock() {
               <article key={s.id} className="homy-glass homy-lift homy-card-glow rounded-2xl p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <span aria-hidden className="homy-icon-chip homy-chip-blue size-10 shrink-0 [&_svg]:size-5"><Package /></span>
+                    <MaterialPhotoUploader
+                      initialUrl={s.imageUrl}
+                      name={s.name}
+                      onUpload={async (url) => {
+                        await patch(s.id, { imageUrl: url }, 'Foto de material actualizada')
+                      }}
+                    />
                     <div className="min-w-0">
                       <p className="font-bold text-[#0A2540] leading-snug">{s.name}</p>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        {s.category}{s.brand ? ` · ${s.brand}` : ''} · se vende por {s.unit}
+                        {s.category} · se vende por {s.unit}
                       </p>
+                      <input value={drafts[s.id]?.brand ?? (s.brand || '')}
+                        onChange={(e) => setDraft(s.id, 'brand', e.target.value)}
+                        onBlur={() => saveBrand(s)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') saveBrand(s) }}
+                        placeholder="Marca (opcional)" maxLength={80}
+                        disabled={savingId === s.id}
+                        aria-label={`Marca de ${s.name}`}
+                        className="homy-glass-input mt-1.5 w-full max-w-[220px] rounded-lg px-2.5 py-1.5 min-h-[36px] text-xs font-semibold text-[#0A2540] disabled:opacity-60" />
                     </div>
                   </div>
                   <StatusBadge status={s.status} />
@@ -366,10 +425,14 @@ export default function ProviderStock() {
                   {/* mínimo + eliminar */}
                   <div className="flex sm:flex-col sm:items-end justify-between gap-2">
                     <div className="sm:text-right">
-                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.12em]">Stock mínimo</p>
-                      <p className="text-lg font-extrabold text-[#0A2540] mt-1.5 tabular-nums leading-none">
-                        {s.minStock} <span className="text-xs font-semibold text-slate-400">{s.unit}</span>
-                      </p>
+                      <label htmlFor={`min-${s.id}`} className="block text-[11px] font-bold text-slate-400 uppercase tracking-[0.12em]">Stock mínimo</label>
+                      <input id={`min-${s.id}`} type="number" min={0} step={1} inputMode="numeric"
+                        value={drafts[s.id]?.min ?? String(s.minStock)}
+                        onChange={(e) => setDraft(s.id, 'min', e.target.value)}
+                        onBlur={() => saveMin(s)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') saveMin(s) }}
+                        disabled={savingId === s.id}
+                        className="homy-glass-input mt-1.5 w-24 rounded-xl px-3 py-2.5 min-h-[44px] text-sm font-bold text-[#0A2540] text-center tabular-nums disabled:opacity-60" />
                     </div>
                     <button onClick={() => setDeleteTarget(s)}
                       className="homy-glass-soft homy-focus rounded-xl min-h-[44px] px-3.5 text-slate-400 hover:text-red-600 flex items-center gap-1.5 text-sm font-bold transition shrink-0">
@@ -398,11 +461,17 @@ export default function ProviderStock() {
           <div className="space-y-4">
             <div>
               <label htmlFor="pub-cat" className="text-[13px] font-bold text-[#0A2540]">Categoría <span className="text-slate-400 font-semibold">(opcional, para acotar)</span></label>
-              <select id="pub-cat" value={dlgCat} onChange={(e) => setDlgCat(e.target.value)}
-                className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-3 min-h-[44px] text-sm">
-                <option value="">Todas las categorías</option>
-                {catalog.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
-              </select>
+              <div className="mt-1.5">
+                <Select value={dlgCat || 'todas'} onValueChange={(v) => setDlgCat(v === 'todas' ? '' : v)}>
+                  <SelectTrigger id="pub-cat" className="homy-glass-input w-full rounded-xl px-3 py-3 min-h-[44px] text-sm border-none">
+                    <SelectValue placeholder="Todas las categorías" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todas">Todas las categorías</SelectItem>
+                    {catalog.map((c) => <SelectItem key={c.slug} value={c.slug}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div>
               <label htmlFor="pub-elem-search" className="text-[13px] font-bold text-[#0A2540]">Elemento</label>
@@ -472,18 +541,29 @@ export default function ProviderStock() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label htmlFor="new-el-cat" className="text-[13px] font-bold text-[#0A2540]">Categoría</label>
-                    <select id="new-el-cat" value={newElCat} onChange={(e) => setNewElCat(e.target.value)}
-                      className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-3 min-h-[44px] text-sm">
-                      <option value="">Elegí…</option>
-                      {catalog.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
+                    <div className="mt-1.5">
+                      <Select value={newElCat} onValueChange={setNewElCat}>
+                        <SelectTrigger id="new-el-cat" className="homy-glass-input w-full rounded-xl px-3 py-3 min-h-[44px] text-sm border-none">
+                          <SelectValue placeholder="Elegí…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {catalog.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   <div>
                     <label htmlFor="new-el-unit" className="text-[13px] font-bold text-[#0A2540]">Unidad de venta</label>
-                    <select id="new-el-unit" value={newElUnit} onChange={(e) => setNewElUnit(e.target.value)}
-                      className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-3 min-h-[44px] text-sm">
-                      {UNIT_OPTIONS.map((u) => <option key={u} value={u}>{u}</option>)}
-                    </select>
+                    <div className="mt-1.5">
+                      <Select value={newElUnit} onValueChange={setNewElUnit}>
+                        <SelectTrigger id="new-el-unit" className="homy-glass-input w-full rounded-xl px-3 py-3 min-h-[44px] text-sm border-none">
+                          <SelectValue placeholder="Elegí unidad" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {UNIT_OPTIONS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
                 <p className="text-[11px] text-slate-500 leading-relaxed">La IA genera la descripción natural y los aliases para que clientes, profesionales y otros proveedores lo encuentren aunque lo busquen con otro nombre.</p>
@@ -531,7 +611,7 @@ export default function ProviderStock() {
       </Dialog>
 
       {/* confirmación de borrado */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null) }}>
+      <AlertDialog open={!!deleteTarget} onOpenChange={(v) => { if (!v && !deleting) setDeleteTarget(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar “{deleteTarget?.name}”?</AlertDialogTitle>
@@ -541,7 +621,7 @@ export default function ProviderStock() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={remove} className="bg-red-600 hover:bg-red-700 text-white">Eliminar</AlertDialogAction>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); remove() }} disabled={deleting} className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-60">{deleting ? 'Eliminando…' : 'Eliminar'}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -558,5 +638,48 @@ function Empty({ icon, title, hint, action }: { icon: React.ReactNode; title: st
       <p className="text-sm text-slate-500 mt-1.5 max-w-md leading-relaxed">{hint}</p>
       {action && <div className="mt-5">{action}</div>}
     </div>
+  )
+}
+
+function MaterialPhotoUploader({ initialUrl, name, onUpload }: { initialUrl?: string | null, name: string, onUpload: (url: string) => Promise<void> }) {
+  const [loading, setLoading] = useState(false)
+  const ref = useRef<HTMLInputElement>(null)
+
+  const handleFile = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    const file = files[0]
+    setLoading(true)
+    const formData = new FormData()
+    formData.append('file', file)
+    try {
+      const res = await fetch('/api/uploads', { method: 'POST', body: formData })
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      await onUpload(data.url)
+    } catch {
+      toast.error('No se pudo subir la foto del material')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <button type="button" disabled={loading} aria-label={initialUrl ? `Cambiar foto de ${name}` : `Subir foto de ${name}`} aria-busy={loading}
+      className="homy-focus relative size-12 shrink-0 rounded-xl overflow-hidden group cursor-pointer border border-[#0A2540]/10 bg-white disabled:cursor-wait"
+      onClick={() => ref.current?.click()}>
+      {initialUrl ? (
+        <img src={initialUrl} alt="" className="object-cover w-full h-full" />
+      ) : (
+        <span aria-hidden className="homy-icon-chip homy-chip-blue size-full flex items-center justify-center [&_svg]:size-5 rounded-none">
+          <Camera className="text-[#1D63B8]" />
+        </span>
+      )}
+      <span aria-hidden className={`absolute inset-0 bg-black/50 flex items-center justify-center transition-opacity ${loading ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'}`}>
+        {loading ? <Loader2 className="size-5 text-white animate-spin" /> : <Upload className="size-5 text-white" />}
+      </span>
+      <input ref={ref} type="file" className="hidden" accept="image/jpeg,image/png,image/webp" tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => { handleFile(e.target.files); e.target.value = '' }} />
+    </button>
   )
 }

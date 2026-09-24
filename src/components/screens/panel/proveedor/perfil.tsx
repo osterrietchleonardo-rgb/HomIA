@@ -1,13 +1,13 @@
 'use client'
-// Perfil del proveedor — datos del negocio, reputación y documentos (DNI frente/reverso)
-import { useEffect, useRef, useState } from 'react'
-import { StatusBadge, Loading, UAvatar, UStars } from '@/components/app/ui-bits'
-import { formatDate } from '@/lib/format'
+// Perfil del proveedor — datos del negocio, reputación, plan y acceso a la verificación de identidad
+import { useEffect, useState } from 'react'
+import { Loading, AvatarUploader, UStars, VerifyBadge } from '@/components/app/ui-bits'
+import { formatARS } from '@/lib/format'
 import { toast } from 'sonner'
 import { useSession } from '@/lib/store'
-import { Upload, ShieldCheck, Store, Star, CheckCircle2, Loader2, Crown } from 'lucide-react'
-
-type Doc = { id: string; type: string; frontUrl: string | null; backUrl: string | null; status: string; createdAt: string }
+import { navigate } from '@/lib/router'
+import { ShieldCheck, Store, Star, Crown, ArrowRight, Clock, CircleAlert } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 type MeUser = {
   email: string
@@ -18,7 +18,14 @@ type MeUser = {
     address: string | null; city: string | null; rating: number; reviewsCount: number
     subscription?: string; proSince?: string | null
   } | null
-  documents: Doc[]
+}
+type PlanState = {
+  plan: 'trial' | 'basic' | 'pro'
+  activo: boolean
+  trialDaysLeft: number | null
+  trialEndsAt: string | null
+  esPro: boolean
+  etiqueta: string
 }
 
 // Tipos de negocio que puede tener un proveedor (catálogo completo de rubros)
@@ -43,9 +50,15 @@ const PROVIDER_KINDS: { value: string; label: string }[] = [
   { value: 'multi', label: 'Multiproducto (de todo un poco)' },
 ]
 
+async function readJson(res: Response): Promise<Record<string, any>> {
+  try { return await res.json() } catch { return {} }
+}
+
 export default function ProviderProfile() {
-  const { refresh } = useSession()
+  const { user, refresh } = useSession()
   const [me, setMe] = useState<MeUser | null>(null)
+  const [plan, setPlan] = useState<PlanState | null>(null)
+  const [preciosArs, setPreciosArs] = useState<{ basic: number; pro: number } | null>(null)
   const [loaded, setLoaded] = useState(false)
 
   // formulario del negocio
@@ -57,39 +70,31 @@ export default function ProviderProfile() {
   const [city, setCity] = useState('')
   const [busy, setBusy] = useState(false)
 
-  // plan PRO (suscripción Mercado Pago — proveedores)
-  const [subscription, setSubscription] = useState<'free' | 'pro'>('free')
-  const [proSince, setProSince] = useState<string | null>(null)
-  const [subscribing, setSubscribing] = useState(false)
-
-  // documentos
-  const frontRef = useRef<HTMLInputElement>(null)
-  const backRef = useRef<HTMLInputElement>(null)
-  const [frontUrl, setFrontUrl] = useState('')
-  const [backUrl, setBackUrl] = useState('')
-  const [frontName, setFrontName] = useState('')
-  const [backName, setBackName] = useState('')
-  const [uploading, setUploading] = useState<'front' | 'back' | null>(null)
-  const [sendingDoc, setSendingDoc] = useState(false)
-  const [docs, setDocs] = useState<Doc[]>([])
-
   async function load() {
-    const res = await fetch('/api/profiles/me')
-    if (res.ok) {
-      const data = await res.json()
-      const u: MeUser | null = data.user || null
-      setMe(u)
-      if (u) {
-        setBusinessName(u.provider?.businessName || '')
-        setKind(u.provider?.kind || 'multi')
-        setCuit(u.provider?.cuit || '')
-        setDescription(u.provider?.description || '')
-        setAddress(u.provider?.address || '')
-        setCity(u.provider?.city || '')
-        setSubscription(u.provider?.subscription === 'pro' ? 'pro' : 'free')
-        setProSince(u.provider?.proSince ?? null)
-        setDocs((u.documents || []).filter((d) => d.type === 'dni'))
+    try {
+      const [resMe, resPlan] = await Promise.all([fetch('/api/profiles/me'), fetch('/api/provider/plan')])
+      const dMe = await readJson(resMe)
+      if (resMe.ok) {
+        const u: MeUser | null = dMe.user || null
+        setMe(u)
+        if (u) {
+          setBusinessName(u.provider?.businessName || '')
+          setKind(u.provider?.kind || 'multi')
+          setCuit(u.provider?.cuit || '')
+          setDescription(u.provider?.description || '')
+          setAddress(u.provider?.address || '')
+          setCity(u.provider?.city || '')
+        }
+      } else {
+        toast.error(dMe.error || 'No pudimos cargar tu perfil')
       }
+      if (resPlan.ok) {
+        const dPlan = await readJson(resPlan)
+        setPlan(dPlan.plan || null)
+        setPreciosArs(dPlan.preciosArs || null)
+      }
+    } catch {
+      toast.error('No pudimos conectar. Reintentá')
     }
   }
 
@@ -106,69 +111,21 @@ export default function ProviderProfile() {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ businessName: businessName.trim(), kind, cuit: cuit.trim(), description: description.trim(), address: address.trim(), city: city.trim() }),
       })
-      if (!res.ok) { toast.error((await res.json()).error); return }
+      if (!res.ok) { toast.error((await readJson(res)).error || 'No pudimos guardar los cambios'); return }
       await refresh()
+      await load()
       toast.success('Perfil actualizado')
+    } catch {
+      toast.error('No pudimos conectar. Reintentá')
     } finally { setBusy(false) }
-  }
-
-  async function uploadSide(side: 'front' | 'back') {
-    const ref = side === 'front' ? frontRef : backRef
-    const file = ref.current?.files?.[0]
-    if (!file) return
-    setUploading(side)
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      fd.append('folder', 'dni')
-      const res = await fetch('/api/uploads', { method: 'POST', body: fd })
-      if (!res.ok) { toast.error((await res.json()).error || `No se pudo subir ${file.name}`); return }
-      const data = await res.json()
-      if (side === 'front') { setFrontUrl(data.url); setFrontName(file.name) }
-      else { setBackUrl(data.url); setBackName(file.name) }
-      toast.success(side === 'front' ? 'Frente subido' : 'Reverso subido')
-    } finally {
-      setUploading(null)
-      if (ref.current) ref.current.value = ''
-    }
-  }
-
-  async function sendDoc() {
-    if (!frontUrl && !backUrl) { toast.error('Subí al menos una imagen del DNI'); return }
-    setSendingDoc(true)
-    try {
-      const res = await fetch('/api/profiles/documents', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'dni', frontUrl: frontUrl || undefined, backUrl: backUrl || undefined }),
-      })
-      if (!res.ok) { toast.error((await res.json()).error); return }
-      toast.success('Documento enviado a revisión')
-      setFrontUrl(''); setBackUrl(''); setFrontName(''); setBackName('')
-      load()
-    } finally { setSendingDoc(false) }
-  }
-
-  async function subscribePro() {
-    setSubscribing(true)
-    try {
-      const res = await fetch('/api/provider/subscription', { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) {
-        if (data.needsConfig) {
-          toast.error('Mercado Pago no configurado en el servidor', { description: 'Agregá MP_ACCESS_TOKEN al archivo .env para suscribirte.' })
-        } else {
-          toast.error(data.error)
-        }
-        return
-      }
-      window.location.href = data.initPoint
-    } finally { setSubscribing(false) }
   }
 
   if (!loaded) return <Loading />
 
   const rating = me?.provider?.rating ?? 0
   const reviewsCount = me?.provider?.reviewsCount ?? 0
+  const verificationStatus = user?.verificationStatus || 'none'
+  const planLabel = plan ? (plan.plan === 'pro' ? 'PRO' : plan.plan === 'basic' ? 'Básico' : plan.activo ? 'Prueba' : 'Prueba finalizada') : '—'
 
   return (
     <div className="homy-page">
@@ -177,40 +134,11 @@ export default function ProviderProfile() {
         <div className="min-w-0">
           <span className="homy-eyebrow">Identidad del negocio</span>
           <h1 className="homy-page-title mt-1.5">Mi perfil</h1>
-          <p className="homy-page-sub">Datos de tu negocio y verificación de identidad.</p>
+          <p className="homy-page-sub">Datos de tu negocio, plan y verificación de identidad.</p>
         </div>
       </header>
 
       <div className="max-w-2xl mx-auto homy-stagger space-y-5">
-        {/* plan PRO (suscripción Mercado Pago) */}
-        <section className="homy-glass-dark relative overflow-hidden rounded-3xl p-5 text-white sm:p-6">
-          <span aria-hidden className="pointer-events-none absolute -right-14 -top-16 size-52 rounded-full bg-[#FFC700]/15 blur-3xl" />
-          <div className="relative flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <span className="homy-icon-chip homy-chip-gold size-10 shrink-0 [&_svg]:size-5" aria-hidden><Crown /></span>
-              <div>
-                <h2 className="flex items-center gap-2 text-lg font-extrabold tracking-tight">
-                  Plan PRO
-                  {subscription === 'pro' && (
-                    <span className="rounded-full bg-[#FFC700]/20 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-widest text-[#FFC700]">Activo</span>
-                  )}
-                </h2>
-                <p className="text-sm text-slate-300">
-                  {subscription === 'pro'
-                    ? `Tu negocio muestra el badge PRO${proSince ? ` desde ${new Date(proSince).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}` : ''}.`
-                    : 'Destacá tu negocio con el badge PRO y prioridad en el motor IA. Suscripción mensual por Mercado Pago.'}
-                </p>
-              </div>
-            </div>
-            {subscription === 'free' && (
-              <button onClick={subscribePro} disabled={subscribing} className="homy-btn-primary shrink-0 px-5 py-3 text-sm">
-                {subscribing ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Crown className="size-4" aria-hidden />}
-                Suscribirme al plan PRO
-              </button>
-            )}
-          </div>
-        </section>
-
         {/* tarjeta de identidad del negocio */}
         <section className="homy-glass rounded-3xl p-5 sm:p-6 relative overflow-hidden">
           <span
@@ -219,9 +147,34 @@ export default function ProviderProfile() {
             style={{ background: 'radial-gradient(circle, rgba(0,196,255,0.16) 0%, transparent 70%)' }}
           />
           <div className="relative flex items-center gap-4">
-            <UAvatar name={me?.displayName || ''} url={me?.avatarUrl} size={64} />
+            <AvatarUploader
+              name={me?.displayName || ''}
+              url={me?.avatarUrl}
+              size={64}
+              onUpload={async (url) => {
+                try {
+                  const res = await fetch('/api/profiles/me', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ avatarUrl: url }),
+                  })
+                  if (res.ok) {
+                    await load()
+                    await refresh()
+                    toast.success('Foto actualizada')
+                  } else {
+                    toast.error('No se pudo guardar la foto')
+                  }
+                } catch {
+                  toast.error('No pudimos conectar. Reintentá')
+                }
+              }}
+            />
             <div className="min-w-0 flex-1">
-              <p className="font-extrabold text-lg text-[#0A2540] truncate">{me?.provider?.businessName || me?.displayName}</p>
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-extrabold text-lg text-[#0A2540]">
+                <span className="truncate">{me?.provider?.businessName || me?.displayName}</span>
+                <VerifyBadge status={verificationStatus} />
+              </p>
               {me?.provider?.kind && me.provider.kind !== 'multi' && (
                 <span className="homy-pill mt-1.5">
                   <span className="homy-pill-dot bg-[#00C4FF]" aria-hidden />
@@ -241,6 +194,30 @@ export default function ProviderProfile() {
           </div>
         </section>
 
+        {/* tu plan */}
+        <section className={`homy-glass rounded-3xl p-5 sm:p-6 ${plan && !plan.activo ? 'ring-2 ring-[#FF5A1F]/40' : ''}`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="homy-icon-chip homy-chip-gold size-10 shrink-0 [&_svg]:size-5" aria-hidden>
+                {plan && !plan.activo ? <CircleAlert /> : plan?.plan === 'trial' ? <Clock /> : <Crown />}
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-lg font-extrabold tracking-tight text-[#0A2540]">Tu plan: {planLabel}</h2>
+                <p className="text-sm text-slate-500">
+                  {!plan ? 'No pudimos cargar el estado de tu plan.'
+                    : plan.plan === 'trial' && plan.activo ? `Te quedan ${plan.trialDaysLeft} día${plan.trialDaysLeft === 1 ? '' : 's'} de prueba gratis. Después: Básico ${formatARS(preciosArs?.basic ?? 50000)}/mes o PRO ${formatARS(preciosArs?.pro ?? 100000)}/mes.`
+                      : plan.plan === 'trial' ? 'Tu prueba terminó: elegí un plan para volver a vender.'
+                        : plan.esPro ? 'Analítica, tarjeta Recomendado y sponsor en la home activos.'
+                          : 'Uso completo de la plataforma. Pasate a PRO para destacarte.'}
+                </p>
+              </div>
+            </div>
+            <button onClick={() => navigate('/panel/proveedor/plan')} className="homy-btn-primary shrink-0 min-h-[44px] px-5 text-sm">
+              {plan && !plan.activo ? 'Elegí tu plan' : 'Ver mi plan'} <ArrowRight className="size-4" aria-hidden />
+            </button>
+          </div>
+        </section>
+
         {/* datos del negocio */}
         <form onSubmit={save} className="homy-glass rounded-3xl p-5 sm:p-6 space-y-4">
           <div className="flex items-center gap-3">
@@ -250,10 +227,16 @@ export default function ProviderProfile() {
           <Field label="Nombre del negocio" value={businessName} onChange={setBusinessName} placeholder="Ej: Corralón Central" required />
           <div>
             <label htmlFor="pf-kind" className="text-[13px] font-bold text-[#0A2540]">Tipo de negocio</label>
-            <select id="pf-kind" value={kind} onChange={(e) => setKind(e.target.value)}
-              className="homy-glass-input mt-1.5 w-full rounded-xl px-4 py-3 min-h-[48px] text-sm font-semibold text-[#0A2540]">
-              {PROVIDER_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
-            </select>
+            <div className="mt-1.5">
+              <Select value={kind} onValueChange={setKind}>
+                <SelectTrigger id="pf-kind" className="homy-glass-input w-full rounded-xl px-4 py-3 min-h-[48px] text-sm font-semibold text-[#0A2540] border-none">
+                  <SelectValue placeholder="Tipo de negocio" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PROVIDER_KINDS.map((k) => <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             <p className="text-xs text-slate-400 mt-1.5">Definí tu rubro: así los clientes y profesionales te encuentran cuando buscan lo que vendés.</p>
           </div>
           <Field label="CUIT" value={cuit} onChange={setCuit} placeholder="30-12345678-9" mono />
@@ -270,61 +253,24 @@ export default function ProviderProfile() {
           </button>
         </form>
 
-        {/* documentos */}
+        {/* verificación de identidad */}
         <section className="homy-glass rounded-3xl p-5 sm:p-6">
-          <div className="flex items-center gap-3">
-            <span aria-hidden className="homy-icon-chip homy-chip-mint size-10 shrink-0 [&_svg]:size-5"><ShieldCheck /></span>
-            <div className="min-w-0">
-              <h2 className="homy-section-title">Documentos</h2>
-              <p className="text-sm text-slate-500 mt-0.5">
-                Subí tu DNI (frente y reverso) para verificar tu negocio. Queda privado: solo lo ve el equipo de HomIA.
-              </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <span aria-hidden className="homy-icon-chip homy-chip-mint size-10 shrink-0 [&_svg]:size-5"><ShieldCheck /></span>
+              <div className="min-w-0">
+                <h2 className="homy-section-title flex flex-wrap items-center gap-2">Verificación de identidad <VerifyBadge status={verificationStatus} /></h2>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  {verificationStatus === 'verificado'
+                    ? 'Tu identidad está verificada: el check verde acompaña a tu negocio en todo HomIA.'
+                    : 'Subí tu DNI (frente y dorso): la IA lo valida y tu negocio muestra el check verde de confianza.'}
+                </p>
+              </div>
             </div>
-          </div>
-
-          {docs.length > 0 && (
-            <div className="space-y-2 mt-5 mb-4">
-              {docs.map((d) => (
-                <div key={d.id} className="homy-glass-soft rounded-xl p-3 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 min-w-0">
-                    {d.frontUrl && <img src={d.frontUrl} alt="DNI frente" className="size-10 rounded-lg object-cover border border-[#0A2540]/10" />}
-                    {d.backUrl && <img src={d.backUrl} alt="DNI reverso" className="size-10 rounded-lg object-cover border border-[#0A2540]/10" />}
-                    <span className="text-sm font-bold text-[#0A2540]">DNI</span>
-                    <span className="text-xs text-slate-400 hidden sm:inline">· {formatDate(d.createdAt)}</span>
-                  </div>
-                  <StatusBadge status={d.status} label={d.status === 'en_revision' ? 'en revisión' : undefined} />
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <input ref={frontRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden"
-              onChange={() => uploadSide('front')} aria-label="Subir frente del DNI" />
-            <input ref={backRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden"
-              onChange={() => uploadSide('back')} aria-label="Subir reverso del DNI" />
-            <button type="button" onClick={() => frontRef.current?.click()} disabled={uploading !== null}
-              className="rounded-2xl border-2 border-dashed border-[#0A2540]/15 hover:border-[#1D63B8] hover:bg-[#1D63B8]/5 disabled:opacity-60 p-4 sm:p-5 flex flex-col items-center justify-center gap-2 text-sm font-semibold text-slate-500 transition min-h-[112px]">
-              {uploading === 'front'
-                ? <Loader2 aria-hidden className="size-5 text-[#00C4FF] animate-spin" />
-                : frontUrl ? <CheckCircle2 aria-hidden className="size-5 text-emerald-500" /> : <Upload aria-hidden className="size-5 text-[#1D63B8]" />}
-              <span className="truncate max-w-full">{frontName || 'Frente del DNI'}</span>
-              <span className="text-xs text-slate-400 font-normal">{frontUrl ? 'Listo para enviar' : 'JPG, PNG o PDF'}</span>
-            </button>
-            <button type="button" onClick={() => backRef.current?.click()} disabled={uploading !== null}
-              className="rounded-2xl border-2 border-dashed border-[#0A2540]/15 hover:border-[#1D63B8] hover:bg-[#1D63B8]/5 disabled:opacity-60 p-4 sm:p-5 flex flex-col items-center justify-center gap-2 text-sm font-semibold text-slate-500 transition min-h-[112px]">
-              {uploading === 'back'
-                ? <Loader2 aria-hidden className="size-5 text-[#00C4FF] animate-spin" />
-                : backUrl ? <CheckCircle2 aria-hidden className="size-5 text-emerald-500" /> : <Upload aria-hidden className="size-5 text-[#1D63B8]" />}
-              <span className="truncate max-w-full">{backName || 'Reverso del DNI'}</span>
-              <span className="text-xs text-slate-400 font-normal">{backUrl ? 'Listo para enviar' : 'JPG, PNG o PDF'}</span>
+            <button onClick={() => navigate('/panel/proveedor/verificacion')} className={`${verificationStatus === 'verificado' ? 'homy-glass-soft rounded-full font-bold text-[#1D63B8]' : 'homy-btn-primary'} shrink-0 min-h-[44px] px-5 text-sm`}>
+              {verificationStatus === 'verificado' ? 'Ver verificación' : 'Verificar ahora'} <ArrowRight className="size-4 inline" aria-hidden />
             </button>
           </div>
-
-          <button type="button" onClick={sendDoc} disabled={sendingDoc || uploading !== null || (!frontUrl && !backUrl)}
-            className="homy-btn-primary homy-focus mt-4 w-full min-h-[48px] disabled:opacity-60">
-            {sendingDoc ? 'Enviando…' : 'Enviar documento a revisión'}
-          </button>
         </section>
       </div>
     </div>

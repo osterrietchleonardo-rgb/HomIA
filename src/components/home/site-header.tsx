@@ -19,6 +19,7 @@ import { LayoutDashboard } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "Directorio", href: "#/directorio", route: "/directorio" },
+  { label: "Materiales", href: "#/materiales", route: "/materiales" },
   { label: "Cómo funciona", href: "#como-funciona" },
   { label: "Motor IA", href: "#motor-ia" },
   { label: "Beneficios", href: "#beneficios" },

@@ -8,15 +8,24 @@ import {
   type FormEvent,
 } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Send, X } from "lucide-react";
+import { Lock, Send, X } from "lucide-react";
 import { Homy } from "@/components/homy/homy-character";
 import type { HomyChatTurn, HomyReply } from "@/lib/homy";
+import { navigate } from "@/lib/router";
 import { cn } from "@/lib/utils";
 
 interface ChatMessage extends HomyChatTurn {
   id: string;
   suggestions?: string[];
   degraded?: boolean;
+  /** la IA pidió login: el mensaje trae los botones de registro/ingreso */
+  needsLogin?: boolean;
+}
+
+/** Ruta SPA actual (hash) para volver después de registrarse/ingresar. */
+function currentPath(): string {
+  if (typeof window === "undefined") return "/";
+  return window.location.hash.replace(/^#/, "") || "/";
 }
 
 const WELCOME_MESSAGE =
@@ -70,15 +79,32 @@ export function HomyWidget() {
         });
         const data = (await res.json()) as {
           ok: boolean;
-          reply: HomyReply;
+          reply?: HomyReply;
+          needsLogin?: boolean;
         };
+        if (res.status === 401 && data.needsLogin) {
+          // Homy (IA) es para usuarios registrados: gate honesto, sin inventar respuesta
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: nextId(),
+              role: "homy",
+              content:
+                "Para usar Homy creá tu cuenta gratis (1 minuto). Es lo que me deja interpretar tu pedido y armarte el paso a paso.",
+              needsLogin: true,
+            },
+          ]);
+          return;
+        }
+        if (!data.reply) throw new Error("sin respuesta");
+        const reply = data.reply;
         setMessages((prev) => [
           ...prev,
           {
             id: nextId(),
             role: "homy",
-            content: data.reply.message,
-            suggestions: data.reply.suggestions,
+            content: reply.message,
+            suggestions: reply.suggestions,
             degraded: !data.ok,
           },
         ]);
@@ -193,6 +219,22 @@ export function HomyWidget() {
                       </span>
                     )}
                   </div>
+                  {m.needsLogin && (
+                    <div className="flex max-w-[92%] flex-wrap gap-1.5">
+                      <button
+                        onClick={() => navigate(`/registrarse?volver=${encodeURIComponent(currentPath())}`)}
+                        className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full bg-action px-3.5 py-1.5 text-xs font-bold text-white transition-all hover:brightness-110 active:scale-[0.97]"
+                      >
+                        <Lock className="size-3.5" aria-hidden /> Crear cuenta gratis
+                      </button>
+                      <button
+                        onClick={() => navigate(`/ingresar?volver=${encodeURIComponent(currentPath())}`)}
+                        className="inline-flex min-h-[40px] items-center rounded-full border border-navy/15 bg-white/80 px-3.5 py-1.5 text-xs font-bold text-navy transition-all hover:border-navy/30 active:scale-[0.97]"
+                      >
+                        Ya tengo cuenta
+                      </button>
+                    </div>
+                  )}
                   {m.suggestions && m.suggestions.length > 0 && (
                     <div className="flex max-w-[92%] flex-wrap gap-1.5">
                       {m.suggestions.map((s) => (

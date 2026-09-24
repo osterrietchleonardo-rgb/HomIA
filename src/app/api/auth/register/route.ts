@@ -66,6 +66,11 @@ export async function POST(req: NextRequest) {
     (r: unknown) => typeof r === 'string' && ['cliente', 'profesional', 'proveedor'].includes(r)
   )
   if (roles.length === 0) return fail('Rol inválido')
+  // validaciones por rol ANTES de crear el usuario (nunca dejar cuentas a medias)
+  const businessName = typeof data.businessName === 'string' ? data.businessName.trim() : ''
+  if (roles.includes('proveedor') && businessName.length < 2) {
+    return fail('El nombre del negocio es obligatorio para proveedores')
+  }
 
   const user = await db.user.create({
     data: {
@@ -107,20 +112,19 @@ export async function POST(req: NextRequest) {
   }
 
   if (roles.includes('proveedor')) {
-    if (!data.businessName) {
-      await db.user.delete({ where: { id: user.id } })
-      return fail('El nombre del negocio es obligatorio para proveedores')
-    }
     await db.providerProfile.create({
       data: {
         userId: user.id,
-        businessName: data.businessName,
+        businessName,
         cuit: data.cuit || null,
         description: data.description || null,
         address: data.address || null,
         city: data.city || null,
         lat: data.lat ?? null,
         lng: data.lng ?? null,
+        // 14 días de prueba gratis desde el alta (después: Básico o PRO)
+        subscription: 'trial',
+        trialEndsAt: new Date(Date.now() + 14 * 86400000),
       },
     })
   }

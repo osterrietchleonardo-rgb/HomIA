@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { parseJson } from '@/lib/api'
 import { withinRadius } from '@/lib/geo'
 import { matchTerms, matchScore, expandNeedQuery, canonicalCategoria } from '@/lib/search-match'
+import { puedeOperar } from '@/lib/plans'
 
 // ─────────────────────────────────────────────────────────────
 // SUPERAGENTE HOMY — loop de razonamiento + grafo de acciones + herramientas reales
@@ -227,9 +228,10 @@ async function toolBuscarMateriales(args: { q?: string; categoria?: string; radi
     take: 400,
   })
   const q = (args.q || '').toLowerCase().trim()
-  let matched = stock
+  // proveedores con prueba vencida / sin plan no aparecen (ni en buscar ni en comparar precios)
+  let matched = stock.filter((s) => puedeOperar(s.provider))
   if (q) {
-    matched = stock.filter((s) => {
+    matched = matched.filter((s) => {
       const hay = [s.element.name, ...parseJson<string[]>(s.element.aliases, []), s.element.description || '', s.brand || '', s.provider.businessName].join(' ').toLowerCase()
       return matchTerms(q, hay)
     })

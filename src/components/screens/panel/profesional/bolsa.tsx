@@ -7,21 +7,11 @@ import { formatARS, URGENCY_LABEL } from '@/lib/format'
 import { formatDistance } from '@/lib/geo'
 import { useLocation } from '@/lib/store'
 import { ChevronDown, MapPin, Boxes, Store, BriefcaseBusiness, Search, Wallet } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useCategories, categoryName } from '@/lib/categories'
+import { apiFetch, NETWORK_ERROR } from '@/lib/api-client'
+import { RefreshCw, WifiOff } from 'lucide-react'
 
-const CATEGORIES = [
-  { slug: 'plomeria', name: 'Plomería' },
-  { slug: 'gasistas', name: 'Gasistas' },
-  { slug: 'electricistas', name: 'Electricistas' },
-  { slug: 'albanileria', name: 'Albañilería' },
-  { slug: 'pintura', name: 'Pintura' },
-  { slug: 'carpinteria', name: 'Carpintería' },
-  { slug: 'herreria', name: 'Herrería' },
-  { slug: 'limpieza', name: 'Limpieza' },
-  { slug: 'jardineria', name: 'Jardinería' },
-  { slug: 'climatizacion', name: 'Climatización' },
-  { slug: 'techos', name: 'Techos' },
-  { slug: 'cerramientos', name: 'Cerramientos' },
-]
 
 type SearchJob = {
   id: string; title: string; description: string; categorySlug: string; urgency: string
@@ -43,26 +33,34 @@ export default function ProJobsBoard() {
   const [materials, setMaterials] = useState<SearchMaterial[]>([])
   const [loading, setLoading] = useState(true)
   const [showMaterials, setShowMaterials] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
+  const { categories: CATEGORIES } = useCategories()
 
   useEffect(() => {
     const t = setTimeout(async () => {
       setLoading(true)
-      try {
-        const params = new URLSearchParams({ mode: 'profesional', q, cat, urgency, radius: String(radius) })
-        if (location.lat && location.lng) {
-          params.set('lat', String(location.lat))
-          params.set('lng', String(location.lng))
-        }
-        const res = await fetch(`/api/search?${params}`)
-        if (res.ok) {
-          const data = await res.json()
-          setJobs(data.jobs || [])
-          setMaterials(data.materials || [])
-        }
-      } finally { setLoading(false) }
+      setError(null)
+      // "todas" (Select) nunca viaja literal a la API: vacío = sin filtro
+      const params = new URLSearchParams({ mode: 'profesional', radius: String(radius) })
+      if (q.trim()) params.set('q', q.trim())
+      if (cat && cat !== 'todas') params.set('cat', cat)
+      if (urgency && urgency !== 'todas') params.set('urgency', urgency)
+      if (location.lat && location.lng) {
+        params.set('lat', String(location.lat))
+        params.set('lng', String(location.lng))
+      }
+      const r = await apiFetch<{ jobs?: SearchJob[]; materials?: SearchMaterial[] }>(`/api/search?${params}`, { silent: true })
+      if (r.ok) {
+        setJobs(r.data?.jobs || [])
+        setMaterials(r.data?.materials || [])
+      } else {
+        setError(r.error || NETWORK_ERROR)
+      }
+      setLoading(false)
     }, 250)
     return () => clearTimeout(t)
-  }, [q, cat, urgency, radius, location.lat, location.lng])
+  }, [q, cat, urgency, radius, location.lat, location.lng, reloadKey])
 
   const jobsWithDistance = useMemo(
     () => [...jobs].sort((a, b) => (a.distanceKm ?? 9999) - (b.distanceKm ?? 9999)),
@@ -108,11 +106,15 @@ export default function ProJobsBoard() {
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 mt-3.5">
             <label className="flex items-center gap-2 shrink-0">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Urgencia</span>
-              <select value={urgency} onChange={(e) => setUrgency(e.target.value)} aria-label="Urgencia"
-                className="homy-glass-input rounded-xl px-3 py-2 text-sm font-semibold cursor-pointer">
-                <option value="">Cualquiera</option>
-                {Object.entries(URGENCY_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
+              <Select value={urgency || 'todas'} onValueChange={(v) => setUrgency(v === 'todas' ? '' : v)}>
+                <SelectTrigger className="homy-glass-input rounded-xl px-3 py-2 text-sm font-semibold cursor-pointer border-none min-w-[140px]" aria-label="Urgencia">
+                  <SelectValue placeholder="Cualquiera" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Cualquiera</SelectItem>
+                  {Object.entries(URGENCY_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </label>
             <label className="flex items-center gap-2.5 min-w-[220px] flex-1 sm:flex-none">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wide shrink-0">Radio: {radius} km</span>
@@ -132,13 +134,24 @@ export default function ProJobsBoard() {
         {/* Lista de trabajos */}
         {loading ? (
           <Loading text="Buscando trabajos…" />
+        ) : error ? (
+          <div className="homy-empty homy-glass-soft border border-dashed border-red-300/60" role="alert">
+            <span className="homy-empty-icon homy-chip-orange" aria-hidden><WifiOff className="size-7" /></span>
+            <h3 className="font-bold text-[#0A2540] text-lg tracking-tight">No pudimos cargar la bolsa</h3>
+            <p className="text-sm text-slate-500 mt-1.5 max-w-md leading-relaxed">{error}</p>
+            <div className="mt-5">
+              <button onClick={() => setReloadKey((k) => k + 1)} className="homy-btn-dark min-h-[44px] px-5 py-2.5 text-sm">
+                <RefreshCw className="size-4" aria-hidden /> Reintentar
+              </button>
+            </div>
+          </div>
         ) : jobsWithDistance.length === 0 ? (
           <Empty
             icon={<BriefcaseBusiness className="size-7" />}
             title="No encontramos trabajos con esos filtros"
             hint="Probá ampliar el radio, quitar la urgencia o buscar por otra categoría."
             action={
-              <button onClick={() => { setQ(''); setCat(''); setUrgency(''); setRadius(100) }} className="homy-btn-primary min-h-[44px] px-5 py-2.5 text-sm">
+              <button onClick={() => { setQ(''); setCat(''); setUrgency(''); setRadius(25) }} className="homy-btn-primary min-h-[44px] px-5 py-2.5 text-sm">
                 Limpiar filtros
               </button>
             }
@@ -146,7 +159,7 @@ export default function ProJobsBoard() {
         ) : (
           <div className="homy-stagger space-y-3">
             {jobsWithDistance.map((j) => {
-              const catName = CATEGORIES.find((c) => c.slug === j.categorySlug)?.name || j.categorySlug
+              const catName = categoryName(CATEGORIES, j.categorySlug)
               return (
                 <article key={j.id} className="homy-glass homy-lift homy-card-glow rounded-3xl p-4 sm:p-5">
                   <div className="flex flex-wrap items-start justify-between gap-3">

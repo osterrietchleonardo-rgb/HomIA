@@ -1,10 +1,11 @@
 'use client'
 // Perfil profesional KYC: datos personales, persona|empresa, profesiones, habilidades y verificación de identidad (DNI)
 import { useEffect, useState } from 'react'
-import { StatusBadge, Loading, UAvatar } from '@/components/app/ui-bits'
+import { Loading, AvatarUploader, VerifyBadge } from '@/components/app/ui-bits'
 import { useSession } from '@/lib/store'
+import { navigate } from '@/lib/router'
 import { toast } from 'sonner'
-import { BadgeCheck, Upload, ShieldCheck, Loader2, UserRound, BriefcaseBusiness, Crown } from 'lucide-react'
+import { BadgeCheck, ShieldCheck, UserRound, BriefcaseBusiness, ArrowRight } from 'lucide-react'
 
 const CATEGORIES = [
   { slug: 'plomeria', name: 'Plomería' },
@@ -21,10 +22,10 @@ const CATEGORIES = [
   { slug: 'cerramientos', name: 'Cerramientos' },
 ]
 
-type Doc = { id: string; type: string; frontUrl: string | null; backUrl: string | null; status: string; createdAt: string }
-
 export default function ProProfile() {
-  const { refresh } = useSession()
+  const { user, refresh } = useSession()
+  // la insignia pública sale del usuario (verificación por DNI + IA), no del perfil
+  const isVerified = user?.verificationStatus === 'verificado'
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
 
@@ -47,15 +48,6 @@ export default function ProProfile() {
   const [companyWebsite, setCompanyWebsite] = useState('')
   const [employeesCount, setEmployeesCount] = useState('1')
   const [serviceRadiusKm, setServiceRadiusKm] = useState(15)
-  const [verified, setVerified] = useState(false)
-
-  // plan PRO (suscripción Mercado Pago)
-
-  // documentos
-  const [documents, setDocuments] = useState<Doc[]>([])
-  const [frontFile, setFrontFile] = useState<File | null>(null)
-  const [backFile, setBackFile] = useState<File | null>(null)
-  const [uploadingDoc, setUploadingDoc] = useState(false)
 
   useEffect(() => {
     (async () => {
@@ -70,7 +62,6 @@ export default function ProProfile() {
             setCity(u.city || '')
             setEmail(u.email || '')
             setAvatarUrl(u.avatarUrl || null)
-            setDocuments(u.documents || [])
             const pro = u.professional
             if (pro) {
               setPersonType(pro.personType === 'empresa' ? 'empresa' : 'persona')
@@ -84,7 +75,6 @@ export default function ProProfile() {
               setCompanyWebsite(pro.companyWebsite || '')
               setEmployeesCount(String(pro.employeesCount ?? 1))
               setServiceRadiusKm(pro.serviceRadiusKm ?? 15)
-              setVerified(!!pro.verified)
             }
           }
         }
@@ -126,33 +116,6 @@ export default function ProProfile() {
     } finally { setBusy(false) }
   }
 
-  async function submitDocument() {
-    if (!frontFile || !backFile) { toast.error('Subí el DNI frente y reverso'); return }
-    setUploadingDoc(true)
-    try {
-      async function upload(file: File): Promise<string | null> {
-        const form = new FormData()
-        form.append('file', file)
-        form.append('folder', 'dni')
-        const res = await fetch('/api/uploads', { method: 'POST', body: form })
-        if (!res.ok) { toast.error(`Error subiendo ${file.name}: ${(await res.json()).error}`); return null }
-        return (await res.json()).url
-      }
-      const frontUrl = await upload(frontFile)
-      const backUrl = await upload(backFile)
-      if (!frontUrl || !backUrl) return
-      const res = await fetch('/api/profiles/documents', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'dni', frontUrl, backUrl }),
-      })
-      if (!res.ok) { toast.error((await res.json()).error); return }
-      toast.success('DNI enviado — queda en revisión por el equipo de HomIA')
-      setFrontFile(null); setBackFile(null)
-      const me = await fetch('/api/profiles/me')
-      if (me.ok) setDocuments((await me.json()).user?.documents || [])
-    } finally { setUploadingDoc(false) }
-  }
-
   if (loading) return <Loading />
 
   const skillsPreview = skillsText.split(',').map((s) => s.trim()).filter(Boolean)
@@ -167,7 +130,7 @@ export default function ProProfile() {
             <h1 className="homy-page-title mt-1.5">Mi perfil profesional</h1>
             <p className="homy-page-sub">Cuanto más completo, más presupuestos aceptás.</p>
           </div>
-          {verified ? (
+          {isVerified ? (
             <span className="homy-pill shrink-0"><BadgeCheck className="size-3.5 text-emerald-600" aria-hidden /> Verificado</span>
           ) : (
             <span className="homy-pill shrink-0"><ShieldCheck className="size-3.5 text-amber-600" aria-hidden /> Sin verificar</span>
@@ -180,7 +143,7 @@ export default function ProProfile() {
             <span className="homy-icon-chip homy-chip-mint size-9 shrink-0 [&_svg]:size-4" aria-hidden><BadgeCheck /></span>
             <p className="text-[13px] leading-relaxed text-slate-600">
               <b>Usar HomIA es gratis para clientes y profesionales.</b> Las suscripciones de pago son solo para proveedores
-              (Básico US$50/mes o PRO US$100/mes): es lo que financia la plataforma, la IA y las búsquedas que te traen trabajos.
+              (14 días gratis, después Básico $50.000/mes o PRO $100.000/mes). HomIA cobra además un 1% en las compras de materiales por Mercado Pago: es lo que financia la plataforma, la IA y las búsquedas que te traen trabajos.
             </p>
           </section>
 
@@ -191,7 +154,24 @@ export default function ProProfile() {
               Datos de contacto
             </h2>
             <div className="flex items-center gap-4 mb-5 rounded-2xl homy-glass-soft p-4">
-              <UAvatar name={displayName || email} url={avatarUrl} size={56} />
+              <AvatarUploader
+                name={displayName || email}
+                url={avatarUrl}
+                size={56}
+                onUpload={async (url) => {
+                  const res = await fetch('/api/profiles/me', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ avatarUrl: url })
+                  })
+                  if (res.ok) {
+                    await refresh()
+                    toast.success('Foto actualizada')
+                  } else {
+                    toast.error('No se pudo guardar la foto')
+                  }
+                }}
+              />
               <div className="min-w-0">
                 <p className="font-bold text-[#0A2540] line-clamp-1">{displayName || 'Tu nombre'}</p>
                 <p className="text-xs text-slate-400 line-clamp-1">{email || '—'} · el email no se puede cambiar</p>
@@ -286,54 +266,33 @@ export default function ProProfile() {
             </button>
           </section>
 
-          {/* verificación de identidad */}
+          {/* verificación de identidad: el flujo completo (subida + IA) vive en /verificacion */}
           <section className="homy-glass rounded-3xl p-5 sm:p-6">
             <h2 className="flex items-center gap-2.5 font-extrabold text-[#0A2540] tracking-tight mb-1">
               <span className="homy-icon-chip homy-chip-mint size-8 [&_svg]:size-4" aria-hidden><ShieldCheck /></span>
-              Documentos — verificación de identidad
+              Verificación de identidad
             </h2>
-            <p className="text-sm text-slate-500 mb-4">Subí tu DNI (frente y reverso) para obtener el sello de verificado. Solo lo ve el equipo de HomIA.</p>
-
-            {documents.length > 0 && (
-              <div className="space-y-2 mb-4">
-                {documents.map((d) => (
-                  <div key={d.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl homy-glass-soft p-3.5">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex gap-1.5 shrink-0">
-                        {d.frontUrl && (
-                          <img src={d.frontUrl} alt="DNI frente" className="size-10 rounded-lg object-cover border border-slate-200" />
-                        )}
-                        {d.backUrl && (
-                          <img src={d.backUrl} alt="DNI reverso" className="size-10 rounded-lg object-cover border border-slate-200" />
-                        )}
-                      </div>
-                      <p className="text-sm font-bold text-[#0A2540] capitalize">DNI</p>
-                    </div>
-                    <StatusBadge status={d.status} />
-                  </div>
-                ))}
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl homy-glass-soft p-4">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-bold text-[#0A2540]">Estado de tu DNI</p>
+                  <VerifyBadge status={user?.verificationStatus || 'none'} compact={false} />
+                </div>
+                <p className="mt-1 text-[13px] leading-relaxed text-slate-500">
+                  {isVerified
+                    ? 'Tu insignia de verificado se ve junto a tu nombre en toda la comunidad.'
+                    : 'Subí el frente y el dorso de tu DNI: la IA lo analiza y tu insignia aparece junto a tu nombre.'}
+                </p>
               </div>
-            )}
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">DNI — frente</span>
-                <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf"
-                  onChange={(e) => setFrontFile(e.target.files?.[0] || null)}
-                  className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm text-slate-500 file:mr-3 file:rounded-full file:border-0 file:bg-[#1D63B8] file:text-white file:px-3 file:py-1.5 file:text-xs file:font-bold file:cursor-pointer" />
-              </label>
-              <label className="block">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">DNI — reverso</span>
-                <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf"
-                  onChange={(e) => setBackFile(e.target.files?.[0] || null)}
-                  className="homy-glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm text-slate-500 file:mr-3 file:rounded-full file:border-0 file:bg-[#1D63B8] file:text-white file:px-3 file:py-1.5 file:text-xs file:font-bold file:cursor-pointer" />
-              </label>
+              <button
+                type="button"
+                onClick={() => navigate('/panel/profesional/verificacion')}
+                className="homy-btn-dark homy-focus min-h-[44px] px-5 py-2.5 text-sm"
+              >
+                {isVerified ? 'Ver verificación' : 'Verificar mi identidad'}
+                <ArrowRight className="size-4" aria-hidden />
+              </button>
             </div>
-            <button onClick={submitDocument} disabled={uploadingDoc || !frontFile || !backFile}
-              className="homy-btn-primary mt-4 min-h-[44px] px-6 py-2.5 text-sm disabled:opacity-40 flex items-center gap-2">
-              {uploadingDoc ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Upload className="size-4" aria-hidden />}
-              {uploadingDoc ? 'Subiendo…' : 'Enviar DNI para verificación'}
-            </button>
           </section>
         </div>
       </div>

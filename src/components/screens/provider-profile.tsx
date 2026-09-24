@@ -7,8 +7,9 @@ import { useSession } from '@/lib/store'
 import { Loading, EmptyState, UAvatar, UStars, VerifyBadge, StatusBadge } from '@/components/app/ui-bits'
 import { ProfileGate } from '@/components/app/profile-gate'
 import { formatARS, formatDate } from '@/lib/format'
+import { matchTerms } from '@/lib/search-match'
 import { toast } from 'sonner'
-import { ChevronLeft, MapPin, Lock, Store, Search, Star, Package, Crown, SendHorizonal, Heart, Share2, MessageCircleOff, Camera, X } from 'lucide-react'
+import { ChevronLeft, MapPin, Store, Search, Star, Package, Crown, SendHorizonal, Heart, Share2, MessageCircleOff, Camera, X, ShoppingCart } from 'lucide-react'
 
 type Profile = {
   id: string; userId: string; displayName: string; avatarUrl: string | null
@@ -102,8 +103,21 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
   const p = data.profile
   const chatBlocked = !!data.chatBlocked
   const parsedReviews = data.reviews.map((r) => ({ ...r, photoList: safePhotos(r.photos) }))
-  const filtered = data.stock.filter((s) => !q || s.name.toLowerCase().includes(q.toLowerCase()))
+  // búsqueda difusa (acentos, plurales) sobre nombre + marca + categoría
+  const filtered = data.stock.filter((s) => !q.trim() || matchTerms(q, `${s.name} ${s.brand || ''} ${s.category}`))
   const categories = [...new Set(data.stock.map((s) => s.categorySlug))]
+  const isClient = user.roles.includes('cliente')
+
+  function goBack() {
+    if (window.history.length > 1) window.history.back()
+    else navigate('/directorio')
+  }
+
+  // "Pedir": el cliente va al marketplace con este elemento preseleccionado
+  function order(s: Stock) {
+    if (!isClient) { toast('Entrá como cliente para pedir'); return }
+    navigate(`/panel/cliente/materiales?stock=${encodeURIComponent(s.id)}&q=${encodeURIComponent(s.name)}`)
+  }
 
   async function contact() {
     setBusy(true)
@@ -126,7 +140,7 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
         <span aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(58% 90% at 88% -10%, rgba(0,196,255,0.18) 0%, transparent 62%), radial-gradient(45% 70% at -5% 110%, rgba(255,90,31,0.14) 0%, transparent 55%)' }} />
         <div className="relative max-w-4xl mx-auto pt-6 pb-14 sm:pb-16 px-4">
           <div className="mb-5 -ml-3.5">
-            <button onClick={() => navigate('/buscar?mode=profesional')} className="homy-focus inline-flex items-center gap-1.5 rounded-full min-h-[44px] px-4 text-slate-300 hover:text-white text-sm font-semibold bg-white/[0.06] hover:bg-white/10 border border-white/10 transition">
+            <button onClick={goBack} className="homy-focus inline-flex items-center gap-1.5 rounded-full min-h-[44px] px-4 text-slate-300 hover:text-white text-sm font-semibold bg-white/[0.06] hover:bg-white/10 border border-white/10 transition">
               <ChevronLeft className="size-4" aria-hidden /> Volver
             </button>
           </div>
@@ -223,16 +237,7 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
               {categories.map((c) => <span key={c} className="homy-pill capitalize">{c}</span>)}
             </div>
           )}
-          {!user ? (
-            <div className="homy-glass-featured rounded-2xl p-8 text-center">
-              <span aria-hidden className="homy-icon-chip homy-chip-gold size-12 mx-auto [&_svg]:size-5"><Lock /></span>
-              <p className="font-extrabold text-[#0A2540] mt-3">Registrate para ver precios y stock</p>
-              <p className="text-sm text-slate-500 mt-1.5 max-w-sm mx-auto">Los precios son visibles para profesionales con cuenta (gratis, 1 minuto).</p>
-              <button onClick={() => navigate('/registrarse?rol=profesional')} className="homy-btn-primary homy-focus mt-5 px-6 py-3 min-h-[44px] text-sm">
-                Crear cuenta gratis
-              </button>
-            </div>
-          ) : filtered.length === 0 ? (
+          {filtered.length === 0 ? (
             <div className="homy-glass-soft rounded-2xl p-6 text-sm text-slate-500 flex items-center justify-center gap-2">
               <Search className="size-4 shrink-0" aria-hidden /> Sin elementos que coincidan.
             </div>
@@ -244,9 +249,18 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
                     <p className="font-bold text-[#0A2540] truncate">{s.name}</p>
                     <p className="text-xs text-slate-400 mt-0.5">{s.category}{s.brand ? ` · ${s.brand}` : ''} · stock: {s.quantity} {s.unit}</p>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex flex-wrap items-center gap-3 shrink-0">
                     <StatusBadge status={s.status} />
                     <p className="homy-num text-lg font-extrabold text-[#16A34A] text-right">{formatARS(s.price)}</p>
+                    {user.id !== p.userId && (
+                      <button
+                        onClick={() => order(s)}
+                        className="homy-btn-dark homy-focus min-h-[36px] px-3.5 py-1.5 text-xs"
+                        aria-label={`Pedir ${s.name}`}
+                      >
+                        <ShoppingCart className="size-3.5" aria-hidden /> Pedir
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

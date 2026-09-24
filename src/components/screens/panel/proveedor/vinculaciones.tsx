@@ -5,7 +5,8 @@ import { Loading, UAvatar } from '@/components/app/ui-bits'
 import { formatDate } from '@/lib/format'
 import { toast } from 'sonner'
 import { Switch } from '@/components/ui/switch'
-import { Link2, Store, UserRound, Info, Mail, NotebookPen } from 'lucide-react'
+import { Link2, Store, UserRound, Info, Mail, NotebookPen, RefreshCw } from 'lucide-react'
+import { apiFetch } from '@/lib/api-client'
 
 type ProfLink = {
   id: string; accountLabel: string; notes: string | null; active: boolean; createdAt: string
@@ -27,9 +28,12 @@ export default function ProviderLinks() {
   const [busy, setBusy] = useState(false)
   const [togglingId, setTogglingId] = useState<string | null>(null)
 
+  const [error, setError] = useState<string | null>(null)
+
   async function load() {
-    const res = await fetch('/api/provider/links')
-    if (res.ok) setLinks((await res.json()).asProvider || [])
+    const r = await apiFetch<{ asProvider: ProfLink[] }>('/api/provider/links?as=proveedor', { silent: true })
+    if (r.ok) { setLinks(r.data?.asProvider || []); setError(null) }
+    else setError(r.error)
   }
 
   useEffect(() => {
@@ -41,12 +45,12 @@ export default function ProviderLinks() {
     if (!email.trim() || !accountLabel.trim()) { toast.error('Completá el email y el nombre de la cuenta de retiro'); return }
     setBusy(true)
     try {
-      const res = await fetch('/api/provider/links', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), accountLabel: accountLabel.trim(), notes: notes.trim() || undefined }),
+      const r = await apiFetch('/api/provider/links', {
+        method: 'POST',
+        json: { email: email.trim(), accountLabel: accountLabel.trim(), notes: notes.trim() || undefined, as: 'proveedor' },
       })
-      if (!res.ok) { toast.error((await res.json()).error); return }
-      toast.success('Vinculación creada — le avisamos al profesional')
+      if (!r.ok) return
+      toast.success('Vinculación creada y activa — le avisamos al profesional')
       setEmail(''); setAccountLabel(''); setNotes('')
       load()
     } finally { setBusy(false) }
@@ -56,16 +60,12 @@ export default function ProviderLinks() {
     setTogglingId(link.id)
     setLinks((prev) => prev.map((l) => (l.id === link.id ? { ...l, active } : l)))
     try {
-      const res = await fetch('/api/provider/links', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: link.id, active }),
-      })
-      if (!res.ok) {
+      const r = await apiFetch('/api/provider/links', { method: 'PATCH', json: { id: link.id, active } })
+      if (!r.ok) {
         setLinks((prev) => prev.map((l) => (l.id === link.id ? { ...l, active: !active } : l)))
-        toast.error((await res.json()).error)
         return
       }
-      toast.success(active ? 'Vinculación activada' : 'Vinculación pausada')
+      toast.success(active ? 'Cuenta activada: ya puede retirar materiales' : 'Cuenta pausada')
     } finally { setTogglingId(null) }
   }
 
@@ -96,18 +96,30 @@ export default function ProviderLinks() {
           <div className="relative min-w-0">
             <p className="font-extrabold text-white">¿Cómo funciona la cuenta de retiro?</p>
             <p className="text-sm text-slate-300 mt-1 leading-relaxed">
-              El profesional retira materiales por tu negocio y cada pedido se factura al proyecto del cliente con su aprobación.
-              Los sobrantes se reembolsan automáticamente y podés pausar una cuenta cuando quieras sin borrar el historial.
+              Habilita a un profesional a retirar materiales en tu local a cuenta de un proyecto: el cliente aprueba cada material
+              y el cobro se gestiona desde Cobros. No es una cuenta bancaria ni mueve plata sola. Las solicitudes que te mandan
+              los profesionales llegan pendientes: vos decidís si las activás, y podés pausarlas cuando quieras sin borrar el historial.
             </p>
           </div>
         </section>
 
         {/* listado */}
-        {links.length === 0 ? (
+        {error ? (
+          <Empty
+            icon={<Info className="size-7" />}
+            title="No pudimos cargar tus vinculaciones"
+            hint={error}
+            action={
+              <button onClick={() => { setLoading(true); load().finally(() => setLoading(false)) }} className="homy-btn-dark homy-focus min-h-[44px] px-5 py-2.5 text-sm">
+                <RefreshCw className="size-4" aria-hidden /> Reintentar
+              </button>
+            }
+          />
+        ) : links.length === 0 ? (
           <Empty
             icon={<Link2 className="size-7" />}
             title="Todavía no vinculaste profesionales"
-            hint="Vinculá por email a un profesional registrado en HomIA y creale su cuenta de retiro: retira materiales a nombre de tu negocio, se factura por proyecto y los sobrantes se reembolsan automáticamente."
+            hint="Vinculá por email a un profesional registrado en HomIA: queda habilitado para retirar materiales en tu local a cuenta de sus proyectos. Las solicitudes que te manden los profesionales también van a aparecer acá."
             action={
               <button onClick={() => document.getElementById('form-vincular')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                 className="homy-btn-primary homy-focus min-h-[44px] px-5 py-2.5 text-sm">
@@ -140,12 +152,13 @@ export default function ProviderLinks() {
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <span className="homy-pill">
-                    <span aria-hidden className={`homy-pill-dot ${l.active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                    {l.active ? 'Activa' : 'Inactiva'}
+                    <span aria-hidden className={`homy-pill-dot ${l.active ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                    {l.active ? 'Activa' : 'Pendiente / pausada'}
                   </span>
                   <Switch checked={l.active} disabled={togglingId === l.id}
                     onCheckedChange={(v) => toggle(l, v)}
                     aria-label={`${l.active ? 'Pausar' : 'Activar'} cuenta de retiro de ${l.professional.companyName || l.professional.displayName}`} />
+                  <span className="text-xs font-bold text-slate-500">{l.active ? 'Pausar' : 'Activar'}</span>
                 </div>
               </article>
             ))}

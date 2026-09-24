@@ -27,6 +27,7 @@ const ProProfileScreen = dynamic(() => import('@/components/screens/pro-profile'
 const ProviderProfileScreen = dynamic(() => import('@/components/screens/provider-profile'), { ssr: false, loading: () => <Loading /> })
 const NotificationsScreen = dynamic(() => import('@/components/screens/notifications'), { ssr: false, loading: () => <Loading /> })
 const DirectoryScreen = dynamic(() => import('@/components/screens/directory-screen'), { ssr: false, loading: () => <Loading /> })
+const MarketplaceScreen = dynamic(() => import('@/components/screens/marketplace-screen'), { ssr: false, loading: () => <Loading /> })
 const MessagesScreen = dynamic(() => import('@/components/screens/messages-screen'), { ssr: false, loading: () => <Loading /> })
 const HelpScreen = dynamic(() => import('@/components/screens/help-screen'), { ssr: false, loading: () => <Loading /> })
 
@@ -43,7 +44,6 @@ const ClientProfile = dynamic(() => import('@/components/screens/panel/cliente/p
 // Panel profesional
 const ProDashboard = dynamic(() => import('@/components/screens/panel/profesional/dashboard'), { ssr: false, loading: () => <Loading /> })
 const ProJobsBoard = dynamic(() => import('@/components/screens/panel/profesional/bolsa'), { ssr: false, loading: () => <Loading /> })
-const ProMaterials = dynamic(() => import('@/components/screens/panel/profesional/materiales'), { ssr: false, loading: () => <Loading /> })
 const ProProjects = dynamic(() => import('@/components/screens/panel/profesional/proyectos'), { ssr: false, loading: () => <Loading /> })
 const ProProjectDetail = dynamic(() => import('@/components/screens/panel/profesional/proyecto-detalle'), { ssr: false, loading: () => <Loading /> })
 const ProBids = dynamic(() => import('@/components/screens/panel/profesional/presupuestos'), { ssr: false, loading: () => <Loading /> })
@@ -114,23 +114,28 @@ export default function AppRoot() {
     if (loading && sessionGated) return <Loading text="Verificando tu sesión…" />
     return pub
   }
-  // Envuelve pantallas públicas con el header+footer del home (para que se sientan parte del sitio)
-  const withPublicShell = (content: React.ReactNode) => (
+  // Envuelve pantallas públicas con el header+footer del home (para que se sientan parte del sitio).
+  // El SiteHeader es fixed h-20: `pad` compensa su alto. Directorio/materiales/ayuda
+  // ya traen su propio padding superior interno → pt-16; el resto (buscar, perfiles,
+  // trabajo, notificaciones) no tiene → pt-20 para no quedar debajo del header.
+  const withPublicShell = (content: React.ReactNode, pad: 'pt-16' | 'pt-20' = 'pt-16') => (
     <div className="relative min-h-screen text-navy flex flex-col">
       <SiteHeader />
-      <main className="flex-1 pt-20">{content}</main>
+      <main className={`flex-1 ${pad}`}>{content}</main>
       <SiteFooter />
     </div>
   )
+  const shell = (content: React.ReactNode) => withPublicShell(content, 'pt-20')
   if (s.length === 0) screen = <HomeScreen />
-  else if (s[0] === 'buscar') screen = publicOrPanel(<SearchScreen />, <SearchScreen embedded />)
+  else if (s[0] === 'buscar') screen = publicOrPanel(shell(<SearchScreen />), <SearchScreen embedded />)
   else if (s[0] === 'ingresar') screen = <LoginScreen />
   else if (s[0] === 'registrarse') screen = <RegisterScreen />
-  else if (s[0] === 'trabajo' && s[1]) screen = publicOrPanel(<JobDetailScreen id={s[1]} />, <JobDetailScreen id={s[1]} />)
-  else if (s[0] === 'profesional' && s[1]) screen = publicOrPanel(<ProProfileScreen id={s[1]} />, <ProProfileScreen id={s[1]} />)
-  else if (s[0] === 'proveedor' && s[1]) screen = publicOrPanel(<ProviderProfileScreen id={s[1]} />, <ProviderProfileScreen id={s[1]} />)
-  else if (s[0] === 'notificaciones') screen = publicOrPanel(<NotificationsScreen />, <NotificationsScreen />)
+  else if (s[0] === 'trabajo' && s[1]) screen = publicOrPanel(shell(<JobDetailScreen id={s[1]} />), <JobDetailScreen id={s[1]} />)
+  else if (s[0] === 'profesional' && s[1]) screen = publicOrPanel(shell(<ProProfileScreen id={s[1]} />), <ProProfileScreen id={s[1]} />)
+  else if (s[0] === 'proveedor' && s[1]) screen = publicOrPanel(shell(<ProviderProfileScreen id={s[1]} />), <ProviderProfileScreen id={s[1]} />)
+  else if (s[0] === 'notificaciones') screen = publicOrPanel(shell(<NotificationsScreen />), <NotificationsScreen />)
   else if (s[0] === 'directorio') screen = inPanel ? withPanel(<DirectoryScreen embedded />) : withPublicShell(<DirectoryScreen />)
+  else if (s[0] === 'materiales') screen = inPanel ? withPanel(<MarketplaceScreen embedded />) : withPublicShell(<MarketplaceScreen />)
   else if (s[0] === 'mensajes') screen = publicOrPanel(<AuthGate path="/mensajes" />, <MessagesScreen embedded />)
   else if (s[0] === 'ayuda') screen = inPanel ? withPanel(<HelpScreen embedded />) : withPublicShell(<HelpScreen />)
   else if (s[0] === 'panel') {
@@ -173,18 +178,18 @@ function panelScreen(route: ReturnType<typeof useRoute>) {
   if (role === 'cliente') {
     if (page === '' ) return <ClientDashboard />
     if (page === 'publicar') return <PublishJob />
-    if (page === 'trabajos') return <MyJobs />
+    if (page === 'trabajos') return <MyJobs highlightId={sub} />
     if (page === 'materiales') return <ClientMaterials />
     if (page === 'proyectos' && sub) return <ClientProjectDetail id={sub} />
     if (page === 'proyectos') return <ClientProjects />
     if (page === 'facturas') return <ClientInvoices />
     if (page === 'perfil') return <ClientProfile />
-    return <ClientDashboard />
+    return <NotFound />
   }
   if (role === 'profesional') {
     if (page === '') return <ProDashboard />
     if (page === 'bolsa') return <ProJobsBoard />
-    if (page === 'materiales') return <ProMaterials />
+    if (page === 'materiales') return <ClientMaterials role="profesional" />
     if (page === 'proyectos' && sub) return <ProProjectDetail id={sub} />
     if (page === 'proyectos') return <ProProjects />
     if (page === 'presupuestos') return <ProBids />
@@ -192,7 +197,7 @@ function panelScreen(route: ReturnType<typeof useRoute>) {
     if (page === 'obras') return <ProWorks />
     if (page === 'vinculaciones') return <ProLinks />
     if (page === 'perfil') return <ProProfileEdit />
-    return <ProDashboard />
+    return <NotFound />
   }
   if (role === 'proveedor') {
     if (page === '') return <ProviderDashboard />
@@ -202,7 +207,7 @@ function panelScreen(route: ReturnType<typeof useRoute>) {
     if (page === 'crm') return <ProviderCRM />
     if (page === 'vinculaciones') return <ProviderLinks />
     if (page === 'perfil') return <ProviderProfileEdit />
-    return <ProviderDashboard />
+    return <NotFound />
   }
   return <RolePicker />
 }
@@ -284,7 +289,7 @@ function AuthGate({ path }: { path: string }) {
             </button>
           </div>
           <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-[11px] font-bold text-slate-400" aria-label="Confianza HomIA">
-            <li className="flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-[#1D63B8]" aria-hidden />Escrow</li>
+            <li className="flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-[#1D63B8]" aria-hidden />Pago con Mercado Pago o efectivo</li>
             <li className="flex items-center gap-1.5"><BadgeCheck className="size-3.5 text-[#0e9f6e]" aria-hidden />Verificación</li>
             <li className="flex items-center gap-1.5"><Sparkles className="size-3.5 text-[#0092c4]" aria-hidden />IA</li>
           </ul>
