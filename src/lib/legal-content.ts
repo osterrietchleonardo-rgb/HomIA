@@ -7,7 +7,10 @@
 // Los datos de la empresa (razón social, CUIT, domicilio, email) salen de variables de entorno
 // públicas NEXT_PUBLIC_LEGAL_*; si faltan, la página lo dice en vez de inventarlos.
 
-export const LEGAL_VERSION = '2026-09-25' // D27: registro de uso de la plataforma (Privacidad §2, §3, §9, §11 y §12)
+// D27: registro de uso de la plataforma (Privacidad §2, §3, §9, §11 y §12). D33 (mismo día): cancelación de la
+// suscripción, sin reintegro y con acceso hasta el fin del período pago; primer cobro al terminar la prueba
+// (Términos, planes). La versión es por día (AAAA-MM-DD): ya era la de hoy, así que no cambia.
+export const LEGAL_VERSION = '2026-09-25'
 
 // Titular de HomIA, responsable de la plataforma y de la base de datos. Datos públicos que dio
 // Leonardo el 25/09/2026. Sin domicilio: pedido expreso de Leonardo. Las variables
@@ -202,8 +205,9 @@ export const TERMINOS: LegalDoc = {
             ],
           },
         },
-        'Los precios están en pesos argentinos. La suscripción se cobra por Mercado Pago todos los meses y la podés cancelar cuando quieras desde tu cuenta de Mercado Pago, sin penalidad.',
-        'Si la suscripción se cancela, se pausa o pasan 35 días sin un cobro, el proveedor deja de aparecer en el marketplace, en las búsquedas y en la home hasta que vuelva a suscribirse. Sus ventas y pedidos anteriores siguen disponibles.',
+        'Los precios están en pesos argentinos. La suscripción se cobra por Mercado Pago todos los meses. Si elegís un plan durante la prueba gratis, el primer cobro es el día en que termina la prueba.',
+        'Podés cancelar la suscripción cuando quieras, sin penalidad, desde HomIA (Mi plan → Cancelar suscripción) o desde Mercado Pago → Suscripciones. Desde la cancelación no se te vuelve a cobrar. Lo ya pagado no se reintegra, pero conservás tu plan hasta el fin del período que pagaste.',
+        'Si la suscripción se cancela o se pausa y termina el período pago, o pasan 35 días sin un cobro, el proveedor deja de aparecer en el marketplace, en las búsquedas, en el directorio y en la home, y no puede abrir ventas nuevas hasta que vuelva a suscribirse. Puede terminar las ventas, entregas, cobros y devoluciones que ya tenía; sus datos, stock, ventas y pedidos anteriores se conservan.',
         'Para clientes y profesionales usar HomIA es gratis.',
       ],
     },

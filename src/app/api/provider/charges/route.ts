@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { ok, fail, body } from '@/lib/api'
 import { db } from '@/lib/db'
-import { planState } from '@/lib/plans'
+import { planState, mensajePlanInactivo } from '@/lib/plans'
 import { createWithChargeNumber } from '@/lib/charge-number'
 
 // ── Cobros de materiales del proveedor al cliente ──
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
   if (!provider) return fail('Solo los proveedores pueden emitir cobros de materiales', 403)
   const st = planState(provider)
   if (!st.activo) {
-    return fail('Tu prueba gratis terminó: elegí un plan (Básico o PRO) desde "Mi plan" para seguir emitiendo cobros', 403, { needsPlan: true })
+    return fail(mensajePlanInactivo(st, 'emitir cobros nuevos'), 403, { needsPlan: true })
   }
 
   const d = await body<{ projectId?: string }>(req)

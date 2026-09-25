@@ -4,13 +4,20 @@
 // · Plan Básico $50.000/mes: uso completo de la plataforma
 // · Plan PRO $100.000/mes: logo y marca en la home + tarjeta "Recomendado" en
 //   marketplace y directorio + analítica de demanda de tu zona
+// · D33: se cancela desde acá o desde Mercado Pago → Suscripciones (da lo mismo); no se vuelve a
+//   cobrar, lo pagado no se reintegra y el plan sigue hasta el fin del período pago. Elegir un plan
+//   durante la prueba no se come los días gratis: el primer cobro es al terminar la prueba.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { navigate, useRoute } from '@/lib/router'
 import { Loading } from '@/components/app/ui-bits'
 import { formatARS } from '@/lib/format'
 import { toast } from 'sonner'
 import {
-  Crown, Sparkles, Check, Clock, TrendingUp, Star, Store, ShieldCheck, CircleAlert, BadgeCheck, Loader2, RefreshCw,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
+  Crown, Sparkles, Check, Clock, TrendingUp, Star, Store, ShieldCheck, CircleAlert, BadgeCheck, Loader2, RefreshCw, CalendarClock, XCircle,
 } from 'lucide-react'
 
 type PlanState = {
@@ -20,6 +27,11 @@ type PlanState = {
   trialEndsAt: string | null
   esPro: boolean
   etiqueta: string
+  cancelado: boolean
+  accesoHasta: string | null
+  primerCobro: string | null
+  motivoInactivo: 'prueba_terminada' | 'plan_vencido' | null
+  vencioEl: string | null
 }
 type PlanData = {
   plan: PlanState
@@ -28,6 +40,17 @@ type PlanData = {
   trialDays: number
   mpConfigured: boolean
   businessName: string
+  puedeCancelar: boolean
+  /** si cancela hoy, sigue con su plan hasta este día (fin del período pago); null = no hay período pago */
+  finPeriodo: string | null
+  /** si elige un plan ahora, el primer cobro es este día (null = en el momento) */
+  primerCobroSiElige: string | null
+}
+
+/** "25/10" en hora de Argentina (UTC-3 fijo). */
+function fechaCorta(iso: string): string {
+  const x = new Date(new Date(iso).getTime() - 3 * 3600_000)
+  return `${String(x.getUTCDate()).padStart(2, '0')}/${String(x.getUTCMonth() + 1).padStart(2, '0')}`
 }
 
 async function readJson(res: Response): Promise<Record<string, any>> {
@@ -42,7 +65,8 @@ export default function ProviderPlan() {
   const [data, setData] = useState<PlanData | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
-  const [busy, setBusy] = useState<'basic' | 'pro' | null>(null)
+  const [busy, setBusy] = useState<'basic' | 'pro' | 'cancelar' | null>(null)
+  const [cancelOpen, setCancelOpen] = useState(false)
   // vuelta de Mercado Pago (?plan=ok o ?preapproval_id=…): confirmamos con polling
   const returnedFromMp = !!(route.query.plan === 'ok' || route.query.preapproval_id)
   const [confirming, setConfirming] = useState(returnedFromMp)
@@ -73,9 +97,12 @@ export default function ProviderPlan() {
     const t = setInterval(async () => {
       const d = await load()
       if (!alive) return
-      if (d && (d.plan.plan === 'basic' || d.plan.plan === 'pro')) {
+      if (d && (d.plan.plan === 'basic' || d.plan.plan === 'pro') && !d.plan.cancelado) {
         setConfirming(false)
-        toast.success(`Plan ${d.plan.plan === 'pro' ? 'PRO' : 'Básico'} activo`, { description: 'Tu suscripción quedó confirmada con Mercado Pago.' })
+        toast.success(
+          d.plan.primerCobro ? `Plan ${d.plan.plan === 'pro' ? 'PRO' : 'Básico'} activado · primer cobro el ${fechaCorta(d.plan.primerCobro)}` : `Plan ${d.plan.plan === 'pro' ? 'PRO' : 'Básico'} activo`,
+          { description: d.plan.primerCobro ? 'Seguís en tu prueba gratis: Mercado Pago te cobra recién ese día.' : 'Tu suscripción quedó confirmada con Mercado Pago.' },
+        )
         navigate('/panel/proveedor/plan', { replace: true })
       } else if (Date.now() - pollStart.current >= POLL_MAX_MS) {
         setConfirming(false)
@@ -109,6 +136,28 @@ export default function ProviderPlan() {
     }
   }
 
+  async function cancelar() {
+    setBusy('cancelar')
+    try {
+      const res = await fetch('/api/provider/plan/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmar: true }),
+      })
+      const d = await readJson(res)
+      if (!res.ok) { toast.error(d.error || 'No pudimos cancelar la suscripción'); return }
+      setCancelOpen(false)
+      toast.success('Cancelaste tu suscripción', {
+        description: d.accesoHasta ? `No se te vuelve a cobrar. Seguís con tu plan hasta el ${fechaCorta(d.accesoHasta)}.` : 'No se te vuelve a cobrar.',
+      })
+      await load()
+    } catch {
+      toast.error('No pudimos conectar. Reintentá')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   if (loading) return <Loading text="Cargando tu plan…" />
   if (!data) {
     return (
@@ -125,8 +174,10 @@ export default function ProviderPlan() {
     )
   }
 
-  const { plan, preciosArs, features, trialDays } = data
+  const { plan, preciosArs, features } = data
   const vencido = !plan.activo
+  const planPago = plan.plan === 'basic' || plan.plan === 'pro'
+  const nombrePlan = plan.plan === 'pro' ? 'PRO' : 'Básico'
 
   return (
     <div className="homy-page">
@@ -150,7 +201,7 @@ export default function ProviderPlan() {
           </p>
         </section>
       )}
-      {confirmTimedOut && !(plan.plan === 'basic' || plan.plan === 'pro') && (
+      {confirmTimedOut && !(planPago && !plan.cancelado) && (
         <section className="homy-glass rounded-2xl p-4 mb-5 flex flex-wrap items-center gap-3 ring-1 ring-[#FFC700]/45">
           <CircleAlert className="size-5 shrink-0 text-[#B98A00]" aria-hidden />
           <p className="min-w-0 flex-[1_1_14rem] text-[13.5px] leading-relaxed text-slate-600">
@@ -172,16 +223,30 @@ export default function ProviderPlan() {
               <p className="text-xl font-extrabold text-[#0A2540] tracking-tight">{plan.etiqueta}</p>
               {plan.plan === 'trial' && plan.trialDaysLeft != null && plan.trialDaysLeft > 0 && (
                 <p className="mt-0.5 text-[13px] text-slate-500">
-                  Termina el {new Date(plan.trialEndsAt!).toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })} —
-                  después elegí un plan para seguir operando sin cortes.
+                  Termina el {fechaCorta(plan.trialEndsAt!)}. Si elegís un plan ahora, no perdés los días que te quedan:
+                  el primer cobro es el {fechaCorta(plan.trialEndsAt!)}, cuando termina tu prueba.
+                </p>
+              )}
+              {planPago && !plan.cancelado && plan.primerCobro && (
+                <p className="mt-0.5 text-[13px] text-slate-500">
+                  Seguís en tu prueba gratis: no se te cobró nada todavía. Mercado Pago te cobra el primer mes el {fechaCorta(plan.primerCobro)}.
+                </p>
+              )}
+              {planPago && plan.cancelado && plan.activo && plan.accesoHasta && (
+                <p className="mt-0.5 text-[13px] text-slate-500">
+                  Cancelaste la suscripción: no se te vuelve a cobrar. Seguís con tu plan {nombrePlan} hasta el {fechaCorta(plan.accesoHasta)}{' '}
+                  (el fin del período que pagaste); después tu stock deja de verse hasta que elijas un plan.
                 </p>
               )}
               {vencido && (
                 <p className="mt-0.5 text-[13px] font-bold text-[#FF5A1F]">
-                  Tu prueba de {trialDays} días terminó: elegí un plan para volver a gestionar stock, pedidos y cobros.
+                  {plan.motivoInactivo === 'plan_vencido'
+                    ? `Tu plan venció${plan.vencioEl ? ` el ${fechaCorta(plan.vencioEl)}` : ''}`
+                    : `Tu prueba gratis terminó${plan.vencioEl ? ` el ${fechaCorta(plan.vencioEl)}` : ''}`}
+                  : tus productos no se ven en HomIA. Podés terminar las ventas que ya tenés; elegí un plan para volver a vender.
                 </p>
               )}
-              {plan.esPro && <p className="mt-0.5 text-[13px] text-slate-500">Tenés todo: analítica, destacado Recomendado y sponsor en la home.</p>}
+              {plan.esPro && plan.activo && <p className="mt-0.5 text-[13px] text-slate-500">Tenés todo: analítica, destacado Recomendado y sponsor en la home.</p>}
             </div>
           </div>
           <span className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-extrabold ring-1 ${
@@ -190,10 +255,75 @@ export default function ProviderPlan() {
               : 'bg-[#0e9f6e]/10 text-[#0e9f6e] ring-[#0e9f6e]/30'
           }`}>
             {vencido ? <><CircleAlert className="size-3.5" aria-hidden /> Elegí tu plan</>
+              : plan.cancelado && plan.accesoHasta ? <><CalendarClock className="size-3.5" aria-hidden /> Activo hasta el {fechaCorta(plan.accesoHasta)}</>
               : <><BadgeCheck className="size-3.5" aria-hidden /> Plan activo</>}
           </span>
         </div>
+        {data.puedeCancelar && (
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[#0A2540]/8 pt-4">
+            <p className="min-w-0 flex-[1_1_16rem] text-[12.5px] leading-relaxed text-slate-500">
+              ¿Querés dejar de pagar? Cancelás acá o en Mercado Pago → Suscripciones: da lo mismo.
+            </p>
+            <button
+              data-track="plan: abrir cancelar suscripción"
+              onClick={() => setCancelOpen(true)}
+              disabled={busy !== null}
+              className="homy-glass-soft inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-4 text-sm font-bold text-[#c2410c] ring-1 ring-[#FF5A1F]/30 disabled:opacity-50"
+            >
+              <XCircle className="size-4" aria-hidden /> Cancelar suscripción
+            </button>
+          </div>
+        )}
       </section>
+
+      {/* antes de ir a Mercado Pago: cuándo es el primer cobro */}
+      {(!planPago || plan.cancelado) && data.primerCobroSiElige && (
+        <section className="homy-glass-soft rounded-2xl p-4 mb-5 flex items-start gap-3 ring-1 ring-[#1D63B8]/20">
+          <CalendarClock className="mt-0.5 size-5 shrink-0 text-[#1D63B8]" aria-hidden />
+          <p className="text-[13px] leading-relaxed text-slate-600">
+            {plan.cancelado
+              ? <>Si volvés a suscribirte, <b>tu primer cobro será el {fechaCorta(data.primerCobroSiElige)}</b>, cuando termina lo que ya pagaste.</>
+              : <>Si elegís un plan ahora, <b>tu primer cobro será el {fechaCorta(data.primerCobroSiElige)}</b>, cuando termina tu prueba. Mercado Pago valida tu tarjeta hoy y no te cobra nada hasta ese día.</>}
+          </p>
+        </section>
+      )}
+
+      {/* diálogo: cancelar suscripción */}
+      <AlertDialog open={cancelOpen} onOpenChange={(o) => { if (busy !== 'cancelar') setCancelOpen(o) }}>
+        <AlertDialogContent className="homy-glass-strong rounded-3xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[#0A2540]">¿Cancelás tu suscripción?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-left text-[13.5px] leading-relaxed text-slate-600">
+                <p>· No se te vuelve a cobrar.</p>
+                {data.finPeriodo ? (
+                  <>
+                    <p>· Lo que ya pagaste no se devuelve, pero <b>seguís con tu plan {nombrePlan} hasta el {fechaCorta(data.finPeriodo)}</b>, el fin del período que pagaste.</p>
+                    <p>· Después, tu stock deja de verse en HomIA hasta que elijas un plan. No se borra nada: podés terminar las ventas que tengas.</p>
+                  </>
+                ) : plan.primerCobro ? (
+                  <p>· Todavía no se te cobró nada: <b>seguís en tu prueba gratis hasta el {fechaCorta(plan.primerCobro)}</b>. Después, elegí un plan para seguir vendiendo.</p>
+                ) : (
+                  <p>· No tenés un período pago vigente: tu plan termina ahora y tu stock deja de verse hasta que elijas un plan. No se borra nada.</p>
+                )}
+                <p>· También podés cancelarla desde Mercado Pago → Suscripciones: da lo mismo.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy === 'cancelar'} className="min-h-[44px] rounded-xl" data-track="plan: seguir con la suscripción">Seguir con mi plan</AlertDialogCancel>
+            <AlertDialogAction
+              data-track="plan: confirmar cancelar suscripción"
+              disabled={busy === 'cancelar'}
+              onClick={(e) => { e.preventDefault(); void cancelar() }}
+              className="min-h-[44px] rounded-xl bg-[#c2410c] text-white hover:bg-[#9a3412]"
+            >
+              {busy === 'cancelar' ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <XCircle className="size-4" aria-hidden />}
+              Sí, cancelar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* comparación de planes */}
       <div className="grid gap-4 lg:grid-cols-2 mb-6">
@@ -204,13 +334,13 @@ export default function ProviderPlan() {
           features={features.basic}
           icon={<Store className="size-5" aria-hidden />}
           chip="homy-chip-blue"
-          actual={plan.plan === 'basic'}
+          actual={plan.plan === 'basic' && !plan.cancelado}
           destacado={false}
           busy={busy === 'basic'}
           disabled={busy !== null || confirming}
           mpConfigured={data.mpConfigured}
           ctaActual="Tu plan actual"
-          cta="Elegir Básico"
+          cta={plan.plan === 'basic' && plan.cancelado ? 'Volver a suscribirme' : 'Elegir Básico'}
           onSubscribe={() => subscribe('basic')}
         />
         <PlanCard
@@ -220,13 +350,13 @@ export default function ProviderPlan() {
           features={features.pro}
           icon={<Sparkles className="size-5" aria-hidden />}
           chip="homy-chip-gold"
-          actual={plan.plan === 'pro'}
+          actual={plan.plan === 'pro' && !plan.cancelado}
           destacado
           busy={busy === 'pro'}
           disabled={busy !== null || confirming}
           mpConfigured={data.mpConfigured}
           ctaActual="Tu plan actual"
-          cta="Pasarme a PRO"
+          cta={plan.plan === 'pro' && plan.cancelado ? 'Volver a suscribirme' : 'Pasarme a PRO'}
           onSubscribe={() => subscribe('pro')}
         />
       </div>
@@ -259,11 +389,14 @@ export default function ProviderPlan() {
       {/* confianza / factura */}
       <section className="homy-glass-soft rounded-2xl p-4 flex items-start gap-3">
         <ShieldCheck className="mt-0.5 size-5 shrink-0 text-[#0e9f6e]" aria-hidden />
-        <p className="text-[13px] leading-relaxed text-slate-600">
-          La suscripción se cobra <b>mensualmente por Mercado Pago</b> y la cancelás cuando quieras desde tu cuenta de MP.
-          Si se cancela, tu negocio vuelve a estado de prueba finalizada — tus datos, reseñas y vinculaciones se conservan.
-          ¿Dudas? Escribinos desde el botón <b>?</b> de abajo.
-        </p>
+        <div className="space-y-1.5 text-[13px] leading-relaxed text-slate-600">
+          <p>La suscripción se cobra <b>mensualmente por Mercado Pago</b>. Si la elegís durante la prueba, el primer cobro es cuando termina la prueba: no perdés días gratis.</p>
+          <p>
+            <b>Cancelás cuando quieras</b>, acá con <b>Cancelar suscripción</b> o en Mercado Pago → Suscripciones (da lo mismo). No se te vuelve a cobrar.
+            <b> Lo ya pagado no se reintegra</b>, pero seguís con tu plan hasta el fin del período que pagaste.
+          </p>
+          <p>Sin plan activo tus productos no se ven en HomIA, pero podés terminar las ventas que ya tenés y no se borra nada: tu stock, precios, reseñas y vinculaciones vuelven tal como estaban cuando elegís un plan. ¿Dudas? Escribinos desde el botón <b>?</b> de abajo.</p>
+        </div>
       </section>
     </div>
   )
@@ -308,6 +441,7 @@ function PlanCard({ nombre, ars, desc, features, icon, chip, actual, destacado, 
         </button>
       ) : (
         <button
+          data-track={`plan: elegir ${nombre}`}
           onClick={onSubscribe}
           disabled={disabled}
           className={`mt-5 w-full min-h-[48px] text-[15px] ${destacado ? 'homy-btn-primary' : 'homy-btn-dark'} disabled:opacity-50`}
@@ -344,7 +478,7 @@ export function TrialExpiredBanner({ daysLeft, preciosArs }: { daysLeft: number 
         <span aria-hidden className="homy-icon-chip homy-chip-gold size-10 shrink-0 [&_svg]:size-5"><Clock /></span>
         <p className="min-w-0 flex-[1_1_14rem] text-[13.5px] leading-relaxed text-slate-600">
           <b>Prueba gratis:</b> te quedan <b>{daysLeft} día{daysLeft === 1 ? '' : 's'}</b> con todos los beneficios. Después elegí el
-          Básico ({basic}/mes) o el PRO ({pro}/mes) para seguir vendiendo.
+          Básico ({basic}/mes) o el PRO ({pro}/mes) para seguir vendiendo: si lo elegís ahora, el primer cobro es cuando termina la prueba.
         </p>
         <button onClick={() => navigate('/panel/proveedor/plan')} className="homy-btn-primary min-h-[44px] shrink-0 px-5 py-2.5 text-sm">
           <Crown className="size-4" aria-hidden /> Ver planes
@@ -356,7 +490,7 @@ export function TrialExpiredBanner({ daysLeft, preciosArs }: { daysLeft: number 
     <section className="homy-glass rounded-2xl p-4 mb-5 flex flex-wrap items-center gap-3 ring-2 ring-[#FF5A1F]/40">
       <span aria-hidden className="homy-icon-chip size-10 shrink-0 [&_svg]:size-5" style={{ background: 'linear-gradient(140deg, #ffedd5 0%, #fed7aa 100%)', color: '#c2410c' }}><CircleAlert /></span>
       <p className="min-w-0 flex-[1_1_14rem] text-[13.5px] leading-relaxed text-slate-600">
-        <b>Tu prueba gratis terminó.</b> Para volver a gestionar stock, pedidos y cobros elegí tu plan:
+        <b>Tu plan no está activo.</b> Tus productos no se ven en HomIA; podés terminar las ventas que ya tenés. Para volver a vender elegí
         Básico <b>{basic}/mes</b> o PRO <b>{pro}/mes</b>.
       </p>
       <button onClick={() => navigate('/panel/proveedor/plan')} className="homy-btn-primary min-h-[44px] shrink-0 px-5 py-2.5 text-sm">

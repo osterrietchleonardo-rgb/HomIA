@@ -117,7 +117,8 @@ export default function ProviderDashboard() {
     <div className="homy-page">
       <VerificationPrompt role="proveedor" />
       {/* estado del plan: cuenta regresiva de la prueba o aviso de vencimiento */}
-      {plan && plan.plan === 'trial' && <TrialExpiredBanner daysLeft={plan.trialDaysLeft} preciosArs={preciosArs} />}
+      {/* prueba vigente: cuenta regresiva; vencido: el aviso fijo de app-root (PlanInactivoAviso) */}
+      {plan && plan.plan === 'trial' && plan.activo && <TrialExpiredBanner daysLeft={plan.trialDaysLeft} preciosArs={preciosArs} />}
       <OnboardingCard role="proveedor" tasks={onboardingTasks} />
       {/* Encabezado */}
       <header className="homy-page-head">

@@ -259,7 +259,7 @@ export default function ProCobros() {
 
         <p className="flex items-start gap-2 rounded-2xl bg-[#1D63B8]/8 px-4 py-3 text-[12.5px] leading-relaxed text-slate-600">
           <CreditCard className="mt-0.5 size-4 shrink-0 text-[#1D63B8]" aria-hidden />
-          Si el cliente paga por Mercado Pago, la plata entra directo en tu cuenta y cobrás el 100% de la factura: el cargo de servicio HomIA del 1% lo paga el cliente aparte. En efectivo no hay cargo.
+          Si el cliente paga por Mercado Pago, el pago entra en tu cuenta por el 100% de la factura: el cargo de servicio HomIA del 1% lo paga el cliente aparte. Mercado Pago lo libera según tus plazos y te descuenta su comisión (se configura en tu cuenta de Mercado Pago). En efectivo no hay cargo.
         </p>
       </div>
 

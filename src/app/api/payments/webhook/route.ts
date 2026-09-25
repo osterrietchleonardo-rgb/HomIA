@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getPayment, getPreapproval, cancelPreapproval, verifyWebhookSignature, ensureFreshSellerToken, refundPayment, type MpPaymentInfo } from '@/lib/mercadopago'
+import { getPayment, cancelPreapproval, verifyWebhookSignature, ensureFreshSellerToken, refundPayment, type MpPaymentInfo } from '@/lib/mercadopago'
 import { planTransicion } from '@/lib/plans'
 import { round2, serviceFeeFor } from '@/lib/fees'
 import { logActivity } from '@/lib/activity'
 import { parseJson } from '@/lib/api'
 import { notificar, notificarVarios } from '@/lib/notify'
 import { registrarEvento } from '@/lib/analytics/server'
-import { procesarAvisoSuscripcion, registrarCobroPorPago, registrarActivacion, registrarBaja, registrarEventoPlan } from '@/lib/suscripciones-mp'
+import { procesarAvisoSuscripcion, registrarCobroPorPago, registrarActivacion, registrarEventoPlan, traerPreapproval, aplicarBajaSuscripcion, MpSubError } from '@/lib/suscripciones-mp'
 
 // Webhook de Mercado Pago (Checkout Pro + Suscripciones).
 // Confirma pagos de facturas de proyecto (invoice:<id>, o <invoiceId> histórico),
@@ -329,15 +329,15 @@ async function applyPurchasePayment(purchase: PurchaseWithProvider, payment: MpP
       {
         userId: purchase.provider.userId,
         type: 'compra_pagada_prov',
-        title: 'Cobro acreditado por Mercado Pago',
-        body: `El cliente pagó el pedido de ${purchase.elementName} con Mercado Pago: el cobro ya está acreditado en tu cuenta. Coordiná la entrega.`,
+        title: 'Pago aprobado en tu Mercado Pago',
+        body: `El cliente pagó el pedido de ${purchase.elementName} con Mercado Pago. Pago aprobado en tu Mercado Pago: Mercado Pago lo libera según tus plazos (lo ves en "Dinero a liberar") y descuenta su comisión. Coordiná la entrega.`,
         link: '#/panel/proveedor/cobros?tab=ventas',
       },
     ],
   })
   await logActivity({
     orderId: purchase.orderId, purchaseId: purchase.id, actorId: null, actorRole: 'sistema', type: 'pagado',
-    message: `Mercado Pago acreditó el pago: ${purchase.total.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 })}${fee > 0 ? ` + cargo de servicio ${fee.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 })}` : ''}.`,
+    message: `Mercado Pago aprobó el pago: ${purchase.total.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 })}${fee > 0 ? ` + cargo de servicio ${fee.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 })}` : ''}.`,
     data: { mpPaymentId: payment.id, amount: payment.transactionAmount },
   })
 }
@@ -414,7 +414,7 @@ async function applyChargePayment(chargeId: string, payment: MpPaymentInfo, coll
   if (charge.projectId == null) {
     await db.purchase.updateMany({ where: { chargeId: charge.id }, data: { status: 'pagado', paymentMethod: 'mercadopago', serviceFee: fee } })
   } else {
-    await logActivity({ projectId: charge.projectId, actorRole: 'sistema', type: 'pagado', message: `Mercado Pago acreditó el pago del cobro ${charge.number}.`, data: { mpPaymentId: payment.id } })
+    await logActivity({ projectId: charge.projectId, actorRole: 'sistema', type: 'pagado', message: `Mercado Pago aprobó el pago del cobro ${charge.number}.`, data: { mpPaymentId: payment.id } })
   }
   await notificarVarios({
     data: [
@@ -422,14 +422,14 @@ async function applyChargePayment(chargeId: string, payment: MpPaymentInfo, coll
         userId: charge.provider.userId,
         type: 'cobro_pagado',
         title: 'Cobro de materiales pagado',
-        body: `El cliente pagó tu cobro ${charge.number} con Mercado Pago.`,
+        body: `El cliente pagó tu cobro ${charge.number} con Mercado Pago. Pago aprobado en tu Mercado Pago: Mercado Pago lo libera según tus plazos (lo ves en "Dinero a liberar") y descuenta su comisión.`,
         link: '#/panel/proveedor/cobros',
       },
       {
         userId: charge.clientId,
         type: 'cobro_pagado',
-        title: 'Pago del cobro acreditado',
-        body: `Tu pago de ${charge.number} quedó acreditado para el proveedor.`,
+        title: 'Pago del cobro aprobado',
+        body: `Tu pago de ${charge.number} fue aprobado: le llega al proveedor por Mercado Pago.`,
         link: charge.projectId ? `#/panel/cliente/proyectos/${charge.projectId}` : '#/panel/cliente/pedidos',
       },
     ],
@@ -458,7 +458,7 @@ async function applyInvoicePayment(invoiceId: string, payment: MpPaymentInfo, co
     data: { status: 'pagada', paymentMethod: 'mercadopago', mpPaymentId: payment.id, paidAt: new Date(), serviceFee: fee },
   })
   if (upd.count === 0) return
-  await logActivity({ projectId: invoice.projectId, actorRole: 'sistema', type: 'pagado', message: `Mercado Pago acreditó el pago de la factura ${invoice.number}.`, data: { mpPaymentId: payment.id } })
+  await logActivity({ projectId: invoice.projectId, actorRole: 'sistema', type: 'pagado', message: `Mercado Pago aprobó el pago de la factura ${invoice.number}.`, data: { mpPaymentId: payment.id } })
   const pro = await db.professionalProfile.findUnique({
     where: { id: invoice.professionalId },
     select: { userId: true },
@@ -469,7 +469,7 @@ async function applyInvoicePayment(invoiceId: string, payment: MpPaymentInfo, co
         userId: pro.userId,
         type: 'factura_pagada',
         title: 'Factura pagada',
-        body: `${invoice.number} fue pagada por Mercado Pago: el dinero se acredita en tu cuenta.`,
+        body: `${invoice.number} fue pagada por Mercado Pago. Pago aprobado en tu Mercado Pago: Mercado Pago lo libera según tus plazos (lo ves en "Dinero a liberar") y descuenta su comisión.`,
         link: `#/panel/profesional/proyectos/${invoice.projectId}`,
       },
     })
@@ -485,27 +485,42 @@ function parsePlanReference(ref: string): { profileId: string; plan: 'basic' | '
   return null
 }
 
-async function handlePreapproval(preapprovalId: string, live: boolean) {
-  // Igual que en pagos: si no aparece en el entorno supuesto, se busca en el otro.
-  const pre = await mpCall(() => getPreapproval(preapprovalId, { live })).catch(async (e) => {
-    if (!process.env.MP_SUB_TEST_ACCESS_TOKEN) throw e
-    return mpCall(() => getPreapproval(preapprovalId, { live: !live }))
+async function handlePreapproval(preapprovalId: string, _live: boolean) {
+  void _live
+  // Como en pagos: se busca en producción y, si no aparece, en prueba (traerPreapproval). Se consulta
+  // con fetch (no con el SDK) para leer también `summarized` / `next_payment_date` (D33) y para que
+  // el E2E pueda usar el doble de MP.
+  const mp = await mpCall(async () => {
+    const r = await traerPreapproval(preapprovalId)
+    if (!r) throw new MpSubError('suscripción no encontrada en Mercado Pago', 404)
+    return r
   })
-  const planRef = parsePlanReference(pre.externalReference || '')
+  const pre = { id: String(mp.id || preapprovalId), status: String(mp.status || '') }
+  const planRef = parsePlanReference(String(mp.external_reference || ''))
   if (!planRef) return
 
   const prov = await db.providerProfile.findUnique({
     where: { id: planRef.profileId },
-    select: { id: true, userId: true, subscription: true, mpPreapprovalId: true, trialEndsAt: true },
+    select: { id: true, userId: true, subscription: true, mpPreapprovalId: true, trialEndsAt: true, createdAt: true, planPaidUntil: true },
   })
   if (!prov) return
+
+  // D33: cancelada / pausada → misma función que el cron y "Cancelar suscripción" en HomIA: con
+  // período pago vigente conserva el plan hasta `planPaidUntil`; sin período pago vuelve a la prueba.
+  if (pre.status === 'cancelled' || pre.status === 'paused') {
+    const r = await aplicarBajaSuscripcion({ providerId: prov.id, preapprovalId: pre.id, status: pre.status, motivo: 'webhook', source: 'webhook', pre: mp })
+    if (r.kind !== 'ignorar' && r.aplicado) {
+      registrarEvento(null, { name: 'plan_degradado', userId: prov.userId, path: '/panel/proveedor/plan', props: { desde: prov.subscription, motivo: r.kind === 'programar_baja' ? 'mercadopago_con_periodo_pago' : 'mercadopago' } })
+    }
+    return
+  }
 
   // Qué hacer lo decide `planTransicion` (lib/plans, pura y compartida con el
   // cron de reconciliación). Acá solo se aplica contra la base y Mercado Pago.
   const t = planTransicion(prov, pre, planRef.plan)
-  if (t.kind === 'ignorar') return
+  if (t.kind !== 'activar') return
 
-  if (t.kind === 'activar') {
+  {
     // D30: el movimiento del plan se registra ANTES del update (idempotente por dedupeKey): si el
     // update falla, el reintento de MP lo vuelve a intentar sin duplicarlo.
     await registrarActivacion({ providerId: prov.id, anterior: prov.subscription, nuevo: planRef.plan, preapprovalId: pre.id, trialEndsAt: prov.trialEndsAt, source: 'webhook' })
@@ -540,18 +555,5 @@ async function handlePreapproval(preapprovalId: string, live: boolean) {
     }
     // métricas (D27): cambio de plan efectivo (idempotente: solo si el update cambió algo)
     if (upd.count > 0) registrarEvento(null, { name: 'plan_activado', userId: prov.userId, path: '/panel/proveedor/plan', props: { desde: prov.subscription, hacia: t.data.subscription ?? null } })
-    return
-  }
-
-  // degradar: solo si la suscripción cancelada/pausada es la VIGENTE y el plan
-  // sigue siendo de pago (condición en el WHERE → idempotente)
-  await registrarBaja({ providerId: prov.id, plan: prov.subscription, preapprovalId: pre.id, tipo: pre.status === 'paused' ? 'pausada' : 'cancelada', source: 'webhook' })
-  const upd = await db.providerProfile.updateMany({
-    where: { id: prov.id, mpPreapprovalId: pre.id, subscription: { in: ['basic', 'pro'] } },
-    data: t.data,
-  })
-  if (upd.count > 0) {
-    await db.notification.create({ data: { userId: prov.userId, ...t.notificacion } })
-    registrarEvento(null, { name: 'plan_degradado', userId: prov.userId, path: '/panel/proveedor/plan', props: { desde: prov.subscription, motivo: 'mercadopago' } })
   }
 }

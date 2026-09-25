@@ -65,7 +65,17 @@ export const FAQ: Faq[] = [
   {
     tema: 'plan-proveedor',
     q: '¿Cuánto cuesta HomIA para un proveedor?',
-    a: `Los primeros ${TRIAL_DAYS} días son gratis. Después, el plan Básico cuesta ${ars(PLAN_PRICE_ARS.basic)}/mes e incluye la app completa: stock, ventas, cobros por Mercado Pago y efectivo, CRM y vinculaciones. El plan PRO cuesta ${ars(PLAN_PRICE_ARS.pro)}/mes y suma tu logo y marca en la cinta de la portada (se cargan en Mi perfil), la tarjeta "Recomendado" en materiales y directorio, y la analítica de demanda de los últimos 30 días (en tu Inicio). Se paga por suscripción de Mercado Pago desde Panel → Mi plan; la cancelás desde tu cuenta de Mercado Pago (en la app no hay botón). Sin plan activo tu negocio deja de aparecer en materiales, directorio, búsquedas y Homy, y no podés tocar el stock ni gestionar ventas; tus datos, reseñas y vinculaciones se conservan.`,
+    a: `Los primeros ${TRIAL_DAYS} días son gratis. Después, el plan Básico cuesta ${ars(PLAN_PRICE_ARS.basic)}/mes e incluye la app completa: stock, ventas, cobros por Mercado Pago y efectivo, CRM y vinculaciones. El plan PRO cuesta ${ars(PLAN_PRICE_ARS.pro)}/mes y suma tu logo y marca en la cinta de la portada (se cargan en Mi perfil), la tarjeta "Recomendado" en materiales y directorio, y la analítica de demanda de los últimos 30 días (en tu Inicio). Se paga por suscripción de Mercado Pago desde Panel → Mi plan. Si lo elegís durante la prueba, no perdés los días gratis: el primer cobro es el día que termina la prueba. Mercado Pago cobra todos los meses hasta que la canceles.`,
+  },
+  {
+    tema: 'plan-cancelar',
+    q: 'Soy proveedor: ¿cómo cancelo mi suscripción? ¿Me devuelven lo que pagué?',
+    a: 'En Panel → Mi plan tocás «Cancelar suscripción» y confirmás; también la podés cancelar desde Mercado Pago → Suscripciones: da lo mismo. Desde ese momento no se te vuelve a cobrar. Lo que ya pagaste no se reintegra, pero seguís con tu plan (y con el PRO, si lo tenías) hasta el fin del período que pagaste: la fecha la ves en Mi plan y en el aviso de la campanita. Si cancelás un plan que elegiste durante la prueba, antes del primer cobro, no se te cobró nada y seguís en tu prueba hasta que termine. Cuando vuelvas a suscribirte, el primer cobro es cuando termina lo que ya tenías pago.',
+  },
+  {
+    tema: 'plan-vencido',
+    q: 'Soy proveedor: ¿qué pasa si no pago después de la prueba o se me vence el plan?',
+    a: 'Tus productos y tu negocio dejan de verse en materiales, directorio, búsquedas y Homy, y no podés abrir ventas nuevas: publicar o editar stock, aprobar reservas nuevas, marcar disponible una reserva ni emitir cobros de materiales. Lo que ya tenés con tus clientes lo podés terminar: entregar, confirmar un pago en efectivo, cancelar con motivo (si ya te pagaron por Mercado Pago, el reembolso sale de tu cuenta), rechazar una reserva pendiente y gestionar devoluciones de sobrantes. Seguís entrando a tu panel y ves todo; no se borra nada. Cuando elegís un plan, tu stock, precios y perfil vuelven a verse tal como estaban.',
   },
   {
     tema: 'finanzas',
@@ -85,7 +95,7 @@ export const FAQ: Faq[] = [
   {
     tema: 'cobros-profesional',
     q: 'Soy profesional: ¿dónde veo lo que cobré y cómo cobro con Mercado Pago?',
-    a: 'En Panel → Cobros (en el celular, dentro de «Más»). Arriba tocás «Conectar Mercado Pago» y autorizás a HomIA: desde ahí tus clientes te pagan las facturas por Mercado Pago y la plata entra directo en tu cuenta (cobrás el 100%; el 1% lo paga el cliente aparte). Sin conexión, solo pueden pagarte en efectivo. Debajo ves lo cobrado este mes, lo pendiente y todas tus facturas con filtros Pendientes / Cobradas / Todas: descargás el PDF y, si el cliente te pagó en efectivo, tocás «Confirmar cobro en efectivo».',
+    a: 'En Panel → Cobros (en el celular, dentro de «Más»). Arriba tocás «Conectar Mercado Pago» y autorizás a HomIA: desde ahí tus clientes te pagan las facturas por Mercado Pago y el pago entra en tu cuenta por el 100% de tu precio (el 1% lo paga el cliente aparte); Mercado Pago lo libera según tus plazos y te descuenta su comisión, que se configura en tu cuenta de Mercado Pago. Sin conexión, solo pueden pagarte en efectivo. Debajo ves lo cobrado este mes, lo pendiente y todas tus facturas con filtros Pendientes / Cobradas / Todas: descargás el PDF y, si el cliente te pagó en efectivo, tocás «Confirmar cobro en efectivo».',
   },
   {
     tema: 'facturas-pdf',

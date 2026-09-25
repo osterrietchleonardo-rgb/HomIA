@@ -339,7 +339,7 @@ export default function ProviderCharges() {
             <h2 className="text-[15px] font-extrabold text-[#0A2540]">Cobrá con tu Mercado Pago</h2>
             <p className="mt-0.5 text-[13px] leading-relaxed text-slate-600">
               {mp?.status === 'connected' ? (
-                <><b className="text-[#0e9f6e]">Conectado</b>{mpExpires ? ` hasta ${mpExpires.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}` : ''}. La plata de tus ventas y cobros entra en tu cuenta: cobrás el 100% de tu precio (el cliente paga aparte el cargo de servicio HomIA del 1%).</>
+                <><b className="text-[#0e9f6e]">Conectado</b>{mpExpires ? ` hasta ${mpExpires.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}` : ''}. Los pagos de tus ventas y cobros entran en tu cuenta por el 100% de tu precio.</>
               ) : mp?.status === 'expired' ? (
                 <><b className="text-[#FF5A1F]">Vencido: volvé a conectar.</b> Sin conexión, tus clientes solo pueden pagarte en efectivo.</>
               ) : (
@@ -359,6 +359,12 @@ export default function ProviderCharges() {
             )}
           </div>
         </div>
+        {/* nota fija (D33): cómo llega la plata. Sin porcentajes de MP: cambian y los elige cada vendedor */}
+        <p className="mt-3 rounded-2xl bg-[#0A2540]/3 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-slate-500">
+          Cuando te pagan por Mercado Pago, el pago queda <b>aprobado en tu Mercado Pago</b> y Mercado Pago lo libera según tus plazos
+          (lo ves en &quot;Dinero a liberar&quot;). <b>Mercado Pago te cobra su comisión a vos</b>, como vendedor: depende de cuándo elegís
+          recibir la plata y se configura en tu cuenta de Mercado Pago. El cargo de servicio HomIA (1%) lo paga el cliente aparte: no sale de tu precio.
+        </p>
       </section>
 
       <div role="tablist" aria-label="Secciones de cobros" className="mb-5 flex gap-1 rounded-full bg-white/[0.06] ring-1 ring-[#0A2540]/10 p-1 w-fit max-w-full overflow-x-auto no-scrollbar">
@@ -590,7 +596,7 @@ export default function ProviderCharges() {
                         </p>
                       )}
                       {v.paymentMethod === 'mercadopago' && (
-                        <p className="mt-1 text-[11.5px] text-slate-400">Cobrás {formatARS(v.total)} (el 100% de tu precio). El cliente paga aparte el cargo de servicio HomIA (1%).</p>
+                        <p className="mt-1 text-[11.5px] text-slate-400">Te pagan {formatARS(v.total)} (el 100% de tu precio); Mercado Pago te descuenta su comisión. El cliente paga aparte el cargo de servicio HomIA (1%).</p>
                       )}
                       {v.status === 'aprobado' && expires && !chargePaid && (
                         <p className="mt-1 flex items-center gap-1.5 text-[12px] text-slate-400">

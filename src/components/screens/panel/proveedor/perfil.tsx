@@ -187,7 +187,8 @@ export default function ProviderProfile() {
   const rating = me?.provider?.rating ?? 0
   const reviewsCount = me?.provider?.reviewsCount ?? 0
   const verificationStatus = user?.verificationStatus || 'none'
-  const planLabel = plan ? (plan.plan === 'pro' ? 'PRO' : plan.plan === 'basic' ? 'Básico' : plan.activo ? 'Prueba' : 'Prueba finalizada') : '—'
+  // D33: la etiqueta del servidor ya dice "cancelado, sigue hasta…", "Plan vencido" o "Prueba finalizada"
+  const planLabel = plan ? (plan.plan === 'pro' ? 'PRO' : plan.plan === 'basic' ? 'Básico' : plan.activo ? 'Prueba' : plan.etiqueta || 'Prueba finalizada') : '—'
 
   return (
     <div className="homy-page">

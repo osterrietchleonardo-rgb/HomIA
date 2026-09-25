@@ -78,6 +78,7 @@ const FLOWS = {
   J: 'Notificaciones', K: 'Verificación DNI', L: 'Obras', M: 'CRM y favoritos', N: 'Seguridad transversal', O: 'IA',
   P: 'Carrito y pedidos multiproveedor', Q: 'Calendario y fechas del trabajo', R: 'Finanzas', S: 'Sugerencias',
   T: 'Métricas de uso y panel del admin', U: 'Ingresos de HomIA (suscripciones y cargo 1%)',
+  V: 'Plan: cancelar, período pago, plan vencido (D33)',
 }
 const results = Object.fromEntries(Object.keys(FLOWS).map((k) => [k, { pass: 0, fail: 0, external: 0, items: [] }]))
 
@@ -3493,14 +3494,33 @@ async function flowS() {
 // fuera de producción) y la suite con --mp-double <puerto>. Sin doble, los checks del webhook se
 // saltean (la API de /admin/ingresos se prueba igual). Ids de pago con prefijo "e2e" (la purga los barre).
 const MP_DOUBLE_PORT = argVal('--mp-double')
-const mpDoble = { server: null, facturas: new Map(), pagos: new Map(), pres: new Map() }
+const mpDoble = { server: null, facturas: new Map(), pagos: new Map(), pres: new Map(), creadas: [] }
 async function startMpDouble() {
   if (!MP_DOUBLE_PORT || mpDoble.server) return !!mpDoble.server
   const { createServer } = await import('node:http')
-  mpDoble.server = createServer((req, res) => {
+  mpDoble.server = createServer(async (req, res) => {
     const u = new URL(req.url, 'http://x')
     const send = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)) }
     let m
+    // D33: alta de suscripción (POST /preapproval) y cancelación (PUT /preapproval/{id})
+    if (req.method === 'POST' || req.method === 'PUT') {
+      let txt = ''
+      for await (const ch of req) txt += ch
+      const body = txt ? JSON.parse(txt) : {}
+      if (req.method === 'POST' && u.pathname === '/preapproval') {
+        const id = `e2epre${TS}n${mpDoble.creadas.length}`
+        mpDoble.creadas.push(body)
+        mpDoble.pres.set(id, { id, status: 'pending', external_reference: body.external_reference, auto_recurring: body.auto_recurring, date_created: new Date().toISOString() })
+        return send(201, { id, init_point: `https://doble.mp/checkout/${id}`, status: 'pending', auto_recurring: body.auto_recurring })
+      }
+      if (req.method === 'PUT' && (m = u.pathname.match(/^\/preapproval\/([^/]+)$/))) {
+        const p = mpDoble.pres.get(m[1])
+        if (!p) return send(404, { message: 'not found' })
+        Object.assign(p, body, { last_modified: new Date().toISOString() })
+        return send(200, p)
+      }
+      return send(404, { message: 'not found' })
+    }
     if ((m = u.pathname.match(/^\/authorized_payments\/([^/]+)$/)) && m[1] !== 'search') {
       if (m[1] === 'e2ecaido') return send(500, { message: 'internal_error' })
       const f = mpDoble.facturas.get(m[1])
@@ -3579,7 +3599,6 @@ async function flowU() {
   const AD = new Actor('adminU', null)
   if (!(await loginAdmin(AD))) {
     check(F, 'ingreso al área /admin con ADMIN_EMAIL/ADMIN_PASSWORD', false, 'faltan las variables o el login falló', 'config: ADMIN_EMAIL/ADMIN_PASSWORD')
-    if (mpDoble.server) mpDoble.server.close()
     return
   }
   const conPrueba = await get(AD, '/api/admin/ingresos?periodo=30&prueba=incluir&gran=dia')
@@ -3624,7 +3643,180 @@ async function flowU() {
   }
   st(F, 'CSV de una tabla inexistente → 400', await get(AD, '/api/admin/ingresos?csv=nada'), 400)
   st(F, 'ficha de un id inexistente → 404', await get(AD, '/api/admin/ingresos/proveedor?id=noexiste123456'), 404)
-  if (mpDoble.server) mpDoble.server.close()
+}
+
+// ═════════════════ V. PLAN DEL PROVEEDOR: CANCELAR, PERÍODO PAGO Y PLAN VENCIDO (D33) ═════════════════
+// Contra el DOBLE de MP (--mp-double): nunca se crean suscripciones reales ni se cobra. Proveedores propios
+// de esta sección (VX: cancela y vence; VY: elige plan en la prueba). Ids de MP con prefijo "e2e".
+const VX = new Actor('provX', 'proveedor')
+const VY = new Actor('provY', 'proveedor')
+for (const a of [VX, VY]) a.ip = `10.253.${(TS >> 8) & 255}.${TS & 255}`
+const avisoPre = (id) => http(ANON, 'POST', `/api/payments/webhook?type=subscription_preapproval&data.id=${encodeURIComponent(id)}`, { json: { type: 'subscription_preapproval', action: 'updated', data: { id } } })
+const cronSubs = () => get(ANON, '/api/cron/subscriptions', { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } })
+
+async function flowV() {
+  const F = 'V'
+  const hayDoble = await startMpDouble()
+  if (!hayDoble) {
+    check(F, 'la sección V necesita --mp-double (nunca toca Mercado Pago de verdad)', false, 'correr con --mp-double <puerto> y el server con MP_API_BASE_PRUEBAS')
+    return
+  }
+  const base = { password: PASSWORD, lat: CABA.lat, lng: CABA.lng, city: 'CABA', howFoundUs: 'otro', acceptTerms: true }
+  for (const [a, name] of [[VX, 'Corralón X'], [VY, 'Ferretería Y']]) {
+    const r = await registrar(a, { ...base, email: a.email, displayName: `${MARK} Prov ${name}`, roles: ['proveedor'], businessName: `${MARK} ${name}`, address: 'Av. Siempreviva 742' })
+    st(F, `registro proveedor ${name}`, r, 201)
+    a.id = r.data?.user?.id
+    a.provId = a.id ? (await db.providerProfile.findUnique({ where: { userId: a.id } }))?.id : undefined
+  }
+  if (!VX.provId || !VY.provId) throw new Error('No se pudieron crear los proveedores de la sección V')
+
+  // ── elegir plan durante la prueba: el primer cobro es el fin de la prueba ──
+  const pY0 = await db.providerProfile.findUnique({ where: { id: VY.provId } })
+  const gY = await get(VY, '/api/provider/plan')
+  check(F, 'en prueba: la pantalla sabe que el primer cobro sería el fin de la prueba', gY.data?.primerCobroSiElige === pY0.trialEndsAt.toISOString(), brief(gY))
+  const altaY = await post(VY, '/api/provider/plan', { plan: 'basic' })
+  st(F, 'elegir Básico durante la prueba', altaY, 201)
+  const cuerpo = mpDoble.creadas.find((b) => b.external_reference === `plan:provider:${VY.provId}:basic`)
+  check(F, 'la suscripción se crea con start_date = fin de la prueba (no se come los días gratis)', cuerpo?.auto_recurring?.start_date === pY0.trialEndsAt.toISOString() && altaY.data?.primerCobro === pY0.trialEndsAt.toISOString(), JSON.stringify(cuerpo?.auto_recurring))
+  // MP autoriza la tarjeta: aviso authorized
+  const preY = altaY.data?.preapprovalId
+  mpDoble.pres.set(preY, { id: preY, status: 'authorized', external_reference: `plan:provider:${VY.provId}:basic`, next_payment_date: pY0.trialEndsAt.toISOString(), date_created: new Date().toISOString(), auto_recurring: { transaction_amount: 50000, start_date: pY0.trialEndsAt.toISOString() }, summarized: { charged_quantity: 0, last_charged_date: null } })
+  st(F, 'aviso authorized de la suscripción elegida en la prueba', await avisoPre(preY), 200)
+  const pY1 = await db.providerProfile.findUnique({ where: { id: VY.provId } })
+  check(F, 'queda en Básico y NO se pisa trialEndsAt', pY1.subscription === 'basic' && pY1.mpPreapprovalId === preY && pY1.trialEndsAt?.getTime() === pY0.trialEndsAt.getTime() && pY1.planPaidUntil === null, JSON.stringify({ s: pY1.subscription, t: pY1.trialEndsAt, h: pY1.planPaidUntil }))
+  const gY1 = await get(VY, '/api/provider/plan')
+  check(F, 'la pantalla dice "primer cobro el DD/MM"', gY1.data?.plan?.primerCobro === pY0.trialEndsAt.toISOString() && /primer cobro el \d{2}\/\d{2}/.test(gY1.data?.plan?.etiqueta || ''), brief(gY1))
+  const nY = await db.notification.findFirst({ where: { userId: VY.id, type: 'plan_basico' }, orderBy: { createdAt: 'desc' } })
+  check(F, 'el aviso dice cuándo es el primer cobro', /primer cobro de Mercado Pago es el \d{2}\/\d{2}/.test(nY?.body || ''), nY?.body)
+  // cancelar antes del primer cobro → vuelve a su prueba (no pagó nada), sin perder días
+  const cY = await post(VY, '/api/provider/plan/cancel', { confirmar: true })
+  st(F, 'cancelar antes del primer cobro', cY, 200)
+  const pY2 = await db.providerProfile.findUnique({ where: { id: VY.provId } })
+  check(F, 'sin cobro: vuelve a la prueba con los mismos días (trialEndsAt intacto)', pY2.subscription === 'trial' && pY2.trialEndsAt?.getTime() === pY0.trialEndsAt.getTime() && pY2.planPaidUntil === null && cY.data?.plan?.activo === true, JSON.stringify({ s: pY2.subscription, t: pY2.trialEndsAt, h: pY2.planPaidUntil }))
+  check(F, 'MP recibió la cancelación', mpDoble.pres.get(preY)?.status === 'cancelled')
+  st(F, 'cancelar otra vez (idempotente)', await post(VY, '/api/provider/plan/cancel', { confirmar: true }), 200)
+
+  // ── cancelar con un período pago vigente ──
+  st(F, 'cancelar sin suscripción (en prueba, nunca eligió plan) → 409', await post(VX, '/api/provider/plan/cancel', { confirmar: true }), 409)
+  const preX = `e2eprex${TS}`
+  const pagado = new Date(Date.now() - 5 * 86_400_000)
+  await db.providerProfile.update({ where: { id: VX.provId }, data: { subscription: 'basic', mpPreapprovalId: preX, trialEndsAt: new Date(Date.now() - 20 * 86_400_000) } })
+  await db.subscriptionCharge.create({ data: { providerId: VX.provId, userId: VX.id, providerName: `${MARK} Corralón X`, plan: 'basic', mpPreapprovalId: preX, mpPaymentId: `e2e${TS}x1`, mpEnvironment: 'live', status: 'approved', amount: 50000, currency: 'ARS', refundedAmount: 0, attemptedAt: pagado, paidAt: pagado, source: 'webhook' } })
+  mpDoble.pres.set(preX, { id: preX, status: 'authorized', external_reference: `plan:provider:${VX.provId}:basic`, next_payment_date: new Date(pagado.getTime() + 30 * 86_400_000).toISOString(), date_created: pagado.toISOString(), summarized: { charged_quantity: 1, last_charged_date: pagado.toISOString() } })
+  const stX = await post(VX, '/api/provider/stock', { elementId: S.E1.id, price: 1300, quantity: 20, minStock: 1 })
+  st(F, 'con plan: publica stock', stX, 201)
+  const stockX = stX.data?.stock?.id
+  const gX = await get(VX, '/api/provider/plan')
+  const esperado = new Date(pagado.getTime()); esperado.setUTCMonth(esperado.getUTCMonth() + 1)
+  check(F, 'antes de cancelar la pantalla muestra hasta cuándo seguiría (último cobro + 1 mes)', gX.data?.puedeCancelar === true && gX.data?.finPeriodo === esperado.toISOString(), brief(gX))
+
+  st(F, 'cancelar sin sesión', await post(ANON, '/api/provider/plan/cancel', { confirmar: true }), 401)
+  st(F, 'cancelar como cliente', await post(C, '/api/provider/plan/cancel', { confirmar: true }), 403)
+  st(F, 'cancelar sin confirmar', await post(VX, '/api/provider/plan/cancel', {}), 400)
+  st(F, 'cancelar como profesional', await post(P, '/api/provider/plan/cancel', { confirmar: true }), 403)
+  check(F, '…la suscripción de X sigue intacta', mpDoble.pres.get(preX)?.status === 'authorized' && (await db.providerProfile.findUnique({ where: { id: VX.provId } })).planPaidUntil === null)
+
+  const cX = await post(VX, '/api/provider/plan/cancel', { confirmar: true })
+  st(F, 'el dueño cancela desde HomIA', cX, 200)
+  const pX1 = await db.providerProfile.findUnique({ where: { id: VX.provId } })
+  check(F, 'MP recibió PUT status=cancelled', mpDoble.pres.get(preX)?.status === 'cancelled')
+  check(F, 'sigue en Básico con planPaidUntil = último cobro + 1 mes', pX1.subscription === 'basic' && pX1.planPaidUntil?.toISOString() === esperado.toISOString() && cX.data?.accesoHasta === esperado.toISOString(), JSON.stringify({ s: pX1.subscription, h: pX1.planPaidUntil }))
+  const evX = await db.subscriptionEvent.findUnique({ where: { dedupeKey: `baja:${preX}` } })
+  check(F, 'evento "cancelada" con motivo "cancelada desde HomIA"', evX?.type === 'cancelada' && evX?.source === 'homia' && /cancelada desde HomIA/.test(evX?.motivo || ''), JSON.stringify(evX))
+  const nX = await db.notification.findMany({ where: { userId: VX.id, type: 'plan_cancelado' } })
+  check(F, 'un aviso que dice hasta cuándo sigue y que no se reintegra', nX.length === 1 && /hasta el \d{2}\/\d{2}/.test(nX[0].body) && /no se reintegra/.test(nX[0].body), JSON.stringify(nX.map((n) => n.body)))
+  const cX2 = await post(VX, '/api/provider/plan/cancel', { confirmar: true })
+  check(F, 'cancelar dos veces: 200 idempotente, misma fecha', cX2.status === 200 && cX2.data?.yaEstaba === true && cX2.data?.accesoHasta === esperado.toISOString(), brief(cX2))
+  st(F, 'MP avisa la cancelación después (webhook)', await avisoPre(preX), 200)
+  const pX2 = await db.providerProfile.findUnique({ where: { id: VX.provId } })
+  check(F, 'el aviso de MP no degrada ni duplica el aviso', pX2.subscription === 'basic' && pX2.planPaidUntil?.getTime() === esperado.getTime() && (await db.notification.count({ where: { userId: VX.id, type: 'plan_cancelado' } })) === 1)
+  check(F, 'un solo evento de baja', (await db.subscriptionEvent.count({ where: { providerId: VX.provId, type: 'cancelada' } })) === 1)
+
+  // mientras planPaidUntil es futuro, sigue operativo
+  const gX2 = await get(VX, '/api/provider/plan')
+  check(F, 'plan cancelado: activo, "cancelado", hasta la fecha', gX2.data?.plan?.activo === true && gX2.data?.plan?.cancelado === true && gX2.data?.plan?.accesoHasta === esperado.toISOString() && gX2.data?.puedeCancelar === false, brief(gX2))
+  st(F, 'plan cancelado vigente: sigue editando stock', await patch(VX, '/api/provider/stock', { id: stockX, price: 1350 }), 200)
+  const offerOf = (r, stockId) => (r.data?.results || []).some((e) => (e.offers || []).some((o) => o.stockId === stockId))
+  check(F, 'plan cancelado vigente: sigue en el marketplace', offerOf(await get(C, '/api/marketplace?q=caño'), stockX))
+
+  // compras para probar después con el plan vencido
+  const compra = await post(C, '/api/purchases', { stockId: stockX, quantity: 3, type: 'compra', note: `${MARK} V compra` })
+  st(F, 'cliente compra (antes del vencimiento)', compra, 201)
+  const compraId = compra.data?.purchase?.id
+  const compra2 = await post(C, '/api/purchases', { stockId: stockX, quantity: 1, type: 'compra', note: `${MARK} V compra a cancelar` })
+  const reserva1 = await post(C, '/api/purchases', { stockId: stockX, quantity: 1, type: 'reserva', note: `${MARK} V reserva a rechazar` })
+  const reserva2 = await post(C, '/api/purchases', { stockId: stockX, quantity: 1, type: 'reserva', note: `${MARK} V reserva a aprobar` })
+  st(F, 'cliente elige efectivo', await patch(C, `/api/purchases/${compraId}`, { action: 'pagar_efectivo' }), 200)
+  const chargeX = (await db.purchase.findUnique({ where: { id: compraId || 'x' } }))?.chargeId
+
+  // ── el período pago termina: el cron lo da de baja ──
+  if (!process.env.CRON_SECRET) {
+    check(F, 'CRON_SECRET configurado para probar el cron', false, 'falta CRON_SECRET en .env')
+    return
+  }
+  const vence = new Date(Date.now() - 60_000)
+  await db.providerProfile.update({ where: { id: VX.provId }, data: { planPaidUntil: vence } })
+  const gX3 = await get(VX, '/api/provider/plan')
+  check(F, 'vencido antes del cron: ya no opera (la misma regla en todos lados)', gX3.data?.plan?.activo === false && gX3.data?.plan?.motivoInactivo === 'plan_vencido', brief(gX3))
+  check(F, 'vencido antes del cron: ya no aparece en el marketplace', !offerOf(await get(C, '/api/marketplace?q=caño'), stockX))
+  const cr = await cronSubs()
+  st(F, 'cron diario de suscripciones', cr, 200)
+  check(F, 'el cron cuenta el vencimiento', (cr.data?.vencidos ?? 0) >= 1, brief(cr))
+  const pX3 = await db.providerProfile.findUnique({ where: { id: VX.provId } })
+  check(F, 'el cron lo pasa a prueba finalizada y guarda cuándo terminó el plan', pX3.subscription === 'trial' && pX3.planPaidUntil?.getTime() === vence.getTime(), JSON.stringify({ s: pX3.subscription, h: pX3.planPaidUntil }))
+  const nV = await db.notification.findFirst({ where: { userId: VX.id, type: 'plan_vencido' } })
+  check(F, 'aviso "Terminó tu plan"', !!nV && /Terminó tu plan/.test(nV.title), JSON.stringify(nV))
+  const cr2 = await cronSubs()
+  check(F, 'correr el cron otra vez no vuelve a avisar', cr2.status === 200 && (await db.notification.count({ where: { userId: VX.id, type: 'plan_vencido' } })) === 1)
+
+  // ── plan vencido: bloquea negocio nuevo, deja cerrar lo que ya tiene ──
+  const nuevoStock = await post(VX, '/api/provider/stock', { elementId: S.E3.id, price: 10, quantity: 1 })
+  check(F, 'vencido: NO publica stock (403 needsPlan, "Tu plan venció el …")', nuevoStock.status === 403 && nuevoStock.data?.needsPlan === true && /^Tu plan venció el \d{2}\/\d{2}/.test(nuevoStock.data?.error || ''), brief(nuevoStock))
+  const edStock = await patch(VX, '/api/provider/stock', { id: stockX, price: 1 })
+  check(F, 'vencido: NO edita stock', edStock.status === 403 && edStock.data?.needsPlan === true, brief(edStock))
+  const apr = await patch(VX, `/api/purchases/${reserva2.data?.purchase?.id}`, { action: 'aprobar' })
+  check(F, 'vencido: NO aprueba una reserva nueva', apr.status === 403 && apr.data?.needsPlan === true && /terminar las ventas que ya tenés/.test(apr.data?.error || ''), brief(apr))
+  st(F, 'vencido: confirma el pago en efectivo', await patch(VX, `/api/charges/${chargeX}`, {}), 200)
+  const ent = await patch(VX, `/api/purchases/${compraId}`, { action: 'entregar' })
+  st(F, 'vencido: entrega una compra pagada', ent, 200)
+  st(F, 'vencido: cancela una compra con motivo', await patch(VX, `/api/purchases/${compra2.data?.purchase?.id}`, { action: 'cancelar', reason: `${MARK} no llego a entregar` }), 200)
+  st(F, 'vencido: rechaza una reserva pendiente', await patch(VX, `/api/purchases/${reserva1.data?.purchase?.id}`, { action: 'rechazar', reason: `${MARK} sin stock` }), 200)
+  const foto = (await upload(C, 'sobrantes', 51)).data?.url
+  const dev = await post(C, '/api/returns', { purchaseId: compraId, items: [{ purchaseId: compraId, elementId: S.E1.id, condition: 'sin_abrir', photoUrl: foto, qty: 1 }] })
+  st(F, 'el cliente pide una devolución al proveedor vencido', dev, 201)
+  const itemsDev = await db.leftoverItem.findMany({ where: { returnId: dev.data?.return?.id || 'x' } })
+  st(F, 'vencido: acepta la devolución', await patch(VX, `/api/returns/${dev.data?.return?.id}`, { action: 'aceptar', items: itemsDev.map((i) => ({ id: i.id, qtyAccepted: 1 })) }), 200)
+  check(F, 'vencido: sigue viendo sus ventas y su stock', (await get(VX, '/api/purchases?as=proveedor')).status === 200 && (await get(VX, '/api/provider/stock')).status === 200)
+  const sX = await db.providerStock.findUnique({ where: { id: stockX || 'x' } })
+  check(F, 'vencido: no se borró nada (stock y precio intactos)', !!sX && sX.price === 1350, JSON.stringify(sX && { price: sX.price, q: sX.quantity }))
+
+  // volver a suscribirse después de vencido: cobro en el momento (sin start_date)
+  const altaX = await post(VX, '/api/provider/plan', { plan: 'pro' })
+  st(F, 'vencido: puede volver a elegir plan', altaX, 201)
+  const cuerpoX = mpDoble.creadas.find((b) => b.external_reference === `plan:provider:${VX.provId}:pro`)
+  check(F, 'sin prueba ni período pago vigente: sin start_date (cobra en el momento)', !!cuerpoX && !cuerpoX.auto_recurring?.start_date && altaX.data?.primerCobro === null, JSON.stringify(cuerpoX?.auto_recurring))
+  const preX2 = altaX.data?.preapprovalId
+  mpDoble.pres.set(preX2, { id: preX2, status: 'authorized', external_reference: `plan:provider:${VX.provId}:pro`, date_created: new Date().toISOString(), summarized: { charged_quantity: 1, last_charged_date: new Date().toISOString() } })
+  st(F, 'aviso authorized del PRO', await avisoPre(preX2), 200)
+  const pX4 = await db.providerProfile.findUnique({ where: { id: VX.provId } })
+  check(F, 'al volver a pagar queda PRO, sin baja programada', pX4.subscription === 'pro' && pX4.planPaidUntil === null && pX4.mpPreapprovalId === preX2, JSON.stringify({ s: pX4.subscription, h: pX4.planPaidUntil }))
+  check(F, 'al volver a pagar, su stock reaparece tal como estaba', offerOf(await get(C, '/api/marketplace?q=caño'), stockX))
+
+  // cobro reembolsado de un proveedor activo: no deja período pago al cancelar
+  await db.subscriptionCharge.create({ data: { providerId: VX.provId, userId: VX.id, providerName: `${MARK} Corralón X`, plan: 'pro', mpPreapprovalId: preX2, mpPaymentId: `e2e${TS}x2`, mpEnvironment: 'live', status: 'refunded', amount: 100000, currency: 'ARS', refundedAmount: 100000, attemptedAt: new Date(), paidAt: new Date(), source: 'webhook' } })
+  const cX3 = await post(VX, '/api/provider/plan/cancel', { confirmar: true })
+  const pX5 = await db.providerProfile.findUnique({ where: { id: VX.provId } })
+  check(F, 'con el único cobro reembolsado, cancelar no deja un período vigente (aunque MP siga contándolo)', cX3.status === 200 && pX5.subscription === 'trial' && (!pX5.planPaidUntil || pX5.planPaidUntil.getTime() <= Date.now()), JSON.stringify({ st: cX3.status, s: pX5.subscription, h: pX5.planPaidUntil }))
+
+  // admin: plan elegido en la prueba = "En prueba", no "En deuda" (si hay sesión de admin)
+  const AD = new Actor('adminV', null)
+  if (await loginAdmin(AD)) {
+    await db.providerProfile.update({ where: { id: VY.provId }, data: { subscription: 'basic', mpPreapprovalId: preY } })
+    const d = (await get(AD, '/api/admin/ingresos?periodo=30&prueba=incluir')).data || {}
+    const i = (d.tablas?.cuentas?.ids || []).indexOf(VY.provId)
+    const fila = i >= 0 ? d.tablas.cuentas.filas[i] : null
+    check(F, 'admin: plan elegido en la prueba → "En prueba" (no "En deuda")', fila?.[1] === 'En prueba', JSON.stringify(fila))
+  }
 }
 
 async function purge({ quiet = false } = {}) {
@@ -3823,7 +4015,7 @@ async function main() {
   }
   // ya hay restos de otra corrida: se limpian antes (idempotente)
   await purge({ quiet: true })
-  const order = [['A', flowA], ['A', flowBaja], ['B', flowB], ['C', flowC], ['I', flowI], ['D', flowD], ['E', flowE], ['F', flowF], ['G', flowG], ['P', flowP], ['H', flowH], ['J', flowJ], ['K', flowK], ['L', flowL], ['M', flowM], ['N', flowN], ['O', flowO], ['Q', flowQ], ['R', flowR], ['S', flowS], ['T', flowT], ['B', flowTrialVencido], ['U', flowU]]
+  const order = [['A', flowA], ['A', flowBaja], ['B', flowB], ['C', flowC], ['I', flowI], ['D', flowD], ['E', flowE], ['F', flowF], ['G', flowG], ['P', flowP], ['H', flowH], ['J', flowJ], ['K', flowK], ['L', flowL], ['M', flowM], ['N', flowN], ['O', flowO], ['Q', flowQ], ['R', flowR], ['S', flowS], ['T', flowT], ['B', flowTrialVencido], ['U', flowU], ['V', flowV]]
   const t0 = Date.now()
   let purgeResult = null
   try {
@@ -3842,6 +4034,7 @@ async function main() {
   } finally {
     const users = { cliente: C.email, profesional: P.email, profesional2: P2.email, proveedor: V.email, provA: VA.email, provB: VB.email, visitante: CV.email, password: PASSWORD, ids: { C: C.id, P: P.id, P2: P2.id, V: V.id, VA: VA.id, VB: VB.id, CV: CV.id, proId: P.proId, provId: V.provId }, S }
     writeFileSync(path.join(OUT_DIR, 'last-run.json'), JSON.stringify({ ...manifest, users, results }, null, 2))
+    if (mpDoble.server) { mpDoble.server.close(); mpDoble.server = null }
     if (!NO_PURGE) purgeResult = await purge()
     else console.log(`\n--no-purge: datos E2E conservados. Credenciales en ${path.join(OUT_DIR, 'last-run.json')}`)
   }

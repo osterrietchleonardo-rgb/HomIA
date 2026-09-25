@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { ok, fail, parseBody, appUrl, parseJson } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
-import { planState } from '@/lib/plans'
+import { planState, accionPermitida, mensajePlanInactivo } from '@/lib/plans'
 import { createSellerPreference, ensureFreshSellerToken, refundPayment } from '@/lib/mercadopago'
 import { createWithChargeNumber } from '@/lib/charge-number'
 import { purchaseLines, releaseLines, reserveItems, StockShortError, fmt, type PurchaseLine } from '@/lib/orders'
@@ -268,8 +268,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // ─────────────── ACCIONES DEL PROVEEDOR ───────────────
   if (!isProvider) return fail('Solo el proveedor puede gestionar tu pedido', 403)
 
+  // D33: sin plan activo NO abre negocio nuevo (aprobar una reserva, marcarla disponible), pero SÍ
+  // cierra lo que ya tiene: entregar, rechazar una reserva pendiente y cancelar (arriba) siguen.
   const state = planState(purchase.provider)
-  if (!state.activo) return fail('Tu prueba gratis terminó: elegí un plan Básico o PRO para seguir vendiendo', 403, { needsPlan: true })
+  const accion = d.action === 'aprobar' ? 'aprobar_reserva' : d.action === 'disponible' ? 'marcar_disponible' : d.action === 'rechazar' ? 'rechazar_reserva' : 'entregar'
+  if (!accionPermitida(accion, state)) {
+    return fail(mensajePlanInactivo(state, d.action === 'aprobar' ? 'aprobar reservas nuevas' : 'volver a vender'), 403, { needsPlan: true })
+  }
 
   if (d.action === 'aprobar') {
     if (st !== 'pendiente_aprobacion') {

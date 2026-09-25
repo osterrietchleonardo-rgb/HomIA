@@ -330,7 +330,7 @@ export const HOWTOS: Record<TourRole, HowTo[]> = {
       steps: [
         'Entrá a Panel → Cobros (en el celular está en «Más»).',
         'Tocá «Conectar Mercado Pago» e ingresá con tu cuenta: volvés solo a Cobros, con la cuenta conectada.',
-        'Desde ahí, cuando un cliente paga tu factura por Mercado Pago, la plata entra directo en tu cuenta y cobrás el 100%: el cargo de servicio HomIA del 1% lo paga el cliente.',
+        'Desde ahí, cuando un cliente paga tu factura por Mercado Pago, el pago entra en tu cuenta por el 100% de la factura: el cargo de servicio HomIA del 1% lo paga el cliente. Mercado Pago lo libera según tus plazos y te descuenta su comisión.',
         'En la misma pantalla ves lo cobrado este mes, lo pendiente y todas tus facturas: descargás el PDF y, si el cliente te pagó en efectivo, tocás «Confirmar cobro en efectivo».',
         'Sin conexión, tus clientes solo pueden pagarte en efectivo (vos confirmás el cobro).',
       ],
@@ -518,7 +518,7 @@ export const HOWTOS: Record<TourRole, HowTo[]> = {
         'Entrá a Panel → Cobros → Ventas (pedidos): ves tu parte de cada pedido con todos sus productos.',
         'Las compras te llegan ya «Por pagar»: el stock está reservado y el cobro emitido, no tenés que aprobar nada. Preparalas. Si no podés cumplir, cancelá con un motivo (si ya estaba pagada por Mercado Pago, se le devuelve completa desde tu cuenta).',
         'Las reservas sí las aprobás: con stock, «Aprobar reserva» reserva todo junto y el cliente tiene 48 h. Sin stock, indicá «Disponible aproximadamente el…» y, cuando lo tengas, tocá «Ya lo tengo: disponible». Si no podés, rechazala con un motivo.',
-        'El cliente paga por Mercado Pago (cobrás el 100%; el 1% de cargo de servicio lo paga él) o en efectivo al retirar.',
+        'El cliente paga por Mercado Pago (te paga el 100% de tu precio; el 1% de cargo de servicio lo paga él; Mercado Pago te descuenta su comisión) o en efectivo al retirar.',
         'Cuando retira, marcá «Entregado». Todo queda en la línea de tiempo del pedido.',
       ],
       href: '/panel/proveedor/cobros?tab=ventas',
@@ -557,7 +557,7 @@ export const HOWTOS: Record<TourRole, HowTo[]> = {
       steps: [
         'Entrá a Panel → Cobros.',
         'Tocá «Conectar Mercado Pago» e ingresá con tu cuenta: autorizás a HomIA y volvés a Cobros con la cuenta conectada.',
-        'Desde ahí tus clientes te pagan por Mercado Pago y la plata entra directo en tu cuenta: cobrás el 100% de tu precio (el 1% de cargo de servicio lo paga el cliente).',
+        'Desde ahí tus clientes te pagan por Mercado Pago y el pago entra en tu cuenta por el 100% de tu precio (el 1% de cargo de servicio lo paga el cliente). Mercado Pago lo libera según tus plazos y te descuenta su comisión.',
         'Sin conexión, solo te pueden pagar en efectivo. Si la conexión vence, el botón dice «Volver a conectar».',
       ],
       href: '/panel/proveedor/cobros',

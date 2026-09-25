@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { ok, fail, parseJson } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
-import { planState } from '@/lib/plans'
+import { planState, mensajePlanInactivo } from '@/lib/plans'
 
 // ── ANALÍTICA DEL NEGOCIO (exclusiva del Plan PRO) ──
 // Qué elementos se están pidiendo más, cuántas consultas hubo sobre el rubro
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 
   const state = planState(prov)
   if (!state.activo) {
-    return fail('Tu prueba gratis terminó: elegí un plan para acceder a tu panel', 403, { needsPlan: true })
+    return fail(mensajePlanInactivo(state, 'ver la analítica'), 403, { needsPlan: true })
   }
   if (state.plan !== 'pro') {
     return fail('La analítica del negocio es exclusiva del Plan PRO', 403, {

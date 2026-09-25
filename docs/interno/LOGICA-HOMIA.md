@@ -724,12 +724,38 @@ profesionales" (`pro/subscription/route.ts`).
 
 **Reglas:**
 
-- `puedeOperar()` = plan pago o prueba vigente (`plans.ts:74-76`). Si no puede operar:
-  desaparece de marketplace, búsqueda, mapa, directorio, comparables y agente
-  (`marketplace/route.ts:53,116`; `search/route.ts:38`; `search/pins/route.ts:58`;
-  `directory/route.ts:134`; `comparables/route.ts:29`; `src/lib/homy/datos.ts:140`); no puede
-  recibir pedidos ("El proveedor no está operando por ahora" — `src/lib/orders.ts:121`), ni
-  gestionar stock, pedidos, cobros o analítica.
+- `puedeOperar()` = `planState().activo`: prueba vigente, o plan pago **sin baja programada**, o
+  plan pago cancelado con `planPaidUntil` todavía futuro (D33). Es la **única regla** para
+  marketplace, búsqueda, mapa, directorio, comparables, sponsors, Homy, carrito/pedidos y los 403 de
+  escritura (`PerfilPlan` exige `planPaidUntil`: toda consulta que decide tiene que traerlo). Si no
+  puede operar: desaparece de marketplace, búsqueda, mapa, directorio, comparables y agente; no
+  puede recibir pedidos ("El proveedor no está operando por ahora" — `src/lib/orders.ts`).
+- **Plan vencido (D33): no abre negocio nuevo, pero cierra lo que ya tiene y no pierde nada.** Sigue
+  entrando a su panel y ve todo (stock, ventas, cobros, finanzas, mensajes, perfil); nada se borra;
+  lo público no lo muestra. Regla pura `accionPermitida()` (`plans.ts`, tests en
+  `src/lib/__tests__/plans.test.ts`):
+
+  | Acción del proveedor con plan vencido | ¿Se permite? | Dónde |
+  |---|---|---|
+  | Publicar, editar o borrar stock | **No** (403 `needsPlan`) | `provider/stock/route.ts` |
+  | Aprobar una reserva nueva | **No** (403 `needsPlan`) | `purchases/[id]/route.ts` (`aprobar`) |
+  | Marcar "disponible" una reserva sin stock | **No** (403 `needsPlan`) | `purchases/[id]/route.ts` (`disponible`) |
+  | Emitir cobros de materiales nuevos | **No** (403 `needsPlan`) | `provider/charges/route.ts` (POST) |
+  | Recibir pedidos nuevos | **No** (409, sale de marketplace/carrito) | `orders.ts`, `cart` |
+  | Analítica PRO | **No** (403) | `provider/analytics/route.ts` |
+  | Marcar entregado | Sí | `purchases/[id]` (`entregar`) |
+  | Confirmar un pago en efectivo | Sí | `charges/[id]` (PATCH) |
+  | Cancelar con motivo (con reembolso total por MP si ya le pagaron) | Sí | `purchases/[id]` (`cancelar`) |
+  | Rechazar una reserva pendiente (libera stock) | Sí | `purchases/[id]` (`rechazar`) |
+  | Devoluciones de sobrantes (aceptar, rechazar, recibir, reembolsar) | Sí | `returns/[id]` |
+  | Ver su panel, ventas, stock, finanzas, mensajes; editar su perfil | Sí | — |
+
+  El 403 dice lo que corresponde (`mensajePlanInactivo()`): "Tu plan venció el DD/MM: …" o "Tu prueba
+  gratis terminó el DD/MM: …", y qué puede seguir haciendo. `planState()` expone `motivoInactivo`
+  (`prueba_terminada` | `plan_vencido`) y `vencioEl`. En el panel, un aviso fijo arriba de todas las
+  pantallas del proveedor menos Mi plan (`plan-aviso.tsx`): "Tu plan no está activo: tus productos no
+  se ven en HomIA. Podés terminar las ventas que ya tenés…" con botón a Mi plan. Al volver a pagar,
+  todo reaparece tal como estaba (stock, precios, perfil).
 - `esProActivo()` = `subscription === 'pro'` **y** puede operar: **única fuente de verdad** de todo
   beneficio PRO (`plans.ts:82-90`). La marca en la home solo se puede editar con PRO activo (403
   `needsPro` — `profiles/me/route.ts:125-137`).
@@ -742,21 +768,42 @@ profesionales" (`pro/subscription/route.ts`).
   (`sponsors/route.ts:10-58`). En la home cada sponsor aparece **una vez por vuelta**: cada copia
   de la cinta mide al menos el ancho de la pantalla más un logo (`sponsors.tsx`, `.homy-marquee-copy`).
 
-**Transiciones de plan** (`planTransicion`, `plans.ts:115-190`, aplicada por webhook y cron):
+**Transiciones de plan** (`planTransicion` y `planVencido`, `plans.ts`; las aplica
+`aplicarBajaSuscripcion()` de `suscripciones-mp.ts`, la misma función para el webhook, el cron y
+"Cancelar suscripción"):
 
 | Evento | Resultado | Notificación |
 |---|---|---|
-| Suscribirse / cambiar plan | `POST /api/provider/plan` crea una preapproval nueva **sin cancelar la vigente** (`provider/plan/route.ts:50-74`) | — |
-| MP avisa `authorized` de la nueva | Activa el plan, guarda `mpPreapprovalId`, `proSince` al subir a PRO; **recién ahí cancela la anterior** | "¡Subiste al plan PRO!", "Pasaste al plan Básico" o "Plan Básico activo" |
-| MP avisa `cancelled`/`paused` de la **vigente** | Vuelve a `trial` con `trialEndsAt = 1970` (prueba consumida): no puede operar | "Tu plan se canceló" / "Tu suscripción quedó pausada" |
+| Suscribirse / cambiar plan | `POST /api/provider/plan` crea una preapproval nueva **sin cancelar la vigente**. **D33:** `auto_recurring.start_date` = `inicioPrimerCobro()`: el fin de la prueba si está vigente, o el fin de lo ya pagado si tenía el plan cancelado con período vigente; si no, sin `start_date` (MP cobra en el momento) | — |
+| MP avisa `authorized` de la nueva | Activa el plan, guarda `mpPreapprovalId`, `proSince` al subir a PRO, `planPaidUntil = null`; **no toca `trialEndsAt`**; **recién ahí cancela la anterior** (salvo que la anterior ya estuviera cancelada) | "¡Subiste al plan PRO!", "Pasaste al plan Básico", "Plan Básico activo" o "Plan Básico elegido" (+ "el primer cobro de Mercado Pago es el DD/MM" si está en la prueba) |
+| MP avisa `cancelled`/`paused` de la **vigente**, o el proveedor toca "Cancelar suscripción" | **D33:** si hay período pago vigente (`calcularPagadoHasta`) → `programar_baja`: sigue con su plan hasta `planPaidUntil`; si no (elegido en la prueba, antes del primer cobro) → vuelve a `trial` **sin pisar `trialEndsAt`** (le quedan sus días gratis) | "Cancelaste tu suscripción" / "Tu suscripción se canceló" / "…quedó pausada": "No se te vuelve a cobrar. Seguís con tu plan hasta el DD/MM… lo pagado no se reintegra" |
+| Aviso repetido con la baja ya programada | Se ignora (idempotente) | — |
 | Aviso de una suscripción que no es la vigente | Se ignora | — |
-| Cron diario: `authorized` pero sin cobro hace más de **35 días** | Degrada por falta de pago | "Tu plan se canceló por falta de pago" |
+| Cron diario: `planPaidUntil` ya pasó | `planVencido()`: vuelve a `trial` y `planPaidUntil` queda con la fecha en que terminó | "Terminó tu plan" |
+| Cron diario: `authorized` pero sin cobro hace más de **35 días** (si nunca cobró, contados desde lo más tarde entre el alta de la suscripción y el fin de la prueba) | Degrada por falta de pago | "Tu plan se canceló por falta de pago" |
 
-- **Vencer la prueba** no dispara nada: `planState()` calcula en el momento que ya no está activa
-  (`plans.ts:58-70`).
-- **No hay botón para cancelar** la suscripción en la app: se cancela desde la cuenta de Mercado
-  Pago (texto de `src/components/screens/panel/proveedor/plan.tsx:263`).
-- Al degradarse, se conservan datos, reseñas y vinculaciones.
+- **Período pago** (`calcularPagadoHasta`): último cobro que vale (aprobado y no reembolsado
+  completo) + 1 mes de calendario. Si HomIA no tiene ningún cobro registrado de esa suscripción, se
+  usa lo que informa MP (`summarized.last_charged_date` + 1 mes, o `next_payment_date` si
+  `charged_quantity > 0`). Si HomIA tiene cobros pero ninguno vale (p. ej. el único fue
+  **reembolsado**), no hay período pago: el resumen de MP sigue contando el cobro reembolsado y
+  daría un mes que nadie pagó.
+- **`planPaidUntil`** (D33): con plan pago = fin del acceso tras cancelar (null = sin baja
+  programada). Con `trial` = cuándo terminó el último plan pago (para decir "tu plan venció el
+  DD/MM"; null = nunca tuvo plan o volvió a una prueba vigente). `trialEndsAt` **ya no se pisa**
+  con 1970; los perfiles viejos con 1970 se siguen leyendo como "tuvo plan".
+- **Cancelar desde HomIA** (`POST /api/provider/plan/cancel` `{ confirmar: true }`): solo el
+  proveedor dueño (sesión); cancela la preapproval en MP (`PUT /preapproval/{id}` `{status:'cancelled'}`
+  con `MP_SUB_ACCESS_TOKEN`, o el de prueba si la suscripción es de prueba); registra
+  `SubscriptionEvent` `cancelada` con `source = homia` y motivo "cancelada desde HomIA" **antes** de
+  tocar el perfil; aplica la baja igual que el webhook. Sin suscripción → 409; MP caído → 503 sin
+  cambiar nada; ya cancelada → 200 con la misma fecha. También se puede cancelar desde Mercado
+  Pago → Suscripciones: da lo mismo.
+- **Reintegros:** lo ya pagado **no se reintegra** al cancelar (igual que MP), pero se conserva el
+  acceso hasta el fin del período pago. Un reintegro excepcional lo decide Leonardo (se hace desde
+  MP; el webhook deja el `SubscriptionCharge` en `refunded` y ese cobro deja de contar).
+- **Vencer la prueba** no dispara nada: `planState()` calcula en el momento que ya no está activa.
+- Al degradarse, se conservan datos, stock, precios, reseñas y vinculaciones.
 - **Cada cobro mensual** llega a la cuenta de MP de HomIA y queda registrado en `SubscriptionCharge`
   (webhook `subscription_authorized_payment` + reconciliación del cron + backfill); cada alta paga,
   cambio de plan y baja queda en `SubscriptionEvent` (§19, D30).
@@ -1102,7 +1149,9 @@ externo no disponible. Rutas relativas a `src/app/api/`. Cualquier `/api/*` que 
 | `DELETE /provider/stock?id=` | Idem | Borra la entrada | 404 |
 | `GET/POST/PATCH /provider/links` | Perfil proveedor o profesional | zod; §12.3 | 403, 409 |
 | `GET /provider/plan` | Perfil proveedor | Estado del plan, precios, si MP está configurado | 403 |
-| `POST /provider/plan` | Perfil proveedor | zod `basic`/`pro`; crea preapproval | 409 mismo plan, 503 |
+| `GET /provider/plan` (D33) | Perfil proveedor | además: `puedeCancelar`, `finPeriodo` (hasta cuándo seguiría si cancela hoy), `primerCobroSiElige`; `plan` trae `cancelado`, `accesoHasta`, `primerCobro`, `motivoInactivo`, `vencioEl` | 403 |
+| `POST /provider/plan` | Perfil proveedor | zod `basic`/`pro`; crea preapproval con `start_date` = fin de la prueba o de lo ya pagado (D33); devuelve `primerCobro` | 409 mismo plan (salvo cancelado: puede volver a suscribirse), 503 |
+| `POST /provider/plan/cancel` (D33) | Perfil proveedor dueño | zod `{ confirmar: true }`; cancela la preapproval en MP y aplica la baja (sigue hasta `planPaidUntil`); idempotente | 401, 403 no proveedor, 400 sin confirmar, 409 sin suscripción, 502 no existe en MP, 503 MP caído |
 | `GET /provider/analytics` | Perfil proveedor con PRO activo | §8 | 403 `needsPlan`/`needsPro` |
 | `POST /pro/subscription` | Perfil profesional | Legado: siempre 403 "HomIA es gratis para profesionales" | 403 |
 | `GET /pro/subscription` | — | `{ free: true }` | — |
@@ -1462,6 +1511,15 @@ la prueba) salen de `ProviderProfile.createdAt`.
   (zod; 400 si un parámetro no vale; CSV de `cobros`, `cargos`, `cuentas`, `proximos`,
   `movimiento`, `mensual`, `ranking_proveedores`, `ranking_vendedores`).
 - `GET /api/admin/ingresos/proveedor?id=<providerId>` → ficha y línea de tiempo (404 si no existe).
+
+
+**D33 (25/09/2026) en los estados de cuenta:** un plan elegido **durante la prueba** y sin cobros es
+"En prueba" (con nota "Eligió el plan X durante la prueba: el primer cobro es el DD/MM"), no "En
+deuda" ni "sin cobro", y no suma al MRR. Un plan **cancelado con período pago vigente**
+(`planPaidUntil`) es "Dado de baja" (motivo del evento, nota "conserva el plan hasta el DD/MM"): ya no
+es ingreso recurrente aunque siga operando. Quien eligió un plan y lo canceló antes del primer cobro
+vuelve a "En prueba". Un cobro reembolsado completo no cuenta como pagado (ni "Al día", ni MRR, ni
+ingresos). Los eventos de baja pueden tener `source = homia` (cancelada desde HomIA).
 
 ## 16. Finanzas del profesional y del proveedor (D24, 25/09/2026)
 

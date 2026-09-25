@@ -1,68 +1,23 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { planTransicion } from '@/lib/plans'
+import { finDePrueba } from '@/lib/plans'
 import { registrarEvento, purgarEventosViejos } from '@/lib/analytics/server'
-import { registrarBaja, sincronizarCobros } from '@/lib/suscripciones-mp'
+import { aplicarBajaSuscripcion, sincronizarCobros, traerPreapproval, vencerPlanesCancelados } from '@/lib/suscripciones-mp'
 
 // ── RECONCILIACIÓN DIARIA DE SUSCRIPCIONES (Vercel Cron) ──
 // El webhook de Mercado Pago puede perderse (caída, reintentos agotados). Una vez
 // por día se re-consulta a MP cada suscripción de proveedor con plan de pago:
-//  · status cancelled | paused → se degrada igual que en el webhook;
+//  · status cancelled | paused → igual que en el webhook (D33): con período pago
+//    vigente conserva el plan hasta `planPaidUntil`; sin período pago, vuelve a la prueba;
 //  · status authorized pero sin cobro hace más de 35 días → se degrada por falta
-//    de pago y se le avisa;
-//  · basic/pro SIN mpPreapprovalId (datos demo / alta manual) → no se toca.
-// Devuelve { checked, downgraded } (+ detalle de errores de MP, que no degradan).
+//    de pago y se le avisa (si nunca cobró, se cuenta desde el fin de la prueba:
+//    un plan elegido durante la prueba tiene su primer cobro ese día);
+//  · basic/pro SIN mpPreapprovalId (datos demo / alta manual) → no se toca;
+//  · D33: planes cancelados cuyo `planPaidUntil` ya pasó → prueba finalizada + aviso.
+// Devuelve { checked, downgraded, vencidos } (+ detalle de errores de MP, que no degradan).
 export const maxDuration = 60
 
-const MP_API = 'https://api.mercadopago.com'
 const DIAS_SIN_COBRO = 35
-
-type MpPreapproval = {
-  id?: string
-  status?: string
-  external_reference?: string
-  date_created?: string
-  next_payment_date?: string
-  summarized?: {
-    charged_quantity?: number | null
-    last_charged_date?: string | null
-    last_charged_amount?: number | null
-    semaphore?: string | null
-  } | null
-}
-
-function tokens(): { live: string; test: string } {
-  return {
-    live: process.env.MP_SUB_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN || '',
-    test: process.env.MP_SUB_TEST_ACCESS_TOKEN || '',
-  }
-}
-
-async function fetchPreapproval(id: string, token: string): Promise<MpPreapproval> {
-  const res = await fetch(`${MP_API}/preapproval/${encodeURIComponent(id)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(15_000),
-    cache: 'no-store',
-  })
-  if (!res.ok) throw new Error(`MP preapproval ${res.status}`)
-  return (await res.json()) as MpPreapproval
-}
-
-/** Igual que el webhook: si no aparece en producción, se busca en el entorno de prueba (y viceversa). */
-async function getPreapprovalAnyEnv(id: string): Promise<MpPreapproval> {
-  const { live, test } = tokens()
-  const orden = [live, test].filter((t) => t.length > 10)
-  if (orden.length === 0) throw new Error('MP_SUB_ACCESS_TOKEN no configurada')
-  let lastErr: unknown
-  for (const t of orden) {
-    try {
-      return await fetchPreapproval(id, t)
-    } catch (e) {
-      lastErr = e
-    }
-  }
-  throw lastErr instanceof Error ? lastErr : new Error('Mercado Pago no respondió')
-}
 
 export async function GET(request: Request) {
   // Solo el cron de Vercel (Authorization: Bearer CRON_SECRET). Sin secreto
@@ -74,21 +29,30 @@ export async function GET(request: Request) {
   }
 
   try {
+    // D33: primero, los planes cancelados cuyo período pago terminó
+    const venc = await vencerPlanesCancelados()
+    for (const userId of venc.userIds) {
+      registrarEvento(null, { name: 'plan_degradado', userId, path: '/panel/proveedor/plan', props: { motivo: 'fin_periodo_pago' } })
+    }
+
+    // las suscripciones vigentes (sin baja programada) se re-consultan a MP
     const provs = await db.providerProfile.findMany({
-      where: { subscription: { in: ['basic', 'pro'] }, mpPreapprovalId: { not: null } },
-      select: { id: true, userId: true, subscription: true, mpPreapprovalId: true },
+      where: { subscription: { in: ['basic', 'pro'] }, mpPreapprovalId: { not: null }, planPaidUntil: null },
+      select: { id: true, userId: true, subscription: true, mpPreapprovalId: true, trialEndsAt: true, createdAt: true },
     })
 
     let checked = 0
     let downgraded = 0
+    let programadas = 0
     const errors: { providerId: string; error: string }[] = []
     let shapeLogged = false
 
     for (const prov of provs) {
       const preId = prov.mpPreapprovalId!
-      let pre: MpPreapproval
+      let pre: Awaited<ReturnType<typeof traerPreapproval>>
       try {
-        pre = await getPreapprovalAnyEnv(preId)
+        pre = await traerPreapproval(preId)
+        if (!pre) throw new Error('suscripción no encontrada en Mercado Pago')
       } catch (e) {
         // MP caído o id inexistente: nunca se degrada por un error nuestro o de MP
         errors.push({ providerId: prov.id, error: e instanceof Error ? e.message : 'error' })
@@ -103,42 +67,40 @@ export async function GET(request: Request) {
           status: pre.status,
           last_charged_date: pre.summarized?.last_charged_date ?? null,
           next_payment_date: pre.next_payment_date ?? null,
+          start_date: pre.auto_recurring?.start_date ?? null,
         })
         shapeLogged = true
       }
 
       const status = String(pre.status || '')
-      const plan: 'basic' | 'pro' = prov.subscription === 'pro' ? 'pro' : 'basic'
       let motivo: 'webhook' | 'impago' | null = null
 
       if (status === 'cancelled' || status === 'paused') {
         motivo = 'webhook'
       } else if (status === 'authorized') {
-        // último cobro; si nunca se cobró, se toma la fecha de alta de la suscripción
+        // último cobro; si nunca se cobró, desde lo más tarde entre el alta de la suscripción y el fin
+        // de la prueba (D33: elegido en la prueba → el primer cobro es al terminar la prueba)
         const nuncaCobrada = (pre.summarized?.charged_quantity ?? 0) === 0
-        const ref = pre.summarized?.last_charged_date || (nuncaCobrada ? pre.date_created : null)
+        let ref: Date | null = pre.summarized?.last_charged_date ? new Date(pre.summarized.last_charged_date) : null
+        if (!ref && nuncaCobrada && pre.date_created) {
+          const alta = new Date(pre.date_created)
+          const fin = finDePrueba(prov)
+          ref = fin.getTime() > alta.getTime() ? fin : alta
+        }
         if (!ref) {
           console.warn('[cron subscriptions] authorized sin fecha de cobro reconocible', { providerId: prov.id })
           continue
         }
-        const dias = (Date.now() - new Date(ref).getTime()) / 86_400_000
+        const dias = (Date.now() - ref.getTime()) / 86_400_000
         if (Number.isFinite(dias) && dias > DIAS_SIN_COBRO) motivo = 'impago'
       }
       if (!motivo) continue
 
-      const t = planTransicion(prov, { id: preId, status }, plan, motivo)
-      if (t.kind !== 'degradar') continue
-      // D30: movimiento del plan antes del update (idempotente por dedupeKey)
-      await registrarBaja({ providerId: prov.id, plan, preapprovalId: preId, tipo: motivo === 'impago' ? 'impago' : status === 'paused' ? 'pausada' : 'cancelada', source: 'cron' })
-      const upd = await db.providerProfile.updateMany({
-        where: { id: prov.id, mpPreapprovalId: preId, subscription: { in: ['basic', 'pro'] } },
-        data: t.data,
-      })
-      if (upd.count > 0) {
-        downgraded++
-        await db.notification.create({ data: { userId: prov.userId, ...t.notificacion } })
-        registrarEvento(null, { name: 'plan_degradado', userId: prov.userId, path: '/panel/proveedor/plan', props: { desde: prov.subscription, motivo } })
-      }
+      const r = await aplicarBajaSuscripcion({ providerId: prov.id, preapprovalId: preId, status, motivo, source: 'cron', pre })
+      if (r.kind === 'ignorar' || !r.aplicado) continue
+      if (r.kind === 'programar_baja') programadas++
+      else downgraded++
+      registrarEvento(null, { name: 'plan_degradado', userId: prov.userId, path: '/panel/proveedor/plan', props: { desde: prov.subscription, motivo: r.kind === 'programar_baja' ? 'mercadopago_con_periodo_pago' : motivo } })
     }
 
     // D30: reconciliación de los cobros de suscripción con Mercado Pago (los que el webhook no
@@ -155,7 +117,7 @@ export async function GET(request: Request) {
 
     // retención de métricas de uso (D27): eventos crudos de más de 13 meses (nunca tira)
     const metricasPurgadas = await purgarEventosViejos()
-    return NextResponse.json({ success: true, checked, downgraded, total: provs.length, errors, metricasPurgadas, cobros })
+    return NextResponse.json({ success: true, checked, downgraded, programadas, vencidos: venc.vencidos, total: provs.length, errors, metricasPurgadas, cobros })
   } catch (error) {
     console.error('Error in subscriptions cron:', error)
     return new NextResponse('Internal Server Error', { status: 500 })

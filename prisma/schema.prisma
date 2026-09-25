@@ -168,6 +168,9 @@ model ProviderProfile {
   trialEndsAt         DateTime? // fin de la prueba gratis de 14 días (null → se calcula desde createdAt)
   mpPreapprovalId     String? // id de preapproval de Mercado Pago (plan basic o pro)
   proSince            DateTime? // desde cuándo está activo el plan de pago
+  // D33: suscripción cancelada (desde HomIA o desde Mercado Pago) con un período pago vigente →
+  // el plan sigue operativo hasta esta fecha y el cron diario lo da de baja al vencer. null = sin baja programada.
+  planPaidUntil       DateTime?
   // Marca del proveedor en la cinta de sponsors de la home (solo Plan PRO activo)
   brandLogoUrl        String? // logo en el bucket público homia-uploads (folder "marca")
   brandTagline        String? // frase de marca, máx. 60 caracteres
@@ -1139,7 +1142,7 @@ model SubscriptionEvent {
   toPlan          String?
   mpPreapprovalId String?
   motivo          String?
-  source          String // webhook|cron|backfill
+  source          String // webhook|cron|backfill|homia (D33: cancelada desde HomIA)|manual
   dedupeKey       String   @unique
   occurredAt      DateTime
   createdAt       DateTime @default(now())

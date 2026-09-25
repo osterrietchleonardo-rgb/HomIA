@@ -160,16 +160,16 @@ export const ETIQUETA_ESTADO: Record<EstadoCuenta, string> = {
 }
 export type MotivoBaja = 'cancelada' | 'pausada' | 'impago' | 'desconocido'
 export const ETIQUETA_MOTIVO: Record<MotivoBaja, string> = {
-  cancelada: 'canceló la suscripción en Mercado Pago',
+  cancelada: 'canceló la suscripción (desde HomIA o desde Mercado Pago)',
   pausada: 'pausó la suscripción en Mercado Pago',
   impago: 'se dio de baja por falta de pago',
   desconocido: 'motivo sin registrar (baja anterior al registro)',
 }
 
-export type CobroMin = { status: string; amount: number; attemptedAt: Date; paidAt: Date | null; plan: string; statusDetail?: string | null; mpPreapprovalId?: string }
+export type CobroMin = { status: string; amount: number; attemptedAt: Date; paidAt: Date | null; plan: string; statusDetail?: string | null; mpPreapprovalId?: string; refundedAmount?: number | null }
 export type EventoMin = { type: string; occurredAt: Date; motivo?: string | null; fromPlan?: string | null; toPlan?: string | null; mpPreapprovalId?: string | null }
 export type PreapprovalMin = { status: string; lastModified?: Date | null; nextPaymentDate?: Date | null; amount?: number | null } | null
-export type ProveedorMin = { subscription: string; trialEndsAt: Date | null; createdAt: Date; mpPreapprovalId: string | null }
+export type ProveedorMin = { subscription: string; trialEndsAt: Date | null; createdAt: Date; mpPreapprovalId: string | null; planPaidUntil?: Date | null }
 
 export type Cuenta = {
   estado: EstadoCuenta
@@ -196,6 +196,12 @@ export function sumarMes(d: Date, meses = 1): Date {
   return r
 }
 
+/** "25/10" en hora de Argentina (UTC-3 fijo, sin horario de verano: no depende del ICU). */
+export function fechaCortaAR(d: Date | string): string {
+  const x = new Date(new Date(d).getTime() - 3 * 3600_000)
+  return `${String(x.getUTCDate()).padStart(2, '0')}/${String(x.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
 /** Días de calendario de Argentina (UTC-3) entre `desde` y `hasta` (0 = el mismo día). */
 export function diasCalendarioAR(desde: Date, hasta: Date): number {
   const d = (x: Date) => Math.floor((x.getTime() - 3 * 3600_000) / DIA_MS)
@@ -213,6 +219,10 @@ const BAJAS = ['cancelada', 'pausada', 'impago']
  *  · Plan pago sin cobro registrado: plan basic/pro sin ningún cobro en HomIA (alta manual/demo, o
  *    el primer cobro todavía no llegó).
  *  · En prueba: trial vigente (vence hoy = 0 días restantes, sigue en prueba hasta la hora exacta).
+ *    También un plan elegido DURANTE la prueba (D33): la suscripción de MP nace con el primer cobro
+ *    al terminar la prueba, así que no debe nada todavía (no es "en deuda" ni cuenta en el MRR).
+ *  · Dado de baja también si canceló con período pago vigente (D33, `planPaidUntil`): conserva el
+ *    plan hasta esa fecha pero ya no es ingreso recurrente.
  *  · Prueba vencida sin plan: trial vencido sin ningún plan pago en su historia.
  *  · Dado de baja: tuvo plan pago y hoy no (canceló/pausó en MP o se degradó por falta de pago).
  */
@@ -224,11 +234,31 @@ export function clasificarCuenta(
   precios: Precios,
   ahora = new Date()
 ): Cuenta {
-  const aprobados = cobros.filter((c) => c.status === 'approved' && c.paidAt).sort((a, b) => a.paidAt!.getTime() - b.paidAt!.getTime())
+  // un cobro reembolsado completo no cuenta como pagado (MP lo pasa a status refunded; por las dudas
+  // también se mira el monto devuelto)
+  const aprobados = cobros.filter((c) => c.status === 'approved' && c.paidAt && (c.refundedAmount ?? 0) < c.amount).sort((a, b) => a.paidAt!.getTime() - b.paidAt!.getTime())
   const ultOk = aprobados[aprobados.length - 1] || null
   const ultimoCobro = ultOk ? { fecha: ultOk.paidAt!, monto: ultOk.amount } : null
   const pagadoHasta = ultOk ? sumarMes(ultOk.paidAt!) : null
   const plan = prov.subscription || 'trial'
+
+  const finPrueba = prov.trialEndsAt ?? new Date(prov.createdAt.getTime() + 14 * DIA_MS)
+  const degradado = prov.trialEndsAt != null && prov.trialEndsAt.getTime() <= 0
+  const bajaEv = [...eventos].filter((e) => BAJAS.includes(e.type)).sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0]
+
+  if ((plan === 'basic' || plan === 'pro') && prov.planPaidUntil) {
+    // D33: canceló (desde HomIA o desde MP) y conserva el plan hasta el fin del período pago
+    const hasta = prov.planPaidUntil
+    let motivo: MotivoBaja = bajaEv ? (bajaEv.type as MotivoBaja) : 'cancelada'
+    if (!bajaEv && pre && pre.status === 'paused') motivo = 'pausada'
+    return {
+      estado: 'baja', plan, desde: bajaEv?.occurredAt ?? null, ultimoCobro, pagadoHasta: hasta,
+      baja: { fecha: bajaEv?.occurredAt ?? null, motivo },
+      nota: hasta.getTime() > ahora.getTime()
+        ? `Canceló la suscripción: conserva el plan hasta el ${fechaCortaAR(hasta)} (período pago, sin reintegro).`
+        : 'Canceló la suscripción y el período pago ya terminó: el cron diario lo pasa a prueba finalizada.',
+    }
+  }
 
   if (plan === 'basic' || plan === 'pro') {
     const refOk = ultOk ? ultOk.paidAt!.getTime() : -Infinity
@@ -254,6 +284,14 @@ export function clasificarCuenta(
       if (dias <= DIAS_SIN_COBRO) return { estado: 'al_dia', plan, desde: ultOk.paidAt!, ultimoCobro, pagadoHasta }
       return armarDeuda(pagadoHasta!)
     }
+    if (!degradado && finPrueba.getTime() > ahora.getTime()) {
+      // D33: eligió el plan durante la prueba; el primer cobro es al terminar la prueba
+      return {
+        estado: 'en_prueba', plan, desde: prov.createdAt, ultimoCobro: null, pagadoHasta: null,
+        prueba: { vence: finPrueba, diasRestantes: Math.max(0, diasCalendarioAR(ahora, finPrueba)) },
+        nota: `Eligió el plan ${plan === 'pro' ? 'PRO' : 'Básico'} durante la prueba: el primer cobro es el ${fechaCortaAR(finPrueba)}.`,
+      }
+    }
     const enProceso = cobros.some((c) => c.status === 'pending' || c.status === 'in_process')
     return {
       estado: 'sin_cobro', plan, desde: null, ultimoCobro: null, pagadoHasta: null,
@@ -263,15 +301,15 @@ export function clasificarCuenta(
     }
   }
 
-  // trial (o degradado: trialEndsAt = 1970 marca "prueba consumida")
-  const finPrueba = prov.trialEndsAt ?? new Date(prov.createdAt.getTime() + 14 * DIA_MS)
-  const degradado = prov.trialEndsAt != null && prov.trialEndsAt.getTime() <= 0
-  const bajaEv = [...eventos].filter((e) => BAJAS.includes(e.type)).sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0]
+  // trial (o degradado: trialEndsAt = 1970 era la marca vieja de "prueba consumida"; desde D33 la
+  // baja ya no pisa la prueba)
   const tuvoPlan = degradado || aprobados.length > 0 || !!bajaEv || eventos.some((e) => ['activada', 'reactivada', 'cambio_plan'].includes(e.type))
-  if (!degradado && finPrueba.getTime() > ahora.getTime() && !bajaEv) {
+  if (!degradado && finPrueba.getTime() > ahora.getTime()) {
+    // D33: si eligió un plan y lo canceló antes del primer cobro, vuelve a su prueba (no pagó nada)
     return {
       estado: 'en_prueba', plan: 'trial', desde: prov.createdAt, ultimoCobro, pagadoHasta,
       prueba: { vence: finPrueba, diasRestantes: Math.max(0, diasCalendarioAR(ahora, finPrueba)) },
+      nota: bajaEv ? 'Eligió un plan y lo canceló antes del primer cobro: sigue en su prueba.' : undefined,
     }
   }
   if (tuvoPlan) {

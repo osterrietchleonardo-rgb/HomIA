@@ -494,7 +494,7 @@ export const GLOSARIO: Concepto[] = [
   },
   {
     id: 'cargo_servicio', nombre: 'Cargo de servicio HomIA (1%)',
-    queEs: 'Cuando un cliente te paga por Mercado Pago, paga aparte un cargo de servicio del 1% para HomIA. Vos cobrás el 100% de tu precio. Por eso no es ni un ingreso ni un gasto tuyo, y no aparece en tus finanzas.',
+    queEs: 'Cuando un cliente te paga por Mercado Pago, paga aparte un cargo de servicio del 1% para HomIA. A vos te pagan el 100% de tu precio (Mercado Pago te descuenta su comisión aparte, en tu cuenta de Mercado Pago). Por eso el 1% no es ni un ingreso ni un gasto tuyo, y no aparece en tus finanzas.',
   },
   {
     id: 'comisiones_mp', nombre: 'Comisiones de Mercado Pago',

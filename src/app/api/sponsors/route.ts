@@ -24,7 +24,7 @@ export async function GET() {
       rating: true,
       reviewsCount: true,
       subscription: true,
-      trialEndsAt: true,
+      trialEndsAt: true, planPaidUntil: true,
       createdAt: true,
       brandLogoUrl: true,
       brandTagline: true,

@@ -6,6 +6,7 @@
 // (scripts/pagos/backfill-suscripciones.mjs, que importa este archivo con node + type stripping:
 // por eso no importa nada de Next).
 import { db } from '@/lib/db'
+import { calcularPagadoHasta, planTransicion, planVencido, type PlanNotificacion } from '@/lib/plans'
 import {
   cobroDesdeMp, eventoActivacion, parseReferenciaPlan, procesarAvisoCobro,
   type CobroSuscripcionData, type MpAuthorizedPayment, type MpPagoSuscripcion, type PlanPago, type ResultadoAviso,
@@ -51,6 +52,24 @@ async function mpGet<T>(path: string, token: string): Promise<T | null> {
   }
   if (res.status === 404) return null
   if (!res.ok) throw new MpSubError(`MP ${res.status} en ${path.split('?')[0]}`, res.status)
+  return (await res.json()) as T
+}
+
+/** PUT/POST a la API de MP (suscripciones). Error → MpSubError con el estado. */
+async function mpSend<T>(method: 'PUT' | 'POST', path: string, token: string, body: unknown): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(`${mpBase()}${path}`, {
+      method,
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
+      cache: 'no-store',
+    })
+  } catch (e) {
+    throw new MpSubError(`MP sin respuesta: ${e instanceof Error ? e.message : 'red'}`, 0)
+  }
+  if (!res.ok) throw new MpSubError(`MP ${res.status} en ${method} ${path.split('?')[0]}`, res.status)
   return (await res.json()) as T
 }
 
@@ -143,7 +162,7 @@ type EventoPlan = {
   type: string
   dedupeKey: string
   occurredAt: Date
-  source: 'webhook' | 'cron' | 'backfill'
+  source: 'webhook' | 'cron' | 'backfill' | 'homia'
   fromPlan?: string | null
   toPlan?: string | null
   mpPreapprovalId?: string | null
@@ -187,13 +206,130 @@ export async function registrarActivacion(input: {
   })
 }
 
-/** Evento de baja de la suscripción vigente (webhook o cron). */
-export function registrarBaja(input: { providerId: string; plan: string; preapprovalId: string; tipo: 'cancelada' | 'pausada' | 'impago'; source: 'webhook' | 'cron' }) {
-  return registrarEventoPlan({
-    providerId: input.providerId, type: input.tipo, fromPlan: input.plan, toPlan: 'trial',
-    mpPreapprovalId: input.preapprovalId, dedupeKey: `baja:${input.preapprovalId}`, occurredAt: new Date(), source: input.source,
-    motivo: input.tipo === 'impago' ? 'sin cobro aprobado en 35 días o suscripción rechazada' : `suscripción ${input.tipo} en Mercado Pago`,
+/** Evento de baja de la suscripción vigente (webhook, cron o cancelar desde HomIA). */
+export async function registrarBaja(input: { providerId: string; plan: string; preapprovalId: string; tipo: 'cancelada' | 'pausada' | 'impago'; source: 'webhook' | 'cron' | 'homia'; hasta?: Date | null }) {
+  const motivoBase = input.tipo === 'impago' ? 'sin cobro aprobado en 35 días o suscripción rechazada'
+    : input.source === 'homia' ? 'cancelada desde HomIA' : `suscripción ${input.tipo} en Mercado Pago`
+  const motivo = input.hasta ? `${motivoBase}; conserva el plan hasta ${input.hasta.toISOString().slice(0, 10)} (período pago)` : motivoBase
+  const e: EventoPlan = {
+    providerId: input.providerId, type: input.tipo, fromPlan: input.plan, toPlan: input.hasta ? input.plan : 'trial',
+    mpPreapprovalId: input.preapprovalId, dedupeKey: `baja:${input.preapprovalId}`, occurredAt: new Date(), source: input.source, motivo,
+  }
+  if (input.source !== 'homia') return registrarEventoPlan(e)
+  // desde HomIA: MP manda enseguida su aviso `cancelled`; si el webhook ganó la carrera, el evento
+  // queda igual con el origen correcto (lo pidió el proveedor en HomIA).
+  const providerName = (await db.providerProfile.findUnique({ where: { id: e.providerId }, select: { businessName: true } }))?.businessName ?? '(proveedor eliminado)'
+  await db.subscriptionEvent.upsert({
+    where: { dedupeKey: e.dedupeKey },
+    create: { ...e, providerName },
+    update: { source: 'homia', motivo, toPlan: e.toPlan },
   })
+}
+
+// ───────────────────────────── baja de la suscripción (D33) ─────────────────────────────
+
+type PreapprovalResumen = {
+  summarized?: { charged_quantity?: number | null; last_charged_date?: string | null } | null
+  next_payment_date?: string | null
+} | null
+
+/** Hasta cuándo cubre lo pagado de una suscripción: cobros aprobados guardados + lo que informa MP. */
+export async function pagadoHastaDe(preapprovalId: string, pre: PreapprovalResumen): Promise<Date | null> {
+  // todos los cobros registrados (también reembolsados/rechazados): si hay alguno, manda la base
+  const cobros = await db.subscriptionCharge.findMany({
+    where: { mpPreapprovalId: preapprovalId },
+    select: { status: true, paidAt: true, amount: true, refundedAmount: true },
+  })
+  return calcularPagadoHasta({
+    cobros,
+    mp: pre ? { cobrosMp: pre.summarized?.charged_quantity ?? null, ultimoCobroMp: pre.summarized?.last_charged_date ?? null, proximoCobroMp: pre.next_payment_date ?? null } : null,
+  })
+}
+
+export type ResultadoBaja =
+  | { kind: 'ignorar'; motivo: string }
+  | { kind: 'programar_baja'; hasta: Date; aplicado: boolean }
+  | { kind: 'degradar'; aplicado: boolean }
+
+/**
+ * Aplica al perfil una suscripción cancelada/pausada o impaga (el webhook, el cron y "Cancelar
+ * suscripción" usan esta misma función): con período pago vigente conserva el plan hasta
+ * `planPaidUntil`; sin período pago vuelve a la prueba (sin pisar `trialEndsAt`). El movimiento del
+ * plan se registra ANTES del update (idempotente por dedupeKey) y el update es condicional (no
+ * notifica dos veces ante avisos repetidos o concurrentes).
+ */
+export async function aplicarBajaSuscripcion(input: {
+  providerId: string
+  preapprovalId: string
+  status: string
+  motivo: 'webhook' | 'impago'
+  source: 'webhook' | 'cron' | 'homia'
+  pre?: PreapprovalResumen
+}): Promise<ResultadoBaja> {
+  const prov = await db.providerProfile.findUnique({
+    where: { id: input.providerId },
+    select: { id: true, userId: true, subscription: true, mpPreapprovalId: true, trialEndsAt: true, createdAt: true, planPaidUntil: true },
+  })
+  if (!prov) return { kind: 'ignorar', motivo: 'proveedor inexistente' }
+  const plan: 'basic' | 'pro' = prov.subscription === 'pro' ? 'pro' : 'basic'
+  const pagadoHasta = input.motivo === 'impago' ? null : await pagadoHastaDe(input.preapprovalId, input.pre ?? null)
+  const t = planTransicion(prov, { id: input.preapprovalId, status: input.status }, plan, input.motivo, { pagadoHasta, desdeHomia: input.source === 'homia' })
+  if (t.kind === 'ignorar') return t
+  if (t.kind === 'activar') return { kind: 'ignorar', motivo: 'no es una baja' }
+  const tipo = input.motivo === 'impago' ? 'impago' : input.status === 'paused' ? 'pausada' : 'cancelada'
+  await registrarBaja({ providerId: prov.id, plan: prov.subscription, preapprovalId: input.preapprovalId, tipo, source: input.source, hasta: t.kind === 'programar_baja' ? t.data.planPaidUntil : null })
+  const upd = await db.providerProfile.updateMany({
+    where: { id: prov.id, mpPreapprovalId: input.preapprovalId, subscription: { in: ['basic', 'pro'] }, planPaidUntil: null },
+    data: t.data,
+  })
+  if (upd.count > 0) await db.notification.create({ data: { userId: prov.userId, ...t.notificacion } })
+  if (t.kind === 'programar_baja') return { kind: 'programar_baja', hasta: t.data.planPaidUntil, aplicado: upd.count > 0 }
+  return { kind: 'degradar', aplicado: upd.count > 0 }
+}
+
+/** Cron diario: planes cancelados cuyo período pago terminó → prueba finalizada + aviso. */
+export async function vencerPlanesCancelados(ahora = new Date()): Promise<{ vencidos: number; userIds: string[] }> {
+  const provs = await db.providerProfile.findMany({
+    where: { subscription: { in: ['basic', 'pro'] }, planPaidUntil: { lte: ahora } },
+    select: { id: true, userId: true, subscription: true, planPaidUntil: true },
+  })
+  const userIds: string[] = []
+  for (const p of provs) {
+    const t = planVencido(p, ahora)
+    if (!t) continue
+    const upd = await db.providerProfile.updateMany({
+      where: { id: p.id, subscription: { in: ['basic', 'pro'] }, planPaidUntil: { lte: ahora } },
+      data: t.data,
+    })
+    if (upd.count > 0) {
+      await db.notification.create({ data: { userId: p.userId, ...t.notificacion } })
+      userIds.push(p.userId)
+    }
+  }
+  return { vencidos: userIds.length, userIds }
+}
+
+/**
+ * Cancela una suscripción en Mercado Pago (PUT /preapproval/{id} {status:'cancelled'}) con el token
+ * de Suscripciones del entorno donde exista. Si ya estaba cancelada no hace nada. null = no existe en MP.
+ */
+export async function cancelarPreapprovalMp(id: string): Promise<(PreapprovalMp & { entorno: Entorno }) | null> {
+  for (const t of tokens()) {
+    const p = await mpGet<PreapprovalMp>(`/preapproval/${encodeURIComponent(id)}`, t.token)
+    if (!p) continue
+    if (p.status === 'cancelled') return { ...p, entorno: t.entorno }
+    const r = await mpSend<PreapprovalMp>('PUT', `/preapproval/${encodeURIComponent(id)}`, t.token, { status: 'cancelled' })
+    return { ...p, ...r, status: r?.status || 'cancelled', entorno: t.entorno }
+  }
+  return null
+}
+
+/** Crea la suscripción (preapproval sin plan asociado) con el token de Suscripciones de producción. */
+export async function crearPreapprovalMp(body: Record<string, unknown>): Promise<{ id: string; initPoint: string }> {
+  const live = tokens().find((t) => t.entorno === 'live')
+  if (!live) throw new MpSubError('MP_SUB_ACCESS_TOKEN no configurada', 0)
+  const r = await mpSend<{ id?: string; init_point?: string }>('POST', '/preapproval', live.token, body)
+  return { id: String(r.id || ''), initPoint: String(r.init_point || '') }
 }
 
 // ───────────────────────────── reconciliación / backfill ─────────────────────────────
@@ -205,7 +341,8 @@ type PreapprovalMp = {
   date_created?: string | null
   last_modified?: string | null
   next_payment_date?: string | null
-  auto_recurring?: { transaction_amount?: number | null } | null
+  auto_recurring?: { transaction_amount?: number | null; start_date?: string | null } | null
+  summarized?: { charged_quantity?: number | null; last_charged_date?: string | null; semaphore?: string | null } | null
 }
 
 type Paginado<T> = { paging?: { total?: number; offset?: number; limit?: number }; results?: T[] }

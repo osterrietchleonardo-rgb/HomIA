@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
       stock: {
         select: {
           quantity: true, status: true, brand: true,
-          provider: { select: { businessName: true, subscription: true, trialEndsAt: true, createdAt: true } },
+          provider: { select: { businessName: true, subscription: true, trialEndsAt: true, planPaidUntil: true, createdAt: true } },
         },
       },
     },

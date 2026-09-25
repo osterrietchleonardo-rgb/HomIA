@@ -1083,6 +1083,12 @@ Es el único lugar para todo lo de cobrar. De arriba hacia abajo:
    Mercado Pago: la plata entra en tu cuenta." Si cancelás: "No conectaste Mercado Pago — Podés
    hacerlo cuando quieras desde Cobros." Estados: conectado (con fecha), "Vencido: volvé a conectar"
    o "No conectado". Podés **desconectar** cuando quieras.
+   Debajo, una nota fija (25/09/2026): cuando te pagan por Mercado Pago, el pago queda **aprobado en
+   tu Mercado Pago** y Mercado Pago lo libera según tus plazos (lo ves en "Dinero a liberar");
+   **Mercado Pago te cobra su comisión a vos**, como vendedor (depende de cuándo elegís recibir la
+   plata y se configura en tu cuenta de Mercado Pago); el cargo de servicio HomIA (1%) lo paga el
+   cliente aparte. Los avisos de pago dicen lo mismo: "Pago aprobado en tu Mercado Pago…", nunca
+   "acreditado en tu cuenta".
 2. **Resumen:** **Cobrado este mes** (facturas cobradas desde el día 1 del mes, hora argentina),
    **Pendiente de cobro** (suma de las facturas sin cobrar) y **Facturas pendientes** (cantidad; si
    hay efectivo para confirmar, lo dice abajo).
@@ -1486,8 +1492,8 @@ proveedor"** y el cliente los aprueba.
 
 - Solo puede haber **un cobro abierto por proyecto** a la vez.
 - No existe un cobro "libre" ni un link de pago para compartir.
-- Si el cliente paga con **Mercado Pago**, la plata entra a **tu** cuenta (cobrás el 100%; el
-  cliente paga aparte el cargo de servicio del 1%). Si no conectaste tu Mercado Pago, solo puede
+- Si el cliente paga con **Mercado Pago**, el pago entra a **tu** cuenta por el 100% de tu precio
+  (el cliente paga aparte el cargo de servicio del 1%; Mercado Pago te descuenta su comisión). Si no conectaste tu Mercado Pago, solo puede
   pagarte en efectivo.
 
 *Fuente: `proveedor/cobros.tsx`, `src/app/api/charges/[id]/route.ts`.*
@@ -1544,8 +1550,13 @@ En **Cobros**, en el recuadro **"Cobrá con tu Mercado Pago"**, tocá **Conectar
 
 - **Sin conexión:** tus clientes solo pueden pagarte **en efectivo** (ventas y cobros de
   proyectos).
-- **Conectado:** "La plata de tus ventas y cobros entra en tu cuenta: cobrás el 100% de tu precio (el
-  cliente paga aparte el cargo de servicio HomIA del 1%)."
+- **Conectado:** "Los pagos de tus ventas y cobros entran en tu cuenta por el 100% de tu precio."
+- Debajo, una nota fija (25/09/2026): cuando te pagan por Mercado Pago, el pago queda **aprobado en
+  tu Mercado Pago** y Mercado Pago lo libera según tus plazos (lo ves en "Dinero a liberar");
+  **Mercado Pago te cobra su comisión a vos**, como vendedor (depende de cuándo elegís recibir la
+  plata y se configura en tu cuenta de Mercado Pago); el cargo de servicio HomIA (1%) lo paga el
+  cliente aparte. Los avisos de pago dicen lo mismo: "Pago aprobado en tu Mercado Pago…", nunca
+  "acreditado en tu cuenta".
 - **Desconectar:** los pagos que ya estaban iniciados no se ven afectados.
 
 **Si algo sale mal:** si aparece "No pudimos conectar tu Mercado Pago", probá de nuevo en un rato.
@@ -1599,28 +1610,58 @@ en curso y Cliente recurrente.
 **Suscribirte:**
 
 1. Tocá **Elegir Básico** o **Pasarme a PRO**.
+   - **Si estás en la prueba gratis, no perdés los días que te quedan:** antes de ir a Mercado Pago
+     la pantalla te dice "Tu primer cobro será el DD/MM, cuando termina tu prueba". Mercado Pago
+     valida tu tarjeta hoy y te cobra el primer mes recién ese día.
 2. Te lleva a Mercado Pago para autorizar el cobro mensual en pesos.
 3. Al volver, la app dice "Estamos confirmando tu pago con Mercado Pago…". Esto puede tardar hasta
    un minuto; si no llega la confirmación, tocá **Volver a verificar**.
 
 **Qué pasa después:**
 
+- Si lo elegiste en la prueba, el estado dice "Plan Básico · primer cobro el DD/MM" y te llega el
+  aviso con esa fecha.
 - Al subir a PRO te llega "¡Subiste al plan PRO!".
 - Al bajar a Básico, dejás de ser Recomendado y salís de la cinta de sponsors.
 
 **Cambiar de plan:** tocá el botón del otro plan. La suscripción anterior se cancela sola recién
 cuando se confirma la nueva; si abandonás el pago, seguís con el plan que tenías.
 
-**Cancelar:** **no hay botón en la app.** Se cancela desde tu cuenta de Mercado Pago.
+**Cancelar (25/09/2026):**
 
-**Qué pasa si vence la prueba, cancelás o dejás de pagar:**
+1. En **Mi plan** tocá **Cancelar suscripción**.
+2. Se abre un aviso que explica, en llano:
+   - no se te vuelve a cobrar;
+   - **lo que ya pagaste no se devuelve**, pero **seguís con tu plan hasta el DD/MM** (el fin del
+     período que pagaste);
+   - después tu stock deja de verse hasta que elijas un plan (no se borra nada);
+   - también la podés cancelar desde **Mercado Pago → Suscripciones**: da lo mismo.
+3. Tocá **Sí, cancelar**. El estado pasa a "Plan Básico · cancelado, sigue hasta el DD/MM" y te
+   llega el aviso "Cancelaste tu suscripción".
+
+- Si cancelás un plan que elegiste **durante la prueba, antes del primer cobro**, no se te cobró
+  nada: seguís en tu prueba hasta que termine.
+- Si después querés volver, tocá **Volver a suscribirme**: el primer cobro es cuando termina lo que
+  ya tenías pago.
+- **Reintegros:** al cancelar no se reintegra lo ya pagado (como en Mercado Pago), pero conservás
+  el acceso hasta el fin del período.
+
+**Qué pasa si vence la prueba, termina lo que pagaste o dejás de pagar:**
 
 - **Si no pagás:** si pasan 35 días sin cobro, el plan se cancela.
 - **Desaparecés** de materiales, directorio, búsquedas, mapa y de las respuestas de Homy.
-- **No podés** tocar el stock, gestionar pedidos, emitir cobros ni ver la analítica.
-- **Sí podés** entrar a tu panel y mirar.
-- **Tus datos, reseñas y vinculaciones se conservan.**
-- Te llega el aviso "Tu plan se canceló…". Para volver, elegí un plan.
+- **No podés abrir ventas nuevas:** publicar o editar stock, aprobar reservas nuevas, marcar
+  "disponible" una reserva, emitir cobros de materiales, ver la analítica.
+- **Sí podés terminar lo que ya tenés:** entregar, confirmar un pago en efectivo, cancelar con motivo
+  (si ya te pagaron por Mercado Pago, se le devuelve al cliente desde tu cuenta), rechazar una
+  reserva pendiente y gestionar devoluciones de sobrantes.
+- **Seguís entrando a tu panel** y ves todo: stock, ventas, cobros, finanzas, mensajes y perfil.
+  Arriba de cada pantalla aparece "Tu plan no está activo: tus productos no se ven en HomIA. Podés
+  terminar las ventas que ya tenés. Elegí un plan para volver a vender." con el botón **Ir a Mi plan**.
+- **No se borra nada:** cuando elegís un plan, tu stock, precios y perfil vuelven a verse tal como
+  estaban.
+- Te llega el aviso que corresponde ("Terminó tu plan", "Tu plan se canceló por falta de pago"). Los
+  mensajes dicen "Tu plan venció el DD/MM…" o "Tu prueba gratis terminó el DD/MM…".
 
 **Tu marca en la portada (solo PRO):**
 

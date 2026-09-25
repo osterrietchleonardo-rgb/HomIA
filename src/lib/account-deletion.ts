@@ -35,7 +35,7 @@ const DEVOLUCION_ABIERTA = ['solicitada', 'aceptada', 'aceptada_parcial', 'recib
 export async function operacionesAbiertas(userId: string): Promise<OperacionAbierta[]> {
   const [pro, prov] = await Promise.all([
     db.professionalProfile.findUnique({ where: { userId }, select: { id: true } }),
-    db.providerProfile.findUnique({ where: { userId }, select: { id: true, subscription: true, mpPreapprovalId: true } }),
+    db.providerProfile.findUnique({ where: { userId }, select: { id: true, subscription: true, mpPreapprovalId: true, planPaidUntil: true } }),
   ])
   const devolucionAbierta = {
     OR: [
@@ -81,8 +81,8 @@ export async function operacionesAbiertas(userId: string): Promise<OperacionAbie
   add('ventas_proveedor', ventas + ventasPagadasSinEntregar, 'venta(s) o reserva(s) sin cerrar (por aprobar, por pagar o por entregar)', '/panel/proveedor/cobros')
   add('cobros_proveedor', cobrosProv, 'cobro(s) que emitiste y todavía no se pagaron', '/panel/proveedor/cobros')
   add('devoluciones_proveedor', devProv, 'devolución(es) de sobrantes sin cerrar', '/panel/proveedor/cobros')
-  if (prov && prov.mpPreapprovalId && (prov.subscription === 'basic' || prov.subscription === 'pro')) {
-    add('suscripcion', 1, `suscripción al plan ${prov.subscription === 'pro' ? 'PRO' : 'Básico'} activa en Mercado Pago: cancelala desde tu cuenta de Mercado Pago`, '/panel/proveedor/plan')
+  if (prov && prov.mpPreapprovalId && !prov.planPaidUntil && (prov.subscription === 'basic' || prov.subscription === 'pro')) {
+    add('suscripcion', 1, `suscripción al plan ${prov.subscription === 'pro' ? 'PRO' : 'Básico'} activa en Mercado Pago: cancelala en Mi plan (o en Mercado Pago → Suscripciones)`, '/panel/proveedor/plan')
   }
   return out
 }

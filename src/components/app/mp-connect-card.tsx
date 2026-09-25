@@ -73,7 +73,7 @@ export default function MpConnectCard({ kind, returnPath }: { kind: 'professiona
           <p className="mt-0.5 text-[13px] leading-relaxed text-slate-600">
             {status === null ? 'Consultando…'
               : status === 'connected' ? (
-                <><b className="text-[#0e9f6e]">Conectado</b>{exp ? ` hasta ${exp.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}` : ''}. Cuando un cliente paga tu factura por Mercado Pago, la plata entra en tu cuenta y cobrás el 100%: el cargo de servicio HomIA (1%) lo paga el cliente aparte.</>
+                <><b className="text-[#0e9f6e]">Conectado</b>{exp ? ` hasta ${exp.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}` : ''}. Cuando un cliente te paga por Mercado Pago, el pago entra en tu cuenta por el 100% de tu precio.</>
               ) : status === 'expired' ? (
                 <><b className="text-[#FF5A1F]">Vencido: volvé a conectar.</b> Sin conexión, tus clientes solo pueden pagarte en efectivo.</>
               ) : (
@@ -93,6 +93,12 @@ export default function MpConnectCard({ kind, returnPath }: { kind: 'professiona
           ) : null}
         </div>
       </div>
+      {/* nota fija (D33): cómo llega la plata. Sin porcentajes de MP: cambian y los elige cada vendedor */}
+      <p className="mt-3 rounded-2xl bg-[#0A2540]/3 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-slate-500">
+        Cuando te pagan por Mercado Pago, el pago queda <b>aprobado en tu Mercado Pago</b> y Mercado Pago lo libera según tus plazos
+        (lo ves en &quot;Dinero a liberar&quot;). <b>Mercado Pago te cobra su comisión a vos</b>, como vendedor: depende de cuándo elegís
+        recibir la plata y se configura en tu cuenta de Mercado Pago. El cargo de servicio HomIA (1%) lo paga el cliente aparte: no sale de tu precio.
+      </p>
 
       <AlertDialog open={askOff} onOpenChange={(o) => { if (!busy) setAskOff(o) }}>
         <AlertDialogContent>

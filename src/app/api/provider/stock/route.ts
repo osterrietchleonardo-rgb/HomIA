@@ -3,10 +3,11 @@ import { z } from 'zod'
 import { ok, fail, parseBody, parseJson } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
-import { planState } from '@/lib/plans'
+import { planState, mensajePlanInactivo } from '@/lib/plans'
 import { matchTerms } from '@/lib/search-match'
 
-const PLAN_VENCIDO = 'Tu prueba gratis terminó: elegí un plan (Básico o PRO) desde "Mi plan" para seguir gestionando tu stock'
+// D33: publicar, editar o borrar stock es negocio nuevo → requiere plan activo (ver/listar, no)
+const PLAN_VENCIDO = (st: ReturnType<typeof planState>) => mensajePlanInactivo(st, 'publicar o editar tu stock')
 
 // números reales y finitos (nada de strings, negativos ni Infinity en precios/cantidades)
 const money = z.number({ message: 'El precio tiene que ser un número' }).finite().positive('El precio tiene que ser mayor a 0').max(1_000_000_000)
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
   if (!prov) return fail('Solo proveedores gestionan stock', 403)
   const st = planState(prov)
   if (!st.activo) {
-    return fail(PLAN_VENCIDO, 403, { needsPlan: true })
+    return fail(PLAN_VENCIDO(st), 403, { needsPlan: true })
   }
 
   const parsed = await parseBody(req, createSchema)
@@ -141,7 +142,7 @@ export async function PATCH(req: NextRequest) {
   if (!prov) return fail('Solo proveedores gestionan stock', 403)
   const st = planState(prov)
   if (!st.activo) {
-    return fail(PLAN_VENCIDO, 403, { needsPlan: true })
+    return fail(PLAN_VENCIDO(st), 403, { needsPlan: true })
   }
 
   const parsed = await parseBody(req, patchSchema)
@@ -182,7 +183,7 @@ export async function DELETE(req: NextRequest) {
   if (!prov) return fail('Solo proveedores gestionan stock', 403)
   const st = planState(prov)
   if (!st.activo) {
-    return fail(PLAN_VENCIDO, 403, { needsPlan: true })
+    return fail(PLAN_VENCIDO(st), 403, { needsPlan: true })
   }
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return fail('Falta el id')

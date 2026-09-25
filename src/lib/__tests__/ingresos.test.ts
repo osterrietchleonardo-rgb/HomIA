@@ -275,3 +275,44 @@ test('aviso: MP caído → 503; factura inexistente → 200 ignorado; factura si
   assert.equal(pagoCaido.status, 503)
   assert.equal(b.filas.size, 0)
 })
+
+// ── D33: plan elegido durante la prueba y baja programada ──
+test('plan elegido durante la prueba, sin cobros todavía → en prueba (no "en deuda" ni MRR) con la fecha del primer cobro', () => {
+  const c = clasificarCuenta({ subscription: 'basic', trialEndsAt: D('2026-10-09T15:00:00Z'), createdAt: D('2026-09-25T15:00:00Z'), mpPreapprovalId: 'pre1' }, [], [], { status: 'authorized' }, PRECIOS, AHORA)
+  assert.equal(c.estado, 'en_prueba')
+  assert.equal(c.plan, 'basic')
+  assert.match(c.nota || '', /primer cobro es el 09\/10/)
+  assert.deepEqual(calcularMrr([{ estado: c.estado, plan: c.plan, tieneSuscripcion: true }], PRECIOS).mrr, 0)
+})
+
+test('cancelada con período pago vigente (planPaidUntil) → baja con acceso hasta la fecha, fuera del MRR', () => {
+  const c = clasificarCuenta({ subscription: 'basic', trialEndsAt: null, createdAt: D('2026-09-01T00:00:00Z'), mpPreapprovalId: 'pre1', planPaidUntil: D('2026-10-20T12:00:00Z') },
+    [aprobado('2026-09-20T12:00:00Z')], [{ type: 'cancelada', occurredAt: D('2026-09-24T12:00:00Z'), motivo: 'cancelada desde HomIA' }], null, PRECIOS, AHORA)
+  assert.equal(c.estado, 'baja')
+  assert.equal(c.plan, 'basic')
+  assert.equal(c.baja?.motivo, 'cancelada')
+  assert.equal(c.pagadoHasta?.toISOString(), '2026-10-20T12:00:00.000Z')
+  assert.match(c.nota || '', /hasta el 20\/10/)
+  assert.equal(calcularMrr([{ estado: c.estado, plan: c.plan, tieneSuscripcion: true }], PRECIOS).mrr, 0)
+})
+
+test('eligió un plan y lo canceló antes del primer cobro → sigue en prueba', () => {
+  const c = clasificarCuenta({ subscription: 'trial', trialEndsAt: D('2026-10-09T15:00:00Z'), createdAt: D('2026-09-25T15:00:00Z'), mpPreapprovalId: 'pre1' }, [], [{ type: 'cancelada', occurredAt: D('2026-09-25T18:00:00Z') }], null, PRECIOS, AHORA)
+  assert.equal(c.estado, 'en_prueba')
+  assert.match(c.nota || '', /antes del primer cobro/)
+})
+
+test('cobro de suscripción reembolsado: no cuenta como pagando (ni al día ni MRR) — caso Delfi', () => {
+  const reemb: CobroMin = { status: 'refunded', amount: 50000, refundedAmount: 50000, attemptedAt: D('2026-09-25T18:48:17Z'), paidAt: D('2026-09-25T18:48:17Z'), plan: 'basic' }
+  const c = clasificarCuenta({ subscription: 'trial', trialEndsAt: D('2026-10-09T18:44:34Z'), createdAt: D('2026-09-25T18:44:34Z'), mpPreapprovalId: 'pre1' }, [reemb], [{ type: 'cancelada', occurredAt: D('2026-09-25T20:00:00Z') }], null, PRECIOS, AHORA)
+  assert.equal(c.estado, 'en_prueba')
+  assert.equal(c.ultimoCobro, null)
+  assert.equal(c.pagadoHasta, null)
+  // con status approved pero devuelto completo, tampoco
+  const c2 = clasificarCuenta(provPago('basic'), [{ ...reemb, status: 'approved' }], [], null, PRECIOS, AHORA)
+  assert.notEqual(c2.estado, 'al_dia')
+  assert.equal(calcularMrr([{ estado: c.estado, plan: c.plan, tieneSuscripcion: true }], PRECIOS).mrr, 0)
+  // la serie de ingresos solo suma cobros aprobados netos de devoluciones
+  const serie = armarSerie(['2026-09-25'], 'dia', { cobrosAprobados: [], cargos: [], altas: [], primerasPagas: [], eventos: [] })
+  assert.equal(serie[0].suscripciones, 0)
+})

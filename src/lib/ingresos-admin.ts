@@ -75,7 +75,7 @@ async function estadosMp(ids: string[]): Promise<{ mapa: Map<string, PreInfo | n
 async function cargarBase(incluirPrueba: boolean) {
   const [provs, cobros, eventos] = await Promise.all([
     db.providerProfile.findMany({
-      select: { id: true, userId: true, businessName: true, subscription: true, trialEndsAt: true, createdAt: true, mpPreapprovalId: true, proSince: true, user: { select: { email: true, deletedAt: true } } },
+      select: { id: true, userId: true, businessName: true, subscription: true, trialEndsAt: true, createdAt: true, mpPreapprovalId: true, proSince: true, planPaidUntil: true, user: { select: { email: true, deletedAt: true } } },
     }),
     db.subscriptionCharge.findMany({ where: incluirPrueba ? {} : { mpEnvironment: 'live' }, orderBy: { attemptedAt: 'desc' } }),
     db.subscriptionEvent.findMany({ orderBy: { occurredAt: 'desc' } }),
@@ -99,7 +99,7 @@ function cuentasDe(base: Base, pres: Map<string, PreInfo | null>, ahora: Date) {
     const pre = p.mpPreapprovalId ? pres.get(p.mpPreapprovalId) ?? null : null
     const preMin: PreapprovalMin = pre ? { status: pre.status, lastModified: pre.lastModified, nextPaymentDate: pre.nextPaymentDate, amount: pre.amount } : null
     const cuenta = clasificarCuenta(
-      { subscription: p.subscription, trialEndsAt: p.trialEndsAt, createdAt: p.createdAt, mpPreapprovalId: p.mpPreapprovalId },
+      { subscription: p.subscription, trialEndsAt: p.trialEndsAt, createdAt: p.createdAt, mpPreapprovalId: p.mpPreapprovalId, planPaidUntil: p.planPaidUntil },
       cobros, eventos, preMin, PLAN_PRICE_ARS, ahora,
     )
     return { p, cuenta, pre, cobros }
@@ -347,7 +347,7 @@ export type ItemLinea = { fecha: string; tipo: string; detalle: string; monto: n
 export async function fichaProveedor(id: string, ahora = new Date()) {
   const p = await db.providerProfile.findUnique({
     where: { id },
-    select: { id: true, userId: true, businessName: true, subscription: true, trialEndsAt: true, createdAt: true, mpPreapprovalId: true, proSince: true, city: true, user: { select: { email: true, displayName: true } } },
+    select: { id: true, userId: true, businessName: true, subscription: true, trialEndsAt: true, createdAt: true, mpPreapprovalId: true, proSince: true, planPaidUntil: true, city: true, user: { select: { email: true, displayName: true } } },
   })
   const [cobros, eventos] = await Promise.all([
     db.subscriptionCharge.findMany({ where: { providerId: id }, orderBy: { attemptedAt: 'desc' } }),
@@ -362,7 +362,7 @@ export async function fichaProveedor(id: string, ahora = new Date()) {
     mpError = r.errores > 0
   }
   const cuenta: Cuenta | null = p
-    ? clasificarCuenta({ subscription: p.subscription, trialEndsAt: p.trialEndsAt, createdAt: p.createdAt, mpPreapprovalId: p.mpPreapprovalId },
+    ? clasificarCuenta({ subscription: p.subscription, trialEndsAt: p.trialEndsAt, createdAt: p.createdAt, mpPreapprovalId: p.mpPreapprovalId, planPaidUntil: p.planPaidUntil },
       cobros, eventos, pre ? { status: pre.status, lastModified: pre.lastModified, nextPaymentDate: pre.nextPaymentDate, amount: pre.amount } : null, PLAN_PRICE_ARS, ahora)
     : null
   const linea: ItemLinea[] = []

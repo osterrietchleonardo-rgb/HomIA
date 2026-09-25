@@ -119,7 +119,7 @@ export const fuenteDatosPrisma: FuenteDatos = {
         element: { select: { name: true, unit: true } },
         provider: {
           select: {
-            id: true, businessName: true, city: true, lat: true, lng: true, subscription: true, trialEndsAt: true,
+            id: true, businessName: true, city: true, lat: true, lng: true, subscription: true, trialEndsAt: true, planPaidUntil: true,
             createdAt: true, mpOauthStatus: true,
             user: { select: { city: true, verificationStatus: true, rating: true, reviewsCount: true } },
           },
@@ -251,7 +251,7 @@ export const fuenteDatosPrisma: FuenteDatos = {
       add(devolucionesPro, 'devolución(es) de sobrantes de tus clientes para responder', '/panel/profesional/devoluciones')    } else {
       const prov = await db.providerProfile.findUnique({
         where: { userId },
-        select: { id: true, subscription: true, trialEndsAt: true, createdAt: true, mpOauthStatus: true },
+        select: { id: true, subscription: true, trialEndsAt: true, planPaidUntil: true, createdAt: true, mpOauthStatus: true },
       })
       if (!prov) return out
       const [porAprobar, aprobados, cobros, efectivo, devoluciones, agotados, porAgotar] = await Promise.all([
@@ -274,7 +274,7 @@ export const fuenteDatosPrisma: FuenteDatos = {
       if (plan.plan === 'trial') {
         out.push({
           cantidad: plan.activo ? plan.trialDaysLeft ?? 0 : 0,
-          texto: plan.activo ? `día(s) de prueba gratis restantes (${plan.etiqueta})` : 'tu prueba gratis terminó: elegí un plan para seguir vendiendo',
+          texto: plan.activo ? `día(s) de prueba gratis restantes (${plan.etiqueta})` : plan.motivoInactivo === 'plan_vencido' ? 'tu plan venció: tus productos no se ven; podés terminar las ventas que ya tenés y elegir un plan para volver a vender' : 'tu prueba gratis terminó: tus productos no se ven; podés terminar las ventas que ya tenés y elegir un plan para volver a vender',
           ruta: '/panel/proveedor/plan',
         })
       }

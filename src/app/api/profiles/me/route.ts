@@ -132,7 +132,7 @@ export async function PUT(req: NextRequest) {
     const prov = roles.includes('proveedor')
       ? await db.providerProfile.findUnique({
           where: { userId: auth.user.id },
-          select: { subscription: true, trialEndsAt: true, createdAt: true },
+          select: { subscription: true, trialEndsAt: true, planPaidUntil: true, createdAt: true },
         })
       : null
     if (!prov) return fail('No tenés perfil de proveedor para editar', 403, { needsRole: 'proveedor' })

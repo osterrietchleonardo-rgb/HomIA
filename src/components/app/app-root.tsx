@@ -15,6 +15,7 @@ import HelpDock from '@/components/help/help-dock'
 import VideoModal from '@/components/help/video-modal'
 import AnalyticsTracker from '@/components/app/analytics-tracker'
 import { rutaAdminNueva } from '@/lib/admin-rutas'
+import { PlanInactivoAviso } from '@/components/screens/panel/proveedor/plan-aviso'
 import {
   ArrowLeft, ArrowRight, BadgeCheck, Boxes, Compass, CornerDownRight,
   HardHat, ShieldCheck, Sparkles, User,
@@ -264,14 +265,16 @@ function panelScreen(route: ReturnType<typeof useRoute>) {
     return <NotFound />
   }
   if (role === 'proveedor') {
-    if (page === '') return <ProviderDashboard />
-    if (page === 'stock') return <ProviderStock />
-    if (page === 'cobros') return <ProviderCharges />
     if (page === 'plan') return <ProviderPlan />
-    if (page === 'crm') return <ProviderCRM />
-    if (page === 'vinculaciones') return <ProviderLinks />
-    if (page === 'finanzas') return <FinanzasScreen rol="proveedor" />
-    if (page === 'perfil') return <ProviderProfileEdit />
+    // D33: con el plan vencido, aviso fijo arriba de todas las pantallas (puede terminar lo que tiene)
+    const conAviso = (n: React.ReactNode) => <><PlanInactivoAviso />{n}</>
+    if (page === '') return conAviso(<ProviderDashboard />)
+    if (page === 'stock') return conAviso(<ProviderStock />)
+    if (page === 'cobros') return conAviso(<ProviderCharges />)
+    if (page === 'crm') return conAviso(<ProviderCRM />)
+    if (page === 'vinculaciones') return conAviso(<ProviderLinks />)
+    if (page === 'finanzas') return conAviso(<FinanzasScreen rol="proveedor" />)
+    if (page === 'perfil') return conAviso(<ProviderProfileEdit />)
     return <NotFound />
   }
   return <RolePicker />

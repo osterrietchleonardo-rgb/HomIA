@@ -1033,6 +1033,51 @@ código por la base (HMAC con el `AUTH_SECRET` del `.env`, solo para `@homia.tes
   celular, rubros, cancelar el plan, reserva sin stock). `homy-eval.mjs` acepta
   `HOMY_EVAL_CUENTAS`/`HOMY_EVAL_PASS` (las cuentas demo se borraron el 25/09/2026).
 
+### 4.20 Plan del proveedor: cancelar desde HomIA, período pago y plan vencido (D33, migración `0038`, 25/09/2026)
+
+- **Esquema:** `ProviderProfile.planPaidUntil DateTime?` (aditiva, `supabase/migrations/0038_plan_pagado_hasta.sql`,
+  aplicada el 25/09/2026 con `migrate diff` + `db execute`; el diff posterior quedó vacío). Con plan
+  pago = fin del acceso tras cancelar (null = sin baja programada); con `trial` = cuándo terminó el
+  último plan pago. `SubscriptionEvent.source` suma `homia` (cancelada desde HomIA).
+- **Reglas puras** (`src/lib/plans.ts`, tests `src/lib/__tests__/plans.test.ts`, 25):
+  `planState(prov, ahora)` (nuevos campos `cancelado`, `accesoHasta`, `primerCobro`, `motivoInactivo`,
+  `vencioEl`), `puedeOperar`/`esProActivo` (el tipo `PerfilPlan` exige `planPaidUntil`: si una
+  consulta no lo trae, `tsc` falla), `calcularPagadoHasta` (cobros que valen = aprobados y no
+  reembolsados completos; resumen de MP solo si la base no tiene cobros de esa suscripción),
+  `inicioPrimerCobro` (start_date), `planTransicion` (nuevo `programar_baja`; `degradar` ya no pisa
+  `trialEndsAt`), `planVencido` (cron), `accionPermitida` / `ACCIONES_NEGOCIO_NUEVO` y
+  `mensajePlanInactivo`. `fechaCortaAR` vive en `suscripciones-core.ts` (UTC-3 fijo, sin ICU).
+- **Servidor** (`src/lib/suscripciones-mp.ts`): `aplicarBajaSuscripcion()` (única aplicación de una
+  baja para webhook, cron y cancelar: evento antes del update, update condicional con
+  `planPaidUntil: null` en el WHERE → no notifica dos veces), `pagadoHastaDe()`,
+  `vencerPlanesCancelados()`, `cancelarPreapprovalMp()` (GET y, si no está cancelada, `PUT
+  /preapproval/{id}` con el token del entorno donde existe) y `crearPreapprovalMp()`.
+  `createProviderPlanPreapproval` y `cancelPreapproval` (`mercadopago.ts`) pasaron del SDK a `fetch`
+  con `mpBase()`, igual que el webhook de preapprovals (`traerPreapproval`) y el cron: así el E2E usa
+  el doble (`MP_API_BASE_PRUEBAS`, solo fuera de producción) y se leen `summarized` y
+  `next_payment_date`.
+- **`start_date` en MP:** la preapproval sin plan asociado acepta `auto_recurring.start_date`; con
+  fecha futura MP autoriza la tarjeta en el momento (valida con un cobro mínimo que devuelve), la
+  suscripción queda `authorized` y el primer cobro (aviso `subscription_authorized_payment`) llega
+  ese día; `next_payment_date` = `start_date` y `summarized.charged_quantity = 0` hasta entonces. El
+  cron cuenta los 35 días sin cobro desde lo más tarde entre el alta y el fin de la prueba. **Sin
+  verificar con un alta real** (no se crean suscripciones reales en pruebas): confirmarlo en el
+  primer proveedor que elija plan en la prueba (`GET /preapproval/{id}` → `auto_recurring.start_date`
+  y `next_payment_date`).
+- **Endpoints:** `POST /api/provider/plan/cancel` (nuevo), `GET/POST /api/provider/plan` (campos
+  nuevos). 403 `needsPlan` solo en acciones de negocio nuevo (`provider/stock` POST/PATCH/DELETE,
+  `purchases/[id]` `aprobar`/`disponible`, `provider/charges` POST, analítica); `entregar`,
+  `rechazar`, `cancelar`, `charges/[id]` y `returns/[id]` no miran el plan.
+- **UI:** `plan.tsx` (diálogo de cancelar con `AlertDialog`, fechas, "Volver a suscribirme",
+  `data-track` en los botones nuevos), `plan-aviso.tsx` (aviso fijo del panel del proveedor, lo
+  monta `app-root.tsx` en todas las pantallas del proveedor menos Mi plan), nota de comisión de MP
+  en `mp-connect-card.tsx` (profesional) y en `proveedor/cobros.tsx`.
+- **Textos de cobro:** `compra_pagada_prov`, `cobro_pagado` y `factura_pagada` dicen "Pago aprobado
+  en tu Mercado Pago: Mercado Pago lo libera según tus plazos (lo ves en 'Dinero a liberar') y
+  descuenta su comisión". Nunca porcentajes de MP.
+- **E2E:** sección V de `scripts/e2e-integral.mjs` (necesita `--mp-double`; el doble ahora atiende
+  `POST /preapproval` y `PUT /preapproval/{id}`).
+
 ## 5. Migraciones y la base única
 
 - **Una sola base = producción.** El `.env` local, los Preview y Producción de Vercel apuntan al
@@ -1060,7 +1105,7 @@ código por la base (HMAC con el `AUTH_SECRET` del `.env`, solo para `@homia.tes
   recordatorio), `0024` (sobrantes con el profesional como vendedor y pata profesional →
   proveedor, §4.2), `0025` (compra directa: `Purchase.availableFrom`, §4.3), `0026` (índice `Conversation.userBId` para la bandeja, §4.5), `0027` (contratar desde un trabajo o
   proyecto: `Project.parentProjectId`, §4.4), `0028` (recuperar contraseña y avisos por mail:
-  `PasswordReset` y `User.emailNotifications`, §4.10), `0029` (términos aceptados y baja de cuenta en `User`, §4.9), `0030` (súper agente Homy: cupo y registro), `0031` (fechas del trabajo y calendario del profesional, §4.7) y `0032` (horario de cada día y jornada del profesional, §4.7.1); `0033` (Finanzas: `FinanceEntry`, `FinanceConfig`, `ProviderStock.unitCost`, §4.12); `0034` (Sugerencias: `Feedback`, §4.13); `0035` (registro y verificación: `User.emailVerifiedAt`, `phoneE164`, `phoneVerifiedAt` y `VerificationCode`, §4.14); `0036` (métricas de uso: `AnalyticsEvent` y `AnalyticsSession`, §4.15); `0037` (ingresos de HomIA: `SubscriptionCharge`, `SubscriptionEvent`, `Payment.mpApplicationFee/mpApprovedAt`, §4.17). La numeración salta de 0023 a 0030
+  `PasswordReset` y `User.emailNotifications`, §4.10), `0029` (términos aceptados y baja de cuenta en `User`, §4.9), `0030` (súper agente Homy: cupo y registro), `0031` (fechas del trabajo y calendario del profesional, §4.7) y `0032` (horario de cada día y jornada del profesional, §4.7.1); `0033` (Finanzas: `FinanceEntry`, `FinanceConfig`, `ProviderStock.unitCost`, §4.12); `0034` (Sugerencias: `Feedback`, §4.13); `0035` (registro y verificación: `User.emailVerifiedAt`, `phoneE164`, `phoneVerifiedAt` y `VerificationCode`, §4.14); `0036` (métricas de uso: `AnalyticsEvent` y `AnalyticsSession`, §4.15); `0037` (ingresos de HomIA: `SubscriptionCharge`, `SubscriptionEvent`, `Payment.mpApplicationFee/mpApprovedAt`, §4.17); `0038` (plan pagado hasta: `ProviderProfile.planPaidUntil`, §4.20). La numeración salta de 0023 a 0030
   porque los dos equipos reservaron rangos distintos.
 - RLS: el commit `2d3b10c` activó RLS en las tablas; script en `scripts/base/enable-rls.mjs`. La app
   accede con el usuario de Prisma (no por la API REST de Supabase), así que RLS protege solo el

@@ -10,6 +10,7 @@ import { MercadoPagoConfig, Preference, Payment, PreApproval } from 'mercadopago
 import { PLAN_PRICE_ARS } from '@/lib/plans'
 import { SERVICE_FEE_LABEL, round2 } from '@/lib/fees'
 import { db } from '@/lib/db'
+import { crearPreapprovalMp, cancelarPreapprovalMp } from '@/lib/suscripciones-mp'
 
 const MP_TOKEN = process.env.MP_ACCESS_TOKEN || ''
 const MP_SUB_TOKEN = process.env.MP_SUB_ACCESS_TOKEN || ''
@@ -174,32 +175,35 @@ export function applicationFeeDe(fees: { type?: string; amount?: number }[] | nu
 // ── PLANES DE PROVEEDOR (basic | pro) ──
 // Único rol con suscripción de pago. external_reference =
 // "plan:provider:<profileId>:<plan>" — el webhook activa el plan elegido.
+// D33: `startDate` = primer cobro (auto_recurring.start_date). Durante la prueba es el fin de la
+// prueba: MP autoriza la tarjeta ahora (valida con un cobro mínimo que devuelve) y cobra la primera
+// cuota ese día; sin `startDate` MP cobra en el momento. Se crea con fetch (no con el SDK) para que
+// las pruebas E2E puedan usar el doble de MP (MP_API_BASE_PRUEBAS, solo fuera de producción).
 export async function createProviderPlanPreapproval(input: {
   profileId: string
   plan: 'basic' | 'pro'
   payerEmail: string
   baseUrl: string
+  startDate?: Date | null
 }): Promise<{ id: string; initPoint: string; priceArs: number }> {
   const priceArs = PLAN_PRICE_ARS[input.plan]
-  const mp = new PreApproval(subClient())
-  const res = await mp.create({
-    body: {
-      reason:
-        input.plan === 'pro'
-          ? 'HomIA Plan PRO: sponsor en la home y Recomendado' // MP: máx. 60 caracteres
-          : 'HomIA Plan Básico: uso completo de la app',
-      auto_recurring: {
-        frequency: 1,
-        frequency_type: 'months',
-        transaction_amount: priceArs,
-        currency_id: 'ARS',
-      },
-      payer_email: input.payerEmail,
-      external_reference: `plan:provider:${input.profileId}:${input.plan}`,
-      back_url: `${input.baseUrl}/panel/proveedor/plan?plan=ok`,
+  const res = await crearPreapprovalMp({
+    reason:
+      input.plan === 'pro'
+        ? 'HomIA Plan PRO: sponsor en la home y Recomendado' // MP: máx. 60 caracteres
+        : 'HomIA Plan Básico: uso completo de la app',
+    auto_recurring: {
+      frequency: 1,
+      frequency_type: 'months',
+      transaction_amount: priceArs,
+      currency_id: 'ARS',
+      ...(input.startDate ? { start_date: input.startDate.toISOString() } : {}),
     },
+    payer_email: input.payerEmail,
+    external_reference: `plan:provider:${input.profileId}:${input.plan}`,
+    back_url: `${input.baseUrl}/panel/proveedor/plan?plan=ok`,
   })
-  return { id: res.id || '', initPoint: (res.init_point || '') as string, priceArs }
+  return { id: res.id, initPoint: res.initPoint, priceArs }
 }
 
 export async function getPreapproval(
@@ -221,9 +225,9 @@ export async function getPreapproval(
 
 /** Cancela una suscripción (cambio de plan o baja). */
 export async function cancelPreapproval(preapprovalId: string): Promise<{ id: string; status: string }> {
-  const mp = new PreApproval(subClient())
-  const res = await mp.update({ id: preapprovalId, body: { status: 'cancelled' } })
-  return { id: String(res.id), status: String(res.status || 'cancelled') }
+  const res = await cancelarPreapprovalMp(preapprovalId)
+  if (!res) throw new Error(`suscripción ${preapprovalId} no encontrada en Mercado Pago`)
+  return { id: String(res.id || preapprovalId), status: String(res.status || 'cancelled') }
 }
 
 /** Reembolso (total o parcial) de un pago. `accessToken` = token OAuth del
