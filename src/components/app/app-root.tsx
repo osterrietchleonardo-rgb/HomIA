@@ -79,7 +79,7 @@ const ProviderProfileEdit = dynamic(() => import('@/components/screens/panel/pro
 const FinanzasScreen = dynamic(() => import('@/components/screens/panel/finanzas/finanzas'), { ssr: false, loading: () => <Loading /> })
 
 // Común a los 3 roles: verificación de identidad por DNI + IA
-// Común a los 3 roles: Sugerencias (D25) + bandeja del administrador (ADMIN_EMAILS)
+// Común a los 3 roles: Sugerencias (D25) + bandeja del administrador (área /admin, D29)
 const SugerenciasScreen = dynamic(() => import('@/components/screens/panel/sugerencias'), { ssr: false, loading: () => <Loading /> })
 const AdminSugerenciasScreen = dynamic(() => import('@/components/screens/panel/admin-sugerencias'), { ssr: false, loading: () => <Loading /> })
 // Área /admin (D29): layout propio + Métricas (D27) y la bandeja de Sugerencias (D25)
@@ -207,8 +207,9 @@ export default function AppRoot() {
       <BackdropFX />
       <div className="homy-screen relative z-10">{screen}</div>
       {/* tutorial guiado por rol + ayuda flotante siempre visible + videoteca */}
-      <TourOverlay />
-      <HelpDock />
+      {/* el área /admin no es de usuarios: sin tour ni Homy flotante (tapaba gráficos) */}
+      {s[0] !== 'admin' && <TourOverlay />}
+      {s[0] !== 'admin' && <HelpDock />}
       <VideoModal />
       {/* métricas de uso propias (D27): no dibuja nada */}
       <AnalyticsTracker />

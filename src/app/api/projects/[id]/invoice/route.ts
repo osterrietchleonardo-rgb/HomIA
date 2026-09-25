@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { ok, fail } from '@/lib/api'
 import { db } from '@/lib/db'
 import { notificar } from '@/lib/notify'
+import { prefijoAnual, ultimoNumero, formatearNumero } from '@/lib/numeracion'
 
 async function loadParty(userId: string, projectId: string) {
   const project = await db.project.findUnique({
@@ -110,17 +111,15 @@ export async function POST(
   const materialsCost = Math.round(items.filter((i) => i.kind === 'material').reduce((a, i) => a + i.subtotal, 0) * 100) / 100
   const total = Math.round((materialsCost + laborCost) * 100) / 100
   const materialIds = materialsForInvoice.map((m) => m.id)
-  const year = new Date().getFullYear()
-
-  // Número secuencial HOM-2026-000001: count + 1 dentro de la transacción; si otro
+  // Número secuencial HOM-2026-000001: el mayor del año + 1 dentro de la transacción (`numeracion.ts`); si otro
   // profesional emitió en el mismo instante, colisiona el @unique y reintentamos.
   let invoice: Prisma.InvoiceGetPayload<{ include: { items: true } }> | null = null
   let lastError: unknown = null
   for (let attempt = 0; attempt < 3 && !invoice; attempt++) {
     try {
       invoice = await db.$transaction(async (tx) => {
-        const count = await tx.invoice.count()
-        const number = `HOM-${year}-${String(count + 1 + attempt).padStart(6, '0')}`
+        const prefijo = prefijoAnual('HOM')
+        const number = formatearNumero(prefijo, (await ultimoNumero((a) => tx.invoice.findFirst(a), prefijo)) + 1 + attempt)
         const created = await tx.invoice.create({
           data: {
             projectId: id,

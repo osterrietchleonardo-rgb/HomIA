@@ -15,6 +15,7 @@ import { round2 } from '@/lib/fees'
 import { logActivity } from '@/lib/activity'
 import { COMPRA_PAGO_MS, fmtDeadline, type OrderLineMode } from '@/lib/order-rules'
 import { notificar } from '@/lib/notify'
+import { prefijoAnual, ultimoNumero, formatearNumero } from '@/lib/numeracion'
 
 // ─────────────────────────── ítems de un sub-pedido ───────────────────────────
 
@@ -78,10 +79,10 @@ export const purchaseItemsInclude = { items: { orderBy: { createdAt: 'asc' as co
  * un cobro creado en la misma transacción) reintenta con el siguiente.
  */
 export async function createWithOrderNumber<T>(create: (number: string, attempt: number) => Promise<T>): Promise<T | null> {
-  const year = new Date().getFullYear()
+  const prefijo = prefijoAnual('PED')
   for (let attempt = 0; attempt < 6; attempt++) {
-    const count = await db.order.count()
-    const number = `PED-${year}-${String(count + 1 + attempt).padStart(6, '0')}`
+    const ultimo = await ultimoNumero((a) => db.order.findFirst(a), prefijo)
+    const number = formatearNumero(prefijo, ultimo + 1 + attempt)
     try {
       return await create(number, attempt)
     } catch (e) {
@@ -199,8 +200,6 @@ export async function createOrder(input: {
   // orden estable: por proveedor, primero la compra y después la reserva
   const ordered = [...groups.values()].sort((a, b) => a.providerId.localeCompare(b.providerId) || (a.mode === 'compra' ? -1 : 1))
   const note = input.note?.trim() || null
-  const year = new Date().getFullYear()
-
   let created: CreatedOrder | null
   try {
     created = await createWithOrderNumber((number, attempt) =>
@@ -246,8 +245,8 @@ export async function createOrder(input: {
           })
           if (compra) {
             await reserveItems(tx, p.items, `Compra ${p.id} de ${input.user.displayName}`)
-            if (chargeBase === null) chargeBase = await tx.providerCharge.count()
-            const chargeNumber = `PRV-${year}-${String(chargeBase + 1 + attempt + chargeSeq++).padStart(6, '0')}`
+            if (chargeBase === null) chargeBase = await ultimoNumero((a) => tx.providerCharge.findFirst(a), prefijoAnual('PRV'))
+            const chargeNumber = formatearNumero(prefijoAnual('PRV'), chargeBase + 1 + attempt + chargeSeq++)
             const charge = await tx.providerCharge.create({
               data: {
                 number: chargeNumber,

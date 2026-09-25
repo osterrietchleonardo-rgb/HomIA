@@ -941,6 +941,22 @@ código por la base (HMAC con el `AUTH_SECRET` del `.env`, solo para `@homia.tes
 - **Migración `0037_ingresos_homia.sql`:** 2 columnas NULL en `Payment` + 2 tablas + índices + RLS;
   aplicada el 25/09/2026 con `prisma db execute`; `migrate diff` posterior: vacío.
 
+### 4.18 Integración del 25/09/2026 y numeración de comprobantes
+
+- **Integración:** los equipos de calendario (D23), finanzas (D24), sugerencias (D25), registro (D26),
+  métricas (D27), `/admin` (D29) e ingresos (D30) se juntaron en `feat/horas-y-logo` con `main`
+  (`6e5be1c` fotos y catálogo, `d2ed310` categorías D28). Finales de línea igualados a `HEAD` en los
+  archivos que los equipos habían convertido. El área `/admin` no muestra el tour ni el Homy
+  flotante (`app-root.tsx`: tapaba los gráficos y no es un área de usuarios).
+- **Numeración:** `src/lib/numeracion.ts` (`prefijoAnual`, `ultimoNumero`, `formatearNumero`) reemplaza
+  `count()+1` en `createWithOrderNumber` y el cobro dentro del pedido (`orders.ts`),
+  `createWithChargeNumber` (`charge-number.ts`) y la factura (`projects/[id]/invoice`). Busca el mayor
+  `number` con `startsWith '<SERIE>-<año>-'` y `orderBy desc` (los números van con 6 dígitos, el orden
+  alfabético es el numérico). Causa: con `count()` un borrado dejaba el conteo por debajo del último
+  número y los 6 intentos chocaban con el `@unique` → 503 (aparecía en las suites E2E que purgan en
+  la base única mientras otra crea pedidos). Las facturas demo con formato `A-0001-…` no entran en la
+  serie `HOM-`. Tests: `src/lib/__tests__/numeracion.test.ts` (4).
+
 ## 5. Migraciones y la base única
 
 - **Una sola base = producción.** El `.env` local, los Preview y Producción de Vercel apuntan al

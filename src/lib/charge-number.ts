@@ -1,17 +1,19 @@
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
+import { prefijoAnual, ultimoNumero, formatearNumero } from '@/lib/numeracion'
 
 /**
  * Crea un ProviderCharge con número secuencial PRV-<año>-<n>.
- * El número sale de count()+1: si hubo borrados o dos cobros simultáneos puede
- * chocar con el @unique → se reintenta con el siguiente (nunca un 500 mudo).
+ * El número sale del mayor número del año + 1 (`numeracion.ts`; con count() un borrado hacía chocar
+ * todos los intentos); si dos cobros simultáneos chocan con el @unique → se reintenta con el
+ * siguiente (nunca un 500 mudo).
  * Devuelve null si no se pudo numerar tras varios intentos.
  */
 export async function createWithChargeNumber<T>(create: (number: string) => Promise<T>): Promise<T | null> {
-  const year = new Date().getFullYear()
+  const prefijo = prefijoAnual('PRV')
   for (let attempt = 0; attempt < 6; attempt++) {
-    const count = await db.providerCharge.count()
-    const number = `PRV-${year}-${String(count + 1 + attempt).padStart(6, '0')}`
+    const ultimo = await ultimoNumero((a) => db.providerCharge.findFirst(a), prefijo)
+    const number = formatearNumero(prefijo, ultimo + 1 + attempt)
     try {
       return await create(number)
     } catch (e) {

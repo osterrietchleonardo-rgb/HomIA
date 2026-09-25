@@ -634,6 +634,10 @@ La sección **Facturas** junta las facturas de todos tus proyectos.
 
 ### 2.7 Materiales: carrito y pedidos
 
+> Arreglo del 25/09/2026: una compra, un cobro o una factura ya no pueden fallar con "No pudimos
+> numerar" después de que se borre algún pedido o una cuenta; la numeración sigue siempre desde el
+> último número del año.
+
 **Pestañas de Materiales:** **Buscar materiales** y **Mis pedidos** (los profesionales tienen además
 **Comparables**). "Mis pedidos" también está en el menú.
 

@@ -811,7 +811,7 @@ async function flowB() {
   const cat = await get(ANON, '/api/catalog')
   st(F, 'catálogo público', cat, 200)
   const allEls = (cat.data?.categories || []).flatMap((c) => c.elements.map((e) => ({ ...e, categoryId: c.id, categorySlug: c.slug })))
-  check(F, 'catálogo con 20 categorías', cat.data?.categories?.length === 20, `n=${cat.data?.categories?.length}`)
+  check(F, 'catálogo con 22 categorías (D28)', cat.data?.categories?.length === 22, `n=${cat.data?.categories?.length}`)
   check(F, 'catálogo con más de 1000 elementos', allEls.length > 1000, `n=${allEls.length}`)
   const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
   // búsqueda difusa como el combobox: "cano pvc desague" sin acentos encuentra "Caño PVC desagüe 110mm"

@@ -49,7 +49,7 @@ src/
   app/
     page.tsx           # landing pública (/)
     [...slug]/page.tsx # catch-all → AppRoot (la SPA)
-    api/…              # 64 endpoints (route.ts) + api/[...slug] (404 JSON) — mapa en §6
+    api/…              # 93 endpoints (route.ts) + api/[...slug] (404 JSON) — mapa en §6
   components/
     app/
       app-root.tsx     # ★ registro central de rutas SPA (router cliente)
@@ -69,6 +69,7 @@ src/
     fees.ts            # cargo de servicio 1% (serviceFeeFor, totalWithMp)
     cart.ts cart-server.ts # carrito (visitante en localStorage, cuenta en la base)
     orders.ts order-view.ts # pedidos multiproveedor y su resumen
+    numeracion.ts      # PED-/PRV-/HOM-: mayor número del año + 1 (nunca count())
     seller-pay.ts      # token del vendedor o 503 honesto
     activity.ts        # línea de tiempo (ActivityEvent)
     units.ts           # paso de cantidad por unidad (1 o 0,5)
@@ -79,20 +80,20 @@ src/
     analytics/         # métricas de uso (D27): core (reglas puras), schema (zod), tracker (navegador), server (collect + registrarEvento), metricas (SQL del panel)
     admin.ts admin-core.ts admin-rutas.ts # área /admin con ingreso propio (D29): requireAdmin(), cookie homia_admin, rutas y redirecciones
     finanzas/          # D24: conceptos (tipos, categorías, glosario: única fuente), calculos (puro, tests en __tests__), datos (server), servidor (zod + sesión)
-supabase/migrations/   # migraciones SQL aplicadas (lista al día en docs/interno/TECNICO-HOMIA.md §5; última de este equipo: 0032)
+supabase/migrations/   # migraciones SQL aplicadas (lista al día en docs/interno/TECNICO-HOMIA.md §5; última: 0037)
 scripts/               # ver scripts/README.md
   catalogo/            # catálogo maestro (datos + seeder idempotente)
   demo/                # seed demo + assets (DNI, fotos de reseñas)
   base/                # utilidades de la base (RLS)
   e2e/                 # pruebas vivas (sec-audit.sh)
-  e2e-integral.mjs     # suite E2E de API (16 secciones A-P)
+  e2e-integral.mjs     # suite E2E de API (22 secciones A-U; 1454/1455 el 25/09/2026)
   e2e-visual.mjs       # recorrido visual Playwright 390×844 y 1280×800
   homy-eval.mjs        # set de evaluación de Homy (32 casos) + homy-eval-casos.json
   homy-test-alias.mjs  # alias @/ para los tests de src/lib/homy/__tests__
   limpieza/            # purgas de usuarios/datos de prueba
   medios/              # generadores de imágenes, videos y favicon
   historico/           # scripts de un solo uso y E2E del sandbox viejo (no se corren)
-prisma/schema.prisma   # 40 modelos
+prisma/schema.prisma   # 49 modelos
 docs/                  # funcional, lógica, técnico, decisiones, bitácora (ver docs/README.md)
   historico/           # worklog, contratos y guías viejas (solo consulta)
 ```
@@ -122,7 +123,7 @@ Convenciones de UI (no inventar otras):
 - `/api/*` inexistente responde 404 JSON (`src/app/api/[...slug]/route.ts`).
 - `next.config.ts` con `ignoreBuildErrors: false` y `tsconfig` con `noImplicitAny: true`: el build tiene que compilar limpio. `NEXT_DIST_DIR` (opcional) permite levantar un segundo `next dev` en la misma carpeta sin pisar `.next`.
 
-## 5. Modelo de datos (40 modelos en prisma/schema.prisma)
+## 5. Modelo de datos (49 modelos en prisma/schema.prisma)
 
 - **Identidad**: `User` (roles JSON; todo registro por pantalla recibe `cliente`; `emailNotifications` para los avisos por mail), `IdentityDocument` (DNI + análisis IA, estado verificación), `OAuthState` (PKCE), `PasswordReset` (recuperar contraseña, hash del token)
 - **Perfiles**: `ProfessionalProfile` (con OAuth MP propio), `ProviderProfile` (multi-tipo, plan/suscripción, trial, marca PRO, OAuth MP)
@@ -142,7 +143,7 @@ Convenciones de UI (no inventar otras):
 
 Notas de esquema: la base es Postgres, pero se mantienen las convenciones heredadas de SQLite: sin enums (String), sin arrays (JSON como string), lat/lng como Float, dinero como Float. Todo el texto de negocio está en español rioplatense.
 
-## 6. Mapa de API (64 endpoints)
+## 6. Mapa de API (93 endpoints)
 
 | Dominio | Endpoints | Notas |
 |---|---|---|
@@ -235,6 +236,9 @@ Notas de esquema: la base es Postgres, pero se mantienen las convenciones hereda
 ◻ Mails: crear la cuenta de Resend, verificar `somoshomia.com` y cargar `RESEND_API_KEY` + `EMAIL_FROM` en Vercel. Sin eso no sale ningún mail (tampoco el de recuperar contraseña).
 ◻ Cuando Leonardo esté conforme con las pruebas: **borrar los datos y cuentas demo** (`@homia.test`) de la base, con su OK. Hasta entonces, `HIDE_DEMO_USERS=1` en Vercel el día del lanzamiento los oculta.
 ◻ Mails: `RESEND_API_KEY` tiene que estar en Vercel (Production) y hace falta un redeploy; remitente `avisos@vakbot.vakdor.com` hasta verificar `somoshomia.com`. Los textos legales quedan como versión vigente, sin revisión de abogado (decisión de Leonardo, D22).
+✔ 25/09/2026: franja horaria del calendario (D23), finanzas (D24), sugerencias (D25), registro con código por mail (D26), métricas de uso (D27), `/admin` con ingreso propio (D29) e ingresos de HomIA (D30); migraciones 0032–0037 aplicadas; E2E 1454/1455 (la falla era del arranque de la prueba). Numeración de comprobantes por el mayor número del año (antes `count()`: un borrado la rompía).
+◻ Leonardo: `ADMIN_EMAIL`/`ADMIN_PASSWORD` en Vercel + redeploy; regla de Firewall para `/api/admin/login`; activar en la app Suscripciones de MP el evento "Pago recurrente de una suscripción" (el cron diario igual carga los cobros); proveedor de SMS/WhatsApp solo si quiere verificar celulares.
+◻ Botones de pantallas de otros equipos sin `data-track` propio (igual se miden por texto/aria-label y por la llamada a la API): sumar al tocar cada pantalla (regla 11).
 ◻ Deuda priorizada: `docs/AUDITORIA-INTEGRAL.md` §9 y `docs/PLAN-LANZAMIENTO-48H.md` §4 (zod en las rutas que faltan, `includes` en directorio/bolsa/pines, cifrado de tokens OAuth).
 
 ## 12. Variables de entorno (nombres exactos que lee el código)

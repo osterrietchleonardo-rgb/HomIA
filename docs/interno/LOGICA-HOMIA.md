@@ -502,6 +502,12 @@ proveedor y por tipo**, con sus productos (`PurchaseItem`). Cada sub-pedido sigu
 de estados y se paga por separado. Las compras de un solo producto hechas antes quedan como "Compra
 anterior".
 
+**Numeración (25/09/2026):** pedidos `PED-`, cobros `PRV-` y facturas `HOM-` toman el **mayor número
+usado en el año + 1** (`src/lib/numeracion.ts`), con reintento si dos chocan en el mismo instante. Antes
+se contaban las filas: cuando se borraba alguna (baja de cuenta, purga de datos de prueba en la base
+única) el número siguiente ya existía y la compra, el cobro o la factura fallaban con "No pudimos
+numerar". Cada año la serie empieza en 1 (el año va en el número, no se repite).
+
 **D15 (24/09/2026, Leonardo):** *"Las compras no necesitan aprobación del proveedor: son directas al
 pago, siempre y cuando haya stock. Las aprobaciones son para las reservas de productos, con o sin
 stock."* Reglas y plazos en `src/lib/order-rules.ts`:
