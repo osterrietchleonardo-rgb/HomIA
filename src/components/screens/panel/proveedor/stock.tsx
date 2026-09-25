@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import { StatusBadge, Loading } from '@/components/app/ui-bits'
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api-client'
-import { matchTerms, matchScore } from '@/lib/search-match'
+import { matchTerms, catalogScore } from '@/lib/search-match'
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -19,6 +19,7 @@ import {
   Plus, Search, Minus, Check, Trash2, Info, Package, PackageOpen, Sparkles, Loader2, Upload, Camera,
 } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { subirImagen } from '@/lib/upload-image'
 
 type StockItem = {
   id: string; elementId: string; name: string; unit: string; category: string; categorySlug: string
@@ -255,7 +256,7 @@ export default function ProviderStock() {
   const nq = elemQuery.trim()
   const ranked = nq.length >= 2
     ? pool
-        .map((e) => ({ e, s: matchScore(nq, [e.name, ...e.aliases, e.description || ''].join(' ')) }))
+        .map((e) => ({ e, s: catalogScore(nq, e) }))
         .filter((x) => x.s > 0)
         .sort((a, b) => b.s - a.s || a.e.name.localeCompare(b.e.name))
         .slice(0, 12)
@@ -649,17 +650,17 @@ function MaterialPhotoUploader({ initialUrl, name, onUpload }: { initialUrl?: st
     if (!files || files.length === 0) return
     const file = files[0]
     setLoading(true)
-    const formData = new FormData()
-    formData.append('file', file)
     try {
-      const res = await fetch('/api/uploads', { method: 'POST', body: formData })
-      if (!res.ok) throw new Error()
-      const data = await res.json()
-      await onUpload(data.url)
-    } catch {
-      toast.error('No se pudo subir la foto del material')
+      const r = await subirImagen(file, 'materiales')
+      if (!r.ok) { toast.error(`Foto de ${name}: ${r.error}`); return }
+      try {
+        await onUpload(r.url)
+      } catch {
+        toast.error('La foto se subió pero no pudimos guardarla en el producto. Probá de nuevo.')
+      }
     } finally {
       setLoading(false)
+      if (ref.current) ref.current.value = '' // permite volver a elegir la misma foto
     }
   }
 

@@ -11,6 +11,7 @@ import { ShieldCheck, Store, Star, Crown, ArrowRight, Clock, CircleAlert, Lock, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DeleteAccountCard } from '@/components/app/delete-account-card'
 import { AvisosMailCard } from '@/components/screens/panel/avisos-mail-card'
+import { subirImagen } from '@/lib/upload-image'
 
 type MeUser = {
   email: string
@@ -141,19 +142,13 @@ export default function ProviderProfile() {
   async function uploadLogo(files: FileList | null) {
     const file = files?.[0]
     if (!file) return
-    if (!['image/png', 'image/webp', 'image/jpeg'].includes(file.type)) { toast.error('Subí el logo en PNG, WEBP o JPG'); return }
     setLogoUploading(true)
     try {
-      const fd = new FormData()
-      fd.append('file', file)
-      fd.append('folder', 'marca')
-      const res = await fetch('/api/uploads', { method: 'POST', body: fd })
-      const d = await readJson(res)
-      if (!res.ok || !d.url) { toast.error(d.error || 'No pudimos subir el logo'); return }
-      setBrandLogoUrl(String(d.url))
+      // PNG con fondo transparente se conserva (o pasa a WEBP, que también es transparente)
+      const r = await subirImagen(file, 'marca', { maxLado: 1200 })
+      if (!r.ok) { toast.error(`Logo: ${r.error}`); return }
+      setBrandLogoUrl(r.url)
       toast.success('Logo subido. Guardá tu marca para publicarlo en la home')
-    } catch {
-      toast.error('No pudimos conectar. Reintentá')
     } finally {
       setLogoUploading(false)
       if (logoInputRef.current) logoInputRef.current.value = ''

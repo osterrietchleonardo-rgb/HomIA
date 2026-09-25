@@ -39,7 +39,7 @@ const PROFILES = [
     role: "Para proveedores",
     headline: "Nuevas ventas, stock bajo control",
     points: [
-      "Gestioná tu stock sobre un catálogo de 1247 materiales",
+      "Gestioná tu stock sobre un catálogo de más de 1.700 materiales",
       "Recibís pedidos y cobrás por Mercado Pago o efectivo",
       "Aceptás devoluciones de sobrantes desde la app",
       "14 días gratis, después desde $50.000/mes",

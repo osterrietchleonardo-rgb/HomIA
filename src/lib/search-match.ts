@@ -47,6 +47,22 @@ export function matchScore(query: string, haystack: string): number {
 }
 
 /**
+ * Puntaje para elegir un elemento del catálogo: las palabras que coinciden en el NOMBRE o en sus
+ * aliases pesan más que las que solo aparecen en la descripción, y el nombre que empieza con la
+ * búsqueda suma un poco más. Con el catálogo de 1764 elementos, "cemento" traía 39 resultados
+ * empatados en orden alfabético y "Cemento Portland 50kg" quedaba afuera de los 12 primeros.
+ * 0 = no coincide (mismo criterio de filtro que matchScore sobre todo el texto).
+ */
+export function catalogScore(query: string, e: { name: string; aliases?: string[] | null; description?: string | null }): number {
+  const todo = matchScore(query, [e.name, ...(e.aliases || []), e.description || ''].join(' '))
+  if (todo === 0) return 0
+  const enNombre = matchScore(query, [e.name, ...(e.aliases || [])].join(' '))
+  const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const empieza = norm(e.name).startsWith(norm(query).split(/\s+/)[0] || '#') ? 1 : 0
+  return todo * 10 + enNombre * 6 + empieza * 3
+}
+
+/**
  * Traduce necesidades en lenguaje natural a términos técnicos del catálogo:
  * "tengo humedad en el techo" → membrana / impermeabilización / goteras.
  * El agente de IA usa esta expansión para recomendar los elementos JUSTOS
@@ -109,6 +125,16 @@ const CATEGORIA_ALIASES: Record<string, string> = {
   iluminacion: 'iluminacion', 'iluminación': 'iluminacion', luminarias: 'iluminacion',
   muebles: 'muebles', muebleria: 'muebles', 'mueblería': 'muebles', equipamiento: 'muebles',
   seguridad: 'seguridad', 'elementos de seguridad': 'seguridad',
+  // Rubros sumados con la expansión 3 del catálogo (25/09/2026). Plagas y repuestos de
+  // electrodomésticos viven hoy en limpieza y electricistas (no hay categoría propia).
+  fumigador: 'limpieza', fumigadores: 'limpieza', fumigacion: 'limpieza', 'fumigación': 'limpieza', plagas: 'limpieza', 'control de plagas': 'limpieza', desinsectador: 'limpieza', desratizacion: 'limpieza',
+  alfombras: 'limpieza', tapizados: 'limpieza', 'limpieza de alfombras': 'limpieza',
+  electrodomesticos: 'electricistas', 'electrodomésticos': 'electricistas', 'tecnico en electrodomesticos': 'electricistas', 'técnico en electrodomésticos': 'electricistas', lavarropas: 'electricistas',
+  refrigeracion: 'climatizacion', 'refrigeración': 'climatizacion', 'tecnico en refrigeracion': 'climatizacion', 'técnico en refrigeración': 'climatizacion', refrigerista: 'climatizacion', heladera: 'climatizacion',
+  cerrajeria: 'cerramientos', 'cerrajería': 'cerramientos', vidrieria: 'cerramientos', 'vidriería': 'cerramientos', vidriero: 'cerramientos',
+  techador: 'techos', impermeabilizacion: 'techos', 'impermeabilización': 'techos',
+  pileta: 'jardineria', piscina: 'jardineria', piletero: 'jardineria', parquizacion: 'jardineria', 'cortador de pasto': 'jardineria', riego: 'jardineria',
+  alarmas: 'seguridad', camaras: 'seguridad', 'cámaras': 'seguridad', cctv: 'seguridad',
 }
 
 /** Slugs válidos de tipo de negocio del proveedor (ProviderProfile.kind). */
@@ -143,9 +169,19 @@ export function canonicalCategoria(raw?: string): string | undefined {
   const t = (raw || '').toLowerCase().trim().normalize('NFC')
   if (!t) return undefined
   if (CATEGORIA_ALIASES[t]) return CATEGORIA_ALIASES[t]
-  // tolera plurales/variantes no mapeadas: contiene un alias conocido
+  // Tolera frases y variantes: busca un alias conocido como PALABRA COMPLETA dentro del texto y
+  // se queda con el más largo ("control de plagas" → plagas/limpieza, no "gas" → gasistas, que
+  // pasaba al buscar por "contiene"). Sin tildes ni mayúsculas. Si el texto es un pedazo de un
+  // alias ("electri"), solo cuenta con 4 letras o más.
+  const sinTildes = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const tt = ` ${sinTildes(t).replace(/[^a-z0-9ñ]+/g, ' ').trim()} `
+  let mejor: { slug: string; largo: number } | undefined
   for (const [alias, slug] of Object.entries(CATEGORIA_ALIASES)) {
-    if (t.includes(alias) || alias.includes(t)) return slug
+    const a = sinTildes(alias).replace(/[^a-z0-9ñ]+/g, ' ').trim()
+    if (!a) continue
+    const entero = tt.includes(` ${a} `) || tt.includes(` ${a}s `) || tt.includes(` ${a}es `)
+    const prefijo = tt.trim().length >= 4 && a.startsWith(tt.trim())
+    if ((entero || prefijo) && (!mejor || a.length > mejor.largo)) mejor = { slug, largo: a.length }
   }
-  return undefined
+  return mejor?.slug
 }

@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { navigate, Link, useRoute } from '@/lib/router'
 import { StatusBadge, Loading, UAvatar, VerifyBadge } from '@/components/app/ui-bits'
 import { formatARS, formatDate } from '@/lib/format'
-import { matchScore } from '@/lib/search-match'
+import { catalogScore } from '@/lib/search-match'
 import { toast } from 'sonner'
 import {
   ArrowRight, Receipt, Truck, Plus, RefreshCcw, Phone, Mail, ArrowLeft,
@@ -281,7 +281,7 @@ export default function ProProjectDetail({ id }: { id: string }) {
   const nq = elemQuery.trim()
   const ranked = nq.length >= 2 && !elementId
     ? pool
-        .map((e) => ({ e, s: matchScore(nq, [e.name, ...(e.aliases || []), e.description || ''].join(' ')) }))
+        .map((e) => ({ e, s: catalogScore(nq, e) }))
         .filter((x) => x.s > 0)
         .sort((a, b) => b.s - a.s || a.e.name.localeCompare(b.e.name))
         .slice(0, 12)

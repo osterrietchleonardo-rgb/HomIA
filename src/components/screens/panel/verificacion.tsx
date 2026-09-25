@@ -12,6 +12,7 @@ import {
   ShieldCheck, ShieldQuestion, ShieldX, IdCard, UploadCloud, ScanFace, BadgeCheck,
   ArrowRight, CheckCircle2, AlertTriangle, Sparkles,
 } from 'lucide-react'
+import { subirImagen } from '@/lib/upload-image'
 
 type Verdict = {
   esDocumento: boolean; pareceReal: boolean; legible: boolean
@@ -103,15 +104,12 @@ export default function VerificationScreen() {
   async function uploadFile(file: File, slot: 'front' | 'back') {
     setUploading(true)
     try {
-      const fd = new FormData()
-      fd.append('file', file)
-      fd.append('folder', 'dni')
-      const res = await fetch('/api/uploads', { method: 'POST', body: fd })
-      const d = await res.json().catch(() => ({}))
-      if (!res.ok) { toast.error(d.error ?? 'No pudimos subir la foto, probá de nuevo'); return }
-      // d.url = "dni-docs/<userId>/dni/<archivo>" (path privado que espera POST /api/verification/dni)
-      if (slot === 'front') setFront(d.url)
-      else setBack(d.url)
+      // DNI: se achica menos (2600 px de lado) para que la IA lea bien los datos
+      const r = await subirImagen(file, 'dni')
+      if (!r.ok) { toast.error(`${slot === 'front' ? 'Frente' : 'Dorso'}: ${r.error}`); return }
+      // r.url = "dni-docs/<userId>/dni/<archivo>" (path privado que espera POST /api/verification/dni)
+      if (slot === 'front') setFront(r.url)
+      else setBack(r.url)
       toast.success(slot === 'front' ? 'Frente listo' : 'Dorso listo')
     } finally { setUploading(false) }
   }

@@ -1,23 +1,16 @@
 // Seeder del Catálogo Maestro HomIA — optimizado para Supabase remoto
 // Usa $transaction con batch para minimizar roundtrips
 import { PrismaClient } from '@prisma/client'
-import { CATALOG_MAESTRO } from './catalog-maestro.mjs'
-import { CATALOG_EXPANSION } from './catalog-expansion.mjs'
-import { CATALOG_EXP2_A } from './catalog-exp2-a.mjs'
-import { CATALOG_EXP2_B } from './catalog-exp2-b.mjs'
-import { CATALOG_EXP2_C } from './catalog-exp2-c.mjs'
-import { CATALOG_EXP2_D } from './catalog-exp2-d.mjs'
+import { catalogSources } from './fuentes.mjs'
 
 const db = new PrismaClient()
 
 async function main() {
   console.log('🌱 Catálogo maestro HomIA — iniciando (modo batch)…')
 
-  // Normaliza todas las fuentes
-  const expansion = Object.entries(CATALOG_EXPANSION).map(([slug, items]) => ({ slug, items }))
-  const exp2 = [CATALOG_EXP2_A, CATALOG_EXP2_B, CATALOG_EXP2_C, CATALOG_EXP2_D]
-    .flatMap((m) => Object.entries(m).map(([slug, items]) => ({ slug, items })))
-  const sources = [...CATALOG_MAESTRO, ...expansion, ...exp2]
+  // Todas las fuentes (maestro + expansiones), igual que seed-catalog-maestro.mjs.
+  // Sin categorías nuevas: esas altas van a su categoría de respaldo.
+  const sources = catalogSources()
 
   // Paso 1: Upsert categorías (son pocas, ~20)
   let order = await db.category.count()

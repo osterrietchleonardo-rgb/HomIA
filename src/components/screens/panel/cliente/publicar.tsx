@@ -7,6 +7,7 @@ import { useLocation } from '@/lib/store'
 import { apiFetch } from '@/lib/api-client'
 import { useCategories, categoryIcon } from '@/lib/categories'
 import { CloudUpload, X, Megaphone, MapPin, PenLine, AlarmClock, Camera } from 'lucide-react'
+import { subirImagen } from '@/lib/upload-image'
 
 const URGENCIES = [
   { value: 'baja', label: 'Tranquilo', dot: 'bg-slate-400' },
@@ -39,12 +40,9 @@ export default function PublishJob() {
     setUploading(true)
     try {
       for (const file of list) {
-        const fd = new FormData()
-        fd.append('file', file)
-        fd.append('folder', 'trabajos')
-        const r = await apiFetch<{ url: string }>('/api/uploads', { method: 'POST', body: fd, silent: true })
-        if (r.ok && r.data?.url) setPhotos((p) => [...p, r.data!.url])
-        else toast.error(`No se pudo subir ${file.name}${r.error ? `: ${r.error}` : ''}`)
+        const r = await subirImagen(file, 'trabajos')
+        if (r.ok) setPhotos((p) => [...p, r.url])
+        else toast.error(`${file.name}: ${r.error}`)
       }
     } finally { setUploading(false) }
   }

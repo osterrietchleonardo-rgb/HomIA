@@ -570,6 +570,30 @@ GET privados de N.
   `e2e-integral.mjs` (`flowARecuperarYMails`, con `--mail-sink <puerto>` levanta un doble de Resend);
   visual `scratch/visual-recuperar.mjs` (73/73, capturas en `scratch/e2e-recuperar/`).
 
+### 4.11 Subida de fotos y catálogo ampliado (25/09/2026)
+
+- **Fotos:** `src/lib/upload-image.ts` (cliente). `prepararImagen()` decodifica con `createImageBitmap`
+  (`imageOrientation: 'from-image'`, respaldo `<img>`), deja igual lo que ya es JPG/PNG/WEBP de ≤ 3,5 MB
+  y ≤ 2000 px (2600 para `folder=dni`), y si no, redimensiona en canvas y codifica JPEG 0,85→0,65 (fondo
+  blanco) o WEBP si el original tenía transparencia (respaldo JPEG si el navegador no codifica WEBP),
+  achicando 20% por vuelta hasta entrar. `subirImagen(file, folder, opts)` sube a `/api/uploads` y
+  traduce la respuesta: 401 → sesión, 413 (Vercel, HTML) → peso, 429, mensaje del servidor, 5xx, red.
+  **Causa del reporte de Leonardo** ("no se pudo subir la foto" en el perfil): Vercel rechaza cuerpos
+  > 4,5 MB con 413 HTML antes de llegar a la función y `AvatarUploader` tiraba un mensaje genérico (y
+  el mismo mensaje si fallaba guardar el perfil). Usan `subirImagen`: foto de perfil (`ui-bits.tsx`,
+  1024 px), logo (`proveedor/perfil.tsx`, 1200 px), foto de material, obras, publicar trabajo,
+  Contratar, reseñas, sobrantes, DNI, sugerencias y finanzas. Verificado en Chrome real
+  (`scratch/upload-image.iife.js` + Playwright): 11,6 MB → 1,43 MB 2000×1500; PNG transparente 11 MB →
+  WEBP 2,66 MB; HEIC ilegible, texto y vacío con su mensaje; 413/401/400/500/sin red/éxito.
+- **Catálogo:** expansión 3 cargada en producción con `seed-catalog-maestro.mjs` (reescrito: una
+  lectura, escritura en lotes, `--dry-run`, `--categorias-nuevas`; idempotente, no toca
+  `ProviderStock`): 546 nuevos, 0 actualizados → 1764. Fuentes en `scripts/catalogo/fuentes.mjs`.
+  `canonicalCategoria` (`search-match.ts`) ahora busca alias como palabra completa y el más largo
+  primero ("control de plagas" ya no cae en `gasistas` por "gas") y suma rubros (fumigador,
+  refrigeración, electrodomésticos, cerrajería, pileta, alarmas…). `catalogScore()` pondera nombre y
+  aliases sobre la descripción en los buscadores del catálogo (stock del proveedor y materiales del
+  proyecto): "cemento" trae primero los cementos.
+
 ## 5. Migraciones y la base única
 
 - **Una sola base = producción.** El `.env` local, los Preview y Producción de Vercel apuntan al

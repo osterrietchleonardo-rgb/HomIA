@@ -89,6 +89,11 @@
   lateral), el botón flotante de Homy se oculta para no tapar los botones de esa ventana, y vuelve al
   cerrarla.
 
+- **Fotos (en toda la app):** podés subir fotos de cualquier tamaño y peso, también las de la
+  cámara del celu: HomIA las achica solas antes de subirlas, sin que se note. Si algo falla, te dice
+  exactamente qué pasó (sin conexión, sesión vencida, formato que tu navegador no puede abrir —como
+  HEIC del iPhone en una computadora— o imagen dañada) y qué hacer.
+
 ## 1. Visitante (sin cuenta)
 
 ### 1.1 Portada (home)

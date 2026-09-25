@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Star, ImagePlus, X, BadgeCheck } from 'lucide-react'
+import { subirImagen } from '@/lib/upload-image'
 
 type Props = {
   targetUserId: string
@@ -28,12 +29,9 @@ export default function ReviewForm({ targetUserId, targetName, targetLabel = '',
   async function uploadPhoto(file: File) {
     setUploading(true)
     try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await fetch('/api/uploads', { method: 'POST', body: fd })
-      if (!res.ok) { toast.error('No se pudo subir la foto'); return }
-      const url = (await res.json()).url as string
-      if (url) setPhotos((prev) => [...prev, url].slice(0, 4))
+      const r = await subirImagen(file, 'reviews')
+      if (!r.ok) { toast.error(`${file.name}: ${r.error}`); return }
+      setPhotos((prev) => [...prev, r.url].slice(0, 4))
     } finally { setUploading(false) }
   }
 
