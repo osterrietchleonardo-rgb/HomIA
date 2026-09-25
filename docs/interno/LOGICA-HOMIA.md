@@ -704,6 +704,9 @@ Reglas:
 - Catálogo maestro: 20 categorías y el catálogo de elementos; alta de elementos nuevos solo por
   proveedores, con anti-duplicado difuso (nombre o alias igual o contenido, sin acentos) y texto de
   IA (`catalog/route.ts:61-143`).
+- En el buscador del catálogo (stock y materiales del proyecto) una medida de la búsqueda que
+  aparece entera en el nombre o los aliases sube el elemento: "mdf 18" trae primero el MDF de 18 mm
+  (`catalogScore`, `search-match.ts`).
 
 ---
 

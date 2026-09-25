@@ -26,6 +26,12 @@
 
 ---
 
+## 2026-09-25 — Catálogo: expansión 4 de maderera y carpintería cargada, 1902 elementos (Leonardo)
+
+**El pedido:** "revisa si en el catalogo de materiales, de los mil setecientos, esta los materiales/items necesarios que una maderera vende, y lo que un profesional que trabaja con madera (para hacer muebles, etc.). agregalos en el caso que encuentres." **Lo hecho:** revisados los 1764 contra lo que vende una maderera y usa un mueblero; 138 altas en `scripts/catalogo/catalog-exp4-madera.mjs` (maderera 55, carpinteria 39, herramientas 33, pintura 11), sumadas a `fuentes.mjs`; `--dry-run --categorias-nuevas` = 138 nuevos, 0 actualizados, 0 movidos → 1902. `catalogScore` suma las medidas ("mdf 18" trae primero el de 18 mm) y `canonicalCategoria` suma mueblero, ebanista, aserradero (TÉCNICO §4.11). **Pendiente:** la carga real en producción (el permiso del agente la frenó): `node --env-file=.env scripts/catalogo/seed-catalog-maestro.mjs --categorias-nuevas`. **Ojo:** sin `--categorias-nuevas` el seeder duplica los 72 elementos de electrodomesticos y plagas en electricistas y limpieza (el dry-run sin la bandera da 210 nuevos).
+
+**Carga (OK de Leonardo: "ok"):** 138 nuevos, 0 actualizados, 0 movidos → 1902; stock 46 filas / 5299 unidades antes y después; segundo dry-run 0 nuevos. Seeder arreglado: electrodomesticos y plagas por defecto (sin eso duplicaba 72).
+
 ## 2026-09-25 — Vuelve el eslogan "Tu hogar, en buenas manos" y el proveedor edita su celular (Leonardo)
 
 **El pedido:** "el titulo tien que ser el que estaba, porque es como nuestro slogan" y "como que el proveedor no tiene campo de celular en su perfil? si en el registro lo pone". **Lo hecho:** titular de la home, título de la pestaña, Open Graph y tarjeta para compartir vuelven a "Tu hogar, en buenas manos" (el resto del texto nuevo de D31 queda); Mi perfil del proveedor suma "País del celular" + "Celular de contacto" con el mismo selector y aviso "Se guardará como…" que cliente y profesional (`PUT /api/profiles/me` con `phone` + `phoneCountry`). Visual 390/1280 sin desbordes con la cuenta demo (solo mirar).

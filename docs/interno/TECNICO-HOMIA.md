@@ -656,6 +656,28 @@ GET privados de N.
   refrigeración, electrodomésticos, cerrajería, pileta, alarmas…). `catalogScore()` pondera nombre y
   aliases sobre la descripción en los buscadores del catálogo (stock del proveedor y materiales del
   proyecto): "cemento" trae primero los cementos.
+- **Expansión 4, maderera y carpintería (25/09/2026, pedido de Leonardo):** 138 altas en
+  `scripts/catalogo/catalog-exp4-madera.mjs` (sumado a `fuentes.mjs`): maderera 55 (pino bruto y
+  cepillado 1x2 a 1x10, tirantes 2x3/3x3, eucalipto, maderas por especie —álamo, kiri, guatambú,
+  paraíso, lenga, roble, incienso, anchico, viraró, pino Paraná—, MDF 12/15/25, MDF melamínico,
+  melamina 15 y maderada, aglomerado crudo, fenólico 9/12/15, terciado y multilaminado, OSB 9,
+  enchapados, alistonados, laminado plástico, chapa natural, molduras, torneados, anticarcoma),
+  carpinteria 39 (tapacantos PVC/ABS/preencolado/madera, bisagras codo y supercodo, correderas,
+  minifix, tornillos, clavos sin cabeza, placard, estantes, colas D3/PU/termofusible), herramientas 33
+  (discos, ingletadora, sierra de banco, mechas Forstner/paleta, router y fresas, sargentos, prensas,
+  engrapadora, clavadora brad) y pintura 11 (lacas, sellador nitro, thinner, tinta al agua, aceite de
+  lino, fondo blanco, barniz marino de exterior, lijas). Chequeo anti-duplicado contra los 1764 con
+  la normalización de `search-match.ts` (nombre igual, alias repetido, similitud de nombre ≥ 0,5:
+  solo quedaron variantes de medida). `--dry-run --categorias-nuevas`: 138 nuevos, 0 actualizados,
+  0 movidos → 1902. **Cargada en producción el 25/09/2026** (OK de Leonardo): 1902 elementos, stock 46
+  filas y 5299 unidades antes y después; un segundo `--dry-run` da 0 nuevos. **Arreglo del seeder:**
+  `catalogSources()` usaba por defecto la categoría de respaldo de electrodomesticos y plagas y, como
+  ya se habían movido, sin `--categorias-nuevas` los creaba de nuevo (210 "nuevos"); ahora esas
+  categorías son el comportamiento por defecto (la opción queda sin efecto).
+  `catalogScore` suma 5 por cada medida de la búsqueda que aparece entera en nombre o aliases ("18"
+  pega con "18mm", no con "1,83"): `matchScore` ignora tokens de menos de 3 caracteres y "mdf 18"
+  empataba todos los MDF. `CATEGORIA_ALIASES` suma aserradero → maderera y mueblero, ebanista,
+  ebanistería, carpintero de muebles, lustrador de muebles → carpinteria.
 - **Categorías nuevas (OK de Leonardo, 25/09/2026):** `electrodomesticos` (ícono `washing-machine`) y
   `plagas` (`bug`). Primero se publicó el código (`src/lib/categories.ts` íconos y lista de respaldo,
   pestañas "Electro" y "Plagas" en materiales y buscador, oficios del profesional, alias de

@@ -59,7 +59,15 @@ export function catalogScore(query: string, e: { name: string; aliases?: string[
   const enNombre = matchScore(query, [e.name, ...(e.aliases || [])].join(' '))
   const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
   const empieza = norm(e.name).startsWith(norm(query).split(/\s+/)[0] || '#') ? 1 : 0
-  return todo * 10 + enNombre * 6 + empieza * 3
+  // Las medidas cortas ("mdf 18", "fenólico 9") no llegan a 3 letras y matchScore las ignora: si el
+  // número aparece en el nombre o los aliases como medida entera, suma ("18" pega con "18mm" o
+  // "18 mm", no con "1,83" ni con "180"). Así "mdf 18" trae primero el MDF de 18 mm.
+  const nombreYAlias = norm([e.name, ...(e.aliases || [])].join(' '))
+  const medidas = norm(query).match(/\d+(?:[.,]\d+)?/g) || []
+  const medida = medidas.filter((m) =>
+    new RegExp(`(^|[^0-9.,])${m.replace(/[.,]/g, '[.,]')}(?![0-9]|[.,][0-9])`).test(nombreYAlias),
+  ).length
+  return todo * 10 + enNombre * 6 + empieza * 3 + medida * 5
 }
 
 /**
@@ -111,7 +119,10 @@ const CATEGORIA_ALIASES: Record<string, string> = {
   durlock: 'durlock', 'chapa seca': 'durlock', yeso: 'durlock',
   pintor: 'pintura', pintores: 'pintura', pintura: 'pintura', pintureria: 'pintura', 'pinturería': 'pintura',
   carpintero: 'carpinteria', carpinteros: 'carpinteria', carpinteria: 'carpinteria', 'carpintería': 'carpinteria',
-  maderera: 'maderera', madera: 'maderera',
+  maderera: 'maderera', madera: 'maderera', aserradero: 'maderera', 'corralón de maderas': 'maderera',
+  // Expansión 4 del catálogo (25/09/2026): oficios de la madera que se buscan con otro nombre.
+  mueblero: 'carpinteria', muebleros: 'carpinteria', ebanista: 'carpinteria', ebanistas: 'carpinteria',
+  ebanisteria: 'carpinteria', 'ebanistería': 'carpinteria', 'carpintero de muebles': 'carpinteria', 'lustrador de muebles': 'carpinteria',
   herrero: 'herreria', herreria: 'herreria', 'herrería': 'herreria',
   ferreteria: 'herreria', 'ferretería': 'herreria', ferretero: 'herreria',
   herramientas: 'herramientas', herramienta: 'herramientas',

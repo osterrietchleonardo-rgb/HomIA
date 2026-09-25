@@ -10,14 +10,13 @@
 //       → simula: lee la base y muestra qué crearía/actualizaría, SIN escribir.
 //   node --env-file=.env scripts/catalogo/seed-catalog-maestro.mjs
 //       → carga de verdad (necesita OK del dueño).
-//   --categorias-nuevas → crea 'electrodomesticos' y 'plagas' y pone ahí sus
-//       elementos (si ya estaban en la categoría de respaldo, los mueve). Antes
-//       hay que aplicar el cambio de UI (ícono, pestañas, alias de Homy).
+//   'electrodomesticos' y 'plagas' se usan SIEMPRE (existen desde el 25/09/2026, D28); la opción
+//   --categorias-nuevas queda solo por compatibilidad y no cambia nada.
 import { PrismaClient } from '@prisma/client'
 import { catalogSources } from './fuentes.mjs'
 
 const DRY = process.argv.includes('--dry-run')
-const CATEGORIAS_NUEVAS = process.argv.includes('--categorias-nuevas')
+const CATEGORIAS_NUEVAS = true // D28: ya existen; con false se duplicarían 72 elementos
 const db = new PrismaClient()
 
 async function main() {

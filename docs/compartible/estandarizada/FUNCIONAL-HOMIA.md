@@ -1367,7 +1367,10 @@ Arriba de todo se ve el estado del plan:
 
 1. En **Stock**, tocá **Publicar elemento**.
 2. Buscá el material en el catálogo. Con 2 letras ya aparecen resultados, y encuentra aunque lo
-   escribas sin acento o con otro nombre.
+   escribas sin acento o con otro nombre. Si ponés la medida ("mdf 18", "fenólico 12"), aparece
+   primero la de esa medida. Una maderera encuentra maderas por especie, tableros, tapacantos,
+   herrajes de mueble y herramientas de carpintería (138 productos sumados el 25/09/2026: el
+   catálogo tiene 1.902).
 3. **Si no está en el catálogo:** tocá **"Agregar «X» al catálogo con IA"**.
    1. Poné el nombre técnico, la categoría y la unidad de venta.
    2. La IA escribe la explicación y los otros nombres con que lo busca la gente.
