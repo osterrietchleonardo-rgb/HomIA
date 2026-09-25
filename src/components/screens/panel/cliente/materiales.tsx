@@ -48,7 +48,8 @@ const CATEGORY_TABS = [
   { slug: 'aislacion', name: 'Aislación' }, { slug: 'iluminacion', name: 'Iluminación' },
   { slug: 'climatizacion', name: 'Clima' }, { slug: 'jardineria', name: 'Jardín' },
   { slug: 'limpieza', name: 'Limpieza' }, { slug: 'muebles', name: 'Muebles' },
-  { slug: 'seguridad', name: 'Seguridad' },
+  { slug: 'seguridad', name: 'Seguridad' }, { slug: 'electrodomesticos', name: 'Electro' },
+  { slug: 'plagas', name: 'Plagas' },
 ]
 
 type Tab = 'buscar' | 'compras' | 'comparables'

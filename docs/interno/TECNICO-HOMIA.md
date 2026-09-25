@@ -593,6 +593,13 @@ GET privados de N.
   refrigeración, electrodomésticos, cerrajería, pileta, alarmas…). `catalogScore()` pondera nombre y
   aliases sobre la descripción en los buscadores del catálogo (stock del proveedor y materiales del
   proyecto): "cemento" trae primero los cementos.
+- **Categorías nuevas (OK de Leonardo, 25/09/2026):** `electrodomesticos` (ícono `washing-machine`) y
+  `plagas` (`bug`). Primero se publicó el código (`src/lib/categories.ts` íconos y lista de respaldo,
+  pestañas "Electro" y "Plagas" en materiales y buscador, oficios del profesional, alias de
+  `search-match.ts`), después `seed-catalog-maestro.mjs --categorias-nuevas` movió los 72 elementos
+  (39 y 33) desde `electricistas` y `limpieza` cambiando la categoría del mismo elemento: el stock de
+  los proveedores no se toca. Como las categorías también son rubros, aparecen solas en publicar,
+  bolsa, obras y directorio.
 
 ## 5. Migraciones y la base única
 

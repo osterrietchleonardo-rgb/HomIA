@@ -22,6 +22,8 @@ const CATEGORIES = [
   { slug: 'climatizacion', name: 'Climatización' },
   { slug: 'techos', name: 'Techos' },
   { slug: 'cerramientos', name: 'Cerramientos' },
+  { slug: 'electrodomesticos', name: 'Electrodomésticos' },
+  { slug: 'plagas', name: 'Control de plagas' },
 ]
 
 export default function ProProfile() {

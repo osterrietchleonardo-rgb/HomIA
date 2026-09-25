@@ -89,6 +89,9 @@
   lateral), el botón flotante de Homy se oculta para no tapar los botones de esa ventana, y vuelve al
   cerrarla.
 
+- **Categorías nuevas (25/09/2026):** "Electrodomésticos · Repuestos" y "Control de plagas", con su
+  pestaña en Materiales y en el buscador, y como oficios para profesionales (técnico en
+  electrodomésticos, fumigador).
 - **Fotos (en toda la app):** podés subir fotos de cualquier tamaño y peso, también las de la
   cámara del celu: HomIA las achica solas antes de subirlas, sin que se note. Si algo falla, te dice
   exactamente qué pasó (sin conexión, sesión vencida, formato que tu navegador no puede abrir —como

@@ -121,7 +121,7 @@ Convenciones de UI (no inventar otras):
 
 - **Identidad**: `User` (roles JSON; todo registro por pantalla recibe `cliente`; `emailNotifications` para los avisos por mail), `IdentityDocument` (DNI + análisis IA, estado verificación), `OAuthState` (PKCE), `PasswordReset` (recuperar contraseña, hash del token)
 - **Perfiles**: `ProfessionalProfile` (con OAuth MP propio), `ProviderProfile` (multi-tipo, plan/suscripción, trial, marca PRO, OAuth MP)
-- **Catálogo**: `Category` (20), `CatalogElement` (1764 elementos con nombre canónico + aliases + descripción + unidad de venta), `ProviderStock`, `StockMovement`, `StockReservation` (sin uso: la reserva descuenta `quantity`)
+- **Catálogo**: `Category` (22), `CatalogElement` (1764 elementos con nombre canónico + aliases + descripción + unidad de venta), `ProviderStock`, `StockMovement`, `StockReservation` (sin uso: la reserva descuenta `quantity`)
 - **Trabajo**: `JobPost`, `JobBid`, `Project`, `ProjectMaterial`, `Invoice` (+`serviceFee`), `InvoiceItem`, `Payment` (+`collector`), `ProviderCharge` (+`serviceFee`), `ProviderLink`, `CompletedWork`
 - **Carrito y pedidos**: `CartItem` (carrito de cuenta), `Order` (`PED-AAAA-NNNNNN`), `Purchase` (sub-pedido de un proveedor y un tipo `compra`|`reserva`, +`orderId`, `serviceFee`, `availableFrom` para reservas sin stock), `PurchaseItem`, `ActivityEvent` (línea de tiempo)
 - **Reputación**: `Review` (estrellas + comentario + foto; proyecto→profesional, proyecto→proveedor, profesional→cliente, compra→proveedor)
@@ -177,7 +177,7 @@ Notas de esquema: la base es Postgres, pero se mantienen las convenciones hereda
 
 ## 8. Catálogo de elementos
 
-- 1764 elementos (1218 + 546 de la expansión 3 del 25/09/2026: techos, refuerzo y humedad, plomería y termotanques, gas y calefacción, redes/TV/CCTV, refrigeración, repuestos de electrodomésticos, cerrajería y aberturas, jardín y piscina, control de plagas, acabados, limpieza especializada), 20 categorías (propuestas sin aplicar: `electrodomesticos` y `plagas`, hoy en `electricistas` y `limpieza`; diff en `scratch/catalogo-exp3/categorias-nuevas.diff`), 100% con descripción natural (español rioplatense) + aliases + unidad de venta.
+- 1764 elementos (1218 + 546 de la expansión 3 del 25/09/2026: techos, refuerzo y humedad, plomería y termotanques, gas y calefacción, redes/TV/CCTV, refrigeración, repuestos de electrodomésticos, cerrajería y aberturas, jardín y piscina, control de plagas, acabados, limpieza especializada), 22 categorías (`electrodomesticos` y `plagas` creadas el 25/09/2026 con OK de Leonardo: también son rubros de profesionales), 100% con descripción natural (español rioplatense) + aliases + unidad de venta.
 - Seeder **idempotente**: `node scripts/catalogo/seed-catalog-maestro.mjs` (upsert por nombre+categoría; NO rompe ProviderStock existente). Los datos viven en `scripts/catalogo/catalog-maestro.mjs`, `catalog-expansion.mjs`, `catalog-exp2-{a,b,c,d}.mjs`. **Escribe en producción** (base única): pedir OK.
 - Datos demo completos (3 usuarios demo, stock, proyectos, reseñas): `node scripts/demo/demo-seed.mjs` (+ `demo-seed-lib.mjs`); borra y recrea los datos demo en producción. Credenciales demo: `cliente@homia.test` / `profesional@homia.test` / `proveedor@homia.test`, pass `Homy2026!`.
 - Búsqueda difusa obligatoria: usar `src/lib/search-match.ts` (NFD, lowercase, strip diacríticos, similitud, singular/plural). Nunca `String.includes` pelado. *Deuda conocida:* `/directory`, `/jobs` (GET) y `/search/pins` todavía usan `includes`.

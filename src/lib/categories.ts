@@ -1,18 +1,18 @@
 'use client'
 // Categorías (rubros) de HomIA — fuente única para bolsa, publicar y obras.
-// Se leen de `GET /api/directory` (→ `categories`, 20 rubros de la DB, mismas
+// Se leen de `GET /api/directory` (→ `categories`, 22 rubros de la DB, mismas
 // que el catálogo maestro). Si la red falla se usa la lista espejo de
 // scripts/catalogo/catalog-maestro.mjs para que los formularios nunca queden vacíos.
 import { useEffect, useState } from 'react'
 import {
   BrickWall, PanelsTopLeft, Droplets, Flame, Zap, Lightbulb, PaintRoller, Wrench, Hammer,
   TreePine, Ruler, House, DoorOpen, LayoutGrid, Layers, AirVent, Leaf, SprayCan, Armchair,
-  ShieldCheck, type LucideIcon,
+  ShieldCheck, WashingMachine, Bug, type LucideIcon,
 } from 'lucide-react'
 
 export type Category = { slug: string; name: string; icon: string }
 
-/** Espejo de las 20 categorías de scripts/catalogo/catalog-maestro.mjs (fallback offline). */
+/** Espejo de las 22 categorías de scripts/catalogo (maestro + expansión 3) (fallback offline). */
 export const CATEGORIES_FALLBACK: Category[] = [
   { slug: 'albanileria', name: 'Corralón · Albañilería', icon: 'brick-wall' },
   { slug: 'durlock', name: 'Durlock · Chapa seca', icon: 'panels-top-left' },
@@ -34,6 +34,8 @@ export const CATEGORIES_FALLBACK: Category[] = [
   { slug: 'limpieza', name: 'Limpieza · Mantenimiento', icon: 'spray-can' },
   { slug: 'muebles', name: 'Muebles · Equipamiento', icon: 'armchair' },
   { slug: 'seguridad', name: 'Seguridad · Protección', icon: 'shield-check' },
+  { slug: 'electrodomesticos', name: 'Electrodomésticos · Repuestos', icon: 'washing-machine' },
+  { slug: 'plagas', name: 'Control de plagas', icon: 'bug' },
 ]
 
 const ICONS: Record<string, LucideIcon> = {
@@ -41,6 +43,7 @@ const ICONS: Record<string, LucideIcon> = {
   lightbulb: Lightbulb, 'paint-roller': PaintRoller, wrench: Wrench, hammer: Hammer, 'tree-pine': TreePine,
   ruler: Ruler, house: House, 'door-open': DoorOpen, 'layout-grid': LayoutGrid, layers: Layers,
   'air-vent': AirVent, leaf: Leaf, 'spray-can': SprayCan, armchair: Armchair, 'shield-check': ShieldCheck,
+  'washing-machine': WashingMachine, bug: Bug,
 }
 
 export function categoryIcon(icon: string | undefined): LucideIcon {

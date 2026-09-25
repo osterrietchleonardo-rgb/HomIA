@@ -125,11 +125,11 @@ const CATEGORIA_ALIASES: Record<string, string> = {
   iluminacion: 'iluminacion', 'iluminación': 'iluminacion', luminarias: 'iluminacion',
   muebles: 'muebles', muebleria: 'muebles', 'mueblería': 'muebles', equipamiento: 'muebles',
   seguridad: 'seguridad', 'elementos de seguridad': 'seguridad',
-  // Rubros sumados con la expansión 3 del catálogo (25/09/2026). Plagas y repuestos de
-  // electrodomésticos viven hoy en limpieza y electricistas (no hay categoría propia).
-  fumigador: 'limpieza', fumigadores: 'limpieza', fumigacion: 'limpieza', 'fumigación': 'limpieza', plagas: 'limpieza', 'control de plagas': 'limpieza', desinsectador: 'limpieza', desratizacion: 'limpieza',
+  // Rubros sumados con la expansión 3 del catálogo (25/09/2026), con categorías propias para
+  // plagas y repuestos de electrodomésticos (aprobadas por Leonardo el 25/09/2026).
+  fumigador: 'plagas', fumigadores: 'plagas', fumigacion: 'plagas', 'fumigación': 'plagas', plagas: 'plagas', 'control de plagas': 'plagas', desinsectador: 'plagas', desratizacion: 'plagas', desratizador: 'plagas', 'desinsectación': 'plagas',
   alfombras: 'limpieza', tapizados: 'limpieza', 'limpieza de alfombras': 'limpieza',
-  electrodomesticos: 'electricistas', 'electrodomésticos': 'electricistas', 'tecnico en electrodomesticos': 'electricistas', 'técnico en electrodomésticos': 'electricistas', lavarropas: 'electricistas',
+  electrodomesticos: 'electrodomesticos', 'electrodomésticos': 'electrodomesticos', electrodomestico: 'electrodomesticos', 'tecnico en electrodomesticos': 'electrodomesticos', 'técnico en electrodomésticos': 'electrodomesticos', lavarropas: 'electrodomesticos', 'service de lavarropas': 'electrodomesticos',
   refrigeracion: 'climatizacion', 'refrigeración': 'climatizacion', 'tecnico en refrigeracion': 'climatizacion', 'técnico en refrigeración': 'climatizacion', refrigerista: 'climatizacion', heladera: 'climatizacion',
   cerrajeria: 'cerramientos', 'cerrajería': 'cerramientos', vidrieria: 'cerramientos', 'vidriería': 'cerramientos', vidriero: 'cerramientos',
   techador: 'techos', impermeabilizacion: 'techos', 'impermeabilización': 'techos',
