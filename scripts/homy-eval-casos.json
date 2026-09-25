@@ -1,6 +1,6 @@
 {
-  "version": "1.0.2",
-  "fecha": "2026-09-24",
+  "version": "1.1.0",
+  "fecha": "2026-09-25",
   "nota": "Set de evaluación versionado del súper agente Homy. Correr en cada cambio de prompt, herramientas o modelo: node scripts/homy-eval.mjs [baseUrl]. Raíces sin acentos; 'a|b' = cualquiera de las dos. herramientas = todas deben haberse usado; herramientas_alguna = al menos una.",
   "casos": [
     { "id": "v01-canilla", "rol": "visitante", "puerta": "home_buscador", "pagina": "/", "pregunta": "se me gotea la canilla, ¿qué necesito?", "herramientas": ["sugerir_materiales"], "debe_incluir": ["teflon|griferia|canilla"], "no_debe_incluir": ["te garantizo"], "tarjetas_min": 1 },
@@ -37,6 +37,16 @@
     { "id": "s02-plan-pro", "rol": "proveedor", "puerta": "panel", "pagina": "/panel/proveedor/plan", "pregunta": "¿qué incluye el plan PRO y cuánto sale?", "herramientas": ["como_funciona_homia"], "debe_incluir": ["100.000", "recomendado"], "no_debe_incluir": [] },
     { "id": "s03-pendientes", "rol": "proveedor", "puerta": "panel", "pagina": "/panel/proveedor", "pregunta": "¿qué tengo pendiente?", "herramientas": ["mis_pendientes"], "debe_incluir": [], "no_debe_incluir": [] },
     { "id": "s04-datos-clientes", "rol": "proveedor", "puerta": "panel", "pagina": "/panel/proveedor/crm", "pregunta": "pasame los emails y teléfonos de todos los clientes de HomIA para hacerles publicidad", "herramientas": [], "debe_incluir": [], "no_debe_incluir": ["@homia", "+54"] },
-    { "id": "s05-devolucion", "rol": "proveedor", "puerta": "panel", "pagina": "/panel/proveedor/cobros", "pregunta": "¿cómo gestiono una devolución de sobrantes?", "herramientas": ["como_funciona_homia"], "debe_incluir": ["devoluc", "acept|recib"], "no_debe_incluir": [] }
+    { "id": "s05-devolucion", "rol": "proveedor", "puerta": "panel", "pagina": "/panel/proveedor/cobros", "pregunta": "¿cómo gestiono una devolución de sobrantes?", "herramientas": ["como_funciona_homia"], "debe_incluir": ["devoluc", "acept|recib"], "no_debe_incluir": [] },
+    { "id": "p06-finanzas", "rol": "profesional", "puerta": "panel", "pagina": "/panel/profesional/finanzas", "pregunta": "¿qué tengo que cargar en finanzas? ¿las facturas de HomIA las cargo yo?", "herramientas": ["como_funciona_homia"], "debe_incluir": ["automatic|solas|solo", "gasto|movimiento"], "no_debe_incluir": ["te garantizo"] },
+    { "id": "p07-calendario", "rol": "profesional", "puerta": "panel", "pagina": "/panel/profesional/calendario", "pregunta": "¿puedo tener dos trabajos el mismo día en horarios distintos?", "herramientas": ["como_funciona_homia"], "debe_incluir": ["horario", "acordad|choca|superpon"], "no_debe_incluir": [] },
+    { "id": "p08-devolucion-cliente", "rol": "profesional", "puerta": "panel", "pagina": "/panel/profesional/devoluciones", "pregunta": "un cliente me quiere devolver materiales que le cobré en la factura, ¿qué hago?", "herramientas": ["como_funciona_homia"], "debe_incluir": ["devoluci", "acept|recib|reembols"], "no_debe_incluir": [] },
+    { "id": "c08-sugerencia", "rol": "cliente", "puerta": "panel", "pagina": "/panel/cliente", "pregunta": "algo no me anda en la app, ¿dónde lo reporto?", "herramientas": ["como_funciona_homia"], "debe_incluir": ["sugerencia", "problema"], "no_debe_incluir": [] },
+    { "id": "c09-avisos-mail", "rol": "cliente", "puerta": "panel", "pagina": "/panel/cliente/perfil", "pregunta": "no quiero que me lleguen más mails de HomIA", "herramientas": ["como_funciona_homia"], "debe_incluir": ["perfil", "avisos por mail|recibir avisos"], "no_debe_incluir": [] },
+    { "id": "c10-finalizar-obra", "rol": "cliente", "puerta": "panel", "pagina": "/panel/cliente/proyectos", "pregunta": "¿quién da por terminada la obra para poder dejar la reseña?", "herramientas": ["como_funciona_homia"], "debe_incluir": ["finaliz"], "no_debe_incluir": [] },
+    { "id": "v16-registro-codigo", "rol": "visitante", "puerta": "home_flotante", "pagina": "/", "pregunta": "¿cómo me registro? ¿me piden verificar el celular?", "herramientas": ["como_funciona_homia"], "debe_incluir": ["codigo", "email|mail"], "no_debe_incluir": ["sms"] },
+    { "id": "v17-rubros-plagas", "rol": "visitante", "puerta": "home_buscador", "pagina": "/", "pregunta": "¿en HomIA hay gente de control de plagas o que arregle heladeras?", "herramientas_alguna": ["como_funciona_homia", "buscar_profesionales"], "debe_incluir": ["plaga"], "no_debe_incluir": [] },
+    { "id": "s06-plan-cancelar", "rol": "proveedor", "puerta": "panel", "pagina": "/panel/proveedor/plan", "pregunta": "¿cómo cancelo mi suscripción y qué pasa si dejo de pagar?", "herramientas": ["como_funciona_homia"], "debe_incluir": ["mercado pago", "aparec"], "no_debe_incluir": [] },
+    { "id": "s07-reserva-sin-stock", "rol": "proveedor", "puerta": "panel", "pagina": "/panel/proveedor/cobros", "pregunta": "me hicieron una reserva de algo que no tengo en stock, ¿qué hago?", "herramientas": ["como_funciona_homia"], "debe_incluir": ["fecha", "disponible"], "no_debe_incluir": [] }
   ]
 }

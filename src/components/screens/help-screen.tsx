@@ -8,6 +8,7 @@ import { startTour } from '@/components/help/tour-overlay'
 import { openVideo } from '@/components/help/video-modal'
 import { videosForRole } from '@/lib/videos-content'
 import { type TourRole } from '@/lib/tour-content'
+import { FAQ } from '@/lib/ayuda-faq'
 import {
   LifeBuoy, User, HardHat, Boxes, ShieldCheck, Star, MessageCircle, Wallet,
   Compass, FolderKanban, Megaphone, ClipboardList, FileText, Search, Package,
@@ -31,17 +32,23 @@ const GUIDES: RoleGuide[] = [
     intro: 'Publicás lo que necesitás, comparás presupuestos, contratás y calificás a quienes trabajaron en tu casa.',
     rows: [
       { what: 'Publicar un trabajo (gratis)', where: 'Panel → Publicar trabajo', href: '/panel/cliente/publicar', hrefLabel: 'Publicar' },
-      { what: 'Comparar presupuestos recibidos', where: 'Panel → Mis trabajos → elegí la publicación', href: '/panel/cliente/trabajos', hrefLabel: 'Mis trabajos' },
+      { what: 'Comparar presupuestos recibidos', where: 'Panel → Mis trabajos → elegí la publicación (también la cerrás o la reabrís)', href: '/panel/cliente/trabajos', hrefLabel: 'Mis trabajos' },
       { what: 'Buscar y contactar profesionales', where: 'Directorio (ordenado por reseñas) → botón Contactar o Contratar', href: '/panel/cliente/directorio', hrefLabel: 'Directorio' },
-      { what: 'Contratar paso a paso', where: 'Directorio → botón Contratar en la tarjeta del profesional', href: '/panel/cliente/directorio', hrefLabel: 'Contratar' },
+      { what: 'Contratar paso a paso', where: 'Directorio → Contratar en la tarjeta del profesional (si ya lo publicaste, elegí tu trabajo arriba y se cargan sus datos)', href: '/panel/cliente/directorio', hrefLabel: 'Contratar' },
       { what: 'Aprobar materiales y seguir la obra', where: 'Panel → Proyectos → detalle del proyecto', href: '/panel/cliente/proyectos', hrefLabel: 'Proyectos' },
+      { what: 'Acordar fechas y horario del trabajo', where: 'Detalle del proyecto → Fechas del trabajo: aceptar, proponer otras o rechazar', href: '/panel/cliente/proyectos', hrefLabel: 'Proyectos' },
+      { what: 'Dar la obra por terminada', where: 'Detalle del proyecto → Finalizar obra (solo vos podés)', href: '/panel/cliente/proyectos', hrefLabel: 'Proyectos' },
       { what: 'Pagar una factura (Mercado Pago o efectivo)', where: 'Panel → Facturas → elegí el método al pagar', href: '/panel/cliente/facturas', hrefLabel: 'Facturas' },
       { what: 'Ver y descargar facturas en PDF', where: 'Panel → Facturas → botón PDF', href: '/panel/cliente/facturas', hrefLabel: 'Facturas' },
       { what: 'Dejar una reseña (pro y proveedor)', where: 'Detalle de un proyecto finalizado → sección Reseñas (con fotos)', href: '/panel/cliente/proyectos', hrefLabel: 'Proyectos' },
       { what: 'Pagar materiales al proveedor', where: 'Detalle del proyecto → Pagos a proveedores (cobros de cada proveedor)', href: '/panel/cliente/proyectos', hrefLabel: 'Proyectos' },
-      { what: 'Devolver sobrantes', where: 'Detalle del proyecto → Sobrantes → cargá foto y cantidad; quien te cobró los materiales (el proveedor, o tu profesional si los cobró en su factura) los acepta y se los entregás', href: '/panel/cliente/proyectos', hrefLabel: 'Proyectos' },
+      { what: 'Comprar o reservar materiales (carrito)', where: 'Panel → Materiales → Agregar al carrito o Reservar; el carrito es el ícono de arriba', href: '/panel/cliente/materiales', hrefLabel: 'Materiales' },
+      { what: 'Pagar y seguir tus pedidos', where: 'Panel → Mis pedidos: cada proveedor por separado, con su línea de tiempo; calificás la compra cuando la retirás', href: '/panel/cliente/pedidos', hrefLabel: 'Mis pedidos' },
+      { what: 'Devolver sobrantes', where: 'Detalle del proyecto → Sobrantes (o el pedido en Mis pedidos) → cargá foto y cantidad; quien te cobró los materiales los acepta y se los entregás', href: '/panel/cliente/proyectos', hrefLabel: 'Proyectos' },
       { what: 'Chatear con profesional o proveedor', where: 'Panel → Mensajes (vos siempre iniciás la conversación)', href: '/panel/cliente/mensajes', hrefLabel: 'Mensajes' },
       { what: 'Verificar tu identidad con DNI', where: 'Panel → Verificación (la IA valida tus fotos)', href: '/panel/cliente/verificacion', hrefLabel: 'Verificación' },
+      { what: 'Tus datos, email y celular, avisos por mail o eliminar la cuenta', where: 'Panel → Mi perfil', href: '/panel/cliente/perfil', hrefLabel: 'Mi perfil' },
+      { what: 'Mandar una sugerencia, queja o problema', where: 'Panel → Sugerencias → Nueva sugerencia (con fotos)', href: '/panel/cliente/sugerencias', hrefLabel: 'Sugerencias' },
     ],
     rules: [
       { title: 'Pago al finalizar la obra', body: 'Elegís cómo pagar cada factura: Mercado Pago o efectivo (el profesional confirma cuando cobra). Pagás al finalizar la obra, una vez que das tu conformidad, y el dinero va directo al profesional.' },
@@ -57,18 +64,24 @@ const GUIDES: RoleGuide[] = [
     intro: 'Encontrá trabajos, mandá presupuestos, comprá materiales al mejor precio y cobrá por Mercado Pago o efectivo.',
     rows: [
       { what: 'Buscar trabajos publicados', where: 'Panel → Bolsa de trabajos (filtrá por tu rubro y zona)', href: '/panel/profesional/bolsa', hrefLabel: 'Bolsa' },
-      { what: 'Enviar presupuestos', where: 'Detalle del trabajo → Enviar presupuesto', href: '/panel/profesional/bolsa', hrefLabel: 'Bolsa' },
-      { what: 'Seguir tus proyectos y etapas', where: 'Panel → Proyectos → detalle (materiales, facturas)', href: '/panel/profesional/proyectos', hrefLabel: 'Proyectos' },
+      { what: 'Enviar presupuestos', where: 'Detalle del trabajo → Enviar presupuesto; lo seguís (o lo retirás) en Mis ofertas', href: '/panel/profesional/bolsa', hrefLabel: 'Bolsa' },
+      { what: 'Seguir tus proyectos y etapas', where: 'Panel → Proyectos → detalle (avanzás de etapa hasta Revisión; el cliente la finaliza)', href: '/panel/profesional/proyectos', hrefLabel: 'Proyectos' },
+      { what: 'Proponer fechas y ver tu calendario', where: 'Detalle del proyecto → Fechas del trabajo; Panel → Calendario para el mes, la agenda de cada día y Mi jornada', href: '/panel/profesional/calendario', hrefLabel: 'Calendario' },
       { what: 'Proponer materiales y comparar precios', where: 'Detalle del proyecto → Materiales (comparables entre proveedores)', href: '/panel/profesional/proyectos', hrefLabel: 'Proyectos' },
-      { what: 'Emitir facturas y cobrar', where: 'Detalle del proyecto → Emitir factura (el cliente paga con Mercado Pago o efectivo — confirmás el cobro)', href: '/panel/profesional/proyectos', hrefLabel: 'Proyectos' },
       { what: 'Definir quién paga los materiales', where: 'Detalle del proyecto → tarjeta ¿Quién paga los materiales?', href: '/panel/profesional/proyectos', hrefLabel: 'Proyectos' },
+      { what: 'Emitir la factura', where: 'Detalle del proyecto → Emitir factura', href: '/panel/profesional/proyectos', hrefLabel: 'Proyectos' },
+      { what: 'Cobrar: conectar Mercado Pago y ver tus facturas', where: 'Panel → Cobros: conectás tu Mercado Pago, ves lo cobrado y lo pendiente, descargás PDF y confirmás el efectivo', href: '/panel/profesional/cobros', hrefLabel: 'Cobros' },
       { what: 'Ver tus finanzas (ganancia, caja, balance)', where: 'Panel → Finanzas: tus facturas se cargan solas; sumás gastos, costos, inversiones e ingresos por fuera. Pestaña Aprendé para entender cada número', href: '/panel/profesional/finanzas', hrefLabel: 'Finanzas' },
+      { what: 'Comprar materiales para vos', where: 'Panel → Materiales (carrito) y Mis pedidos', href: '/panel/profesional/materiales', hrefLabel: 'Materiales' },
       { what: 'Devoluciones de sobrantes', where: 'Panel → Devoluciones: las de tus clientes por materiales que cobraste en tu factura (aceptás, recibís y reembolsás) y las que les pedís a tus proveedores desde el proyecto (Sobrantes → Pedir devolución a …)', href: '/panel/profesional/devoluciones', hrefLabel: 'Devoluciones' },
+      { what: 'Subcontratar a otro profesional', where: 'Perfil del otro profesional → Contratar → elegí uno de tus proyectos activos (tu cliente no lo ve)', href: '/panel/profesional/directorio', hrefLabel: 'Directorio' },
       { what: 'Mostrar tus obras (vitrina)', where: 'Panel → Mis obras → cargar fotos del trabajo terminado', href: '/panel/profesional/obras', hrefLabel: 'Mis obras' },
-      { what: 'Gestionar tus clientes (CRM)', where: 'Panel → CRM clientes', href: '/panel/profesional/crm', hrefLabel: 'CRM' },
+      { what: 'Seguir tus oportunidades (CRM)', where: 'Panel → CRM clientes: tablero de tratos por etapa', href: '/panel/profesional/crm', hrefLabel: 'CRM' },
       { what: 'Dejar una reseña al cliente', where: 'Detalle de un proyecto finalizado → formulario de reseña', href: '/panel/profesional/proyectos', hrefLabel: 'Proyectos' },
       { what: 'Responder chats', where: 'Panel → Mensajes (los clientes inician, vos respondés)', href: '/panel/profesional/mensajes', hrefLabel: 'Mensajes' },
-      { what: 'Verificar tu identidad con DNI', where: 'Panel → Verificación — sin verificar quedás como "No verificado" ante todos', href: '/panel/profesional/verificacion', hrefLabel: 'Verificación' },
+      { what: 'Verificar tu identidad con DNI', where: 'Panel → Verificación: sin verificar quedás como "No verificado" ante todos', href: '/panel/profesional/verificacion', hrefLabel: 'Verificación' },
+      { what: 'Tus rubros, zona, datos, avisos por mail o eliminar la cuenta', where: 'Panel → Mi perfil', href: '/panel/profesional/perfil', hrefLabel: 'Mi perfil' },
+      { what: 'Mandar una sugerencia, queja o problema', where: 'Panel → Sugerencias → Nueva sugerencia (con fotos)', href: '/panel/profesional/sugerencias', hrefLabel: 'Sugerencias' },
     ],
     rules: [
       { title: 'Cobrás al finalizar, sin comisión', body: 'Emitís la factura cuando la obra termina y el cliente la paga con Mercado Pago (va directo a tu cuenta) o en efectivo (el acuerdo queda registrado y vos confirmás el cobro cuando lo recibís). HomIA no cobra comisión sobre tus facturas.' },
@@ -81,107 +94,32 @@ const GUIDES: RoleGuide[] = [
     label: 'Soy proveedor',
     icon: Boxes,
     tone: 'homy-chip-ai',
-    intro: 'Publicá tu catálogo, conectá con profesionales que compran materiales y gestioná tu stock y tus tratos.',
+    intro: 'Publicá tu catálogo, vendé con compras y reservas, cobrá directo en tu Mercado Pago o en efectivo y seguí tus números.',
     rows: [
-      { what: 'Publicar materiales y precios', where: 'Panel → Stock → agregar elementos al catálogo', href: '/panel/proveedor/stock', hrefLabel: 'Stock' },
+      { what: 'Publicar materiales y precios', where: 'Panel → Stock → elegí el elemento del catálogo y cargá precio, cantidad, marca y foto (si no está, lo agregás con IA)', href: '/panel/proveedor/stock', hrefLabel: 'Stock' },
       { what: 'Alertas de reposición', where: 'Panel → Inicio (marcados "por agotar" y "agotados")', href: '/panel/proveedor', hrefLabel: 'Inicio' },
-      { what: 'Vincularte con profesionales', where: 'Panel → Vinculaciones → creá el vínculo para que retiren materiales a cuenta de un proyecto', href: '/panel/proveedor/vinculaciones', hrefLabel: 'Vinculaciones' },
-      { what: 'Conectar Mercado Pago', where: 'Panel → Cobros → botón "Conectá Mercado Pago" (así los pagos van directo a tu cuenta)', href: '/panel/proveedor/cobros', hrefLabel: 'Cobros' },
-      { what: 'Mi plan (Básico o PRO)', where: 'Panel → Mi plan → 14 días gratis, después Básico $50.000/mes o PRO $100.000/mes', href: '/panel/proveedor/plan', hrefLabel: 'Mi plan' },
-      { what: 'Ver tus finanzas (ganancia, caja, balance, stock al costo)', where: 'Panel → Finanzas: tus ventas se cargan solas; cargás el costo de tus productos, gastos, compras de mercadería e ingresos de mostrador. Pestaña Aprendé para entender cada número', href: '/panel/proveedor/finanzas', hrefLabel: 'Finanzas' },
+      { what: 'Compras y reservas del carrito', where: 'Panel → Cobros → Ventas (pedidos): las compras llegan por pagar; las reservas las aprobás o les ponés fecha', href: '/panel/proveedor/cobros', hrefLabel: 'Ventas' },
+      { what: 'Cobrar materiales de un proyecto', where: 'Panel → Cobros → Cobros de proyectos → emitir cobro por los materiales aprobados', href: '/panel/proveedor/cobros', hrefLabel: 'Cobros' },
+      { what: 'Conectar Mercado Pago', where: 'Panel → Cobros → botón "Conectar Mercado Pago" (así los pagos van directo a tu cuenta)', href: '/panel/proveedor/cobros', hrefLabel: 'Cobros' },
       { what: 'Gestionar devoluciones de sobrantes', where: 'Panel → Cobros → Devoluciones → aceptá los ítems, marcá recibido cuando los traigan y registrá el reembolso (si te lo pide un profesional, marcás cómo le devolviste la plata por fuera de HomIA)', href: '/panel/proveedor/cobros', hrefLabel: 'Cobros' },
-      { what: 'Gestionar tratos (CRM)', where: 'Panel → CRM', href: '/panel/proveedor/crm', hrefLabel: 'CRM' },
-      { what: 'Aparecer en el directorio', where: 'Tu perfil público se arma solo con tu stock y reseñas', href: '/panel/proveedor/directorio', hrefLabel: 'Directorio' },
-      { what: 'Recibir reseñas de clientes', where: 'Los clientes califican tu entrega al finalizar proyectos con tus materiales', href: '/panel/proveedor/directorio', hrefLabel: 'Directorio' },
-      { what: 'Cobrar materiales directo al cliente', where: 'Panel → Cobros → emitir cobro por los materiales aprobados', href: '/panel/proveedor/cobros', hrefLabel: 'Cobros' },
+      { what: 'Mi plan (Básico o PRO)', where: 'Panel → Mi plan → 14 días gratis, después Básico $50.000/mes o PRO $100.000/mes; se cancela desde tu cuenta de Mercado Pago', href: '/panel/proveedor/plan', hrefLabel: 'Mi plan' },
+      { what: 'Tu logo y marca en la portada (PRO)', where: 'Panel → Mi perfil → Tu marca en la home', href: '/panel/proveedor/perfil', hrefLabel: 'Mi perfil' },
+      { what: 'Analítica de demanda (PRO)', where: 'Panel → Inicio: ventas, elementos más pedidos y búsquedas de los últimos 30 días', href: '/panel/proveedor', hrefLabel: 'Inicio' },
+      { what: 'Ver tus finanzas (ganancia, caja, balance, stock al costo)', where: 'Panel → Finanzas: tus ventas se cargan solas; cargás el costo de tus productos, gastos, compras de mercadería e ingresos de mostrador. Pestaña Aprendé para entender cada número', href: '/panel/proveedor/finanzas', hrefLabel: 'Finanzas' },
+      { what: 'Vincularte con profesionales', where: 'Panel → Vinculaciones → activá el vínculo para que retiren materiales a cuenta de un proyecto', href: '/panel/proveedor/vinculaciones', hrefLabel: 'Vinculaciones' },
+      { what: 'Seguir tus tratos (CRM)', where: 'Panel → CRM: tablero de tratos por etapa', href: '/panel/proveedor/crm', hrefLabel: 'CRM' },
+      { what: 'Aparecer en el directorio', where: 'Tu perfil público se arma solo con tu stock, tus reseñas y tu verificación', href: '/panel/proveedor/directorio', hrefLabel: 'Directorio' },
+      { what: 'Recibir reseñas de clientes', where: 'Los clientes te califican al retirar una compra o al finalizar una obra con tus materiales', href: '/panel/proveedor/directorio', hrefLabel: 'Directorio' },
       { what: 'Responder chats', where: 'Panel → Mensajes (los clientes inician, vos respondés)', href: '/panel/proveedor/mensajes', hrefLabel: 'Mensajes' },
-      { what: 'Verificar tu identidad con DNI', where: 'Panel → Verificación — el check verde aumenta tus ventas', href: '/panel/proveedor/verificacion', hrefLabel: 'Verificación' },
+      { what: 'Verificar tu identidad con DNI', where: 'Panel → Verificación: el check verde aumenta tus ventas', href: '/panel/proveedor/verificacion', hrefLabel: 'Verificación' },
+      { what: 'Datos del negocio, avisos por mail o eliminar la cuenta', where: 'Panel → Mi perfil', href: '/panel/proveedor/perfil', hrefLabel: 'Mi perfil' },
+      { what: 'Mandar una sugerencia, queja o problema', where: 'Panel → Sugerencias → Nueva sugerencia (con fotos)', href: '/panel/proveedor/sugerencias', hrefLabel: 'Sugerencias' },
     ],
     rules: [
       { title: 'Tu stock es tu vidriera', body: 'Los profesionales comparan precios entre proveedores antes de comprar: catálogo completo y actualizado = más ventas.' },
       { title: 'Cobros directos al cliente', body: 'En proyectos con modo "el cliente paga al proveedor", emitís el cobro por tus materiales desde Cobros y el cliente te paga con Mercado Pago o efectivo (lo confirmás vos).' },
-      { title: 'Reputación con evidencia', body: 'Las reseñas de los clientes pueden incluir fotos de la entrega: más confianza, más ventas. Solo clientes con un proyecto real finalizado pueden reseñarte.' },
+      { title: 'Reputación con evidencia', body: 'Las reseñas de los clientes pueden incluir fotos de la entrega: más confianza, más ventas. Solo te reseña quien te compró de verdad: una compra entregada o una obra finalizada con tus materiales.' },
     ],
-  },
-]
-
-const FAQ: { q: string; a: string; tema?: string }[] = [
-  {
-    q: '¿Cómo funciona el pago al finalizar la obra?',
-    a: 'Cuando la obra termina, el profesional emite la factura y el cliente la paga. El dinero va directo al profesional. Así el cliente sabe que paga recién cuando aprueba el trabajo terminado.',
-  },
-  {
-    q: '¿Dónde dejo una reseña, a quién y en qué momento?',
-    tema: 'resenas',
-    a: 'Las reseñas se dejan desde el detalle de un proyecto, y se activan recién cuando la obra finaliza. Solo pueden reseñarse participantes reales de esa obra: el cliente califica a su profesional y a cada proveedor que le vendió materiales, y el profesional califica al cliente. Una reseña por persona y proyecto, con estrellas, comentario y hasta 4 fotos. Nadie puede reseñar sin un proyecto real entre ambos.',
-  },
-  {
-    q: '¿Cómo pago una factura: Mercado Pago o efectivo?',
-    tema: 'pagos',
-    a: 'El cliente elige el método al pagar: Mercado Pago (el dinero va directo a la cuenta de quien cobra: el profesional o el proveedor, nunca queda retenido en HomIA; se suma un «Cargo de servicio HomIA (1%)» que ves antes de pagar) o efectivo (sin cargo). Para cobrar por Mercado Pago, el profesional o el proveedor tiene que haber conectado su cuenta; si no lo hizo, te lo decimos y podés pagar en efectivo. Con efectivo, el acuerdo queda registrado: el profesional ve que va a cobrar en efectivo y confirma desde su panel cuando recibe el dinero — recién ahí la factura queda pagada. Podés cancelar el acuerdo antes de la confirmación y elegir otro método.',
-  },
-  {
-    q: '¿Quién paga los materiales?',
-    a: 'Lo acuerdan profesional y cliente en cada proyecto y lo ven los dos siempre: (1) los adelanta el profesional y los cobra junto con la mano de obra en su factura, o (2) el cliente los paga directamente al proveedor: el proveedor emite el cobro desde su panel (Panel → Cobros) y el cliente paga con Mercado Pago o acuerda efectivo. En el modo 2, la factura del profesional cubre solo mano de obra.',
-  },
-  {
-    q: '¿Cómo funciona la verificación de identidad y por qué hay usuarios "No verificados"?',
-    tema: 'verificacion',
-    a: 'HomIA verifica la identidad con el DNI: desde tu panel (Verificación) subís una foto del frente y otra del dorso, y un modelo de IA de visión revisa que sea un documento real, legible y que coincida con los datos de tu cuenta. Podés intentarlo hasta 3 veces por día. Cada perfil muestra siempre su estado: "Verificado", "En revisión" o "No verificado" — nunca se oculta, es información clave para decidir con quién contratás. Las fotos de tu DNI se guardan en un almacenamiento privado: nadie más las ve, los demás solo ven el estado. La insignia confirma el documento; no garantiza la calidad del trabajo.',
-  },
-  {
-    q: '¿Quién puede iniciar un chat?',
-    a: 'Siempre el cliente. Los profesionales y proveedores pueden responder cualquier conversación, pero no pueden escribirle primero a un cliente. Así evitamos molestias y el cliente mantiene el control.',
-  },
-  {
-    q: '¿Publicar un trabajo cuesta algo?',
-    a: 'No. Publicar, recibir presupuestos, contratar y chatear es gratis para el cliente, y también para el profesional. Solo cuando pagás con Mercado Pago (una factura, un cobro de materiales o una compra) se suma un «Cargo de servicio HomIA (1%)» que paga quien compra; el profesional o el proveedor cobra el 100% de su precio. En efectivo no hay cargo.',
-  },
-  {
-    q: '¿Cómo funciona el carrito de materiales?',
-    a: 'Sumás productos de uno o varios proveedores con «Agregar al carrito» (también sin cuenta: se guarda en tu dispositivo y, al crear tu cuenta o ingresar, se pasa a tu cuenta). Al confirmar elegís qué comprás y qué reservás. Lo que comprás con stock no necesita aprobación del proveedor: el stock queda reservado y tenés 24 h para pagar con Mercado Pago (+1% de cargo de servicio) o elegir efectivo al retirar (7 días para retirar); si no, se cancela sola. Lo que reservás (con o sin stock) lo aprueba el proveedor: si no lo tiene, te dice cuándo, y cuando está disponible tenés 48 h. A cada proveedor le pagás por separado. Todo se sigue en Mis pedidos.',
-  },
-  {
-    q: '¿Qué hago con los materiales que sobraron?',
-    a: 'Se los devolvés a quien te los cobró: al proveedor si se los pagaste a él (compra de materiales o cobro del proveedor), o a tu profesional si te los cobró en su factura. Desde el detalle del proyecto (o desde Mis pedidos, si fue una compra de materiales) cargás cada sobrante con foto y cantidad. Quien te los vendió acepta todos o algunos ítems, se los entregás y confirma la recepción. Si pagaste con Mercado Pago, el reembolso (el precio de lo que devolvés; el cargo de servicio del 1% no se devuelve) vuelve solo a tu medio de pago; si pagaste en efectivo, te lo devuelven en efectivo y lo confirmás en la app. Tenés hasta 30 días desde el pago.',
-  },
-  {
-    q: '¿Cuánto cuesta HomIA para un proveedor?',
-    a: 'Los primeros 14 días son gratis. Después, el plan Básico cuesta $50.000/mes e incluye la app completa: stock, ventas, cobros por Mercado Pago y efectivo, CRM y vinculaciones. El plan PRO cuesta $100.000/mes y suma tu logo y marca en la home, la tarjeta "Recomendado" en marketplace y directorio, y analítica de demanda. Lo gestionás desde Panel → Mi plan.',
-  },
-  {
-    q: '¿Para qué sirve Finanzas y qué tengo que cargar?',
-    tema: 'finanzas',
-    a: 'Finanzas (en el panel del profesional y del proveedor, gratis en todos los planes) te muestra si tu negocio gana plata (Resultados), cuánta plata tenés (Caja), cuánto vale (Balance) y las métricas clave con recomendaciones. Lo que pasa por HomIA se carga solo y dice "Automático · viene de HomIA": tus facturas o ventas (facturado y cobrado por separado), las devoluciones de sobrantes, los materiales que compraste en la app y los subcontratos. Vos cargás el resto en Movimientos: trabajos o ventas por fuera de HomIA, costos de cada trabajo, gastos fijos (los mensuales se cargan una vez y se repiten solos), inversiones como herramientas o un vehículo (se reparten mes a mes: amortización), retiros, aportes y préstamos. Cada categoría explica qué es con ejemplos, y la pestaña Aprendé tiene la guía y el glosario. El cargo de servicio del 1% lo paga el cliente: no es ingreso ni gasto tuyo. HomIA no recibe las comisiones que te descuenta Mercado Pago: si querés verlas, cargalas como gasto. Podés exportar todo a Excel. No es asesoramiento impositivo: para impuestos consultá a un contador.',
-  },
-  {
-    q: '¿Cómo funciona "Contratar" desde el directorio?',
-    a: 'Elegís un profesional del directorio, tocás "Contratar" y un asistente de 4 pasos te guía: qué necesitás (con fotos), cuándo y dónde, presupuesto estimado y confirmación. Se crea el proyecto y el profesional recibe todo el brief al instante.',
-  },
-  {
-    q: '¿Puedo descargar mis facturas?',
-    a: 'Sí, todas las facturas se ven y descargan como PDF con formato profesional: desde Facturas (panel del cliente) o desde el detalle de cada proyecto.',
-  },
-  {
-    q: '¿Puedo tener más de un rol?',
-    a: 'Sí. Con la misma cuenta podés ser cliente, profesional y/o proveedor. Cambiás de rol desde el selector arriba a la derecha del panel, y cada rol tiene su propio panel con sus herramientas.',
-  },
-  {
-    q: '¿Me olvidé la contraseña?',
-    a: 'En Ingresar tocá "¿Olvidaste tu contraseña?", escribí el email de tu cuenta y te mandamos un link para crear una nueva (revisá también spam o promociones). El link vence en 1 hora y sirve una sola vez; si venció, pedí otro. Después ingresás con la contraseña nueva: tus datos, proyectos y pedidos quedan como estaban.',
-  },
-  {
-    q: '¿HomIA me avisa por mail?',
-    a: 'Sí, además del aviso en la campanita te mandamos un mail con lo importante: una compra o reserva nueva (proveedor), que te contrataron o te aceptaron un presupuesto (profesional), una oferta nueva, una factura o una reserva aprobada o lista para retirar (cliente), pagos acreditados por Mercado Pago y pedidos de devolución de sobrantes. Los mensajes del chat no llegan por mail. Podés apagar los avisos por mail desde Mi perfil.',
-  },
-  {
-    q: '¿Cómo dejo una sugerencia, una queja o aviso que algo no funciona?',
-    tema: 'sugerencias',
-    a: 'Desde tu panel, en Sugerencias (está en los tres roles, cerca de Ayuda): tocás «Nueva sugerencia», elegís el tipo (Sugerencia, Queja, Mejora, Oportunidad, Problema técnico u Otro), sobre qué parte de HomIA es, un título y la descripción. Podés sumar hasta 4 fotos o capturas desde la cámara o la galería: se guardan en un almacenamiento privado que solo ven vos y el equipo de HomIA. Si es un problema técnico, se adjunta solo la pantalla desde la que venías, tu navegador, tu dispositivo y la fecha, para encontrarlo más rápido. En «Mis envíos» ves el estado (Recibida, En revisión, Planificada, Resuelta o Descartada) y nuestra respuesta, que también te llega como notificación y por mail. Podés mandar hasta 10 por día.',
-  },
-  {
-    q: '¿Cómo elimino mi cuenta?',
-    a: 'Desde Mi perfil, al final: "Eliminar mi cuenta". Escribís ELIMINAR y tu contraseña. Si tenés proyectos, pedidos, facturas, cobros o devoluciones abiertos (o, si sos proveedor, tu suscripción de Mercado Pago activa), primero tenés que cerrarlos: la app te dice cuáles. Se borran tus datos personales, las fotos de tu DNI, tu carrito, favoritos, conversaciones con Homy y notificaciones, y tu perfil deja de aparecer. Las facturas, pagos y pedidos cerrados se conservan sin tu nombre porque la ley nos obliga, y tus reseñas y mensajes quedan como "Usuario eliminado". No se puede deshacer.',
   },
 ]
 
@@ -203,7 +141,7 @@ export default function HelpScreen({ embedded = false }: { embedded?: boolean })
     : TOUR_ROLES
   const defaultTab = visibleGuides[0]?.id ?? 'cliente'
   const [tab, setTab] = useState(defaultTab)
-  // ?tema=pagos|verificacion|resenas (links del footer): abre esa pregunta y la muestra
+  // ?tema=<tema> (pie de página, Homy, guías): abre esa pregunta y la muestra (temas en src/lib/ayuda-faq.ts)
   const { query } = useRoute()
   const tema = query.tema
   const faqDelTema = tema ? FAQ.findIndex((f) => f.tema === tema) : -1
@@ -241,7 +179,7 @@ export default function HelpScreen({ embedded = false }: { embedded?: boolean })
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-extrabold tracking-tight text-white sm:text-lg">Recorrido guiado por rol</h2>
             <p className="mt-0.5 text-[13px] font-medium leading-relaxed text-slate-300">
-              Un tutorial interactivo te lleva sección por sección: qué es, qué podés hacer ahí y cómo no trabarte. Se arranca solo en tu primer ingreso y lo repetís cuando quieras desde el botón de ayuda (abajo a la derecha).
+              Un tutorial interactivo te lleva sección por sección: qué es, qué podés hacer ahí y cómo no trabarte. No arranca solo: lo empezás acá, desde «Tus primeros pasos» del Inicio o desde el botón de Homy (abajo a la derecha) → «Guías y tour».
             </p>
           </div>
         </div>
@@ -371,7 +309,7 @@ export default function HelpScreen({ embedded = false }: { embedded?: boolean })
         </h2>
         <div className="mt-4 space-y-2">
           {FAQ.map((f, i) => (
-            <div key={f.q} id={f.tema ? `ayuda-${f.tema}` : undefined} className="homy-glass-soft scroll-mt-24 overflow-hidden rounded-2xl">
+            <div key={f.q} id={`ayuda-${f.tema}`} className={`homy-glass-soft overflow-hidden rounded-2xl ${embedded ? 'scroll-mt-48 lg:scroll-mt-36' : 'scroll-mt-24'}`}>
               <button onClick={() => setOpenFaq(openFaq === i ? null : i)} aria-expanded={openFaq === i}
                 className="homy-focus flex min-h-[52px] w-full items-center gap-3 px-4 py-3 text-left">
                 <span className="min-w-0 flex-1 text-sm font-extrabold text-[#0A2540]">{f.q}</span>

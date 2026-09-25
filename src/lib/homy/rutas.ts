@@ -22,6 +22,10 @@ export const SECCIONES: Seccion[] = [
   { ruta: '/ayuda', nombre: 'Centro de ayuda', rol: 'publico' },
   { ruta: '/registrarse', nombre: 'Crear cuenta gratis', rol: 'publico' },
   { ruta: '/ingresar', nombre: 'Ingresar', rol: 'publico' },
+  { ruta: '/recuperar', nombre: 'Recuperar la contraseña', rol: 'publico' },
+  { ruta: '/terminos', nombre: 'Términos y Condiciones', rol: 'publico' },
+  { ruta: '/privacidad', nombre: 'Política de Privacidad', rol: 'publico' },
+  { ruta: '/notificaciones', nombre: 'Notificaciones (la campanita)', rol: 'publico' },
   // cliente
   { ruta: '/panel/cliente', nombre: 'Inicio del cliente', rol: 'cliente' },
   { ruta: '/panel/cliente/publicar', nombre: 'Publicar trabajo', rol: 'cliente' },
@@ -61,7 +65,7 @@ export const SECCIONES: Seccion[] = [
 ]
 
 /** Parámetros de query que pueden viajar en un link (el resto se rechaza). */
-const QUERY_OK = new Set(['tab', 'stock', 'q', 'mode', 'cat', 'volver', 'rol', 'compra'])
+const QUERY_OK = new Set(['tab', 'stock', 'q', 'mode', 'cat', 'volver', 'rol', 'compra', 'tema'])
 
 /** Rutas con ids que solo valen si el id salió de una herramienta. */
 const RUTA_ENTIDAD = /^\/(profesional|proveedor|trabajo)\/([A-Za-z0-9_-]{6,40})$/
@@ -114,6 +118,28 @@ export function linkPermitido(href: string, rol: RolHomy, rolesUsuario: string[]
   if (deHerramientas.has(exacto) || deHerramientas.has(n.path)) return true
   if (RUTA_ENTIDAD.test(n.path)) return false // un id que no salió de una herramienta
   return seccionesDelRol(rol, rolesUsuario).some((s) => s.ruta === n.path)
+}
+
+/**
+ * Link de una entrada del conocimiento para ESTE rol. Una entrada general puede traer la
+ * pantalla de otro panel (ej. /panel/cliente/materiales para un profesional): si el rol
+ * tiene la misma pantalla en su panel, se lleva ahí; si no la tiene y tampoco puede
+ * entrar a esa (un cliente y el calendario del profesional), la entrada va sin link.
+ * El visitante recibe la ruta tal cual (después se convierte en registro).
+ */
+export function rutaParaRol(ruta: string, rol: RolHomy, rolesUsuario: string[] = []): string | null {
+  const n = normalizarHref(ruta)
+  if (!n) return null
+  if (rol === 'visitante') return ruta
+  const m = n.path.match(/^\/panel\/(cliente|profesional|proveedor)(\/.*)?$/)
+  if (m && m[1] !== rol) {
+    const propia = `/panel/${rol}${m[2] || ''}`
+    if (SECCIONES.some((s) => s.ruta === propia && s.rol === rol)) {
+      const qs = n.query.toString()
+      return `${propia}${qs ? `?${qs}` : ''}`
+    }
+  }
+  return linkPermitido(ruta, rol, rolesUsuario, new Set()) ? ruta : null
 }
 
 /** Visitante: lo que exige cuenta se convierte en "creá tu cuenta y volvés acá". */

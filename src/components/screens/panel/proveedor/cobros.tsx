@@ -369,6 +369,7 @@ export default function ProviderCharges() {
             key={t}
             role="tab"
             aria-selected={tab === t}
+            data-tour={`tab-${t}`}
             onClick={() => { setTab(t); navigate(t === 'cobros' ? '/panel/proveedor/cobros' : `/panel/proveedor/cobros?tab=${t}`, { replace: true }) }}
             className="homy-tab shrink-0"
           >

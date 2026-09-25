@@ -14,8 +14,13 @@ const args = process.argv.slice(2)
 const BASE = args.find((a) => a.startsWith('http')) || 'http://localhost:3061'
 const SOLO = (args.find((a) => a.startsWith('--solo=')) || '').slice(7).split(',').filter(Boolean)
 const CONC = Number((args.find((a) => a.startsWith('--conc=')) || '--conc=4').slice(7))
-const PASS = 'Homy2026!'
-const CUENTAS = { cliente: 'cliente@homia.test', profesional: 'profesional@homia.test', proveedor: 'proveedor@homia.test' }
+// Cuentas con las que se loguean los casos de cliente/profesional/proveedor. Las demo @homia.test
+// se borraron (25/09/2026): pasá otras con HOMY_EVAL_CUENTAS='{"cliente":"…","profesional":"…","proveedor":"…"}'
+// y HOMY_EVAL_PASS. Los casos que buscan datos (plomeros, cemento, cable…) dependen de lo que haya en la base.
+const PASS = process.env.HOMY_EVAL_PASS || 'Homy2026!'
+const CUENTAS = process.env.HOMY_EVAL_CUENTAS
+  ? JSON.parse(process.env.HOMY_EVAL_CUENTAS)
+  : { cliente: 'cliente@homia.test', profesional: 'profesional@homia.test', proveedor: 'proveedor@homia.test' }
 
 const casosFile = JSON.parse(fs.readFileSync(new URL('./homy-eval-casos.json', import.meta.url), 'utf8'))
 const casos = casosFile.casos.filter((c) => !SOLO.length || SOLO.includes(c.id))

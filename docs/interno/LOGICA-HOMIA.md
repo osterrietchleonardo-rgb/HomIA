@@ -1608,3 +1608,32 @@ IA (§11/§9 de AGENTS), solapamiento de fechas acordadas bloqueado (§3.6). No 
 para todos (el estado del DNI se muestra siempre), ni presupuestos armados por IA, ni mudanzas, ni
 matrícula. **Si cambia una de estas reglas, se revisa el texto de la portada en la misma rama.**
 
+## Ayuda, tour y conocimiento de Homy = espejo de las reglas (25/09/2026)
+
+Las cuatro fuentes de ayuda (preguntas frecuentes `src/lib/ayuda-faq.ts`, "¿Dónde hago cada cosa?" en
+`help-screen.tsx`, "¿Cómo hago?"/"Me trabé" en `howto-content.ts`, tour en `tour-content.ts`) y Homy
+(`conocimiento.ts`, que importa las tres primeras) solo afirman reglas de este documento. Las que más
+se equivocaban antes del 25/09 y hoy dicen lo correcto:
+
+- **Obra finalizada:** la finaliza solo el cliente, desde Ejecución o Revisión (§3.2); el profesional
+  avanza etapas hasta Revisión. De eso dependen las reseñas (§9).
+- **Publicación y oferta:** no se editan. La publicación se cierra o reabre (`PATCH /jobs/[id]` con
+  `status`); la oferta se retira y, si el trabajo sigue abierto, se vuelve a ofertar (§2).
+- **Proveedor:** no propone materiales (lo hace el profesional y aprueba el cliente, §3.4); sus ventas
+  del carrito están en Cobros → Ventas: compra con stock ya "por pagar", reserva aprobada por él (§4).
+- **CRM:** tablero manual de tratos por etapa (título, monto y, en el proveedor, con quién); no junta
+  solo proyectos ni facturas.
+- **Vinculaciones:** la que pide el profesional queda pendiente hasta que el proveedor la activa.
+- **Plan del proveedor:** se cancela desde la cuenta de Mercado Pago (en la app no hay botón); sin plan
+  activo sale de la vidriera y no opera, conserva datos (§8).
+- **Roles:** todo registro suma `cliente`; hoy no hay forma de sumar `profesional` o `proveedor` a una
+  cuenta existente.
+- **Celular:** se guarda estandarizado, no se verifica por código; el email sí (§1.3).
+- **Links de Homy:** una entrada general que apunta a la pantalla de otro panel se lleva al panel del
+  que pregunta si tiene esa misma pantalla (`rutaParaRol()`); si no la tiene, va sin link.
+
+**Si cambia una de estas reglas, se cambian la Ayuda, las guías, el tour y Homy en la misma rama**
+(los tests `src/lib/__tests__/ayuda.test.ts` y `src/lib/homy/__tests__/conocimiento.test.ts` fallan
+si una sección del menú queda sin parada del tour, si un paso apunta a un elemento que no existe o si
+un link de Homy no existe en la app).
+

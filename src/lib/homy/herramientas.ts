@@ -8,7 +8,7 @@ import { haversineKm } from '@/lib/geo'
 import { buscarConocimiento } from './conocimiento'
 import { compararOfertas, compararProfesionales } from './ranking'
 import { ubicarZona } from './zonas'
-import { canonHref, linkCarrito, adaptarParaVisitante } from './rutas'
+import { canonHref, linkCarrito, adaptarParaVisitante, rutaParaRol } from './rutas'
 import type { FuenteDatos, OfertaStock } from './datos'
 import type { Puerta, RolHomy, Tarjeta, TarjetaMaterial } from './tipos'
 
@@ -433,7 +433,7 @@ export function crearHerramientas(ctx: Contexto, datos: FuenteDatos, reg: Regist
       type: 'function',
       name: 'como_funciona_homia',
       description:
-        'Base de conocimiento de HomIA: qué es, precios y planes, pagos y cargo de servicio, carrito y pedidos, sobrantes, verificación DNI, reseñas, mensajes, y el paso a paso de cada sección y problema típico del rol del usuario (con su ruta). Usala para cualquier pregunta sobre cómo se usa la app o cuánto cuesta.',
+        'Base de conocimiento de HomIA: qué es, precios y planes, pagos y cargo de servicio, carrito y pedidos, sobrantes y devoluciones, verificación DNI, reseñas, mensajes, calendario y fechas, cobros, finanzas, sugerencias, cuenta (registro, contraseña, perfil, avisos por mail, eliminar la cuenta), rubros, fotos, preguntas frecuentes de la Ayuda y el paso a paso de cada sección y problema típico del rol del usuario (con su ruta). Usala para cualquier pregunta sobre cómo se usa la app o cuánto cuesta.',
       strict: true,
       parameters: obj({ tema: { type: 'string', description: 'Lo que quiere saber, en pocas palabras.' } }),
     },
@@ -448,16 +448,19 @@ export function crearHerramientas(ctx: Contexto, datos: FuenteDatos, reg: Regist
           resumen: `nada: ${i.tema}`,
         }
       }
-      for (const h of hits) {
-        if (h.ruta) registrarLink(reg, h.ruta)
+      // el link de cada entrada, llevado al panel de quien pregunta (o sin link si no le sirve)
+      const rutas = hits.map((h) => (h.ruta ? rutaParaRol(h.ruta, ctx.rol, ctx.rolesUsuario) : null))
+      hits.forEach((h, k) => {
+        const ruta = rutas[k]
+        if (ruta) registrarLink(reg, ruta)
         for (const m of montosDeTexto(h.texto)) reg.montos.add(m)
-      }
+      })
       return {
         estado: 'encontrado',
         salida: txt({
           estado: 'encontrado',
           nota: 'Respondé con esto y nada más. Si la pregunta pide algo que no está acá, decí que no lo manejamos desde acá.',
-          entradas: hits.map((h) => ({ titulo: h.titulo, texto: h.texto, ruta: h.ruta ?? null })),
+          entradas: hits.map((h, k) => ({ titulo: h.titulo, texto: h.texto, ruta: rutas[k] })),
         }),
         resumen: hits.map((h) => h.titulo).join(' | ').slice(0, 200),
       }

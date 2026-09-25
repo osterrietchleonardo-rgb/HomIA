@@ -402,21 +402,41 @@ demás dejan de servir.
 *Fuente: `src/components/screens/auth-register.tsx`, `auth-login.tsx`, `auth-recuperar.tsx`,
 `auth-restablecer.tsx`, `src/components/app/verificacion-contacto-card.tsx` (D26).*
 
-### 1.8 Ayuda
+### 1.8 Ayuda, guías, tour y Homy *(completado el 25/09/2026)*
 
-- **Página Ayuda:**
-  - Guías por rol.
-  - Tabla "qué hago / dónde".
-  - 11 preguntas frecuentes.
-  - Videos. El visitante también los puede ver.
-- **Recorrido guiado:** requiere cuenta y no arranca solo. Se inicia desde el botón **?**, la
-  página de Ayuda o la tarjeta "Tus primeros pasos".
+Hay cuatro lugares de ayuda y todos dicen lo mismo que hace la app (se revisaron contra el código el
+25/09/2026; matriz en `scratch/ayuda-homy/matriz.md`):
 
-- **Temas directos desde el pie de página:** "Pagos con Mercado Pago o efectivo", "Verificación de
-  identidad por IA" y "Reseñas con fotos" abren la Ayuda con esa pregunta ya desplegada y a la vista
-  (no el principio de la página).
+- **Página Ayuda** (`/ayuda`, y "Ayuda" en el menú de los tres roles):
+  - "¿Dónde hago cada cosa?" por rol: cliente 18 filas, profesional 19, proveedor 18 (con fechas y
+    horario, finalizar la obra, carrito y Mis pedidos, Cobros, Finanzas, Devoluciones, subcontratar,
+    Ventas y reservas del proveedor, marca PRO, analítica, Mi perfil y Sugerencias).
+  - Videos por rol (el visitante también los ve).
+  - **26 preguntas frecuentes**, cada una con su tema: `/ayuda?tema=<tema>` la abre desplegada y a
+    la vista (en el panel, sin que la tape el título fijo). Temas: pago-al-finalizar, resenas, pagos,
+    quien-paga-materiales, verificacion, chat, costos, carrito, sobrantes, devoluciones-profesional,
+    plan-proveedor, finanzas, calendario, contratar, cobros-profesional, facturas-pdf, registro, roles,
+    rubros, fotos, contrasena, avisos-mail, sugerencias, tour, eliminar-cuenta, terminos.
+  - El pie de página abre "Pagos con Mercado Pago o efectivo", "Verificación de identidad por IA" y
+    "Reseñas con fotos" con esa pregunta desplegada.
+- **Botón de Homy → "Guías y tour"** (abajo a la derecha, en el panel): el recorrido del rol
+  (completo o una sección), **"¿Cómo hago?"** (cliente 15 guías, profesional 18, proveedor 17),
+  **"Me trabé"** (cliente 8, profesional 8, proveedor 7) y los videos.
+- **Recorrido guiado:** requiere cuenta y **no arranca solo**. Se inicia desde el botón de Homy, la
+  página de Ayuda o la tarjeta "Tus primeros pasos". Recorre **todas las secciones del menú** del rol:
+  cliente 15 paradas, profesional 20 (suma Calendario, Cobros, Finanzas, Mis pedidos, Devoluciones,
+  Mi perfil y Sugerencias), proveedor 16 (suma las pestañas Ventas y Devoluciones de Cobros,
+  Finanzas, Mi perfil con la marca PRO y Sugerencias). Cada parada ilumina el elemento real; en el
+  celular, si la sección vive dentro de **"Más"**, ilumina ese botón y lo dice. La tarjeta se ubica
+  para no tapar lo iluminado ni salirse de la pantalla.
+- **Homy** (vista "Homy" del mismo botón): conoce todo lo anterior (importa las guías, el tour y las
+  preguntas frecuentes) más reglas propias (planes, pagos, rubros, fotos, campanita, Mi perfil, lo que
+  HomIA no hace). Lleva cada link al panel de quien pregunta (a un profesional le da
+  `/panel/profesional/materiales`, no la del cliente) y no da links a pantallas que ese rol no tiene.
+- El área `/admin` no es de usuarios: no aparece en la ayuda, ni en el tour, ni en Homy.
 
-*Fuente: `src/components/screens/help-screen.tsx`, `src/components/help/*`.*
+*Fuente: `src/lib/ayuda-faq.ts`, `src/components/screens/help-screen.tsx`, `src/lib/howto-content.ts`,
+`src/lib/tour-content.ts`, `src/components/help/*`, `src/lib/homy/conocimiento.ts`.*
 
 ### 1.9 Términos y Condiciones y Política de Privacidad
 
@@ -1961,11 +1981,13 @@ corrigieron; quedan anotadas para decidir.
 
 | Qué dice la app | Qué hace | Dónde |
 |---|---|---|
-| El CRM del proveedor es un "historial" de compras de profesionales (tour) | Es un tablero manual de tratos | `tour-content.ts:280` |
 | "Después podés sumar otros perfiles" (registro) | No hay forma de sumar un perfil después | `auth-register.tsx:258` |
-| El recorrido guiado "se arranca solo en tu primer ingreso" | No arranca solo | `help-screen.tsx:203`; `tour-overlay.tsx:4-6` |
-| Botón "Conectá Mercado Pago" (ayuda y tour del proveedor) | El botón dice "Conectar Mercado Pago" | `help-screen.tsx:87`; `tour-content.ts:264` |
 | Al volver de pagar un cobro de materiales del proyecto con Mercado Pago | No aparece aviso de "confirmando pago" (sí en Facturas y en Mis pedidos) | `cliente/proyecto-detalle.tsx` |
+
+Corregido el 25/09 (ayuda y tour): el CRM se explica como tablero de tratos; el recorrido ya no dice
+que arranca solo; el botón se nombra "Conectar Mercado Pago"; las guías ya no dicen que el profesional
+finaliza la obra (la finaliza el cliente), que una publicación u oferta se edita (se cierra/retira y se
+hace otra) ni que el proveedor propone materiales.
 
 Corregido el 24/09 (commit `2eed864`): el pago de facturas ahora sí va a la cuenta del profesional;
 la regla de chat ya se decide por el destinatario; el perfil del cliente muestra "Tu DNI está en

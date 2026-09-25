@@ -532,8 +532,8 @@ GET privados de N.
   20-39833562-8, email `business@vakdor.com`, **sin domicilio** (pedido de Leonardo). Son datos
   públicos, por eso viven en el código; las variables `NEXT_PUBLIC_LEGAL_RAZON_SOCIAL`, `_CUIT`,
   `_DOMICILIO` y `_EMAIL` (opcionales, se leen en el build) reemplazan cada valor.
-- **Ayuda por tema:** `/ayuda?tema=pagos|verificacion|resenas` abre la pregunta con ese `tema` en
-  `FAQ` (`help-screen.tsx`) y la lleva a la vista (`#ayuda-<tema>`, diferido 250 ms para no pelear con
+- **Ayuda por tema:** `/ayuda?tema=<tema>` abre la pregunta con ese `tema` en
+  `FAQ` (desde el 25/09/2026 en `src/lib/ayuda-faq.ts`, todas con tema; ver §4.19) y la lleva a la vista (`#ayuda-<tema>`, diferido 250 ms para no pelear con
   `resetAppScroll()` de `navigate()`). Los links del footer usan esos temas.
 - **Verificación:** Playwright contra dev en 1280 y 390: hash tipeado en la home → 5 pantallas; logo →
   home → header (Directorio, Materiales, Ayuda); los 17 links del footer (páginas, anclas de la home y
@@ -999,6 +999,40 @@ código por la base (HMAC con el `AUTH_SECRET` del `.env`, solo para `@homia.tes
   "Celular de contacto" (`phone` + `phoneCountry` en el mismo `PUT /api/profiles/me` de los datos del
   negocio).
 
+### 4.19 Ayuda, guías, tour y Homy al día con la app (25/09/2026)
+
+- **Preguntas frecuentes:** `src/lib/ayuda-faq.ts` (`FAQ`, 26 con `tema` único) es la única fuente:
+  la importan `help-screen.tsx` (pantalla) y `conocimiento.ts` (`desdeFaq()` → entradas `faq-<tema>`
+  con ruta `/ayuda?tema=<tema>`). Precios del plan desde `plans.ts` y rubros desde
+  `src/lib/categories-data.ts` (datos puros; `categories.ts` los re-exporta, porque es `'use client'`
+  con íconos y no se puede importar del servidor).
+- **Homy:** `rutas.ts` suma `/recuperar`, `/terminos`, `/privacidad`, `/notificaciones` y el parámetro
+  `tema`; `rutaParaRol(ruta, rol, roles)` lleva el link de una entrada al panel de quien pregunta o lo
+  saca (lo usa `como_funciona_homia` en `herramientas.ts` antes de registrar el link).
+  `conocimiento.ts`: `porRolYVisitante()` (avisos por mail, eliminar cuenta y Mi perfil con link al
+  perfil de cada rol) y entradas nuevas (rubros, fotos, campanita, dónde está la ayuda); "no existe"
+  ampliado. `prompt.ts`: qué hace cada rol al día; `sugerencias.ts`: sugerencias iniciales para
+  pedidos, calendario, cobros, finanzas, devoluciones y sugerencias.
+- **Tour:** `tour-content.ts` con una parada por sección del menú de cada rol (15/20/16). Anclas:
+  `nav-<pantalla>` de `panel-layout.tsx` y `data-tour="tab-<pestaña>"` en las pestañas de
+  `proveedor/cobros.tsx`. `tour-overlay.tsx`: en el celular, si el ancla del menú no está en la barra
+  inferior ilumina `data-tour-m="nav-mas"` con aviso; lleva al centro un ancla que está fuera de la
+  pantalla aunque sea en parte (`inline: 'center'`); reintenta hasta ~6 s (pantallas que tardan en
+  traer datos); la tarjeta mide su alto con un `ResizeObserver` y se ubica abajo, arriba o al costado
+  del foco sin salirse de la pantalla (en el celular, arriba si el foco está en la mitad de abajo).
+- **Ayuda:** en el panel el título de la página es `sticky`, por eso la pregunta abierta por tema usa
+  `scroll-mt-48 lg:scroll-mt-36` (fuera del panel, `scroll-mt-24`).
+- **Tests:** `src/lib/homy/__tests__/conocimiento.test.ts` (8: cada sección de `rutas.ts` existe en
+  `app-root.tsx`; cada ruta del conocimiento está en `rutas.ts` y pasa el guardarraíl llevada al rol;
+  ids únicos; FAQ con tema y en Homy; búsqueda de lo nuevo; `rutaParaRol`) y
+  `src/lib/__tests__/ayuda.test.ts` (5: cada `target` del tour existe como `data-tour` y los del menú
+  en el menú de ese rol; cada sección del menú tiene parada; rutas del tour sin query y del panel del
+  rol; links de guías existentes y del rol; sin muletillas de IA).
+- **Eval de Homy:** `homy-eval-casos.json` 1.1.0 con 10 casos nuevos (finanzas, calendario,
+  devoluciones del profesional, sugerencias, avisos por mail, finalizar obra, registro sin código de
+  celular, rubros, cancelar el plan, reserva sin stock). `homy-eval.mjs` acepta
+  `HOMY_EVAL_CUENTAS`/`HOMY_EVAL_PASS` (las cuentas demo se borraron el 25/09/2026).
+
 ## 5. Migraciones y la base única
 
 - **Una sola base = producción.** El `.env` local, los Preview y Producción de Vercel apuntan al
@@ -1229,6 +1263,11 @@ Todas las rutas con IA tienen `export const maxDuration = 60`.
 9. **Stream NDJSON** de eventos `inicio`, `paso`, `texto`, `texto_reinicio`, `final` (mensaje,
    tarjetas, acciones, sugerencias, pregunta, cupo), `limite`, `error` (`tipos.ts:102-109`).
 
+**Medición del 25/09/2026 (set 1.1.0, 42 casos, server local contra la base única):** 40/42 en la
+corrida completa (v13 y s07: la primera por variación del modelo, pasó 2 de 2 al repetir; en s07 se
+aflojó un texto esperado demasiado estricto y pasó 2 de 2), **0 alucinaciones**, p50 8,1 s, p95
+12,8 s, US$0,0012 por consulta estimado (US$0,051 la corrida).
+
 **Medición del equipo (informe del 24/09, no re-medido acá):** set de evaluación de 32 casos 32/32,
 0 alucinaciones, costo ≈ US$0,001 por consulta (estimado con precio de lista: cotejar con la factura
 de OpenAI), p50 9,3 s.
@@ -1339,11 +1378,12 @@ Nombres exactos que lee el código (`grep process.env` en `src/`) y su documenta
 | `scripts/e2e-visual.mjs` (249 líneas) | Recorrido visual con Playwright de todas las pantallas por rol en 390×844 (y las principales en 1280×800): captura, errores de consola, overflow horizontal, textos "undefined/NaN", botón "Más" del menú móvil (`:12-18`) | `PLAYWRIGHT_DIR=<carpeta con playwright> node scripts/e2e-visual.mjs [--base] [--out] [--keep]`; sin `--data` corre antes la integral con `--no-purge` y purga al final | Mismo aviso: escribe en producción |
 | `scripts/e2e/sec-audit.sh` (130 líneas) | Auditoría de seguridad en vivo: login de las 3 cuentas demo, 401 sin sesión, 403 cruzados entre roles, IDOR sobre factura/PDF/cobro/proyecto/conversación/compra, bloqueo tras 10 logins fallidos, reglas de contraseña, inyección SQL/XSS en búsquedas | `bash scripts/e2e/sec-audit.sh` (usa `http://localhost:3000`, `sec-audit.sh:3`) | Usa las cuentas demo reales |
 
-| `scripts/homy-eval.mjs` + `scripts/homy-eval-casos.json` | Set de evaluación del súper agente: 32 casos contra un server real; mide herramientas usadas, textos que deben/no deben aparecer, links válidos, montos que existen en la base y que no haya caído al respaldo (`homy-eval.mjs:1-8`). Resultado del equipo: 32/32, 0 alucinaciones | `node scripts/homy-eval.mjs [http://localhost:3061] [--solo=id1,id2] [--conc=4]` | Usa las cuentas demo solo para leer, pero **escribe** `HomyRun`, `HomySession`, `HomyMessage`, `AiUsage` y `SearchEvent` en producción; los ids quedan en `scratch/homy-eval/` para limpiarlos |
+| `scripts/homy-eval.mjs` + `scripts/homy-eval-casos.json` | Set de evaluación del súper agente: 42 casos (32 + 10 del 25/09/2026, §4.19) contra un server real; mide herramientas usadas, textos que deben/no deben aparecer, links válidos, montos que existen en la base y que no haya caído al respaldo (`homy-eval.mjs:1-8`). Resultado del equipo: 32/32, 0 alucinaciones | `node scripts/homy-eval.mjs [http://localhost:3061] [--solo=id1,id2] [--conc=4]` | Usa las cuentas demo solo para leer, pero **escribe** `HomyRun`, `HomySession`, `HomyMessage`, `AiUsage` y `SearchEvent` en producción; los ids quedan en `scratch/homy-eval/` para limpiarlos |
 | `src/lib/__tests__/email.test.ts` | Mails y tokens (D18): payload a Resend (Bearer, from, to, asunto, HTML con marca y botón, texto plano, pie), escape de HTML, sin clave → `no_configurado` sin red, error 4xx/red sin tirar, dominios `.test` nunca a Resend real, `linkAbsoluto`, token 32 bytes + sha256 + estados, política de contraseña (10 tests, sin red ni base) | `node --test --import ./scripts/homy-test-alias.mjs src/lib/__tests__/email.test.ts` | No escribe nada |
 | `src/lib/__tests__/schedule.test.ts` | Fechas del trabajo (D21) y horarios (D23): máquina de estados con franja, validación de días y de franja, hoy en hora argentina, día al mediodía UTC, choque de franjas (ejemplos de Leonardo, bordes, día completo, varios días), bloquea vs. avisa, estado del día con la jornada 06–18 y con jornada propia, unión de franjas y huecos, próximo día con lugar, textos con horario (19 tests, sin base) | `node --test --import ./scripts/homy-test-alias.mjs src/lib/__tests__/schedule.test.ts` | No escribe nada |
 | `src/lib/finanzas/__tests__/calculos.test.ts` | Finanzas (D24), 20 tests a mano: plomero con 3 obras renglón por renglón, retiros que no son gasto, caja cobrada vs. facturada, caja que cierra con saldo inicial a mitad de período, rentabilidad por obra, días de cobro, vencidas y recurrentes, punto de equilibrio, recurrentes proyectados/terminados (31 → fin de mes), amortización, préstamo capital/interés, devoluciones y reintegros, balance que cierra y concilia con aportes − retiros + resultado, ferretería con costo cargado/estimado/sin dato y ventas de mostrador, bordes sin NaN, compras personales, lista del período, períodos, contenido; regresión de la madrugada (lo de hoy guardado al mediodía) vista roja con el bug y verde con el arreglo | `node --test --import ./scripts/homy-test-alias.mjs src/lib/finanzas/__tests__/calculos.test.ts` | No escribe nada |
 | `scripts/e2e-integral.mjs` sección **R** (Finanzas) | Automáticos = base con las mismas reglas (facturado, cobrado, por cobrar, mano de obra, devoluciones, compras; ventas, cobrado, devoluciones, costo de lo vendido e inventario del proveedor), deltas exactos de gasto/ingreso pendiente/inversión/retiro/préstamo/cuota, recurrente 3 → terminado 2, edición, validaciones, 401/403/400, IDOR 404/403, saldo inicial, compra personal, baja lógica, compra de mercadería, CSV (BOM, `;`, `1.234,56`). Corrida completa 25/09: **R 97/98** (la falla era de la prueba, corregida después, sin re-correr completa); tiempo del resumen en dev local 1,7-2,1 s | `E2E_EMAIL_PREFIX=e2e-fin- node scripts/e2e-integral.mjs --base …` (R usa datos de B, D, E, F, G, P: correr completa) | Escribe en producción; purga verificada con `financeEntries`, `financeConfigs` y `financeOrphans` en 0 |
+| `src/lib/homy/__tests__/conocimiento.test.ts` y `src/lib/__tests__/ayuda.test.ts` | Links de Homy contra `rutas.ts` y `app-root.tsx`; tour, guías y Ayuda contra el código (§4.19) | `node --test --import ./scripts/homy-test-alias.mjs src/lib/__tests__/*.test.ts src/lib/finanzas/__tests__/*.test.ts src/lib/homy/__tests__/*.test.ts` (166 en total el 25/09/2026) | No escribe nada |
 | `src/lib/homy/__tests__/loop.test.ts` | Pruebas unitarias del loop, guardarraíles, ranking y cupo, sin base ni OpenAI (19 según el equipo) | `node --test --import ./scripts/homy-test-alias.mjs src/lib/homy/__tests__/*.test.ts` (el alias resuelve `@/…`) | No escribe nada |
 
 Build: `npm run build` (tipos estrictos). Lint: `npm run lint`.

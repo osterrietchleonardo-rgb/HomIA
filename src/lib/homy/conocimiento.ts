@@ -1,12 +1,15 @@
 // Base de conocimiento de HomIA para el súper agente Homy.
-// Fuente: las guías que ya ve el usuario (howto-content, tour-content, FAQ del
-// centro de ayuda) + reglas de negocio decididas por el dueño. Las guías se
-// IMPORTAN (una sola fuente de verdad): si alguien edita el tour o el "¿Cómo
-// hago?", Homy lo sabe sin tocar este archivo.
+// Fuente: las guías que ya ve el usuario (howto-content, tour-content, las preguntas
+// frecuentes del Centro de ayuda en ayuda-faq) + reglas de negocio decididas por el dueño.
+// Las guías y las preguntas se IMPORTAN (una sola fuente de verdad): si alguien edita el
+// tour, el "¿Cómo hago?" o la Ayuda, Homy lo sabe sin tocar este archivo.
+// Toda `ruta` tiene que estar en SECCIONES de rutas.ts (lo verifica un test).
 // Regla: no inventar funciones. Lo que NO existe también está escrito acá.
 import { HOWTOS, TROUBLES } from '@/lib/howto-content'
+import { FAQ } from '@/lib/ayuda-faq'
 import { TOURS, type TourRole } from '@/lib/tour-content'
 import { PLAN_PRICE_ARS, TRIAL_DAYS } from '@/lib/plans'
+import { CATEGORIES_FALLBACK } from '@/lib/categories-data'
 import type { RolHomy } from './tipos'
 import { entradasHomyFinanzas } from '@/lib/finanzas/conceptos'
 
@@ -26,6 +29,19 @@ const ars = (n: number) => `$${n.toLocaleString('es-AR')}`
 const BASICO = ars(PLAN_PRICE_ARS.basic)
 const PRO = ars(PLAN_PRICE_ARS.pro)
 
+/**
+ * Una entrada por rol (con el link a la pantalla de SU panel) y otra para el visitante
+ * (sin link al panel): así Homy lleva a cada uno a la pantalla correcta.
+ */
+function porRolYVisitante(id: string, titulo: string, pantalla: string, texto: string, claves: string): Entrada[] {
+  return [
+    ...(['cliente', 'profesional', 'proveedor'] as const).map((rol): Entrada => ({
+      id: `${id}-${rol}`, titulo, roles: [rol], ruta: `/panel/${rol}/${pantalla}`, texto, claves,
+    })),
+    { id, titulo, roles: ['visitante'], texto, claves },
+  ]
+}
+
 /** Reglas de negocio y conceptos (decisiones del dueño, 2026-09-24). */
 const NUCLEO: Entrada[] = [
   {
@@ -33,7 +49,7 @@ const NUCLEO: Entrada[] = [
     titulo: 'Qué es HomIA',
     roles: ['todos'],
     texto:
-      'HomIA es un ecosistema de servicios del hogar en Argentina con tres roles: el cliente busca y contrata profesionales (plomeros, electricistas, gasistas, pintores, etc.) y compra materiales; el profesional consigue trabajos, presupuesta, ejecuta y cobra; el proveedor (ferretería, corralón, pinturería, etc.) vende sus materiales con stock propio. Todo queda registrado en la plataforma: presupuestos, proyectos, pagos, facturas en PDF, reseñas y chats.',
+      'HomIA es una plataforma de servicios del hogar en Argentina con tres roles: el cliente busca y contrata profesionales (plomeros, electricistas, gasistas, pintores, etc.) y compra materiales; el profesional consigue trabajos, presupuesta, ejecuta y cobra; el proveedor (ferretería, corralón, pinturería, etc.) vende sus materiales con stock propio. Todo queda registrado en la plataforma: presupuestos, proyectos, pagos, facturas en PDF, reseñas y chats.',
     claves: 'que es homia como funciona para que sirve plataforma app',
   },
   {
@@ -48,7 +64,7 @@ const NUCLEO: Entrada[] = [
     id: 'proveedor-planes',
     titulo: 'Planes del proveedor (prueba, Básico, PRO)',
     roles: ['todos', 'proveedor'],
-    texto: `El proveedor arranca con ${TRIAL_DAYS} días gratis desde el alta. Al terminar la prueba tiene que elegir plan para seguir apareciendo y vendiendo: Básico ${BASICO}/mes o PRO ${PRO}/mes, que se pagan por suscripción de Mercado Pago. Sin plan activo (prueba vencida o suscripción cancelada), su stock deja de aparecer en búsquedas, marketplace, directorio y en Homy. El PRO suma: logo y marca en la home, tarjeta "Recomendado" y prioridad ante empates, y analítica (elementos más pedidos y consultas del rubro). Se gestiona en Panel → Mi plan.`,
+    texto: `El proveedor arranca con ${TRIAL_DAYS} días gratis desde el alta. Al terminar la prueba tiene que elegir plan para seguir apareciendo y vendiendo: Básico ${BASICO}/mes o PRO ${PRO}/mes, que se pagan por suscripción de Mercado Pago. Sin plan activo (prueba vencida, suscripción cancelada o 35 días sin cobro), su stock deja de aparecer en búsquedas, marketplace, directorio y en Homy, y no puede tocar el stock ni gestionar ventas ni cobros (sí entrar a mirar; sus datos, reseñas y vinculaciones se conservan). El PRO suma: logo y marca en la cinta de la home (se cargan en Mi perfil → Tu marca en la home), tarjeta "Recomendado" y prioridad ante empates, y analítica de los últimos 30 días en su Inicio (ventas, elementos más pedidos, consultas del rubro y búsquedas donde apareció). Se elige y se cambia en Panel → Mi plan; la suscripción se cancela desde la cuenta de Mercado Pago (en la app no hay botón para cancelar).`,
     ruta: '/panel/proveedor/plan',
     claves: 'ser proveedor vender materiales plan pro basico prueba gratis 14 dias suscripcion recomendado sponsor analitica cancelar',
   },
@@ -84,7 +100,7 @@ const NUCLEO: Entrada[] = [
     titulo: 'Conectar Mercado Pago (proveedor)',
     roles: ['proveedor', 'todos'],
     texto:
-      'El proveedor lo conecta en Panel → Cobros con el botón "Conectá Mercado Pago": se abre Mercado Pago, autorizás a HomIA y volvés al panel con la cuenta conectada. Desde ahí los clientes pueden pagarte con Mercado Pago y el dinero entra directo a tu cuenta. Si no conectás, solo podés cobrar en efectivo. Si algo falla al volver, reintentá desde el mismo botón.',
+      'El proveedor lo conecta en Panel → Cobros con el botón "Conectar Mercado Pago": se abre Mercado Pago, autorizás a HomIA y volvés al panel con la cuenta conectada. Desde ahí los clientes pueden pagarte con Mercado Pago y el dinero entra directo a tu cuenta. Si no conectás, solo podés cobrar en efectivo. Si algo falla al volver, reintentá desde el mismo botón. Cobros tiene tres pestañas: "Cobros de proyectos" (los materiales que el cliente le paga directo), "Ventas (pedidos)" (compras y reservas del carrito) y "Devoluciones" (sobrantes).',
     ruta: '/panel/proveedor/cobros',
     claves: 'conectar mercado pago cuenta mp vincular cobrar oauth autorizar',
   },
@@ -111,7 +127,7 @@ const NUCLEO: Entrada[] = [
     titulo: 'Verificación de identidad con DNI',
     roles: ['todos', 'cliente', 'profesional', 'proveedor'],
     texto:
-      'Cada usuario puede verificar su identidad subiendo foto del frente y del dorso del DNI: una IA revisa que el documento sea real y legible y el perfil muestra "Verificado". Quien no lo hizo figura como "No verificado" (nunca se oculta). Es gratis y se hace en Panel → Verificación. Homy prioriza a los verificados en sus recomendaciones.',
+      'Cada usuario puede verificar su identidad subiendo foto del frente y del dorso del DNI: una IA revisa que el documento sea real, legible y coincida con los datos de la cuenta, y el perfil muestra "Verificado" (o "En revisión" mientras falta el dictamen). Quien no lo hizo figura como "No verificado" (nunca se oculta). Es gratis, se puede intentar hasta 3 veces por día y se hace en Panel → Verificación (también se puede subir al crear la cuenta). Las fotos del DNI son privadas: los demás solo ven el estado. Homy prioriza a los verificados en sus recomendaciones.',
     claves: 'verificar verificado dni identidad check confianza no verificado',
   },
   {
@@ -134,8 +150,8 @@ const NUCLEO: Entrada[] = [
     id: 'multi-rol',
     titulo: 'Tener más de un rol',
     roles: ['todos', 'cliente', 'profesional', 'proveedor'],
-    texto: 'Con la misma cuenta podés ser cliente, profesional y/o proveedor; cambiás de rol desde el selector del panel y cada rol tiene su panel.',
-    claves: 'varios roles cambiar rol ser profesional y cliente',
+    texto: 'Todo el que se registra también queda como cliente: el profesional y el proveedor pueden contratar y comprar materiales como cualquier cliente, y cambian de panel con el selector de perfil de arriba (cada rol tiene su panel). Hoy no se puede sumar el rol profesional o proveedor a una cuenta que ya existe; si alguien lo necesita, que lo cuente en Sugerencias.',
+    claves: 'varios roles cambiar rol ser profesional y cliente sumar agregar perfil proveedor tambien',
   },
   {
     id: 'registro',
@@ -207,30 +223,22 @@ const NUCLEO: Entrada[] = [
       'En Ingresar se toca "¿Olvidaste tu contraseña?", se escribe el email de la cuenta y HomIA manda un link para crear una contraseña nueva (mirar también spam o promociones). El link vence en 1 hora y sirve una sola vez; si venció o ya se usó, se pide otro. Se pueden pedir hasta 3 links por hora. Después se ingresa con la contraseña nueva: los datos, proyectos y pedidos quedan como estaban. Homy no puede cambiar ni ver contraseñas.',
     claves: 'olvide contraseña clave password recuperar restablecer no puedo entrar ingresar cuenta bloqueada link mail',
   },
-  {
-    id: 'avisos-mail',
-    titulo: 'Avisos por mail',
-    roles: ['todos'],
-    ruta: '/panel',
-    texto:
-      'Además del aviso en la campanita, HomIA manda un mail al email de la cuenta con los eventos importantes: compra o reserva nueva (al proveedor), te contrataron o te aceptaron el presupuesto (al profesional), oferta nueva en tu trabajo, factura emitida y reserva aprobada o lista para retirar (al cliente), pago acreditado por Mercado Pago (a quien cobra) y pedido de devolución de sobrantes (a quien lo recibe). Los mensajes del chat NO llegan por mail. Se apagan desde Mi perfil → "Recibir avisos por mail" (el mail para crear una nueva contraseña llega siempre).',
-    claves: 'mail email correo aviso notificacion me avisan enterarme apagar desactivar dejar de recibir spam',
-  },
-  {
-    id: 'eliminar-cuenta',
-    titulo: 'Eliminar mi cuenta',
-    roles: ['todos'],
-    ruta: '/panel',
-    texto:
-      'Se hace desde Mi perfil → "Eliminar mi cuenta" (al final de la página, en los tres roles): hay que escribir ELIMINAR y la contraseña. Si hay algo abierto (proyectos activos, facturas o cobros sin pagar, pedidos sin cerrar, devoluciones en curso o, si es proveedor, la suscripción de Mercado Pago activa) no se elimina y la app lista qué cerrar primero. Al eliminarla se borran los datos personales (nombre, email, teléfono, dirección, foto, ubicación, cumpleaños), las fotos del DNI, el carrito, los favoritos, las conversaciones con Homy y las notificaciones, y el perfil deja de aparecer; se conservan sin nombre las facturas, pagos y pedidos cerrados (obligación legal) y las reseñas y mensajes, que figuran como "Usuario eliminado". No se puede deshacer. Homy no puede eliminar cuentas.',
-    claves: 'eliminar borrar dar de baja cerrar cuenta darme de baja borrar mis datos supresion ley 25326 privacidad',
-  },
+  ...porRolYVisitante('avisos-mail', 'Avisos por mail', 'perfil',
+    'Además del aviso en la campanita, HomIA manda un mail al email de la cuenta con los eventos importantes: compra o reserva nueva (al proveedor), te contrataron o te aceptaron el presupuesto (al profesional), oferta nueva en tu trabajo, factura emitida y reserva aprobada o lista para retirar (al cliente), pago acreditado por Mercado Pago (a quien cobra), pedido de devolución de sobrantes (a quien lo recibe) y la respuesta del equipo a una sugerencia. Los mensajes del chat NO llegan por mail. Se apagan desde Mi perfil → "Recibir avisos por mail" (el mail para crear una nueva contraseña llega siempre).',
+    'mail email correo aviso notificacion me avisan enterarme apagar desactivar dejar de recibir spam'),
+  ...porRolYVisitante('eliminar-cuenta', 'Eliminar mi cuenta', 'perfil',
+    'Se hace desde Mi perfil → "Eliminar mi cuenta" (al final de la página, en los tres roles): hay que escribir ELIMINAR y la contraseña. Si hay algo abierto (proyectos activos, facturas o cobros sin pagar, pedidos sin cerrar, devoluciones en curso o, si es proveedor, la suscripción de Mercado Pago activa) no se elimina y la app lista qué cerrar primero. Al eliminarla se borran los datos personales (nombre, email, teléfono, dirección, foto, ubicación, cumpleaños), las fotos del DNI, el carrito, los favoritos, las conversaciones con Homy y las notificaciones, y el perfil deja de aparecer; se conservan sin nombre las facturas, pagos y pedidos cerrados (obligación legal) y las reseñas y mensajes, que figuran como "Usuario eliminado". No se puede deshacer. Homy no puede eliminar cuentas.',
+    'eliminar borrar dar de baja cerrar cuenta darme de baja borrar mis datos supresion ley 25326 privacidad'),
+  ...porRolYVisitante('mi-perfil', 'Qué hay en Mi perfil', 'perfil',
+    'En Mi perfil (los tres roles) se cambian los datos de la cuenta: nombre, el país del celular y el celular (sirve cualquier país; no se verifica con código, se guarda en formato internacional), dirección y ciudad. La tarjeta "Email y celular" muestra si el email está Verificado o Sin verificar; si dice Sin verificar, "Verificar ahora" manda un código de 6 números por mail. El profesional además cambia sus rubros, su zona, su descripción y su foto; el proveedor, los datos del negocio (nombre, tipo, CUIT, dirección) y, con plan PRO, su logo, frase y color para la cinta de la home ("Tu marca en la home"). Abajo están el interruptor "Recibir avisos por mail" y "Eliminar mi cuenta".',
+    'perfil mis datos cambiar nombre celular telefono pais email verificar codigo direccion foto rubros zona logo marca'),
   {
     id: 'terminos',
     titulo: 'Términos y Política de Privacidad',
     roles: ['todos'],
+    ruta: '/terminos',
     texto:
-      'Para crear una cuenta hay que aceptar los Términos y Condiciones y la Política de Privacidad (casilla obligatoria en el último paso del registro). Las dos páginas están en el pie de la portada ("Términos y Condiciones" y "Política de Privacidad") y explican las reglas de uso, pagos, plazos, qué datos se guardan y para qué.',
+      'Para crear una cuenta hay que aceptar los Términos y Condiciones y la Política de Privacidad (casilla obligatoria en el último paso del registro). Las dos páginas están en el pie de la portada ("Términos y Condiciones" y "Política de Privacidad") y explican las reglas de uso, pagos, plazos, qué datos se guardan y para qué. Tienen un resumen "En pocas palabras" y se pueden imprimir o guardar en PDF.',
     claves: 'terminos condiciones politica privacidad legal datos personales aceptar',
   },
   // Sugerencias (D25): una entrada por rol para que Homy lleve a la pantalla del panel correcto
@@ -240,15 +248,46 @@ const NUCLEO: Entrada[] = [
     roles: [rol],
     ruta: `/panel/${rol}/sugerencias`,
     texto:
-      'En Panel → Sugerencias (en los tres roles, cerca de Ayuda) se toca "Nueva sugerencia" y se elige el tipo: Sugerencia, Queja, Mejora, Oportunidad (algo nuevo que HomIA podría ofrecer), Problema técnico (algo no funciona) u Otro; después sobre qué parte de HomIA es, un título y la descripción (qué pasó, qué esperabas y qué te gustaría). Se pueden sumar hasta 4 fotos (desde la cámara o la galería, JPG, PNG o WEBP de hasta 8 MB); se guardan en un almacenamiento privado que solo ven quien la manda y el equipo de HomIA. En "Problema técnico" se adjunta solo la pantalla desde la que venías, el navegador, el dispositivo y la fecha. Se pueden mandar hasta 10 por día. Abajo, en "Mis envíos", se ve el estado (Recibida, En revisión, Planificada, Resuelta o Descartada) y la respuesta del equipo, que además llega como notificación y por mail. Homy no puede mandar sugerencias por vos.',
+      'En Panel → Sugerencias (en los tres roles, cerca de Ayuda) se toca "Nueva sugerencia" y se elige el tipo: Sugerencia, Queja, Mejora, Oportunidad (algo nuevo que HomIA podría ofrecer), Problema técnico (algo no funciona) u Otro; después sobre qué parte de HomIA es, un título y la descripción (qué pasó, qué esperabas y qué te gustaría). Se pueden sumar hasta 4 fotos (desde la cámara o la galería, de cualquier tamaño: la app las achica sola); se guardan en un almacenamiento privado que solo ven quien la manda y el equipo de HomIA. En "Problema técnico" se adjunta solo la pantalla desde la que venías, el navegador, el dispositivo y la fecha. Se pueden mandar hasta 10 por día. Abajo, en "Mis envíos", se ve el estado (Recibida, En revisión, Planificada, Resuelta o Descartada) y la respuesta del equipo, que además llega como notificación y por mail. Homy no puede mandar sugerencias por vos.',
     claves: 'sugerencia sugerencias queja reclamo mejora idea oportunidad problema error falla bug reportar no funciona anda mal feedback opinion comentario contacto equipo',
   })),
+  {
+    id: 'rubros',
+    titulo: 'Rubros de HomIA',
+    roles: ['todos'],
+    ruta: '/directorio',
+    texto: `HomIA tiene ${CATEGORIES_FALLBACK.length} rubros, que sirven para buscar profesionales y materiales: ${CATEGORIES_FALLBACK.map((c) => c.name).join(', ')}. El profesional elige los suyos al registrarse y los cambia en Mi perfil.`,
+    claves: 'rubros categorias oficios rubro electrodomesticos repuestos lavarropas heladera plagas fumigacion cucarachas control de plagas que servicios hay',
+  },
+  {
+    id: 'fotos',
+    titulo: 'Subir fotos (no puedo subir una foto)',
+    roles: ['todos'],
+    texto: 'Las fotos se pueden subir de cualquier tamaño (perfil, logo, obras, stock, reseñas, sobrantes, DNI, trabajos, sugerencias, finanzas): la app las achica y comprime sola en el celular antes de subirlas. Sirven JPG, PNG, WEBP o la foto de la cámara. Si falla, el mensaje dice el motivo: sin conexión, imagen dañada, o una foto HEIC del iPhone que ese navegador no puede abrir (subirla desde el iPhone, o en Ajustes > Cámara > Formatos elegir "Más compatible", o mandarla como JPG).',
+    claves: 'foto fotos imagen subir no puedo subir no se pudo subir pesada grande tamaño heic iphone',
+  },
+  {
+    id: 'notificaciones',
+    titulo: 'La campanita (notificaciones)',
+    roles: ['todos'],
+    ruta: '/notificaciones',
+    texto: 'La campanita de arriba en el panel junta los avisos: presupuestos y ofertas, contrataciones, fechas propuestas o aceptadas, facturas, cobros y pagos acreditados, pedidos y reservas, devoluciones de sobrantes y respuestas a sugerencias. El número naranja es lo que falta leer. Los mensajes del chat se cuentan aparte, en Mensajes.',
+    claves: 'campanita campana notificaciones avisos novedades me llego sin leer',
+  },
+  {
+    id: 'ayuda-guias',
+    titulo: 'Dónde está la ayuda: tour, guías, videos y preguntas frecuentes',
+    roles: ['todos'],
+    ruta: '/ayuda',
+    texto: 'En el panel, el botón de Homy (abajo a la derecha) tiene dos vistas: "Homy" para preguntar y "Guías y tour" con el recorrido guiado del rol (completo o una sección), "¿Cómo hago?" con cada acción paso a paso, "Me trabé" con los atascos típicos y los videos. El recorrido no arranca solo: también se empieza desde el Centro de ayuda o desde la tarjeta "Tus primeros pasos" del Inicio. El Centro de ayuda (Ayuda en el menú) tiene qué se hace en cada sección por rol, los videos y las preguntas frecuentes.',
+    claves: 'ayuda tour recorrido guiado tutorial guias como hago me trabe videos preguntas frecuentes centro de ayuda',
+  },
   {
     id: 'no-existe',
     titulo: 'Lo que HomIA NO hace (hoy)',
     roles: ['todos'],
     texto:
-      'HomIA no retiene el dinero (no hay escrow ni seña por la plataforma), no garantiza plazos ni precios de terceros, no asigna profesionales automáticamente (el cliente elige), no comparte datos de contacto por fuera del chat y no fija los precios de materiales (los pone cada proveedor).',
+      'HomIA no retiene el dinero (no hay escrow ni seña por la plataforma), no garantiza plazos ni precios de terceros, no asigna profesionales automáticamente (el cliente elige), no comparte datos de contacto por fuera del chat y no fija los precios de materiales (los pone cada proveedor). Tampoco hay, hoy: forma de editar un trabajo ya publicado (se cierra y se publica otro), de editar una oferta enviada (se retira y se vuelve a ofertar), de sumar el rol profesional o proveedor a una cuenta existente, botón en la app para cancelar la suscripción del proveedor (se cancela en Mercado Pago), verificación del celular por código, ni envíos a domicilio gestionados por HomIA (los materiales se retiran en el local del proveedor).',
     claves: 'garantia escrow seguro plazo asignan envio',
   },
 ]
@@ -289,8 +328,19 @@ function desdeGuias(): Entrada[] {
   return out
 }
 
+/** Preguntas frecuentes del Centro de ayuda (misma fuente que la pantalla /ayuda). */
+function desdeFaq(): Entrada[] {
+  return FAQ.map((f) => ({
+    id: `faq-${f.tema}`,
+    titulo: f.q,
+    roles: ['todos'],
+    texto: f.a,
+    ruta: `/ayuda?tema=${f.tema}`,
+  }))
+}
+
 // Finanzas (D24): cómo usar la sección y el glosario, desde la única fuente (conceptos.ts)
-export const CONOCIMIENTO: Entrada[] = [...NUCLEO, ...desdeGuias(), ...entradasHomyFinanzas()]
+export const CONOCIMIENTO: Entrada[] = [...NUCLEO, ...desdeGuias(), ...desdeFaq(), ...entradasHomyFinanzas()]
 
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 const VACIAS = new Set(['que', 'los', 'las', 'por', 'para', 'con', 'del', 'como', 'una', 'uno', 'hay', 'mas', 'esta', 'este', 'donde', 'cuando', 'hago', 'puedo', 'tengo', 'quiero', 'necesito'])

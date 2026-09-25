@@ -37,7 +37,21 @@ export default function TourOverlay() {
   const [rect, setRect] = useState<DOMRect | null>(null)
   // clave del paso cuyo ancla no está en pantalla (ej: en el celu vive dentro de "Más")
   const [missingKey, setMissingKey] = useState<string | null>(null)
+  // en el celu, la sección del menú vive dentro de «Más»: se ilumina ese botón
+  const [viaMas, setViaMas] = useState(false)
   const runRef = useRef<Run | null>(null)
+  // alto real de la tarjeta (para ubicarla sin que se salga de la pantalla): lo mide un
+  // ResizeObserver, porque cambia con el texto de cada paso
+  const [cardH, setCardH] = useState(330)
+  const roRef = useRef<ResizeObserver | null>(null)
+  const cardRef = useCallback((node: HTMLDivElement | null) => {
+    roRef.current?.disconnect()
+    roRef.current = null
+    if (!node || typeof ResizeObserver === 'undefined') return
+    const medir = () => setCardH((h) => (Math.abs(node.offsetHeight - h) > 2 ? node.offsetHeight : h))
+    roRef.current = new ResizeObserver(medir)
+    roRef.current.observe(node)
+  }, [])
 
   const step: TourStep | null = run ? (TOURS[run.role]?.[run.index] ?? null) : null
 
@@ -55,19 +69,28 @@ export default function TourOverlay() {
     if (!r) return false
     const st = TOURS[r.role]?.[r.index]
     if (!st) return false
-    if (!st.target) { setRect(null); return true }
+    if (!st.target) { setRect(null); setViaMas(false); return true }
     // data-tour (desktop) o data-tour-m (bottom-nav móvil): elegir el visible
-    const els = document.querySelectorAll<HTMLElement>(`[data-tour="${st.target}"], [data-tour-m="${st.target}"]`)
-    let el: HTMLElement | null = null
-    for (const cand of Array.from(els)) {
-      const r = cand.getBoundingClientRect()
-      if (r.width >= 2 || r.height >= 2) { el = cand; break }
+    const visible = (sel: string) => {
+      for (const cand of Array.from(document.querySelectorAll<HTMLElement>(sel))) {
+        const r = cand.getBoundingClientRect()
+        if (r.width >= 2 || r.height >= 2) return cand
+      }
+      return null
     }
+    let el = visible(`[data-tour="${st.target}"], [data-tour-m="${st.target}"]`)
+    // sección del menú que en el celu no está en la barra inferior: iluminar «Más»
+    const mas = !el && st.target.startsWith('nav-') ? visible('[data-tour-m="nav-mas"]') : null
+    if (mas) el = mas
+    setViaMas(!!mas)
     if (!el) { setRect(null); return false }
     const rc = el.getBoundingClientRect()
     if (rc.width < 2 && rc.height < 2) { setRect(null); return false }
-    if (rc.bottom < 0 || rc.top > window.innerHeight || rc.right < 0 || rc.left > window.innerWidth) {
-      el.scrollIntoView({ block: 'center', behavior: 'auto' })
+    // fuera de la pantalla, aunque sea en parte (ej. la pestaña «Devoluciones» en una fila que
+    // scrollea de costado en el celu): llevarlo al centro
+    const afuera = rc.top < 0 || rc.bottom > window.innerHeight || rc.left < 0 || rc.right > window.innerWidth
+    if (afuera && rc.height < window.innerHeight && rc.width < window.innerWidth) {
+      el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'auto' })
       setRect(el.getBoundingClientRect())
       return true
     }
@@ -89,7 +112,8 @@ export default function TourOverlay() {
     const tick = () => {
       if (!alive) return
       if (measureOnce()) return
-      if (tries > 18) { if (step.target) setMissingKey(key); return }
+      // hasta ~6 s: la pantalla puede tardar en traer sus datos y dibujar el elemento
+      if (tries > 55) { if (step.target) setMissingKey(key); return }
       tries += 1
       setTimeout(tick, 110)
     }
@@ -171,18 +195,27 @@ export default function TourOverlay() {
   // en móvil (sin sidebar) las secciones que no están en la barra inferior viven en "Más"
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024
   const missing = !rect && missingKey === `${run.role}:${run.index}:${route.path}`
-  const hint = missing && isMobile ? 'Abrí «Más» (abajo a la derecha) para encontrar esta sección' : null
+  const hint = viaMas
+    ? 'En el celu, esta sección está dentro de «Más» (abajo a la derecha)'
+    : missing && isMobile ? 'Abrí «Más» (abajo a la derecha) para encontrar esta sección' : null
+  // en el celu la tarjeta va abajo, salvo que el foco esté en la mitad de abajo (barra
+  // inferior, «Más»): ahí va arriba para no taparlo
+  const compactArriba = compact && !!rect && rect.top > window.innerHeight / 2
 
   // Posición de la tarjeta: debajo del foco si hay lugar, si no arriba.
   let cardStyle: React.CSSProperties = {}
   if (rect && !compact) {
     const cardW = 350
-    const estH = 330
-    const below = rect.bottom + estH + 24 < window.innerHeight
+    const vh = window.innerHeight
     const left = Math.max(12, Math.min(rect.left + rect.width / 2 - cardW / 2, vw - cardW - 12))
-    cardStyle = below
-      ? { top: rect.bottom + 14, left }
-      : { bottom: window.innerHeight - rect.top + 14, left }
+    if (rect.bottom + cardH + 26 <= vh) cardStyle = { top: rect.bottom + 14, left } // abajo del foco
+    else if (rect.top - cardH - 26 >= 0) cardStyle = { top: rect.top - cardH - 14, left } // arriba
+    else {
+      // ni arriba ni abajo (ej. un ítem bajo del menú lateral): al costado, dentro de la pantalla
+      const top = Math.max(12, Math.min(rect.top + rect.height / 2 - cardH / 2, vh - cardH - 12))
+      const derecha = rect.right + 16 + cardW <= vw - 12
+      cardStyle = { top, left: derecha ? rect.right + 16 : Math.max(12, rect.left - cardW - 16) }
+    }
   }
 
   return (
@@ -211,14 +244,14 @@ export default function TourOverlay() {
         aria-label={`Tour guiado: ${step.title}`}
         className={
           compact
-            ? 'fixed inset-x-2 bottom-3 z-[63]'
+            ? `fixed inset-x-2 z-[63] ${compactArriba ? 'top-3' : 'bottom-3'}`
             : rect
               ? 'fixed z-[63] w-[350px]'
               : 'pointer-events-none fixed inset-0 z-[63] flex items-center justify-center px-4'
         }
         style={cardStyle}
       >
-        <div className="homy-glass-strong pointer-events-auto max-h-[86vh] w-full max-w-md overflow-y-auto rounded-3xl p-5 shadow-[0_30px_80px_-24px_rgba(10,37,64,0.55)]">
+        <div ref={cardRef} className="homy-glass-strong pointer-events-auto max-h-[86vh] w-full max-w-md overflow-y-auto rounded-3xl p-5 shadow-[0_30px_80px_-24px_rgba(10,37,64,0.55)]">
           <div className="flex items-center gap-2.5">
             <span className="homy-icon-chip homy-chip-blue size-9 shrink-0 [&_svg]:size-4.5" aria-hidden><Icon /></span>
             <div className="min-w-0 flex-1">
