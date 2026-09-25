@@ -72,6 +72,10 @@ Una línea: D19 y D20 en `decisiones.md`; migración `0029` aplicada (3 columnas
 
 ---
 
+## 2026-09-25 — Fotos que no subían y catálogo ampliado (Leonardo)
+
+"cuando quiero subir una foto de perfil me dice 'no se pudo subir la foto', es mejor que especifique porque" → causa: Vercel corta > 4,5 MB (413 HTML) y los componentes mostraban un mensaje genérico. `subirImagen()` en las 11 pantallas con fotos (TÉCNICO §4.11). Catálogo: expansión 3 cargada en producción (546 nuevos → 1764, 0 actualizados, stock intacto 46); `canonicalCategoria` por palabra completa; `catalogScore`; texto de la home "más de 1.700 materiales".
+
 ## 2026-09-25 — Titular de HomIA en las páginas legales y mails con Resend (Leonardo)
 
 "ya cargue la api de resend y el dominio para los emails (por ahora). mi nombre completo es Leonardo Osterrietch, mi cuit es 20398335628, no pongas domicilio" + "mejor usar de email: business@vakdor.com" → `TITULAR` en `legal-content.ts`; Privacidad §1 remite al titular. Resend: el dominio verificado es `vakbot.vakdor.com` (no `somoshomia.com`) → remitente por defecto `avisos@vakbot.vakdor.com`. Prueba real con `sendEmail`: entregado (Resend `last_event: delivered`). Producción respondía 503 `needsConfig` antes del deploy (la clave no llegaba a las funciones). Pedido: "cuando terminemos conformes con las pruebas se borran los datos/cuentas demo" (AGENTS §11).
