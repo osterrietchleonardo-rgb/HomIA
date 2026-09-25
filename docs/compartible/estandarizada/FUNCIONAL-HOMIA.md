@@ -348,7 +348,7 @@ Pensadas para leerse en el celu:
   mismo que aplica el sistema.
 - **Contacto:** razón social, CUIT, domicilio y email de la empresa. Mientras no estén cargados, la
   página lo dice ("Todavía no publicamos acá…"), sin inventarlos.
-- Versión inicial: la tiene que revisar un abogado antes del lanzamiento (D22).
+- Es la versión vigente. No la revisa un abogado: lo decidió Leonardo el 25/09/2026 (D22).
 
 *Fuente: `src/lib/legal-content.ts`, `src/components/screens/legal-screen.tsx`.*
 

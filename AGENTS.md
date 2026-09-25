@@ -218,7 +218,7 @@ Notas de esquema: la base es Postgres, pero se mantienen las convenciones hereda
 ✔ Términos aceptados al registrarse (`acceptTerms`, `User.termsAcceptedAt/termsVersion`), "Eliminar mi cuenta" con anonimización (`POST /api/profiles/me/eliminar`, `User.deletedAt`), filtro de cuentas demo por `HIDE_DEMO_USERS`, imagen para compartir (`opengraph-image`) y páginas de error (D19/D20, migración 0029 aplicada, rama `feat/recuperar-mails`).
 ✔ Recuperar contraseña por mail y avisos por mail de los eventos clave con interruptor en el perfil de los tres roles (D18, migración 0028 aplicada, rama `feat/recuperar-mails`). E2E A+B+F 286/286 con doble de Resend.
 ◻ Mails: crear la cuenta de Resend, verificar `somoshomia.com` y cargar `RESEND_API_KEY` + `EMAIL_FROM` en Vercel. Sin eso no sale ningún mail (tampoco el de recuperar contraseña).
-◻ Día del lanzamiento: `HIDE_DEMO_USERS=1` en Vercel (Production) y datos `NEXT_PUBLIC_LEGAL_*`; textos legales revisados por un abogado.
+◻ Día del lanzamiento: `HIDE_DEMO_USERS=1` en Vercel (Production) y datos `NEXT_PUBLIC_LEGAL_*`. Los textos legales quedan como versión vigente, sin revisión de abogado (decisión de Leonardo, D22).
 ◻ Deuda priorizada: `docs/AUDITORIA-INTEGRAL.md` §9 y `docs/PLAN-LANZAMIENTO-48H.md` §4 (zod en las rutas que faltan, `includes` en directorio/bolsa/pines, cifrado de tokens OAuth).
 
 ## 12. Variables de entorno (nombres exactos que lee el código)

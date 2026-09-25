@@ -2,7 +2,8 @@
 // Versión del 24/09/2026, redactada a partir de cómo funciona el sistema HOY (reglas de
 // docs/interno/LOGICA-HOMIA.md y docs/interno/decisiones.md). Cada plazo, porcentaje y dato
 // mencionado acá existe en el código: si cambia una regla, hay que cambiar este archivo y subir
-// LEGAL_VERSION. DEBEN revisarse con un abogado antes de darlos por definitivos.
+// LEGAL_VERSION. Son la versión vigente: Leonardo decidió el 25/09/2026 no hacerlos revisar
+// por un abogado (D22).
 // Los datos de la empresa (razón social, CUIT, domicilio, email) salen de variables de entorno
 // públicas NEXT_PUBLIC_LEGAL_*; si faltan, la página lo dice en vez de inventarlos.
 
