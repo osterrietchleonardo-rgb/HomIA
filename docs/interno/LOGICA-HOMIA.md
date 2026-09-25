@@ -1253,6 +1253,13 @@ profesional (antes apuntaba a una página inexistente; corregido en `2eed864`).
 
 ### 17.1 Qué evento se registra y cuándo
 
+**Solo clientes reales (D32, 25/09/2026).** No se guarda nada (el endpoint responde 204 igual): fuera
+del sitio publicado (`VERCEL_ENV` ≠ `production`, salvo `ANALYTICS_EN_DESARROLLO=1` en la suite de
+métricas), desde navegadores automatizados o robots (user agent), desde el navegador del
+administrador (cookie de `/admin`; al entrar a `/admin` el navegador queda marcado con
+`homia_track_off`) ni de la cuenta cuyo email es `ADMIN_EMAIL`. Lo mismo para los eventos de
+servidor (`registrarEvento`). Reglas en `src/lib/analytics/filtro.ts`.
+
 | `type` | Cuándo | `name` | Extra (`props`, `entityType/Id`) |
 |---|---|---|---|
 | `page_view` | Cada cambio de ruta (hash de la SPA, `popstate`, `pushState`/`replaceState`) y la carga inicial; misma ruta normalizada seguida = una sola | la ruta normalizada (`/panel/cliente/proyectos/:id`) | `rol`, `tab`, `mode`, `tipo` de la query si son cortos; activo de la ruta |

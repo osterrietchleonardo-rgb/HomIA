@@ -27,6 +27,9 @@ export default function AdminArea({ route, children }: { route: RouteState; chil
       const r = await fetch('/api/admin/login', { cache: 'no-store' })
       const d = await r.json().catch(() => ({}))
       setEstado(d.admin ? 'dentro' : 'fuera')
+      // el navegador del administrador no cuenta en las métricas (solo clientes reales, 25/09/2026):
+      // queda marcado aunque la sesión de /admin venza
+      if (d.admin) { try { localStorage.setItem('homia_track_off', '1') } catch { /* modo privado */ } }
     } catch {
       setEstado('fuera')
     }

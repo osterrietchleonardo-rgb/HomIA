@@ -14,6 +14,9 @@
 //     D26: toda alta necesita el código de 6 números del mail; con el doble se lee del mail, sin él
 //     se arma por la base (helper `registrar`) y los checks de códigos que leen el mail no corren.
 //
+// La sección T (métricas) necesita el server con ANALYTICS_EN_DESARROLLO=1: fuera de producción no
+// se registra uso (analytics/filtro.ts). Las cuentas demo ya no existen (borradas el 25/09/2026).
+//
 // El server tiene que correr con HIDE_DEMO_USERS distinto de 1 (los usuarios de la suite son
 // @homia.test y con el flag prendido quedan ocultos de lo público — D20).
 //

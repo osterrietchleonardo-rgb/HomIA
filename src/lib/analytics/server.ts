@@ -10,6 +10,24 @@ import { db } from '@/lib/db'
 import { hashSeguro, ipDe } from '@/lib/homy/cupo'
 import { normalizarRuta, sumarLatidos, resumirDispositivo, type TipoEntidad } from './core'
 import type { Lote } from './schema'
+import { registroHabilitado, esNavegadorAutomatizado, esEmailDelDueno } from '@/lib/analytics/filtro'
+
+// ¿La cuenta es la del dueño (su email = ADMIN_EMAIL)? Se cachea 10 min por instancia: una consulta
+// por usuario nuevo, no por lote.
+const cacheDueno = new Map<string, { es: boolean; hasta: number }>()
+export async function esCuentaDelDueno(userId: string | null | undefined): Promise<boolean> {
+  if (!userId || !process.env.ADMIN_EMAIL) return false
+  const c = cacheDueno.get(userId)
+  if (c && c.hasta > Date.now()) return c.es
+  let es = false
+  try {
+    const u = await db.user.findUnique({ where: { id: userId }, select: { email: true } })
+    es = esEmailDelDueno(u?.email)
+  } catch { /* ante la duda, se registra */ }
+  if (cacheDueno.size > 5000) cacheDueno.clear()
+  cacheDueno.set(userId, { es, hasta: Date.now() + 600_000 })
+  return es
+}
 
 /** Cookie propia (no httpOnly) que el tracker escribe con `<anonId>.<sessionId>` para que los
  *  eventos de servidor (login, registro…) queden en la misma línea de tiempo del visitante. */
@@ -138,8 +156,12 @@ async function escribirEventoServidor(e: EventoServidor, ctx: { anonId: string; 
  */
 export function registrarEvento(req: Request | null, e: EventoServidor): void {
   try {
+    // solo clientes reales: nada fuera de producción ni de navegadores automatizados (filtro.ts);
+    // sin req (webhook, cron) no hay navegador que mirar
+    if (!registroHabilitado()) return
     const h = req?.headers
     const ua = h?.get('user-agent') || ''
+    if (h && esNavegadorAutomatizado(ua)) return
     const ipHash = h ? hashSeguro(`ip:${ipDe(h)}`) : null
     let cookieVal: string | null = null
     const m = (h?.get('cookie') || '').match(/(?:^|;\s*)homia_anon_id=([^;]+)/)
@@ -151,8 +173,9 @@ export function registrarEvento(req: Request | null, e: EventoServidor): void {
       device: ua ? resumirDispositivo(ua) : null,
       ipHash,
     }
-    const tarea = () => escribirEventoServidor(e, ctx).catch((err) => console.warn('[metricas] no se pudo registrar', e.name, err instanceof Error ? err.message : err))
-    try { after(tarea) } catch { void tarea() } // fuera de un request (scripts) no hay after()
+    const tarea = async () => { if (await esCuentaDelDueno(e.userId)) return; await escribirEventoServidor(e, ctx) }
+    const _tarea = () => tarea().catch((err) => console.warn('[metricas] no se pudo registrar', e.name, err instanceof Error ? err.message : err))
+    try { after(_tarea) } catch { void _tarea() } // fuera de un request (scripts) no hay after()
   } catch (err) {
     console.warn('[metricas] registrarEvento', err instanceof Error ? err.message : err)
   }

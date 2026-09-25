@@ -26,6 +26,10 @@
 
 ---
 
+## 2026-09-25 — Cuentas demo borradas y /admin solo con clientes reales (D32) (Leonardo)
+
+**El pedido:** "limpiar los 3 usuarios demo cuidadosamente" y "en /admin limpiar/no registrar lo generado/hecho por los demo y tuyos, deben ser 100% reales de clientes reales". **Antes de tocar:** inventario de solo lectura: 0 usuarios reales; las demo eran 5 (las 3 de ingreso + carolina y julian del seed); ningún vínculo con cuentas reales; el único pago con id de MP era inventado (`MP-DEMO-…`). **Lo hecho:** copia completa en `scratch/backup-demo-*.json`, purga de las 5 cuentas y todo lo suyo (46 de stock, 2 proyectos, 2 facturas, 6 reseñas, 3 chats, 34 sesiones de Homy, 62 eventos, 3 DNI…, 1 archivo) → 0; suscripción `pending` del proveedor demo cancelada en MP. `analytics/filtro.ts` (TÉCNICO §4.15) y borrado del uso registrado de pruebas. E2E T 94/94 con `ANALYTICS_EN_DESARROLLO=1`.
+
 ## 2026-09-25 — Catálogo: expansión 4 de maderera y carpintería cargada, 1902 elementos (Leonardo)
 
 **El pedido:** "revisa si en el catalogo de materiales, de los mil setecientos, esta los materiales/items necesarios que una maderera vende, y lo que un profesional que trabaja con madera (para hacer muebles, etc.). agregalos en el caso que encuentres." **Lo hecho:** revisados los 1764 contra lo que vende una maderera y usa un mueblero; 138 altas en `scripts/catalogo/catalog-exp4-madera.mjs` (maderera 55, carpinteria 39, herramientas 33, pintura 11), sumadas a `fuentes.mjs`; `--dry-run --categorias-nuevas` = 138 nuevos, 0 actualizados, 0 movidos → 1902. `catalogScore` suma las medidas ("mdf 18" trae primero el de 18 mm) y `canonicalCategoria` suma mueblero, ebanista, aserradero (TÉCNICO §4.11). **Pendiente:** la carga real en producción (el permiso del agente la frenó): `node --env-file=.env scripts/catalogo/seed-catalog-maestro.mjs --categorias-nuevas`. **Ojo:** sin `--categorias-nuevas` el seeder duplica los 72 elementos de electrodomesticos y plagas en electricistas y limpieza (el dry-run sin la bandera da 210 nuevos).

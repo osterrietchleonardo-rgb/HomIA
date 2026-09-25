@@ -828,6 +828,14 @@ código por la base (HMAC con el `AUTH_SECRET` del `.env`, solo para `@homia.tes
 
 ### 4.15 Métricas de uso y panel del administrador (D27, migración `0036`, 25/09/2026)
 
+- **D32 (25/09/2026):** `src/lib/analytics/filtro.ts` (`registroHabilitado`, `esNavegadorAutomatizado`,
+  `esEmailDelDueno`; tests en `src/lib/__tests__/analytics-filtro.test.ts`) aplicado en
+  `/api/analytics/collect` (antes de escribir; también `getAdminSession()`) y en `registrarEvento`
+  (con `esCuentaDelDueno()` cacheado 10 min por instancia). `admin-layout.tsx` marca el navegador del
+  admin con `homia_track_off`. Limpieza hecha: cuentas demo (5) con todo lo suyo y todo el uso de
+  pruebas (`AnalyticsEvent/Session`, `SearchEvent`, Homy, `AiUsage`, códigos y estados OAuth vencidos),
+  con copia previa en `scratch/backup-*.json`.
+
 - **Modelos** (aditivos, sin FK a `User`, como `HomyRun`):
   - `AnalyticsEvent` (`id`, `userId?`, `anonId`, `sessionId`, `role?`, `type`
     page_view|click|submit|dialog|search|error|server, `name`, `path` normalizado, `entityType?`,

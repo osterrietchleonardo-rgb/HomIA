@@ -1808,6 +1808,10 @@ CSV (separador ";", montos "1.234,56") con el estado de resultados y todos los m
 
 ## Métricas: qué se registra y el panel del administrador *(D27, 25/09/2026)*
 
+> **Solo clientes reales (25/09/2026):** las pruebas, los robots, las cuentas de demostración (ya
+> borradas) y el propio dueño no cuentan. Al entrar a `/admin` desde un navegador, ese navegador deja de
+> contarse para siempre.
+
 ### Qué registra HomIA de cada visita (todos los usuarios y los visitantes)
 
 Desde el 25/09/2026 HomIA lleva **su propio registro de uso** (sin Google Analytics ni ninguna
