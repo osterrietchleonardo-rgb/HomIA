@@ -11,7 +11,7 @@ const jakarta = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.somoshomia.com"),
-  title: "HomIA | Arreglá tu casa y pagá al terminar",
+  title: "HomIA | Tu hogar, en buenas manos",
   description: "Plomeros, electricistas, gasistas, pintores y más. Compará presupuestos sin llamar a nadie, mirá quién validó su DNI y qué dicen otros clientes, y pagá cuando el trabajo está hecho, por Mercado Pago o en efectivo. Gratis para clientes.",
   keywords: [
     "HomIA",
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "HomIA" }],
   openGraph: {
-    title: "HomIA | Arreglá tu casa y pagá al terminar",
+    title: "HomIA | Tu hogar, en buenas manos",
     description:
       "Presupuestos de profesionales con reseñas de otros clientes, materiales de varios proveedores en un solo carrito y pago cuando el trabajo está hecho. Gratis para clientes.",
     url: "https://www.somoshomia.com",
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "HomIA | Arreglá tu casa y pagá al terminar",
+    title: "HomIA | Tu hogar, en buenas manos",
     description:
       "Profesionales y materiales para tu casa, en Argentina. Pagás al terminar, reseñas con fotos, gratis para clientes.",
   },

@@ -59,7 +59,7 @@
   Next.js aparece **"Algo salió mal"** con dos botones: **Reintentar** (vuelve a cargar esa parte) e
   **Ir al inicio**. No se muestran detalles técnicos. *(24/09/2026.)*
 - **Compartir el link de HomIA** por WhatsApp o redes muestra una imagen de vista previa: fondo azul
-  oscuro, "HomIA", "Arreglá tu casa y pagá al terminar" y "Profesionales con reseñas y materiales de
+  oscuro, "HomIA", "Tu hogar, en buenas manos" y "Profesionales con reseñas y materiales de
   varios proveedores. Gratis para clientes." *(24/09/2026; texto cambiado el 25/09/2026, D31.)*
 - **Eliminar mi cuenta** (los tres roles, al final de **Mi perfil**) *(D19, 24/09/2026)*:
   1. Tocás **Eliminar mi cuenta**. Se abre una ventana que explica **qué se borra** (nombre, email,
@@ -103,7 +103,7 @@
 
 **Qué muestra, de arriba hacia abajo:**
 
-1. **Titular y buscador principal:** "Arreglá tu casa y pagá al terminar". Escribís qué necesitás
+1. **Titular y buscador principal:** "Tu hogar, en buenas manos." (el eslogan de HomIA, pedido de Leonardo); debajo, qué ganás: presupuestos, DNI validado, reseñas y pago al terminar. Escribís qué necesitás
    (por ejemplo "Necesito un plomero urgente") y tocás Enter o el botón.
 2. **Cómo funciona:** tres pasos ("Contá qué pasó", "Elegí con datos, no a ciegas", "Pagás cuando
    está terminado").
@@ -1619,7 +1619,8 @@ En la cinta de sponsors aparecen primero los proveedores que cargaron logo propi
 ### 4.10 Mi perfil
 
 - **Datos del negocio:** nombre (obligatorio), tipo de negocio (18 rubros), CUIT, descripción,
-  dirección y ciudad.
+  dirección y ciudad, y el **celular de contacto** (el que cargaste al registrarte) con su **país**:
+  mientras escribís te muestra "Se guardará como +54 9 …" (25/09/2026).
 - **Foto, plan y verificación:** foto del negocio, el estado de tu plan y el acceso a la
   verificación.
 - **Marca en la portada:** solo PRO (ver 4.9).

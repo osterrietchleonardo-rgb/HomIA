@@ -13,10 +13,14 @@ import { DeleteAccountCard } from '@/components/app/delete-account-card'
 import { AvisosMailCard } from '@/components/screens/panel/avisos-mail-card'
 import { VerificacionContactoCard } from '@/components/app/verificacion-contacto-card'
 import { subirImagen } from '@/lib/upload-image'
+import { SelectorPaisCelular, AvisoCelular } from '@/components/app/selector-pais-celular'
+import { paisDeCelular, ejemploCelular, type CountryCode } from '@/lib/registro'
 
 type MeUser = {
   email: string
   displayName: string
+  phone?: string | null
+  phoneE164?: string | null
   avatarUrl?: string | null
   provider: {
     businessName: string; kind?: string; cuit: string | null; description: string | null
@@ -77,6 +81,9 @@ export default function ProviderProfile() {
   const [description, setDescription] = useState('')
   const [address, setAddress] = useState('')
   const [city, setCity] = useState('')
+  // celular de contacto (el mismo que cargó al registrarse), estandarizado con país (D26)
+  const [phone, setPhone] = useState('')
+  const [pais, setPais] = useState<CountryCode>('AR')
   const [busy, setBusy] = useState(false)
 
   // marca en la home (Plan PRO)
@@ -101,6 +108,8 @@ export default function ProviderProfile() {
           setDescription(u.provider?.description || '')
           setAddress(u.provider?.address || '')
           setCity(u.provider?.city || '')
+          setPhone(u.phone || '')
+          setPais(paisDeCelular(u.phoneE164 || u.phone) || 'AR')
           setBrandLogoUrl(u.provider?.brandLogoUrl || '')
           setBrandTagline(u.provider?.brandTagline || '')
           setBrandColor(u.provider?.brandColor || '')
@@ -129,7 +138,7 @@ export default function ProviderProfile() {
     try {
       const res = await fetch('/api/profiles/me', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ businessName: businessName.trim(), kind, cuit: cuit.trim(), description: description.trim(), address: address.trim(), city: city.trim() }),
+        body: JSON.stringify({ businessName: businessName.trim(), kind, cuit: cuit.trim(), description: description.trim(), address: address.trim(), city: city.trim(), phone: phone.trim(), phoneCountry: pais }),
       })
       if (!res.ok) { toast.error((await readJson(res)).error || 'No pudimos guardar los cambios'); return }
       await refresh()
@@ -408,6 +417,12 @@ export default function ProviderProfile() {
           </div>
           <Field label="Dirección" value={address} onChange={setAddress} placeholder="Calle y número" />
           <Field label="Ciudad" value={city} onChange={setCity} placeholder="Ej: Córdoba" />
+          <SelectorPaisCelular id="perfil-proveedor-pais" value={pais} onChange={setPais}
+            labelClassName="text-[13px] font-bold text-[#0A2540]" selectClassName="py-3 text-sm" gapClassName="mt-1.5" />
+          <div>
+            <Field label="Celular de contacto" value={phone} onChange={setPhone} type="tel" placeholder={ejemploCelular(pais) || '+54 9 …'} required />
+            <AvisoCelular phone={phone} pais={pais} />
+          </div>
           <button type="submit" disabled={busy} className="homy-btn-primary homy-focus w-full min-h-[48px] disabled:opacity-60">
             {busy ? 'Guardando…' : 'Guardar cambios'}
           </button>

@@ -26,6 +26,10 @@
 
 ---
 
+## 2026-09-25 — Vuelve el eslogan "Tu hogar, en buenas manos" y el proveedor edita su celular (Leonardo)
+
+**El pedido:** "el titulo tien que ser el que estaba, porque es como nuestro slogan" y "como que el proveedor no tiene campo de celular en su perfil? si en el registro lo pone". **Lo hecho:** titular de la home, título de la pestaña, Open Graph y tarjeta para compartir vuelven a "Tu hogar, en buenas manos" (el resto del texto nuevo de D31 queda); Mi perfil del proveedor suma "País del celular" + "Celular de contacto" con el mismo selector y aviso "Se guardará como…" que cliente y profesional (`PUT /api/profiles/me` con `phone` + `phoneCountry`). Visual 390/1280 sin desbordes con la cuenta demo (solo mirar).
+
 ## 2026-09-25 — Publicado: celular por país sin código, textos de la home (D31) y panel del registro fijo (Leonardo)
 
 **Lo hecho:** commit `14e99e6` en `main`. Textos del panel de Crear cuenta/Ingresar reescritos con la propuesta del equipo de copy. Pruebas: unitarias 150/150, E2E A 205/205 y T 94/94, visual 60/60 local y **60/60 en producción**; en producción el panel izquierdo queda fijo (scrollY 0 en cada paso, 1280/1440/390) y `canal: 'celular'` responde 400.

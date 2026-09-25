@@ -964,6 +964,11 @@ código por la base (HMAC con el `AUTH_SECRET` del `.env`, solo para `@homia.tes
   la base única mientras otra crea pedidos). Las facturas demo con formato `A-0001-…` no entran en la
   serie `HOM-`. Tests: `src/lib/__tests__/numeracion.test.ts` (4).
 
+- **25/09/2026 (Leonardo):** vuelve el eslogan "Tu hogar, en buenas manos" en `hero.tsx`,
+  `layout.tsx` (title/OG/Twitter) y `og-card.tsx`; `proveedor/perfil.tsx` suma `SelectorPaisCelular` +
+  "Celular de contacto" (`phone` + `phoneCountry` en el mismo `PUT /api/profiles/me` de los datos del
+  negocio).
+
 ## 5. Migraciones y la base única
 
 - **Una sola base = producción.** El `.env` local, los Preview y Producción de Vercel apuntan al

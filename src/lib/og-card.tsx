@@ -2,7 +2,7 @@
 // La usan src/app/opengraph-image.tsx y src/app/twitter-image.tsx con ImageResponse (next/og):
 // solo estilos en línea y flexbox (lo que soporta el renderizador de next/og).
 export const OG_SIZE = { width: 1200, height: 630 }
-export const OG_ALT = 'HomIA: arreglá tu casa y pagá al terminar'
+export const OG_ALT = 'HomIA: tu hogar, en buenas manos'
 
 export function HomiaShareCard() {
   return (
@@ -46,7 +46,7 @@ export function HomiaShareCard() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
         <div style={{ fontSize: 64, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1.1 }}>
-          Arreglá tu casa y pagá al terminar
+          Tu hogar, en buenas manos
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
           <div style={{ width: 10, height: 44, borderRadius: 5, background: '#FF5A1F', flexShrink: 0 }} />

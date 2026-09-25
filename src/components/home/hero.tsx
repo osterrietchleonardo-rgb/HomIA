@@ -39,11 +39,11 @@ export function Hero() {
 
           {/* Titular */}
           <h1 className="mt-7 max-w-4xl text-balance text-[2.6rem] font-extrabold leading-[1.05] tracking-[-0.02em] text-navy sm:text-6xl lg:text-[4.6rem]">
-            Arreglá tu casa
+            Tu hogar,
             <br />
-            y pagá{" "}
-            <span className="homy-gradient-text whitespace-nowrap">
-              al terminar
+            en{" "}
+            <span className="homy-gradient-text">
+              buenas manos
             </span>
             .
           </h1>
