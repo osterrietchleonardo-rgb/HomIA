@@ -538,9 +538,13 @@ GET privados de N.
   `{ ok: true, id }` o `{ ok: false, reason: 'no_configurado' | 'destinatario_invalido' | 'error' }`.
   Sin `RESEND_API_KEY` no intenta y hace un `console.warn` una vez por proceso. **Plantilla de marca
   (25/09/2026, pedido de Leonardo):** tablas y estilos en línea, 560 px que se achica en el celu;
-  cabecera azul marino `#0A2540` con el logo PNG (`public/email/homia-logo-blanco.png`, mascota +
-  wordmark en Plus Jakarta Sans, generado desde `public/logo.svg` con Playwright; Gmail y Outlook no
-  muestran SVG; `alt="HomIA"` si bloquean imágenes) y "Tu hogar en buenas manos"; franja naranja
+  cabecera azul marino `#0A2540` con el logo PNG (mascota + wordmark en Plus Jakarta Sans, generado
+  desde `public/logo.svg` con Playwright; Gmail y Outlook no muestran SVG) **incrustado en el mail**:
+  va como adjunto inline (`attachments: [{ content_id: 'homia-logo', … }]`, base64 en
+  `src/lib/email-logo.ts`) y el HTML usa `src="cid:homia-logo"`. Con la URL pública
+  (`public/email/homia-logo-blanco.png`) Leonardo veía el recuadro vacío (25/09/2026): el cliente de
+  correo no la descargaba. Para regenerar: rehacer el PNG y volver a pasarlo a base64 en
+  `email-logo.ts` y "Tu hogar en buenas manos"; franja naranja
   `#FF5A1F` / dorado `#FFC700` / celeste `#00C4FF`; título, párrafos, botón naranja con flecha y link
   de respaldo; nota destacada con borde celeste; texto de vista previa oculto; pie gris con el motivo
   del mail, links a Ayuda, Términos y Privacidad y "HomIA es un servicio de Leonardo Osterrietch, CUIT

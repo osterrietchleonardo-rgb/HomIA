@@ -65,7 +65,10 @@ test('con clave: POST a Resend con Bearer, from, to, subject, html y texto plano
   assert.deepEqual(body.to, ['proveedor@ejemplo.com'])
   assert.equal(body.subject, 'Nueva compra: stock reservado')
   // HTML: marca, colores, botón con el link, texto escapado y pie de avisos
-  assert.match(body.html, /<img src="[^"]*\/email\/homia-logo-blanco\.png"[^>]*alt="HomIA"/)
+  assert.match(body.html, /<img src="cid:homia-logo"[^>]*alt="HomIA"/)
+  assert.equal(body.attachments?.[0]?.content_id, 'homia-logo')
+  assert.equal(body.attachments?.[0]?.filename, 'homia-logo.png')
+  assert.ok((body.attachments?.[0]?.content || '').startsWith('iVBORw0KGgo'), 'el logo va como PNG en base64')
   assert.match(body.html, /#FF5A1F/)
   assert.match(body.html, /HomIA es un servicio de Leonardo Osterrietch/)
   assert.match(body.html, /#0A2540/)

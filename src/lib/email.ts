@@ -3,6 +3,7 @@
 // Nunca rompe el flujo que lo llama: siempre devuelve un resultado, nunca tira.
 
 import { TITULAR } from '@/lib/legal-content'
+import { LOGO_CID, LOGO_FILENAME, LOGO_PNG_BASE64 } from '@/lib/email-logo'
 
 export type EmailResult =
   | { ok: true; id: string | null }
@@ -81,12 +82,13 @@ export function linkAbsoluto(link: string | null | undefined): string {
  * Arma el HTML con la plantilla de marca de HomIA y el texto plano alternativo.
  * Tablas + estilos en línea (lo único que respetan Gmail, Outlook y Apple Mail), un solo
  * ancho de 560 px que se achica en el celu, logo en PNG (los clientes de mail no muestran SVG)
- * servido desde /email/ del sitio, con texto alternativo "HomIA" si las imágenes están bloqueadas.
+ * incrustado como adjunto inline (cid:), con texto alternativo "HomIA".
  */
 export function renderEmail(c: EmailContent): { html: string; text: string } {
   const pie = c.unsubscribeFooter === false ? PIE_CUENTA : PIE_AVISOS
   const base = appUrl()
-  const logo = `${base}/email/homia-logo-blanco.png`
+  // Logo incrustado en el mail (adjunto inline), no una URL: ver src/lib/email-logo.ts
+  const logo = `cid:${LOGO_CID}`
   const previa = esc((c.paragraphs.find((p) => !/^Hola/.test(p)) || c.heading).slice(0, 140))
   const parrafos = c.paragraphs
     // "$ 45.600": el signo no se separa del monto al cortar la línea en el celu
@@ -172,7 +174,11 @@ export async function sendEmail(c: EmailContent): Promise<EmailResult> {
     const res = await fetch(url, {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: remitente(), to: [to], subject: c.subject, html, text }),
+      body: JSON.stringify({
+        from: remitente(), to: [to], subject: c.subject, html, text,
+        // logo inline: el HTML lo referencia como cid:homia-logo
+        attachments: [{ filename: LOGO_FILENAME, content: LOGO_PNG_BASE64, content_id: LOGO_CID, content_type: 'image/png' }],
+      }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     })
     if (!res.ok) {

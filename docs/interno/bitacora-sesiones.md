@@ -46,6 +46,7 @@ Una línea: D19 y D20 en `decisiones.md`; migración `0029` aplicada (3 columnas
 
 "ya cargue la api de resend y el dominio para los emails (por ahora). mi nombre completo es Leonardo Osterrietch, mi cuit es 20398335628, no pongas domicilio" + "mejor usar de email: business@vakdor.com" → `TITULAR` en `legal-content.ts`; Privacidad §1 remite al titular. Resend: el dominio verificado es `vakbot.vakdor.com` (no `somoshomia.com`) → remitente por defecto `avisos@vakbot.vakdor.com`. Prueba real con `sendEmail`: entregado (Resend `last_event: delivered`). Producción respondía 503 `needsConfig` antes del deploy (la clave no llegaba a las funciones). Pedido: "cuando terminemos conformes con las pruebas se borran los datos/cuentas demo" (AGENTS §11).
 "usar una plantilla con colores de marca y logo para los emails, en español" → plantilla nueva en `renderEmail` (TÉCNICO, envío de mails) + logos PNG en `public/email/`; 39/39 unitarias; vista previa revisada en 700 y 390 px (se corrigieron el CUIT y el `$` que se cortaban).
+"el logo no se ve en el email, se ve el tipico espacio sin nada renderizado" → la URL respondía bien (también como proxy de Gmail/Outlook), pero depende de que el correo la descargue: ahora el logo va incrustado (adjunto inline `cid:homia-logo`, `src/lib/email-logo.ts`). Resend: entregado, adjunto `inline` con `content_id` correcto. 11/11 unitarias del mail.
 
 ## 2026-09-25 — Textos legales sin abogado (Leonardo)
 
