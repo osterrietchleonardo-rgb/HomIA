@@ -26,6 +26,10 @@
 
 ---
 
+## 2026-09-25 — Publicado: celular por país sin código, textos de la home (D31) y panel del registro fijo (Leonardo)
+
+**Lo hecho:** commit `14e99e6` en `main`. Textos del panel de Crear cuenta/Ingresar reescritos con la propuesta del equipo de copy. Pruebas: unitarias 150/150, E2E A 205/205 y T 94/94, visual 60/60 local y **60/60 en producción**; en producción el panel izquierdo queda fijo (scrollY 0 en cada paso, 1280/1440/390) y `canal: 'celular'` responde 400.
+
 ## 2026-09-25 — Copy de la home: lo que gana cada rol, sin frases de IA (D31) (Leonardo)
 
 Auditoría en `scratch/copy-home/auditoria.md`; textos nuevos en `src/components/home/*`, metadatos y
