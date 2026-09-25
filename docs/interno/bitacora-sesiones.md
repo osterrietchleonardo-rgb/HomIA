@@ -26,6 +26,10 @@
 
 ---
 
+## 2026-09-25 — Cuentas de prueba nunca visibles en el sitio publicado (Leonardo)
+
+**El pedido:** "la sección de la home 'proveedores recomendados de la comunidad', si no hay ninguno, que no esté visible [...] ahora estoy viendo uno 'e2e corralón x', se supone que no debe haber usuarios de prueba!!!". **Causa:** la cinta ya se oculta sola sin PRO activos (`sponsors.tsx`), pero una suite E2E corriendo en local creó un proveedor PRO `@homia.test` en la base única y `HIDE_DEMO_USERS` nunca se prendió en Vercel. **Lo hecho:** `ocultarDemo()` (`src/lib/visibility.ts`) es siempre true con `VERCEL_ENV=production`; tests en `src/lib/__tests__/visibility.test.ts`.
+
 ## 2026-09-25 — Videos de ayuda con afirmaciones falsas, fuera de la lista (Leonardo)
 
 Al preparar los guiones de los videos que faltan ("dame que tendría que contener cada uno de esos videos"), la narración de `scripts/medios/gen-videos.py` decía escrow / "el dinero queda protegido" / "liberamos tu dinero" (HomIA no retiene plata), que el profesional finaliza la obra, plan PRO de profesionales y que el cliente aprueba los pedidos al proveedor. Se sacaron de `src/lib/videos-content.ts` cli-bienvenida, cli-contratar, pro-bienvenida, pro-presupuestos, pro-cobros y prv-ventas (los MP4 quedan); siguen cli-materiales, cli-resenas, pro-materiales, prv-bienvenida y prv-stock. Guiones nuevos en el doc "Videos de ayuda de HomIA: guiones para producir".

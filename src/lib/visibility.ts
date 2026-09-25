@@ -2,7 +2,7 @@
 //
 // Dos reglas, un solo lugar:
 //   1. Una cuenta ELIMINADA (User.deletedAt, "Eliminar mi cuenta") nunca aparece en lo público.
-//   2. Con HIDE_DEMO_USERS=1 (se prende en Vercel el día del lanzamiento) tampoco aparecen
+//   2. En producción siempre (y en local con HIDE_DEMO_USERS=1) tampoco aparecen
 //      las cuentas de demostración y de prueba (email terminado en @homia.test): así el
 //      primer cliente real no ve profesionales, proveedores, trabajos ni reseñas falsos.
 //      Las cuentas demo siguen pudiendo iniciar sesión y usar su panel.
@@ -15,9 +15,15 @@ import type { Prisma } from '@prisma/client'
 
 export const DEMO_EMAIL_SUFFIX = '@homia.test'
 
-/** true si hay que esconder las cuentas demo (@homia.test) de lo público. */
-export function ocultarDemo(): boolean {
-  return (process.env.HIDE_DEMO_USERS || '').trim() === '1'
+/**
+ * true si hay que esconder las cuentas de prueba (@homia.test) de lo público.
+ * En el sitio publicado (VERCEL_ENV=production) SIEMPRE: la base es una sola y las suites E2E crean
+ * cuentas @homia.test mientras corren (25/09/2026 se vio "[E2E] Corralón" en la cinta de la home).
+ * Fuera de producción, solo con HIDE_DEMO_USERS=1 (las suites corren sin él para verse a sí mismas).
+ */
+export function ocultarDemo(env: { HIDE_DEMO_USERS?: string; VERCEL_ENV?: string } = process.env as { HIDE_DEMO_USERS?: string; VERCEL_ENV?: string }): boolean {
+  if (env.VERCEL_ENV === 'production') return true
+  return (env.HIDE_DEMO_USERS || '').trim() === '1'
 }
 
 /** `where` de Prisma sobre `User`: solo usuarios que se pueden mostrar en lo público. */
