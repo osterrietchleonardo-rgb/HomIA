@@ -3,13 +3,18 @@
 // formulario nunca acepta algo que después el servidor rechaza, ni al revés.
 //
 // Método tomado de PRISMA-SYSTEM (`lib/invites/reglas.ts`, `lib/whatsapp/phone.ts`): email con
-// trim + minúsculas, celular a E.164 con libphonenumber-js forzando el "9" de celular de Argentina,
-// y el celular escrito DOS VECES comparando los números normalizados ("11 2345-6789" y
-// "011 15 2345 6789" son el mismo). Sumado para HomIA: sugerencia de dominio mal escrito, nombres
-// con mayúsculas iniciales y CUIT/CUIL con dígito verificador.
+// trim + minúsculas, celular de cualquier país (con selector de país) a E.164 con libphonenumber-js
+// forzando el "9" de celular de Argentina, y el celular escrito DOS VECES comparando los números
+// normalizados ("11 2345-6789" y "011 15 2345 6789" son el mismo). El celular NO se verifica por
+// código: solo se estandariza (Leonardo, 25/09/2026). Sumado para HomIA: sugerencia de dominio mal
+// escrito, nombres con mayúsculas iniciales y CUIT/CUIL con dígito verificador.
 //
 // Sin dependencias del servidor: se importa desde componentes 'use client' y desde las rutas.
-import { parsePhoneNumberFromString } from 'libphonenumber-js/min'
+import {
+  parsePhoneNumberFromString, getCountries, getCountryCallingCode, getExampleNumber, type CountryCode,
+} from 'libphonenumber-js/min'
+// ejemplos de celular por país (4 KB) para el placeholder del campo
+import ejemplosCelular from 'libphonenumber-js/examples.mobile.json'
 
 // ─────────────────────────────── email ───────────────────────────────
 
@@ -94,22 +99,41 @@ export function normalizarEmail(raw: unknown): EmailNormalizado {
 }
 
 // ─────────────────────────────── celular ───────────────────────────────
+// 25/09/2026 (Leonardo): el celular se ESTANDARIZA con país, como PRISMA-SYSTEM
+// (`components/shared/ManualContactFields.tsx` + `lib/whatsapp/phone.ts`). No se verifica por código.
 
-export type CelularNormalizado = { ok: true; e164: string; mostrar: string } | { ok: false; error: string }
+export type { CountryCode }
+
+export type CelularNormalizado = { ok: true; e164: string; mostrar: string; pais: CountryCode } | { ok: false; error: string }
+
+const PAISES = new Set<string>(getCountries())
+
+/** ¿Es un código de país ISO-2 que conoce libphonenumber (en mayúsculas: "AR", "UY"…)? */
+export function esPaisCelular(x: unknown): x is CountryCode {
+  return typeof x === 'string' && PAISES.has(x)
+}
+
+let nombresPais: Intl.DisplayNames | null | undefined
+/** Nombre del país en español ("UY" → "Uruguay"); si no se sabe, el código. */
+export function nombrePais(pais: string): string {
+  if (nombresPais === undefined) {
+    try {
+      nombresPais = new Intl.DisplayNames(['es'], { type: 'region' })
+    } catch {
+      nombresPais = null
+    }
+  }
+  return nombresPais?.of(pais) || pais
+}
 
 /**
- * Celular argentino → E.164 con el 9 de celular (`+5491123456789`) y cómo mostrarlo
- * (`+54 9 11 2345-6789`). Acepta como lo escribe la gente: con o sin +54, con o sin 9, con o sin
- * 0 de larga distancia y 15, con espacios, guiones, puntos o paréntesis. libphonenumber-js sabe
- * los códigos de área (2, 3 o 4 cifras) y dónde va el 15; si la persona no puso ni 9 ni 15 el
- * número queda como fijo y se le agrega el 9 (el campo es "Celular": igual que PRISMA).
+ * Celular argentino → E.164 con el 9 de celular (`+5491123456789`). Acepta como lo escribe la
+ * gente: con o sin +54, con o sin 9, con o sin 0 de larga distancia y 15, con espacios, guiones,
+ * puntos o paréntesis. libphonenumber-js sabe los códigos de área (2, 3 o 4 cifras) y dónde va el
+ * 15; si la persona no puso ni 9 ni 15 el número queda como fijo y se le agrega el 9 (el campo es
+ * "Celular": igual que PRISMA).
  */
-export function normalizarCelular(raw: unknown): CelularNormalizado {
-  const s = String(raw ?? '').trim()
-  if (!s) return { ok: false, error: 'Escribí tu celular' }
-  if (s.length > 30) return { ok: false, error: 'El celular es demasiado largo' }
-  if (/[a-z]/i.test(s)) return { ok: false, error: 'El celular solo lleva números (ej.: 11 2345-6789)' }
-  const digitos = s.replace(/\D/g, '')
+function celularArgentino(s: string, digitos: string): CelularNormalizado {
   if (digitos.length < 8) return { ok: false, error: 'Al celular le faltan números: poné el código de área y el número (ej.: 11 2345-6789)' }
   // "+54…" o "0054…" es internacional; "54…" con 12 o 13 cifras también (así lo copian de WhatsApp)
   let texto = s
@@ -122,7 +146,6 @@ export function normalizarCelular(raw: unknown): CelularNormalizado {
     pn = undefined
   }
   if (!pn || pn.country !== 'AR' || !pn.isValid()) {
-    if (pn && pn.country && pn.country !== 'AR') return { ok: false, error: 'Por ahora solo aceptamos celulares de Argentina (+54)' }
     return { ok: false, error: 'Ese celular no es válido: revisá el código de área y el número (ej.: 11 2345-6789 o 351 15 555-1234)' }
   }
   let nacional = pn.nationalNumber as string // sin 0 ni 15; con el 9 si la persona lo indicó
@@ -131,26 +154,125 @@ export function normalizarCelular(raw: unknown): CelularNormalizado {
   if (!nacional.startsWith('9')) nacional = `9${nacional}`
   if (nacional.length !== 11) return { ok: false, error: 'Ese celular no es válido: tiene que tener código de área y número (10 cifras sin el 0 ni el 15)' }
   const e164 = `+54${nacional}`
-  return { ok: true, e164, mostrar: formatearCelular(e164) }
+  return { ok: true, e164, mostrar: formatearCelular(e164), pais: 'AR' }
 }
 
-/** `+5491123456789` → `+54 9 11 2345-6789`. Si no se puede formatear, devuelve lo mismo. */
+/** Celular de otro país (o internacional con +): válido según libphonenumber. */
+function celularDePais(texto: string, pais: CountryCode | undefined, error: string): CelularNormalizado {
+  let pn
+  try {
+    pn = parsePhoneNumberFromString(texto, pais)
+  } catch {
+    pn = undefined
+  }
+  if (!pn || !pn.isValid()) {
+    // internacional con un código de país conocido: el mensaje nombra ese país
+    if (!pais && pn?.country) return { ok: false, error: `Número inválido para ${nombrePais(pn.country)}: revisá la característica y la cantidad de números` }
+    return { ok: false, error }
+  }
+  const e164 = pn.number as string
+  return { ok: true, e164, mostrar: formatearCelular(e164), pais: (pn.country || pais || 'AR') as CountryCode }
+}
+
+/**
+ * Celular de cualquier país → E.164 (`+59899123456`) y cómo mostrarlo (`+598 99 123 456`).
+ * `pais` es el país elegido en el selector (Argentina por defecto): sirve para leer el número como
+ * se escribe allá. Si el texto empieza con `+` (o `00`) es internacional y manda el código de país
+ * escrito, sea cual sea el elegido. Argentina mantiene la regla del 9 de celular.
+ */
+export function normalizarCelular(raw: unknown, pais: CountryCode = 'AR'): CelularNormalizado {
+  const s = String(raw ?? '').trim()
+  if (!s) return { ok: false, error: 'Escribí tu celular' }
+  if (s.length > 30) return { ok: false, error: 'El celular es demasiado largo' }
+  if (/[a-z]/i.test(s)) return { ok: false, error: 'El celular solo lleva números (ej.: 11 2345-6789)' }
+  const digitos = s.replace(/\D/g, '')
+  const internacional = s.startsWith('+') || /^00/.test(digitos)
+  if (!internacional) {
+    if (pais === 'AR') return celularArgentino(s, digitos)
+    return celularDePais(s, pais, `Número inválido para ${nombrePais(pais)}: revisá la característica y la cantidad de números`)
+  }
+  const texto = `+${s.startsWith('+') ? digitos : digitos.slice(2)}`
+  if (texto.startsWith('+54')) return celularArgentino(texto, digitos)
+  return celularDePais(texto, undefined, 'Ese número internacional no es válido: revisá el código de país, la característica y la cantidad de números')
+}
+
+/**
+ * `+5491123456789` → `+54 9 11 2345-6789`; `+59899123456` → `+598 99 123 456`. El guion final solo
+ * en Argentina (así se escribe acá). Si no se puede formatear, devuelve lo mismo.
+ */
 export function formatearCelular(e164: string): string {
   try {
     const pn = parsePhoneNumberFromString(e164)
-    // "+54 9 11 2345 6789" → "+54 9 11 2345-6789" (como se escribe en Argentina)
-    if (pn) return pn.formatInternational().replace(/ (\d+)$/, '-$1')
+    if (pn) {
+      const intl = pn.formatInternational()
+      return pn.countryCallingCode === '54' ? intl.replace(/ (\d+)$/, '-$1') : intl
+    }
   } catch {
     /* sigue */
   }
   return e164
 }
 
+/** País de un celular guardado en E.164 (para que el perfil arranque con el país correcto). */
+export function paisDeCelular(e164: unknown): CountryCode | null {
+  if (typeof e164 !== 'string' || !e164.startsWith('+')) return null
+  try {
+    return parsePhoneNumberFromString(e164)?.country ?? null
+  } catch {
+    return null
+  }
+}
+
 /** ¿Los dos celulares escritos son el mismo número? (se comparan normalizados, no como texto) */
-export function mismoCelular(a: unknown, b: unknown): boolean {
-  const x = normalizarCelular(a)
-  const y = normalizarCelular(b)
+export function mismoCelular(a: unknown, b: unknown, pais: CountryCode = 'AR'): boolean {
+  const x = normalizarCelular(a, pais)
+  const y = normalizarCelular(b, pais)
   return x.ok && y.ok && x.e164 === y.e164
+}
+
+/** Ejemplo de celular de un país, como se escribe allá (placeholder del campo). */
+export function ejemploCelular(pais: CountryCode): string {
+  if (pais === 'AR') return '11 2345-6789'
+  try {
+    return getExampleNumber(pais, ejemplosCelular)?.formatNational() || ''
+  } catch {
+    return ''
+  }
+}
+
+export type PaisCelular = { iso: CountryCode; nombre: string; codigo: string; bandera: string }
+
+const bandera = (iso: string) => iso.toUpperCase().replace(/./g, (ch) => String.fromCodePoint(127397 + ch.charCodeAt(0)))
+
+const PAISES_PRIMERO = ['AR', 'UY', 'CL', 'PY', 'BO', 'MX', 'ES', 'US']
+
+/**
+ * Países para el selector del celular (como `getPhoneCountries` de PRISMA): bandera, nombre en
+ * español y código de llamada. Primero AR/UY/CL/PY/BO/MX/ES/US; el resto por orden alfabético.
+ */
+export function paisesCelular(locale = 'es'): PaisCelular[] {
+  let nombres: Intl.DisplayNames | null = null
+  try {
+    nombres = new Intl.DisplayNames([locale], { type: 'region' })
+  } catch {
+    nombres = null
+  }
+  const lista: PaisCelular[] = getCountries().map((iso) => ({
+    iso,
+    nombre: nombres?.of(iso) || iso,
+    codigo: getCountryCallingCode(iso),
+    bandera: bandera(iso),
+  }))
+  return lista.sort((a, b) => {
+    const pa = PAISES_PRIMERO.indexOf(a.iso)
+    const pb = PAISES_PRIMERO.indexOf(b.iso)
+    if (pa !== -1 || pb !== -1) {
+      if (pa === -1) return 1
+      if (pb === -1) return -1
+      return pa - pb
+    }
+    return a.nombre.localeCompare(b.nombre, locale)
+  })
 }
 
 // ─────────────────────────────── nombres ───────────────────────────────

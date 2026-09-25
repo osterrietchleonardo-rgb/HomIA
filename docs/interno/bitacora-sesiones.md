@@ -26,6 +26,21 @@
 
 ---
 
+## 2026-09-25 — Copy de la home: lo que gana cada rol, sin frases de IA (D31) (Leonardo)
+
+Auditoría en `scratch/copy-home/auditoria.md`; textos nuevos en `src/components/home/*`, metadatos y
+tarjeta para compartir; FUNCIONAL §1.1, LÓGICA (portada = espejo de las reglas), TÉCNICO y D31. tsc
+limpio, eslint sin errores nuevos, capturas 390/1280 antes y después sin desborde, 24/24 CTAs y links.
+Sin commit. Pendiente: aplicar la propuesta para `auth-shell.tsx` cuando el otro equipo lo suelte.
+
+## 2026-09-25 — Celular con país sin verificación por código, y el panel izquierdo del registro quieto (Leonardo)
+
+**El pedido:** "no pedí verificar celular. solo estandarizar. como hace prisma-system, que pone para elegir país, y reconoce la escritura del formato de celular de todos los países…", "la verificación de cuenta se tiene que hacer desde la confirmación del email cuando se registra" y "en la pantalla de registro 'crear cuenta', la pantalla de la izquierda al seleccionar cualquier rol, se desplaza hacia abajo y se ve mal".
+**Causa real del desplazamiento:** el panel de marca (`aside` de `auth-shell.tsx`) crecía con la altura de la página y centraba su contenido con `justify-between`; al pasar al paso 2 el titular bajaba a la mitad y `irA()` dejaba la ventana 24 px abajo, tapando "Volver al inicio".
+**Lo hecho:** selector "País del celular" (AR por defecto, 245 países con bandera, nombre y código, como `ManualContactFields.tsx` de PRISMA) en el registro y en Mi perfil de cliente y profesional; `normalizarCelular(texto, pais)` acepta todos los países (`+`/`00` = internacional; Argentina sigue con el 9); `phoneCountry` validado con zod en `auth/register` y `profiles/me`; se borró toda la verificación del celular por código (`celular-proveedor.ts`, canal `celular` → 400, `phoneToken`, `PHONE_VERIFY_PROVIDER`/`TWILIO_*`/`WHATSAPP_*`); tarjeta "Email y celular" con el email Verificado / Sin verificar + "Verificar ahora" y el celular estandarizado sin insignia; `aside` fijo (`lg:sticky lg:top-0 lg:h-screen`) y `irA()` con `window.scrollTo({ top: 0 })`. `User.phoneVerifiedAt` queda en la base sin uso (sin migración). Detalle: FUNCIONAL 1.7 y 2.12, LÓGICA §1.3, TÉCNICO §4.14, nota en D26, AGENTS §4/§6/§11/§12, Privacidad (sin cambiar `LEGAL_VERSION`) y Homy. Sin commit.
+**Pruebas:** unitarias 150/150 (registro 20: 7 países, internacional, errores por país); E2E sección A **205/205** con doble de Resend (Uruguay, España y EE.UU., país inválido → 400, número inválido para el país → 400) y purga verificada; visual 40/40 en 1280×800 y 390×844 (titular izquierdo en la misma posición antes y después de elegir rol y al scrollear, `scrollY` 0 en cada paso, Ingresar/Recuperar/Restablecer con el panel a la altura de la pantalla, sin desbordes, perfil demo solo mirando).
+**Qué mirar mañana:** en producción, `/registrarse` en la compu: el titular no se mueve al elegir rol.
+
 ## 2026-09-25 — Integración de los siete equipos y arreglo de la numeración de pedidos (Leonardo)
 
 **Lo hecho:** commit `a5f0f27` (calendario D23, finanzas D24, sugerencias D25, registro D26, métricas D27, `/admin` D29, ingresos D30) + merge de `main`. Suite E2E completa con un solo server y nada en paralelo: **1454/1455** (la única falla, S "mail al equipo", era del arranque del server sin `FEEDBACK_EMAIL` de prueba). Unitarias 141/141 + 4 nuevas. **Causa real** del 503 "No pudimos numerar tu pedido" que vieron los equipos: la numeración salía de `count()+1` y un borrado la hacía chocar siempre; ahora sale del mayor número del año (TÉCNICO §4.18). Homy y el tour no se muestran en `/admin`.

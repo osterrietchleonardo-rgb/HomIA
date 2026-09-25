@@ -8,24 +8,24 @@ const STEPS = [
   {
     icon: MessagesSquare,
     num: "01",
-    title: "Contale qué necesitás",
-    body: "Escribí con lenguaje natural, como se lo contarías a un vecino de confianza. Homy, nuestro agente de IA, interpreta tu necesidad y la traduce en un pedido técnico claro y completo.",
+    title: "Contá qué pasó",
+    body: "Publicás el trabajo con hasta 4 fotos, o le preguntás a Homy con tus palabras. A los profesionales de ese oficio les llega el aviso y te mandan su presupuesto. Si ya sabés a quién querés, lo contratás directo desde el directorio.",
     accent: "text-tech",
     chipBg: "bg-tech/10",
   },
   {
     icon: ClipboardList,
     num: "02",
-    title: "Los agentes arman tu presupuesto",
-    body: "La IA coordina mano de obra, materiales y tiempos en un presupuesto integral. Todo a la vista, sin letra chica: sabés exactamente qué pagás y para qué, antes de aprobar nada.",
+    title: "Elegí con datos, no a ciegas",
+    body: "Cada presupuesto trae el precio, el plazo en días y quién lo manda: si validó su DNI, sus estrellas y sus obras. Le escribís por chat antes de decidir. Los materiales te los propone uno por uno, con precio, y aprobás cada uno.",
     accent: "text-action",
     chipBg: "bg-action/10",
   },
   {
     icon: ShieldCheck,
     num: "03",
-    title: "Aprobás y HomIA coordina",
-    body: "Pagás al finalizar el trabajo, por Mercado Pago o en efectivo, directo al profesional. ¿Sobró material? Lo cargás en la app, lo devolvés al local del proveedor y, si pagaste con Mercado Pago, el reembolso vuelve a tu medio de pago.",
+    title: "Pagás cuando está terminado",
+    body: "La factura te llega a la app y la pagás por Mercado Pago o en efectivo. La plata va directo al profesional: HomIA no la retiene. Si sobró material, se lo devolvés a quien te lo vendió y te reintegran lo que pagaste por eso.",
     accent: "text-tech",
     chipBg: "bg-tech/10",
   },
@@ -41,8 +41,8 @@ export function HowItWorks() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading
           kicker="Cómo funciona"
-          title="Tres pasos. Cero estrés."
-          description="HomIA se ocupa de la complejidad para que vos solo tomes una decisión: aprobar. Así de simple funciona un hogar bien cuidado."
+          title="De «se rompió» a «quedó bien», en tres pasos."
+          description="No hace falta saber de tecnología. Si mandás mensajes por WhatsApp, ya sabés usar HomIA: se maneja desde el celular."
         />
 
         <div className="relative mt-16 grid gap-6 md:grid-cols-3 md:gap-8">

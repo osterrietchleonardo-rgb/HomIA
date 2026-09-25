@@ -273,13 +273,13 @@ async function flowA() {
     check(F, `registro ${key} deja sesión (cookie)`, !!a.cookie)
     a.id = r.data?.user?.id
     check(F, `registro ${key} roles`, JSON.stringify(r.data?.user?.roles) === JSON.stringify(payloads[key].roles), brief(r))
-    check(F, `registro ${key}: email verificado y celular sin verificar (no hay proveedor de SMS)`, r.data?.user?.emailVerified === true && r.data?.user?.phoneVerified === false, brief(r))
+    check(F, `registro ${key}: email verificado y celular estandarizado (Argentina por defecto, sin verificación por código)`, r.data?.user?.emailVerified === true && r.data?.user?.phoneCountry === 'AR' && !('phoneVerified' in (r.data?.user || {})), brief(r))
   }
   if (!C.id || !P.id || !P2.id || !V.id) throw new Error('No se pudieron crear los usuarios E2E')
-  const uC0 = await db.user.findUnique({ where: { id: C.id }, select: { displayName: true, phone: true, phoneE164: true, phoneVerifiedAt: true, emailVerifiedAt: true } })
+  const uC0 = await db.user.findUnique({ where: { id: C.id }, select: { displayName: true, phone: true, phoneE164: true, emailVerifiedAt: true } })
   check(F, 'celular raro normalizado a E.164 (+549…) y mostrado "+54 9 11 2345-6789"', uC0?.phoneE164 === '+5491123456789' && uC0?.phone === '+54 9 11 2345-6789', JSON.stringify(uC0))
   check(F, 'nombre con mayúsculas iniciales ("cliente q" → "Cliente Q")', uC0?.displayName === `${MARK} Cliente Q`, uC0?.displayName)
-  check(F, 'cuenta nueva: emailVerifiedAt guardado, phoneVerifiedAt vacío', !!uC0?.emailVerifiedAt && uC0?.phoneVerifiedAt === null, JSON.stringify(uC0))
+  check(F, 'cuenta nueva: emailVerifiedAt guardado (la verificación de la cuenta es el email)', !!uC0?.emailVerifiedAt, JSON.stringify(uC0))
   const uV0 = await db.providerProfile.findUnique({ where: { userId: V.id }, select: { kind: true, address: true } })
   check(F, 'proveedor: tipo de comercio y dirección del local guardados', uV0?.kind === 'corralon' && uV0?.address === 'Av. Corrientes 1234', JSON.stringify(uV0))
 
@@ -310,6 +310,39 @@ async function flowA() {
   check(F, 'celular sin código de área → 400 en "phone" con mensaje claro', celMalo.status === 400 && /código de área/.test(celMalo.data?.campos?.phone || ''), brief(celMalo))
   const celDistinto = await post(bad2, '/api/auth/register', { ...completo, phone: '11 2345-6789', phoneConfirm: '11 2345-6788' })
   check(F, 'celular repetido distinto → 400 en "phoneConfirm"', celDistinto.status === 400 && !!celDistinto.data?.campos?.phoneConfirm, brief(celDistinto))
+  // 25/09/2026 (Leonardo): celular de cualquier país con `phoneCountry`; se estandariza, no se verifica
+  const paisMalo = await post(bad2, '/api/auth/register', { ...completo, phoneCountry: 'XX', phone: '099 123 456', phoneConfirm: '099 123 456' })
+  check(F, 'país del celular inválido (XX) → 400', paisMalo.status === 400 && /País del celular inválido/.test(paisMalo.data?.error || ''), brief(paisMalo))
+  const paisMin = await post(bad2, '/api/auth/register', { ...completo, phoneCountry: 'uy', phone: '099 123 456', phoneConfirm: '099 123 456' })
+  check(F, 'país del celular en minúsculas → 400 (ISO-2 en mayúsculas)', paisMin.status === 400 && /País del celular inválido/.test(paisMin.data?.error || ''), brief(paisMin))
+  const uyMalo = await post(bad3, '/api/auth/register', { ...completo, phoneCountry: 'UY', phone: '99 123', phoneConfirm: '99 123' })
+  check(F, 'número inválido para el país → 400 en "phone" con mensaje claro', uyMalo.status === 400 && /^Número inválido para Uruguay: revisá la característica y la cantidad de números$/.test(uyMalo.data?.campos?.phone || ''), brief(uyMalo))
+  const esMalo = await post(bad3, '/api/auth/register', { ...completo, phoneCountry: 'ES', phone: '11 2345-6789', phoneConfirm: '11 2345-6789' })
+  check(F, 'celular argentino con país España → 400 "inválido para España"', esMalo.status === 400 && /España/.test(esMalo.data?.campos?.phone || ''), brief(esMalo))
+  const uyBien = await post(bad3, '/api/auth/register', { ...completo, phoneCountry: 'UY', phone: '099 123 456', phoneConfirm: '+598 99 123 456' })
+  check(F, 'Uruguay escrito como allá y repetido con +598: el celular pasa (solo falta el código del mail)', uyBien.status === 400 && !uyBien.data?.campos?.phone && !uyBien.data?.campos?.phoneConfirm && uyBien.data?.needsEmailCode === true, brief(uyBien))
+  const intl = await post(bad3, '/api/auth/register', { ...completo, phoneCountry: 'AR', phone: '+34 612 34 56 78', phoneConfirm: '+34612345678' })
+  check(F, 'con + adelante manda el código de país escrito, aunque el país elegido sea otro', intl.status === 400 && !intl.data?.campos?.phone && !intl.data?.campos?.phoneConfirm, brief(intl))
+  // alta real con celular de Uruguay (cuenta descartable, se purga al final)
+  const UY = new Actor('uy', 'cliente')
+  UY.ip = ipN(5)
+  const eUy = mailNuevo('uy')
+  const altaUy = await post(UY, '/api/auth/register', { ...completo, email: eUy, emailToken: await comprobanteEmail(UY, eUy), phoneCountry: 'UY', phone: '099 123 456', phoneConfirm: '+598 99 123 456' })
+  st(F, 'alta con celular de Uruguay', altaUy, 201)
+  const uUy = await db.user.findUnique({ where: { email: eUy }, select: { phone: true, phoneE164: true, phoneVerifiedAt: true } })
+  check(F, 'Uruguay guardado estandarizado (+59899123456 / "+598 99 123 456"), sin marca de verificación', uUy?.phoneE164 === '+59899123456' && uUy?.phone === '+598 99 123 456' && uUy?.phoneVerifiedAt === null && altaUy.data?.user?.phoneCountry === 'UY', JSON.stringify(uUy))
+  // Mi perfil: EE.UU. y España con `phoneCountry`; país inválido y número inválido → 400
+  st(F, 'PUT perfil con país del celular inválido → 400', await put(UY, '/api/profiles/me', { phone: '202 555 0143', phoneCountry: 'ZZ' }), 400)
+  const usMalo = await put(UY, '/api/profiles/me', { phone: '202 555', phoneCountry: 'US' })
+  check(F, 'PUT perfil con número inválido para EE.UU. → 400 con el nombre del país', usMalo.status === 400 && /Número inválido para Estados Unidos/.test(usMalo.data?.error || ''), brief(usMalo))
+  st(F, 'PUT perfil con celular de EE.UU.', await put(UY, '/api/profiles/me', { phone: '(202) 555-0143', phoneCountry: 'US' }), 200)
+  const uUs = await db.user.findUnique({ where: { email: eUy }, select: { phone: true, phoneE164: true } })
+  check(F, 'EE.UU. guardado estandarizado (+12025550143 / "+1 202 555 0143")', uUs?.phoneE164 === '+12025550143' && uUs?.phone === '+1 202 555 0143', JSON.stringify(uUs))
+  st(F, 'PUT perfil con celular de España', await put(UY, '/api/profiles/me', { phone: '612 34 56 78', phoneCountry: 'ES' }), 200)
+  const uEs = await db.user.findUnique({ where: { email: eUy }, select: { phone: true, phoneE164: true } })
+  check(F, 'España guardado estandarizado (+34612345678 / "+34 612 34 56 78")', uEs?.phoneE164 === '+34612345678' && uEs?.phone === '+34 612 34 56 78', JSON.stringify(uEs))
+  const estUy = await get(UY, '/api/auth/verificacion')
+  check(F, 'la tarjeta "Email y celular" muestra el celular estandarizado, sin estado de verificación', estUy.data?.cuenta?.celular === '+34 612 34 56 78' && !('celularVerificado' in (estUy.data?.cuenta || {})) && !('celular' in (estUy.data?.disponible || {})), brief(estUy))
   const sinCodigo = await post(bad2, '/api/auth/register', completo)
   check(F, 'sin el código del mail no se crea la cuenta (needsEmailCode)', sinCodigo.status === 400 && sinCodigo.data?.needsEmailCode === true, brief(sinCodigo))
   const otroComp = await comprobanteEmail(bad2, mailNuevo('otro'))
@@ -384,7 +417,7 @@ async function flowA() {
   st(F, 'PUT perfil sin celular (la cuenta tiene uno) → 400', await put(C, '/api/profiles/me', { phone: '' }), 400)
   st(F, 'PUT perfil cliente válido', await put(C, '/api/profiles/me', { displayName: `${MARK} Cliente Q`, city: 'CABA', phone: '1122334455' }), 200)
   const uCel = await db.user.findUnique({ where: { id: C.id } })
-  check(F, 'perfil cliente persistido con el celular normalizado (y sin verificar: cambió)', uCel.phoneE164 === '+5491122334455' && uCel.phone === '+54 9 11 2233-4455' && uCel.phoneVerifiedAt === null, `${uCel.phone} ${uCel.phoneE164}`)
+  check(F, 'perfil cliente persistido con el celular normalizado (sin phoneCountry = Argentina)', uCel.phoneE164 === '+5491122334455' && uCel.phone === '+54 9 11 2233-4455', `${uCel.phone} ${uCel.phoneE164}`)
   st(F, 'PUT perfil profesional válido', await put(P, '/api/profiles/me', { bio: `${MARK} Pintor con 5 años`, professions: ['pintura'], serviceRadiusKm: 20 }), 200)
   st(F, 'PUT perfil proveedor válido', await put(V, '/api/profiles/me', { description: `${MARK} corralón de prueba`, kind: 'Corralón' }), 200)
   const prov = await db.providerProfile.findUnique({ where: { id: V.provId } })
@@ -395,7 +428,8 @@ async function flowA() {
   await flowARecuperarYMails()
 }
 
-// ── A1. Códigos de verificación de email y celular (D26, migración 0035) ──
+// ── A1. Códigos de verificación del email (D26, migración 0035). El celular no se verifica por
+// código desde el 25/09/2026: el canal "celular" responde 400. ──
 // Con `--mail-sink` se leen los códigos de los mails; sin el doble se prueba lo que no necesita
 // leer el mail (límites, vencido, agotado vía base) y se avisa que el resto quedó sin probar.
 async function flowACodigos({ ipN, mailNuevo, completo }) {
@@ -405,10 +439,12 @@ async function flowACodigos({ ipN, mailNuevo, completo }) {
   const ultimaFila = (target) => db.verificationCode.findFirst({ where: { target }, orderBy: { createdAt: 'desc' } })
 
   const disp = await get(ANON, '/api/auth/verificacion')
-  check(F, 'qué se puede verificar: email sí, celular no (sin proveedor de SMS/WhatsApp)', disp.status === 200 && disp.data?.disponible?.celular === false && disp.data?.cuenta === null && (MAIL_SINK_PORT ? disp.data?.disponible?.email === true : true), brief(disp))
-  const cel503 = await enviar(ANON, { canal: 'celular', proposito: 'registro', destino: '11 2345-6789' })
-  check(F, 'código al celular sin proveedor → 503 needsConfig (no se simula nada)', cel503.status === 503 && cel503.data?.needsConfig === true, brief(cel503))
-  check(F, 'sin proveedor no se guarda ningún código de celular', (await db.verificationCode.count({ where: { target: '+5491123456789', purpose: 'registro' } })) === 0)
+  check(F, 'qué se puede verificar: solo el email (el celular ya no figura)', disp.status === 200 && !('celular' in (disp.data?.disponible || {})) && disp.data?.cuenta === null && (MAIL_SINK_PORT ? disp.data?.disponible?.email === true : true), brief(disp))
+  const cel400 = await enviar(ANON, { canal: 'celular', proposito: 'registro', destino: '11 2345-6789' })
+  check(F, 'código al celular → 400 (el celular no se verifica por código)', cel400.status === 400 && /solo se verifica el email/.test(cel400.data?.error || ''), brief(cel400))
+  const celComp = await comprobar(ANON, { canal: 'celular', proposito: 'registro', destino: '11 2345-6789', codigo: '123456' })
+  check(F, 'comprobar un código de celular → 400', celComp.status === 400, brief(celComp))
+  check(F, 'no se guarda ningún código de celular', (await db.verificationCode.count({ where: { target: '+5491123456789', purpose: 'registro' } })) === 0)
   st(F, 'enviar con email inválido', await enviar(ANON, { canal: 'email', proposito: 'registro', destino: 'juan@@gmail.com' }), 400)
   st(F, 'enviar con canal inválido', await enviar(ANON, { canal: 'paloma', proposito: 'registro', destino: 'a@gmail.com' }), 400)
   st(F, 'comprobar con código de letras', await comprobar(ANON, { canal: 'email', proposito: 'registro', destino: 'a@gmail.com', codigo: 'abc123' }), 400)
@@ -502,7 +538,7 @@ async function flowACodigos({ ipN, mailNuevo, completo }) {
   // ── verificar después, desde la cuenta (cuentas anteriores a D26) ──
   await db.user.update({ where: { id: C.id }, data: { emailVerifiedAt: null } })
   const est = await get(C, '/api/auth/verificacion')
-  check(F, 'cuenta sin verificar: el estado lo dice (email no, celular no)', est.data?.cuenta?.emailVerificado === false && est.data?.cuenta?.celularVerificado === false && est.data?.cuenta?.email === C.email, brief(est))
+  check(F, 'cuenta sin verificar: el estado lo dice (email no) y el celular va sin estado', est.data?.cuenta?.emailVerificado === false && !('celularVerificado' in (est.data?.cuenta || {})) && est.data?.cuenta?.email === C.email, brief(est))
   const tK = Date.now()
   const sK = await enviar(C, { canal: 'email', proposito: 'cuenta', destino: 'otro@gmail.com' })
   st(F, 'pedir código para verificar el email de la cuenta', sK, 200)
@@ -513,7 +549,7 @@ async function flowACodigos({ ipN, mailNuevo, completo }) {
   const ya = await enviar(C, { canal: 'email', proposito: 'cuenta' })
   check(F, 'ya verificado: no manda otro código', ya.status === 200 && ya.data?.yaVerificado === true, brief(ya))
   const celK = await enviar(C, { canal: 'celular', proposito: 'cuenta' })
-  check(F, 'verificar el celular de la cuenta sin proveedor → 503 needsConfig', celK.status === 503 && celK.data?.needsConfig === true, brief(celK))
+  check(F, 'verificar el celular de la cuenta → 400 (no existe esa verificación)', celK.status === 400, brief(celK))
 }
 
 // ── A2. Recuperar contraseña y avisos por mail (D18, migración 0028) ──

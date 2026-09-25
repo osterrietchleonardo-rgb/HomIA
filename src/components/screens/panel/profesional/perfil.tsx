@@ -9,6 +9,8 @@ import { BadgeCheck, ShieldCheck, UserRound, BriefcaseBusiness, ArrowRight, Hand
 import { DeleteAccountCard } from '@/components/app/delete-account-card'
 import { AvisosMailCard } from '@/components/screens/panel/avisos-mail-card'
 import { VerificacionContactoCard } from '@/components/app/verificacion-contacto-card'
+import { SelectorPaisCelular, AvisoCelular } from '@/components/app/selector-pais-celular'
+import { paisDeCelular, ejemploCelular, type CountryCode } from '@/lib/registro'
 
 const CATEGORIES = [
   { slug: 'plomeria', name: 'Plomería' },
@@ -37,6 +39,7 @@ export default function ProProfile() {
   // usuario
   const [displayName, setDisplayName] = useState('')
   const [phone, setPhone] = useState('')
+  const [pais, setPais] = useState<CountryCode>('AR')
   const [city, setCity] = useState('')
   const [email, setEmail] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
@@ -64,6 +67,7 @@ export default function ProProfile() {
           if (u) {
             setDisplayName(u.displayName || '')
             setPhone(u.phone || '')
+            setPais(paisDeCelular(u.phoneE164 || u.phone) || 'AR')
             setCity(u.city || '')
             setEmail(u.email || '')
             setAvatarUrl(u.avatarUrl || null)
@@ -98,6 +102,7 @@ export default function ProProfile() {
       const payload: Record<string, unknown> = {
         displayName: displayName.trim(),
         phone: phone.trim(),
+        phoneCountry: pais,
         city: city.trim(),
         personType,
         professions,
@@ -195,10 +200,15 @@ export default function ProProfile() {
                 <p className="text-xs text-slate-400 line-clamp-1">{email || '—'} · el email no se puede cambiar</p>
               </div>
             </div>
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Nombre y apellido" value={displayName} onChange={setDisplayName} placeholder="Ej: Juan Pérez" />
-              <Field label="Celular" value={phone} onChange={setPhone} placeholder="+54 9 …" />
               <Field label="Ciudad" value={city} onChange={setCity} placeholder="Ej: Córdoba" />
+              <SelectorPaisCelular id="perfil-pro-pais" value={pais} onChange={setPais}
+                labelClassName="text-xs font-bold text-slate-500 uppercase tracking-wide" selectClassName="py-2.5 text-sm" />
+              <div>
+                <Field label="Celular" value={phone} onChange={setPhone} placeholder={ejemploCelular(pais) || '+54 9 …'} />
+                <AvisoCelular phone={phone} pais={pais} />
+              </div>
             </div>
           </section>
 
@@ -284,7 +294,7 @@ export default function ProProfile() {
             </button>
           </section>
 
-          {/* D26: email y celular verificados o no, y verificarlos con un código */}
+          {/* D26: email verificado o no (y verificarlo con un código) y el celular estandarizado */}
           <VerificacionContactoCard />
 
           {/* verificación de identidad: el flujo completo (subida + IA) vive en /verificacion */}

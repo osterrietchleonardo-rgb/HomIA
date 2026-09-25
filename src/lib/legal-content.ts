@@ -90,7 +90,7 @@ export const TERMINOS: LegalDoc = {
         {
           lista: [
             'Tenés que ser mayor de 18 años y dar datos verdaderos, completos y actualizados.',
-            'Para crear la cuenta confirmás tu email con un código de 6 números que te mandamos por mail (vence a los 10 minutos). Tu celular lo escribís dos veces; por ahora no lo verificamos con un código y figura como "sin verificar".',
+            'Para crear la cuenta confirmás tu email con un código de 6 números que te mandamos por mail (vence a los 10 minutos). Tu celular lo escribís dos veces, con su país, y lo guardamos en formato internacional; no lo verificamos con un código.',
             'Una misma cuenta puede tener perfil de cliente, de profesional y de proveedor.',
             'Sos responsable de cuidar tu contraseña y de todo lo que se haga desde tu cuenta. Si creés que alguien entró sin permiso, cambiá la contraseña y avisanos.',
             'Si te olvidaste la contraseña, la recuperás desde "¿Olvidaste tu contraseña?" con un enlace que te llega por email.',
@@ -334,8 +334,8 @@ export const PRIVACIDAD: LegalDoc = {
           tabla: {
             columnas: ['Tipo de dato', 'Ejemplos', 'De dónde sale'],
             filas: [
-              ['Cuenta', 'Nombre, apellido, email, celular, ciudad, contraseña (guardada cifrada, nunca en texto), roles, cómo nos conociste, fecha y versión de los términos aceptados, y cuándo confirmaste tu email o tu celular', 'Lo cargás al registrarte'],
-              ['Códigos de verificación', 'El código de 6 números que te mandamos para confirmar tu email o tu celular (guardado cifrado, vence a los 10 minutos) y la dirección IP desde la que se pidió, para frenar abusos', 'Se genera al registrarte o al verificar tu email o celular'],
+              ['Cuenta', 'Nombre, apellido, email, celular, ciudad, contraseña (guardada cifrada, nunca en texto), roles, cómo nos conociste, fecha y versión de los términos aceptados, y cuándo confirmaste tu email', 'Lo cargás al registrarte'],
+              ['Códigos de verificación', 'El código de 6 números que te mandamos por mail para confirmar tu email (guardado cifrado, vence a los 10 minutos) y la dirección IP desde la que se pidió, para frenar abusos', 'Se genera al registrarte o al verificar tu email'],
               ['Perfil', 'Foto, teléfono, fecha de nacimiento, dirección, ciudad, oficios, descripción, obras realizadas', 'Lo cargás vos'],
               ['Negocio (proveedor)', 'Razón social, CUIT, logo, tipo de comercio, stock y precios', 'Lo cargás vos'],
               ['Ubicación', 'Ubicación aproximada para buscar cerca', 'Solo si la compartís desde el navegador'],

@@ -142,7 +142,7 @@ const NUCLEO: Entrada[] = [
     titulo: 'Crear cuenta',
     roles: ['visitante', 'todos'],
     texto:
-      'Crear la cuenta es gratis y tarda un par de minutos: elegís tu rol (cliente, profesional o proveedor); cargás nombre, apellido, email, celular (se escribe dos veces), contraseña y ciudad; confirmás el email con un código de 6 números que llega por mail (vence en 10 minutos); y al final lo de tu rol (el profesional, sus rubros y su zona de trabajo; el proveedor, el nombre, el tipo y la dirección de su comercio) y aceptás los términos. El DNI es opcional y se puede verificar después. Hoy el celular queda "sin verificar": HomIA todavía no manda códigos por SMS ni WhatsApp. Sin cuenta podés buscar y mirar; para contactar, contratar, comprar, publicar u ofertar necesitás cuenta.',
+      'Crear la cuenta es gratis y tarda un par de minutos: elegís tu rol (cliente, profesional o proveedor); cargás nombre, apellido, email, el país de tu celular y el celular (se escribe dos veces; sirve cualquier país), contraseña y ciudad; confirmás el email con un código de 6 números que llega por mail (vence en 10 minutos); y al final lo de tu rol (el profesional, sus rubros y su zona de trabajo; el proveedor, el nombre, el tipo y la dirección de su comercio) y aceptás los términos. El DNI es opcional y se puede verificar después. La cuenta se verifica confirmando el email; el celular no se verifica con código, solo se guarda en formato internacional. Sin cuenta podés buscar y mirar; para contactar, contratar, comprar, publicar u ofertar necesitás cuenta.',
     ruta: '/registrarse',
     claves: 'registrarme crear cuenta registro alta sumarme',
   },

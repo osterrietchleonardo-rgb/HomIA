@@ -47,7 +47,8 @@ model User {
   // emailVerifiedAt: cuándo probó con un código de 6 cifras que el email es suyo (las cuentas nuevas
   //   nacen verificadas; las anteriores quedan en NULL = "sin verificar" hasta que lo hagan en el perfil).
   // phoneE164: el celular normalizado (+549…); `phone` guarda cómo se muestra (+54 9 11 2345-6789).
-  // phoneVerifiedAt: cuándo confirmó el celular con un código por SMS/WhatsApp (NULL sin proveedor).
+  // phoneVerifiedAt: SIN USO desde el 25/09/2026 (el celular solo se estandariza con país, no se
+  // verifica por código); queda en la base para no hacer una migración destructiva.
   emailVerifiedAt    DateTime?
   phoneE164          String?
   phoneVerifiedAt    DateTime?

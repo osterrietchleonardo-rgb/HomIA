@@ -1,6 +1,6 @@
-// Reglas de los códigos de verificación de email y celular (D26, 25/09/2026). Funciones puras
-// (sin base ni red) para poder probarlas con tests; la parte con base, mail y SMS/WhatsApp está en
-// `verificacion-server.ts`.
+// Reglas de los códigos de verificación del email (D26, 25/09/2026). Funciones puras (sin base ni
+// red) para poder probarlas con tests; la parte con base y mail está en `verificacion-server.ts`.
+// El celular NO se verifica por código: solo se estandariza con país (Leonardo, 25/09/2026).
 //
 // - Código de 6 cifras con `crypto.randomInt` (aleatorio criptográfico).
 // - En la base se guarda HMAC-SHA256(clave, canal:propósito:destino:código), nunca el código: con
@@ -12,10 +12,11 @@
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto'
 import { CODIGO } from '@/lib/registro'
 
-export type Canal = 'email' | 'celular'
+// un solo canal: queda como tipo porque forma parte del hash guardado y de la columna `channel`
+export type Canal = 'email'
 export type Proposito = 'registro' | 'cuenta'
 
-/** Topes por conexión (IP) para que nadie use HomIA para mandar mails o SMS a terceros. */
+/** Topes por conexión (IP) para que nadie use HomIA para mandar mails a terceros. */
 export const TOPE_IP_HORA = 30
 
 export function nuevoCodigo(): string {

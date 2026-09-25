@@ -59,8 +59,8 @@
   Next.js aparece **"Algo salió mal"** con dos botones: **Reintentar** (vuelve a cargar esa parte) e
   **Ir al inicio**. No se muestran detalles técnicos. *(24/09/2026.)*
 - **Compartir el link de HomIA** por WhatsApp o redes muestra una imagen de vista previa: fondo azul
-  oscuro, "HomIA", "Tu hogar en buenas manos" y "Profesionales verificados, materiales y pagos en un
-  solo lugar". *(24/09/2026.)*
+  oscuro, "HomIA", "Arreglá tu casa y pagá al terminar" y "Profesionales con reseñas y materiales de
+  varios proveedores. Gratis para clientes." *(24/09/2026; texto cambiado el 25/09/2026, D31.)*
 - **Eliminar mi cuenta** (los tres roles, al final de **Mi perfil**) *(D19, 24/09/2026)*:
   1. Tocás **Eliminar mi cuenta**. Se abre una ventana que explica **qué se borra** (nombre, email,
      teléfono, dirección, foto, ubicación, cumpleaños, fotos del DNI, carrito, favoritos,
@@ -103,19 +103,41 @@
 
 **Qué muestra, de arriba hacia abajo:**
 
-1. **Buscador principal:** escribís qué necesitás (por ejemplo "Necesito un plomero urgente") y
-   tocás Enter o el botón.
-2. **Cómo funciona:** tres pasos.
-3. **Motor IA** y **Beneficios.**
-4. **Comunidad:** una tarjeta por rol.
-   - Cliente: "Buscar un servicio".
-   - Profesional: "Quiero recibir licitaciones".
-   - Proveedor: "Quiero vender en HomIA".
+1. **Titular y buscador principal:** "Arreglá tu casa y pagá al terminar". Escribís qué necesitás
+   (por ejemplo "Necesito un plomero urgente") y tocás Enter o el botón.
+2. **Cómo funciona:** tres pasos ("Contá qué pasó", "Elegí con datos, no a ciegas", "Pagás cuando
+   está terminado").
+3. **Homy, el asistente** (qué contesta, cuántas consultas por día y que no inventa) y
+   **Beneficios** ("Menos riesgo que llamar a un número que te pasaron").
+4. **Para quién es:** una tarjeta por rol con lo que gana cada uno.
+   - Cliente: "Buscá un profesional".
+   - Profesional (etiqueta "Gratis"): "Ofrecé tus servicios gratis".
+   - Proveedor: "Probá 14 días gratis".
+   - Abajo, el **Directorio**: "Ver el directorio".
 5. **Cinta de sponsors:** una banda azul oscuro de punta a punta con el logo y el nombre de cada
    proveedor con plan PRO, en tono suave. Pasa sola, **cada proveedor aparece una sola vez por
    vuelta** (nunca se ve el mismo dos veces a la vez) y se frena si le pasás el mouse por encima.
    Si todavía no hay ningún proveedor PRO, esta cinta no aparece.
-6. **Cierre:** "Crear cuenta gratis" y "Hablar con Homy".
+6. **Cierre:** "La próxima vez que se rompa algo, ya sabés dónde buscar", con "Crear cuenta gratis"
+   y "Preguntale a Homy".
+
+**Qué le dice la portada a cada uno (D31, 25/09/2026):** todo lo que promete está en la app; no hay
+testimonios ni cantidades de usuarios inventadas, ni frases de relleno.
+
+- **Cliente:** publicás una vez y te llegan presupuestos para comparar; ves quién validó su DNI y
+  las reseñas de otros clientes (con fotos); pagás cuando el trabajo está hecho, por Mercado Pago
+  (con el cargo del 1%) o en efectivo (sin cargo), sin adelantos; comprás materiales a varios
+  proveedores en un carrito; devolvés lo que sobra en 30 días y te reintegran; la cuenta es gratis.
+- **Profesional:** aviso de trabajos de su oficio para ofertar desde el celular, sin pagar
+  publicidad; cobra el 100% en su Mercado Pago o en efectivo (HomIA no le cobra comisión); factura
+  en PDF armada por la app; calendario que no deja pisar dos trabajos en el mismo horario; finanzas
+  simples; las reseñas buenas lo suben en el directorio; gratis.
+- **Proveedor:** su stock aparece con su precio cuando alguien busca ese material; carga productos
+  de un catálogo de más de 1.700 materiales con la descripción ya escrita; pedidos, cobros y
+  devoluciones en su panel; cobra en su Mercado Pago o en efectivo; con PRO sale primero como
+  Recomendado y ve qué se busca en su rubro; 14 días gratis sin tarjeta, después Básico $50.000 o
+  PRO $100.000 por mes.
+- **Para todos:** se usa desde el celular, como WhatsApp, sin saber de tecnología.
 
 **El buscador y Homy, sin cuenta:**
 
@@ -265,7 +287,7 @@ En el perfil de un proveedor, los productos **sin stock** muestran el botón **R
 
 ### 1.7 Crear cuenta e ingresar
 
-**Crear cuenta, en 4 pasos** *(D26, 25/09/2026: datos obligatorios, estandarizados y email confirmado con un código)*:
+**Crear cuenta, en 4 pasos** *(D26, 25/09/2026: datos obligatorios, estandarizados y email confirmado con un código. La verificación de la cuenta es **confirmar el email**; el celular se estandariza con su país pero **no se verifica con un código**, decisión de Leonardo del mismo día)*:
 
 1. **Cómo vas a usar HomIA:** "Soy cliente", "Soy profesional" o "Soy proveedor".
 2. **Tus datos** (todos obligatorios, iguales para los tres roles):
@@ -275,12 +297,20 @@ En el perfil de un proveedor, los productos **sin stock** muestran el botón **R
      ("gmial.com", "hotmial.com", "gmail.con", "gmail.com.ar") aparece **"¿Quisiste decir
      juan@gmail.com?"** con el botón **Sí, usar ese**; no se corrige solo (un dominio raro puede ser
      el de tu empresa).
-   - **Celular**, como lo escribas: "011 15 2345-6789", "11 2345 6789", "+54 9 11…", con o sin 0 y
-     15. Debajo muestra **cómo quedó**: "Se va a guardar como +54 9 11 2345-6789". Si no es un
-     celular argentino válido lo dice claro (por ejemplo "Al celular le faltan números: poné el
-     código de área…").
+   - **País del celular:** una lista con bandera, nombre y código de cada país ("Argentina (+54)",
+     "Uruguay (+598)", "España (+34)"…), con **Argentina elegida** y Uruguay, Chile, Paraguay,
+     Bolivia, México, España y Estados Unidos arriba; el resto por orden alfabético. En el celular
+     abre el selector del teléfono.
+   - **Celular**, como se escribe en ese país. En Argentina: "011 15 2345-6789", "11 2345 6789",
+     "+54 9 11…", con o sin 0 y 15. El ejemplo gris del campo cambia con el país (Uruguay "094 231
+     234", España "612 34 56 78"). Si empieza con **+**, se toma el código de país escrito aunque
+     el país elegido sea otro. Debajo muestra **cómo quedó**: "Se guardará como +54 9 11
+     2345-6789" (o "+598 99 123 456"). Si no es válido lo dice claro, por ejemplo "Número inválido
+     para Uruguay: revisá la característica y la cantidad de números" o, en Argentina, "Al celular
+     le faltan números: poné el código de área…".
    - **Repetí el celular:** se escribe otra vez (no se puede pegar) y avisa "Coinciden" o "Todavía
-     no coinciden". Así se evita un número mal tipeado que nadie puede usar después.
+     no coinciden" (se comparan los números, no cómo están escritos: "099 123 456" y "+598 99 123
+     456" coinciden). Así se evita un número mal tipeado que nadie puede usar después.
    - **Contraseña** (mínimo 8 caracteres, con letras y números; el ojito la muestra u oculta).
    - **Ciudad o localidad** (ej.: "Palermo, CABA").
    - Opcionales: "¿Cómo nos encontraste?" y compartir ubicación.
@@ -295,12 +325,10 @@ En el perfil de un proveedor, los productos **sin stock** muestran el botón **R
    - **"¿No te llegó? Podés pedir otro en 0:59"**: cuenta regresiva de 60 segundos y después el botón
      **Mandarme un código nuevo** (hasta 5 códigos por hora para el mismo email).
    - "Cambiar email" vuelve al paso 2 sin perder nada.
-   - **Celular:** hoy HomIA **no manda códigos por SMS ni WhatsApp** (no hay proveedor contratado).
-     Por eso el celular no pide código: queda **"sin verificar"**, confirmado solo por haberlo
-     escrito dos veces. Cuando se active un proveedor, este paso pedirá también el código del
-     celular.
+   - **El celular no pide código** (ni SMS ni WhatsApp): se confirma escribiéndolo dos veces y queda
+     guardado estandarizado.
 4. **Tu cuenta** (lo del rol):
-   - Arriba recuerda "Email confirmado: …" y "Celular +54 9 …: queda sin verificar por ahora".
+   - Arriba recuerda "Email confirmado: …" y "Celular: +54 9 11 2345-6789".
    - **Profesional:** **rubros en los que trabajás** (al menos uno) y **zona de trabajo** ("Trabajás
      en Palermo, CABA y hasta 15 km a la redonda", con la barra de 1 a 100 km). Lo demás es opcional
      y está plegado en "Más datos de tu trabajo": persona o empresa, DNI o CUIL (se revisa el dígito
@@ -335,6 +363,10 @@ En el perfil de un proveedor, los productos **sin stock** muestran el botón **R
 - Hoy **no hay forma de sumar un perfil después**.
 - Al terminar te lleva a tu panel, o de vuelta a donde estabas (por ejemplo, al carrito que armaste
   sin cuenta).
+- **En la computadora**, el panel de la izquierda (logo, titular y los tres beneficios) queda
+  **fijo a la altura de la pantalla**: al elegir el rol o avanzar de paso no se mueve; solo baja y
+  sube el formulario. Cada cambio de paso lleva la pantalla arriba de todo, con "Volver al inicio" y
+  el paso a paso a la vista. Lo mismo en Ingresar, Recuperar y Restablecer la contraseña.
 - **Cuentas creadas antes del 25/09/2026:** siguen funcionando igual; en **Mi perfil → Email y
   celular** ven su email "Sin verificar" y lo pueden verificar con un código cuando quieran (ver
   2.12).
@@ -831,14 +863,17 @@ sobrantes**.
 
 ### 2.12 Mi perfil
 
-- **Email y celular** *(D26)*: tarjeta con el email y el celular y su estado, **Verificado** (verde)
-  o **Sin verificar** (amarillo), como la insignia del DNI. Si el email está sin verificar (cuentas
-  anteriores al 25/09/2026), **Verificar** manda un código de 6 números a tu email y lo escribís
-  ahí mismo (misma regla: 10 minutos, 5 intentos, otro código a los 60 segundos). El celular hoy
-  queda "Sin verificar" con la nota "Todavía no podemos mandar códigos por SMS ni WhatsApp".
-- Podés cambiar tu foto, nombre, celular, dirección, ciudad y cumpleaños. El celular se guarda
-  estandarizado (+54 9 …); si no es un celular válido, no se guarda y te dice por qué; si lo
-  cambiás, vuelve a quedar "sin verificar". No se puede dejar vacío si ya tenías uno.
+- **Email y celular** *(D26)*: tarjeta con el **email y su estado**, **Verificado** (verde) o **Sin
+  verificar** (amarillo), como la insignia del DNI. Si el email está sin verificar (cuentas
+  anteriores al 25/09/2026), **Verificar ahora** manda un código de 6 números a tu email y lo
+  escribís ahí mismo (misma regla: 10 minutos, 5 intentos, otro código a los 60 segundos). Debajo,
+  el **celular estandarizado** ("+54 9 11 2345-6789"), **sin estado de verificación**: el celular no
+  se verifica con código. Si es un número viejo que no se puede estandarizar, dice "revisalo: no es
+  un celular válido".
+- Podés cambiar tu foto, nombre, **país del celular** y celular, dirección, ciudad y cumpleaños. El
+  país arranca en el de tu celular guardado. El celular se guarda estandarizado (con aviso en vivo
+  "Se guardará como …"); si no es válido para el país elegido, no se guarda y te dice por qué. No
+  se puede dejar vacío si ya tenías uno.
 - Podés compartir tu ubicación y elegir el **radio de búsqueda** (1 a 100 km).
 - El email no se puede cambiar.
 - **Avisos por mail:** interruptor "Recibir avisos por mail" (prendido de fábrica). Dice a qué email
@@ -1173,10 +1208,11 @@ proyectos. **No es una cuenta bancaria ni guarda plata.**
 - **Verificación:** igual que la del cliente (punto 2.11). Si en tu perfil cargaste un DNI/CUIL
   distinto al de la foto, la verificación se rechaza.
 - **Mi perfil:**
-  - Datos de contacto, persona o empresa, oficios (al menos uno), habilidades, experiencia y bio.
+  - Datos de contacto (con el **país del celular** y el aviso "Se guardará como …", como el
+    cliente, 2.12), persona o empresa, oficios (al menos uno), habilidades, experiencia y bio.
   - **Radio de servicio:** a qué distancia aceptás trabajar.
-  - **Email y celular** *(D26)*: la misma tarjeta que el cliente (2.12): verificado o sin
-    verificar, y **Verificar** el email con un código.
+  - **Email y celular** *(D26)*: la misma tarjeta que el cliente (2.12): email verificado o sin
+    verificar, **Verificar ahora** con un código, y el celular estandarizado.
   - Acceso **"Cobros y Mercado Pago"** (lleva a Cobros, ver 3.8).
   - Un aviso: usar HomIA es gratis; cuando alguien paga por Mercado Pago se suma un cargo de
     servicio del 1% que paga quien compra (vos cobrás el 100% de tu factura).
@@ -1587,8 +1623,8 @@ En la cinta de sponsors aparecen primero los proveedores que cargaron logo propi
 - **Foto, plan y verificación:** foto del negocio, el estado de tu plan y el acceso a la
   verificación.
 - **Marca en la portada:** solo PRO (ver 4.9).
-- **Email y celular** *(D26)*: la misma tarjeta que el cliente (2.12): verificado o sin verificar, y
-  **Verificar** el email con un código.
+- **Email y celular** *(D26)*: la misma tarjeta que el cliente (2.12): email verificado o sin
+  verificar, **Verificar ahora** con un código, y el celular estandarizado.
 - **Avisos por mail:** interruptor "Recibir avisos por mail" (te compraron o reservaron, te pagaron
   por MP, te piden devolver materiales). Ver "Lo básico para todos".
 - Al final: **Eliminar mi cuenta** (ver "Lo básico para todos"). Si tenés un plan pago activo,
@@ -1822,7 +1858,7 @@ herramienta de afuera). No cambia nada de lo que la persona ve ni hace: no hay c
   demo y de prueba** (prendida: saca las cuentas `@homia.test` y los navegadores de las pruebas).
   Si todavía no hay uso registrado lo dice: "se registra desde el 25/09/2026".
 - **Usuarios:** cuentas por rol, nuevas por día, bajas, activos del último día / 7 días / 30 días,
-  cuántos iniciaron sesión (y los ingresos fallidos), verificados (DNI, email, celular),
+  cuántos iniciaron sesión (y los ingresos fallidos), verificados (DNI y email),
   proveedores por plan (Prueba, Básico, PRO, Vencido) y cuántos pagan, y "cómo nos conocieron".
 - **Uso:** sesiones, visitantes únicos, duración promedio y mediana (tiempo activo real), horas
   totales, pantallas por sesión, pantallas más usadas, botones más tocados, acciones (con cuántas

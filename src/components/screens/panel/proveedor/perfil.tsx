@@ -413,7 +413,7 @@ export default function ProviderProfile() {
           </button>
         </form>
 
-        {/* D26: email y celular verificados o no, y verificarlos con un código */}
+        {/* D26: email verificado o no (y verificarlo con un código) y el celular estandarizado */}
         <VerificacionContactoCard />
 
         {/* verificación de identidad */}

@@ -11,13 +11,15 @@ import { problemaDeContrasena } from '@/lib/password-policy'
 import { canonicalProviderKind } from '@/lib/search-match'
 import {
   normalizarEmail, normalizarCelular, normalizarNombre, problemaNombre, normalizarCuit, normalizarDniOCuil,
+  esPaisCelular,
 } from '@/lib/registro'
-import { comprobanteValido, disponibilidad } from '@/lib/verificacion-server'
+import { comprobanteValido } from '@/lib/verificacion-server'
 
 // POST /api/auth/register (D26, 25/09/2026: datos estandarizados y email verificado ANTES de crear
 // la cuenta). Obligatorio para todos: nombre, apellido, email con el comprobante del código que
-// llegó por mail (`emailToken`, de POST /api/auth/verificacion/comprobar), celular escrito dos
-// veces (`phone` + `phoneConfirm`; con proveedor de SMS/WhatsApp también `phoneToken`), contraseña,
+// llegó por mail (`emailToken`, de POST /api/auth/verificacion/comprobar: es LA verificación de la
+// cuenta), celular escrito dos veces (`phone` + `phoneConfirm`, de cualquier país con `phoneCountry`
+// ISO-2, Argentina por defecto; se estandariza a E.164, NO se verifica por código), contraseña,
 // ciudad o localidad y aceptar los términos. Profesional: al menos un rubro (+ radio de trabajo,
 // por defecto 15 km). Proveedor: nombre del comercio, tipo de comercio y dirección del local.
 // Todo lo demás es opcional y se valida si viene (DNI/CUIL y CUIT con dígito verificador).
@@ -33,7 +35,8 @@ const schema = z.object({
   emailToken: str(2000),
   phone: str(60),
   phoneConfirm: str(60),
-  phoneToken: str(2000),
+  // país del celular (ISO-2 de libphonenumber: "AR", "UY"…); sin él, Argentina
+  phoneCountry: z.string().refine(esPaisCelular, 'País del celular inválido').optional(),
   password: str(300),
   city: str(300),
   lat: z.number().min(-90).max(90).nullable().optional(),
@@ -101,10 +104,11 @@ export async function POST(req: NextRequest) {
   const pw = problemaDeContrasena(d.password)
   if (pw) campos.password = pw
 
-  const cel = normalizarCelular(d.phone)
+  const pais = d.phoneCountry && esPaisCelular(d.phoneCountry) ? d.phoneCountry : 'AR'
+  const cel = normalizarCelular(d.phone, pais)
   if (!cel.ok) campos.phone = cel.error
   else {
-    const rep = normalizarCelular(d.phoneConfirm)
+    const rep = normalizarCelular(d.phoneConfirm, pais)
     if (!(d.phoneConfirm || '').trim()) campos.phoneConfirm = 'Repetí tu celular para confirmarlo'
     else if (!rep.ok || rep.e164 !== cel.e164) campos.phoneConfirm = 'Los dos celulares no coinciden: revisalos'
   }
@@ -153,21 +157,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── verificación: el email con su código (siempre); el celular con el suyo solo si hay proveedor ──
+  // ── verificación de la cuenta: el email con su código (el celular no se verifica) ──
   let needsEmailCode = false
-  let needsPhoneCode = false
   if (em.ok && !campos.email && !(await comprobanteValido(d.emailToken, 'email', em.email))) {
     campos.email = 'Confirmá tu email con el código de 6 números que te mandamos'
     needsEmailCode = true
-  }
-  const celularConCodigo = disponibilidad().celular
-  let phoneVerified = false
-  if (cel.ok && !campos.phone && !campos.phoneConfirm && celularConCodigo) {
-    phoneVerified = await comprobanteValido(d.phoneToken, 'celular', cel.e164)
-    if (!phoneVerified) {
-      campos.phone = 'Confirmá tu celular con el código que te mandamos'
-      needsPhoneCode = true
-    }
   }
 
   const faltan = Object.keys(campos)
@@ -178,7 +172,6 @@ export async function POST(req: NextRequest) {
       faltan,
       ...(campos.acceptTerms ? { needsTerms: true } : {}),
       ...(needsEmailCode ? { needsEmailCode: true } : {}),
-      ...(needsPhoneCode ? { needsPhoneCode: true } : {}),
     })
   }
   // (acá em.ok y cel.ok son true: si no, habría campos con error)
@@ -204,7 +197,6 @@ export async function POST(req: NextRequest) {
         howFoundUs: d.howFoundUs && HOW_FOUND.includes(d.howFoundUs) ? d.howFoundUs : null,
         phone: cel.mostrar,
         phoneE164: cel.e164,
-        phoneVerifiedAt: phoneVerified ? ahora : null,
         emailVerifiedAt: ahora,
         birthday: d.birthday || null,
         address: esProv ? address : null,
@@ -280,7 +272,7 @@ export async function POST(req: NextRequest) {
       hasProvider: esProv,
       emailVerified: true,
       phone: cel.mostrar,
-      phoneVerified,
+      phoneCountry: cel.pais,
     },
   }, 201)
 }

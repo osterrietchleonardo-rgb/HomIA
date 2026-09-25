@@ -1,4 +1,4 @@
-// Tests de la estandarización del registro (D26): email, celular argentino, nombres y CUIT.
+// Tests de la estandarización del registro (D26): email, celular con país, nombres y CUIT.
 // Correr con:
 //   node --test --import ./scripts/homy-test-alias.mjs src/lib/__tests__/registro.test.ts
 import { test } from 'node:test'
@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import {
   normalizarEmail, sugerirEmail, normalizarCelular, formatearCelular, mismoCelular,
   normalizarNombre, problemaNombre, normalizarCuit, normalizarDniOCuil,
+  paisesCelular, esPaisCelular, paisDeCelular, ejemploCelular,
 } from '../registro'
 
 // ── email ──
@@ -86,14 +87,100 @@ test('celular: muestra cómo quedó (+54 9 área número)', () => {
 })
 
 test('celular: rechaza lo que no es un celular válido con un mensaje claro', () => {
-  const malos = ['', '123', '15 2345-6789', 'once 2345 6789', '11 2345 678', '11 2345 67890', '+598 99 123 456', '+1 202 555 0143', '0800 333 4444']
+  const malos = ['', '123', '15 2345-6789', 'once 2345 6789', '11 2345 678', '11 2345 67890', '0800 333 4444']
   for (const m of malos) {
     const r = normalizarCelular(m)
     assert.equal(r.ok, false, `debería rechazar "${m}"`)
     assert.ok(!r.ok && r.error.length > 10, m)
   }
-  const uy = normalizarCelular('+598 99 123 456')
-  assert.ok(!uy.ok && /Argentina/.test(uy.error))
+})
+
+// ── celular de cualquier país (25/09/2026: se estandariza con país, no se verifica por código) ──
+test('celular: el país por defecto es Argentina y devuelve el país', () => {
+  const r = normalizarCelular('11 2345-6789')
+  assert.ok(r.ok)
+  assert.equal(r.ok && r.pais, 'AR')
+  assert.equal(normalizarCelular('11 2345-6789', 'AR').ok, true)
+})
+
+test('celular: acepta celulares de otros países con el país elegido', () => {
+  const casos: [string, string, string, string][] = [
+    ['099 123 456', 'UY', '+59899123456', '+598 99 123 456'],
+    ['99 123 456', 'UY', '+59899123456', '+598 99 123 456'],
+    ['612 34 56 78', 'ES', '+34612345678', '+34 612 34 56 78'],
+    ['(202) 555-0143', 'US', '+12025550143', '+1 202 555 0143'],
+    ['55 1234 5678', 'MX', '+525512345678', '+52 55 1234 5678'],
+    ['9 8765 4321', 'CL', '+56987654321', '+56 9 8765 4321'],
+    ['11 96123-4567', 'BR', '+5511961234567', '+55 11 96123 4567'],
+  ]
+  for (const [entrada, pais, e164, mostrar] of casos) {
+    const r = normalizarCelular(entrada, pais as never)
+    assert.ok(r.ok, `${pais} ${entrada} → ${!r.ok ? r.error : ''}`)
+    assert.equal(r.ok && r.e164, e164, entrada)
+    assert.equal(r.ok && r.mostrar, mostrar, entrada)
+    assert.equal(r.ok && r.pais, pais, entrada)
+  }
+})
+
+test('celular: con + adelante se interpreta como internacional, sin importar el país elegido', () => {
+  const uy = normalizarCelular('+598 99 123 456', 'AR')
+  assert.ok(uy.ok)
+  assert.equal(uy.ok && uy.e164, '+59899123456')
+  assert.equal(uy.ok && uy.pais, 'UY')
+  const us = normalizarCelular('+1 202 555 0143')
+  assert.ok(us.ok && us.pais === 'US' && us.e164 === '+12025550143')
+  const es = normalizarCelular('0034 612 34 56 78', 'AR')
+  assert.ok(es.ok && es.pais === 'ES' && es.e164 === '+34612345678', 'con 00 también es internacional')
+  // un celular argentino internacional elegido con otro país sigue la regla del 9
+  const ar = normalizarCelular('+54 11 2345-6789', 'UY')
+  assert.ok(ar.ok && ar.e164 === '+5491123456789' && ar.pais === 'AR' && ar.mostrar === '+54 9 11 2345-6789')
+})
+
+test('celular: número inválido para el país elegido, con el nombre del país', () => {
+  const r = normalizarCelular('99 123', 'UY')
+  assert.ok(!r.ok)
+  assert.match(!r.ok ? r.error : '', /Número inválido para Uruguay: revisá la característica y la cantidad de números/)
+  const es = normalizarCelular('12 34', 'ES')
+  assert.ok(!es.ok && /España/.test(es.error))
+  const intl = normalizarCelular('+598 99 123', 'AR')
+  assert.ok(!intl.ok && intl.error.length > 10)
+})
+
+test('celular: el doble tipeo compara números del mismo país', () => {
+  assert.equal(mismoCelular('099 123 456', '+598 99 123 456', 'UY'), true)
+  assert.equal(mismoCelular('099 123 456', '099 123 457', 'UY'), false)
+})
+
+test('celular: lista de países con bandera, nombre y código, AR primero', () => {
+  const lista = paisesCelular('es')
+  assert.ok(lista.length > 200)
+  assert.deepEqual(lista.slice(0, 8).map((p) => p.iso), ['AR', 'UY', 'CL', 'PY', 'BO', 'MX', 'ES', 'US'])
+  const ar = lista[0]
+  assert.equal(ar.nombre, 'Argentina')
+  assert.equal(ar.codigo, '54')
+  assert.equal(ar.bandera, '🇦🇷')
+  // el resto en orden alfabético
+  const resto = lista.slice(8).map((p) => p.nombre)
+  assert.deepEqual(resto, [...resto].sort((a, b) => a.localeCompare(b, 'es')))
+})
+
+test('celular: país válido, país de un E.164 y ejemplo por país', () => {
+  assert.equal(esPaisCelular('UY'), true)
+  assert.equal(esPaisCelular('XX'), false)
+  assert.equal(esPaisCelular('ar'), false, 'ISO-2 en mayúsculas')
+  assert.equal(esPaisCelular(undefined), false)
+  assert.equal(paisDeCelular('+5491123456789'), 'AR')
+  assert.equal(paisDeCelular('+59899123456'), 'UY')
+  assert.equal(paisDeCelular(null), null)
+  assert.equal(paisDeCelular('basura'), null)
+  assert.equal(ejemploCelular('AR'), '11 2345-6789')
+  assert.equal(ejemploCelular('UY'), '094 231 234')
+  assert.equal(ejemploCelular('ES'), '612 34 56 78')
+})
+
+test('celular: formato para mostrar (guion final solo en Argentina)', () => {
+  assert.equal(formatearCelular('+59899123456'), '+598 99 123 456')
+  assert.equal(formatearCelular('+5491123456789'), '+54 9 11 2345-6789')
 })
 
 test('celular: el doble tipeo compara números, no texto', () => {

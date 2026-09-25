@@ -134,17 +134,19 @@ eliminadas.
 función compartida por la pantalla y el servidor (`src/lib/registro.ts`), el celular escrito dos
 veces y comparado normalizado, y validar todo **antes** de crear la cuenta. A diferencia de PRISMA
 (link de confirmación de Supabase Auth), el email se confirma con un **código de 6 números** antes de
-crear la cuenta.
+crear la cuenta. **Esa es la verificación de la cuenta.** El celular se **estandariza con país**
+(como el alta de contactos de los asesores en PRISMA, `ManualContactFields.tsx`) y **no se verifica
+con código** (Leonardo, 25/09/2026: "no pedí verificar celular, solo estandarizar").
 
 **Obligatorio para crear la cuenta** (`POST /auth/register`; si falta algo → **400** con `campos`
 {campo: mensaje} y `faltan` [campos], todo junto; nada se crea):
 
 | Rol | Obligatorio | Opcional (se valida si viene) |
 |---|---|---|
-| Todos | `firstName`, `lastName` (2+ letras, hasta 40), `email` válido **con `emailToken`** (comprobante del código), `phone` celular argentino válido + `phoneConfirm` que coincida, `password` (≥ 8, letras y números), `city` (2+), `acceptTerms: true` | `howFoundUs` (google/redes/recomendacion/publicidad/otro), `lat`/`lng`, `birthday` |
+| Todos | `firstName`, `lastName` (2+ letras, hasta 40), `email` válido **con `emailToken`** (comprobante del código), `phone` celular válido para su país + `phoneConfirm` que coincida, `password` (≥ 8, letras y números), `city` (2+), `acceptTerms: true` | `phoneCountry` (ISO-2 en mayúsculas de `getCountries()` de libphonenumber: `AR`, `UY`…; sin él, `AR`; otro valor → 400 "País del celular inválido"), `howFoundUs` (google/redes/recomendacion/publicidad/otro), `lat`/`lng`, `birthday` |
 | Profesional | + `professions` (≥ 1 slug) ; zona = `city` + `serviceRadiusKm` (1–100, por defecto 15) | `personType`, `dniCuil` (DNI 7-8 cifras o CUIL con dígito verificador), `companyCuit` (CUIT con DV), `companyName`, `companyWebsite`, `employeesCount`, `skills`, `experienceYears`, `bio` |
 | Proveedor | + `businessName` (2–120), `kind` (uno de los 18 de `PROVIDER_KINDS`, se canoniza), `address` (calle y número: ≥ 5 caracteres con al menos un número) | `cuit` (con DV, se guarda `30-12345678-9`), `description` |
-| Con proveedor de SMS/WhatsApp configurado | + `phoneToken` (comprobante del código del celular) | — |
+
 
 Por qué eso y no más: es lo mínimo para operar con confianza (a quién contactar y por dónde, dónde
 trabaja o dónde retiran); el DNI, el CUIT y lo demás se piden después (verificación de identidad
@@ -157,11 +159,20 @@ existente y perfil) para no espantar en el celu.
   dominios comunes en Argentina (gmail, hotmail, outlook, yahoo(.com.ar), live, icloud, fibertel…),
   ≤ 1 cambio para dominios de hasta 8 letras y ≤ 2 para más largos, más reemplazos fijos
   (`gmail.com.ar` → `gmail.com`). Solo se **sugiere**; nunca se corrige solo.
-- **Celular:** `libphonenumber-js` (metadata mínima) con país AR: saca el 0 y el 15, conoce los
-  códigos de área de 2, 3 y 4 cifras y valida el largo. Si no vino con 9 ni 15 se agrega el 9 (el
-  campo es "Celular", igual que PRISMA). Se guarda `phoneE164` (`+5491123456789`) y `phone` para
-  mostrar (`+54 9 11 2345-6789`). Rechaza: menos de 8 cifras, letras, no argentinos ("Por ahora solo
-  aceptamos celulares de Argentina"), 0800/0810/0600 y largos que no cierran.
+- **Celular (`normalizarCelular(texto, pais = 'AR')`):** `libphonenumber-js` (metadata mínima) con
+  el país elegido en el selector. **Cualquier país**: se interpreta como se escribe allá y tiene que
+  ser válido para ese país (característica y cantidad de números); si no, 400 "Número inválido para
+  Uruguay: revisá la característica y la cantidad de números" (nombre del país con
+  `Intl.DisplayNames` en español). **Con `+` o `00` adelante es internacional** y manda el código de
+  país escrito, sea cual sea el elegido (el país resultante sale del número). **Argentina** (elegida
+  o `+54`) mantiene la regla de antes: saca el 0 y el 15, conoce los códigos de área de 2, 3 y 4
+  cifras, si no vino con 9 ni 15 agrega el 9 (el campo es "Celular", igual que PRISMA), rechaza
+  menos de 8 cifras, 0800/0810/0600 y largos que no cierran. Letras → 400 en todos los países. Se
+  guarda `phoneE164` (`+5491123456789`, `+59899123456`) y `phone` para mostrar en formato
+  internacional (`+54 9 11 2345-6789` con guion final solo en Argentina; `+598 99 123 456`). El
+  doble tipeo compara los E.164 con el mismo país (`mismoCelular(a, b, pais)`). Sin verificación de
+  tipo "móvil" fuera de Argentina: la metadata mínima valida largo y prefijos, no si es celular o
+  fijo.
 - **Nombre y apellido:** espacios de más fuera; mayúscula inicial solo en palabras escritas todas en
   minúscula o todas en mayúscula ("juan PÉREZ" → "Juan Pérez"); "de/del/la/y…" en minúscula salvo
   al principio; lo mezclado ("McDonald") o con números/símbolos queda igual. `displayName` =
@@ -193,26 +204,29 @@ existente y perfil) para no espantar en el celu.
   mails…" y no se puede crear la cuenta (fallback honesto: no se simula la verificación). Si el mail
   no sale, el código se borra (no cuenta para la espera) y responde 503; si la dirección es
   inválida o reservada (`.test`, `.invalid`…), 400.
-- **Celular:** solo si hay proveedor de SMS/WhatsApp (`PHONE_VERIFY_PROVIDER`, TÉCNICO §4.14).
-  **Hoy no hay:** el pedido de código al celular responde 503 `needsConfig`, el registro no pide
-  `phoneToken` y la cuenta nace con `phoneVerifiedAt = NULL` ("sin verificar"). Nunca se simula.
+- **Celular: no hay código.** Las rutas de verificación aceptan solo `canal: 'email'`; `celular` →
+  400 "Canal inválido: solo se verifica el email". El registro no pide ni acepta comprobante del
+  celular y la respuesta de alta ya no trae `phoneVerified` (trae `phoneCountry`).
+  `User.phoneVerifiedAt` queda en la base sin uso (siempre `NULL` para cuentas nuevas).
 
 **Qué se bloquea sin email verificado:** crear la cuenta. Toda cuenta creada desde D26 nace con
 `emailVerifiedAt`. **Cuentas anteriores** (`emailVerifiedAt = NULL`): **no se les bloquea nada**
 (pueden mirar, contratar, comprar, ofertar y vender como antes); ven "Sin verificar" en Mi perfil y
 lo verifican cuando quieran. Por qué: al 25/09/2026 todas las cuentas de la base son de prueba o
 demo (D20) y bloquear operaciones en curso por un dato nuevo rompería pedidos y proyectos abiertos;
-si en el futuro hubiera cuentas reales sin verificar se decide aparte. El **celular sin verificar no
-bloquea nada** (no hay cómo verificarlo todavía).
+si en el futuro hubiera cuentas reales sin verificar se decide aparte. El celular no tiene estado
+de verificación y no bloquea nada.
 
 **Después, desde la cuenta** (propósito `cuenta`): el destino sale de la sesión (el email de la
-cuenta o su `phoneE164`), nunca del body. Al acertar se marca `emailVerifiedAt` / `phoneVerifiedAt`
-solo si el dato sigue siendo el mismo (409 si cambió en el medio). Ya verificado → 200
-`yaVerificado`.
+cuenta), nunca del body. Al acertar se marca `emailVerifiedAt` solo si el email sigue siendo el
+mismo (409 si cambió en el medio). Ya verificado → 200 `yaVerificado`.
 
-**Cambiar el celular** (`PUT /profiles/me`): se normaliza igual (400 con el motivo si no es válido);
-si cambia el número, `phoneVerifiedAt` vuelve a `NULL`; no se puede dejar vacío si la cuenta ya
-tenía un celular válido. El email no se puede cambiar.
+**Cambiar el celular** (`PUT /profiles/me`, con `phoneCountry` opcional igual que el registro): se
+estandariza igual (400 con el motivo si no es válido para el país); no se puede dejar vacío si la
+cuenta ya tenía un celular válido. Mi perfil arranca el selector en el país del celular guardado
+(`paisDeCelular(phoneE164 || phone)`). `GET /auth/verificacion` muestra el celular estandarizado;
+para cuentas anteriores a D26 con `phone` sin `phoneE164`, lo estandariza al leer (sin escribir) y
+solo pide "revisalo" si no se puede. El email no se puede cambiar.
 
 ## 2. Trabajos publicados (`JobPost`) y ofertas (`JobBid`)
 
@@ -979,10 +993,10 @@ externo no disponible. Rutas relativas a `src/app/api/`. Cualquier `/api/*` que 
 
 | Método y ruta | Auth | Valida / hace | Errores clave |
 |---|---|---|---|
-| `POST /auth/register` | — (8/h por IP) | **D26:** zod + validación completa (§1.3): nombre, apellido, email con `emailToken` válido para ESE email, celular + repetido (y `phoneToken` si hay proveedor), contraseña ≥ 8 con letras y números, ciudad, **`acceptTerms: true`** (§1.1); profesional: rubros; proveedor: comercio, tipo y dirección. Todo estandarizado. Crea usuario y perfiles en **una sola escritura** (`emailVerifiedAt` = ahora), prueba de 14 días, CRM y sesión | 400 con `campos`/`faltan` (+ `needsTerms`, `needsEmailCode`, `needsPhoneCode`), 409 "Ya existe una cuenta…" (solo con comprobante válido), 429 |
-| `GET /auth/verificacion` | — | Qué se puede verificar (`disponible.email`, `disponible.celular`, canal) y, con sesión, `cuenta` { email, emailVerificado, celular, celularNormalizado, celularVerificado } (D26) | — |
-| `POST /auth/verificacion/enviar` | — / Sesión (`cuenta`) | zod `{ canal: email\|celular, proposito: registro\|cuenta, destino? }`. Registro: normaliza el destino; cuenta: el destino sale de la sesión. Crea el código (hash), lo manda y responde `{ venceEnSeg: 600, reenviarEnSeg: 60, canal }`; misma respuesta si el email ya tiene cuenta (§1.3) | 400 destino inválido, 401 (`cuenta` sin sesión), 429 `motivo` = espera\|tope_destino\|tope_ip + `esperarSeg`, 503 `needsConfig` (sin mail o sin proveedor de celular) |
-| `POST /auth/verificacion/comprobar` | — / Sesión (`cuenta`) | zod `{ canal, proposito, destino?, codigo: 6 cifras }`. Registro → `{ comprobante }` (JWT 30 min); cuenta → marca verificado | 400 `motivo` = incorrecto (+ `intentosRestantes`)\|vencido\|usado\|sin_codigo, 409 dato cambiado, 429 agotado (60 intentos / 15 min por IP en memoria) |
+| `POST /auth/register` | — (8/h por IP) | **D26:** zod + validación completa (§1.3): nombre, apellido, email con `emailToken` válido para ESE email, celular + repetido de cualquier país (`phoneCountry` ISO-2 opcional, AR por defecto; estandarizado, sin código), contraseña ≥ 8 con letras y números, ciudad, **`acceptTerms: true`** (§1.1); profesional: rubros; proveedor: comercio, tipo y dirección. Todo estandarizado. Crea usuario y perfiles en **una sola escritura** (`emailVerifiedAt` = ahora), prueba de 14 días, CRM y sesión | 400 con `campos`/`faltan` (+ `needsTerms`, `needsEmailCode`), 400 "País del celular inválido", 409 "Ya existe una cuenta…" (solo con comprobante válido), 429 |
+| `GET /auth/verificacion` | — | Si hoy se mandan códigos por mail (`disponible.email`) y, con sesión, `cuenta` { email, emailVerificado, emailVerificadoEl, celular (estandarizado), celularNormalizado } (D26; el celular sin estado de verificación desde el 25/09/2026) | — |
+| `POST /auth/verificacion/enviar` | — / Sesión (`cuenta`) | zod `{ canal: 'email', proposito: registro\|cuenta, destino? }` (`celular` → 400: el celular no se verifica). Registro: normaliza el destino; cuenta: el destino sale de la sesión. Crea el código (hash), lo manda y responde `{ venceEnSeg: 600, reenviarEnSeg: 60, canal }`; misma respuesta si el email ya tiene cuenta (§1.3) | 400 canal o destino inválido, 401 (`cuenta` sin sesión), 429 `motivo` = espera\|tope_destino\|tope_ip + `esperarSeg`, 503 `needsConfig` (sin mail) |
+| `POST /auth/verificacion/comprobar` | — / Sesión (`cuenta`) | zod `{ canal: 'email', proposito, destino?, codigo: 6 cifras }`. Registro → `{ comprobante }` (JWT 30 min); cuenta → marca el email verificado | 400 `motivo` = incorrecto (+ `intentosRestantes`)\|vencido\|usado\|sin_codigo, 409 dato cambiado, 429 agotado (60 intentos / 15 min por IP en memoria) |
 | `POST /auth/login` | — (10 fallos email+IP, 30 por IP / 15 min) | Verifica contraseña, crea sesión | 401 "Email o contraseña incorrectos", 429 |
 | `POST /auth/logout` | — | Borra la cookie | — |
 | `GET /auth/me` | — | Usuario de la sesión o `null` | — |
@@ -995,7 +1009,7 @@ externo no disponible. Rutas relativas a `src/app/api/`. Cualquier `/api/*` que 
 | Método y ruta | Auth | Valida / hace | Errores clave |
 |---|---|---|---|
 | `GET /profiles/me` | Sesión | Perfil completo; DNI como URL firmada de 10 min; sin tokens MP | 401 |
-| `PUT /profiles/me` | Sesión | zod: datos personales, profesionales y de proveedor; avatar/logo solo de HomIA; marca solo con PRO; `emailNotifications` (boolean, avisos por mail, §14.1); **celular normalizado** (`phoneE164`; si cambia, `phoneVerifiedAt` vuelve a NULL; no se vacía si había uno — D26, §1.3); escribe todo en una transacción | 400 (celular inválido o vacío), 403 `needsRole`/`needsPro` |
+| `PUT /profiles/me` | Sesión | zod: datos personales, profesionales y de proveedor; avatar/logo solo de HomIA; marca solo con PRO; `emailNotifications` (boolean, avisos por mail, §14.1); **celular estandarizado** con `phoneCountry` opcional (ISO-2, AR por defecto; `phoneE164`; no se vacía si había uno — D26, §1.3); escribe todo en una transacción | 400 (celular inválido para el país, vacío o país inválido), 403 `needsRole`/`needsPro` |
 | `POST /profiles/me/eliminar` | Sesión | zod `confirm: "ELIMINAR"` + `password`; bloquea con operaciones abiertas; borra DNI del bucket y anonimiza (§1.1, D19) | 400, 401, 403 contraseña, 409 `pendientes`, 429, 503 Storage |
 | `GET /profiles/professional/[id]` | Sesión | Perfil, 12 obras, 20 reseñas, `chatBlocked`; cuenta eliminada o demo con `HIDE_DEMO_USERS=1` → 404 salvo al propio usuario (§1.2) | 401, 404 |
 | `GET /profiles/professional/[id]/availability` | — (público) | zod en query (`from`/`to` `AAAA-MM-DD`, máx. 186 días). `jornada`, `dias` con `estado` (`con_lugar`/`completo`), franjas ocupadas unidas (`ocupado`/`por_confirmar`) y `libres`; `proximoDiaConLugar`, `disponibleEstaSemana`. Sin datos del trabajo (§3.6, D21/D23) | 400, 404 |
@@ -1281,7 +1295,8 @@ profesional (antes apuntaba a una página inexistente; corregido en `2eed864`).
   7 días / 30 días anteriores al fin del período. **Activos en el período:** con evento en el
   período. **Iniciaron sesión:** usuarios distintos con `login_ok` en el período.
 - **Verificados:** DNI `verificationStatus = verificado` (y `en_revision` aparte); email
-  `emailVerifiedAt`; celular `phoneVerifiedAt`. **Plan:** `ProviderProfile.subscription`;
+  `emailVerifiedAt` (el celular no se verifica desde el 25/09/2026: ya no hay tarjeta de celular
+  verificado). **Plan:** `ProviderProfile.subscription`;
   pagos = `basic` + `pro`.
 - **Sesión:** fila de `AnalyticsSession` iniciada en el período. **Duración promedio y mediana:**
   de `activeMs` de las sesiones con tiempo activo > 0. **Horas totales:** suma de `activeMs`.
@@ -1571,4 +1586,15 @@ $50.000 / $100.000 con 14 días de prueba y baja de la vidriera por cancelación
 cobro; cancelación de proyecto solo en presupuesto o materiales; 3 intentos de DNI por día; Homy 8/60
 consultas por día; fechas del proyecto propuestas y aceptadas por la otra parte. **Si cambia una de
 estas reglas, se cambia el texto legal en la misma rama y se sube `LEGAL_VERSION`.**
+
+## Textos de la portada = espejo de las reglas (D31, 25/09/2026)
+
+La portada (`src/components/home/*`, metadatos de `src/app/layout.tsx` y `src/lib/og-card.tsx`) solo
+afirma reglas de este documento: pago al terminar sin retención (§6), cargo del 1% solo con Mercado
+Pago (§6), la plata va a la cuenta del vendedor (§12), profesional y cliente gratis y proveedor con
+14 días de prueba y $50.000 / $100.000 (§8), sobrantes 30 días a quien vendió (§12), reseñas solo
+de proyectos finalizados o compras entregadas y sin edición (§9), Homy 8/60 consultas y respaldo sin
+IA (§11/§9 de AGENTS), solapamiento de fechas acordadas bloqueado (§3.6). No dice "verificados"
+para todos (el estado del DNI se muestra siempre), ni presupuestos armados por IA, ni mudanzas, ni
+matrícula. **Si cambia una de estas reglas, se revisa el texto de la portada en la misma rama.**
 

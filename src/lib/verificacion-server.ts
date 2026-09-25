@@ -1,11 +1,12 @@
-// Verificación de email y celular con código de 6 cifras (D26, 25/09/2026): base, mail y
-// SMS/WhatsApp. Las reglas puras están en `verificacion.ts`; los topes en `registro.ts` → CODIGO.
+// Verificación del email con código de 6 cifras (D26, 25/09/2026): base y mail. Las reglas puras
+// están en `verificacion.ts`; los topes en `registro.ts` → CODIGO. El celular no se verifica por
+// código (Leonardo, 25/09/2026): solo se estandariza con país en `registro.ts`.
 //
 // Dos propósitos:
 //  - "registro": todavía no hay cuenta. Al acertar el código se devuelve un comprobante firmado
 //    (JWT de 30 min) que `POST /api/auth/register` exige para crear la cuenta.
-//  - "cuenta": el usuario ya tiene sesión (cuentas anteriores o celular cambiado). Al acertar se
-//    marca `User.emailVerifiedAt` / `phoneVerifiedAt`.
+//  - "cuenta": el usuario ya tiene sesión (cuentas anteriores al registro con código). Al acertar
+//    se marca `User.emailVerifiedAt`.
 //
 // Sin enumeración de cuentas: si alguien pide un código de registro para un email que YA tiene
 // cuenta, la respuesta es idéntica, pero en vez del código ese email recibe un aviso "ya tenés
@@ -15,8 +16,7 @@ import { createHmac } from 'node:crypto'
 import { SignJWT, jwtVerify } from 'jose'
 import { db } from '@/lib/db'
 import { sendEmail, emailConfigurado } from '@/lib/email'
-import { proveedorCelular } from '@/lib/celular-proveedor'
-import { CODIGO, formatearCelular } from '@/lib/registro'
+import { CODIGO } from '@/lib/registro'
 import {
   nuevoCodigo, hashCodigo, hashesIguales, estadoCodigo, permisoEnvio, MENSAJE_CODIGO,
   type Canal, type Proposito,
@@ -38,15 +38,9 @@ export function ipCliente(req: Request): string | null {
 
 export type ErrorVerif = { ok: false; status: number; error: string; extra?: Record<string, unknown> }
 
-/** ¿Qué se puede verificar hoy? (la pantalla lo consulta para no pedir lo que no se puede mandar) */
+/** ¿Se pueden mandar códigos por mail hoy? (la pantalla lo consulta para avisar con honestidad) */
 export function disponibilidad() {
-  const cel = proveedorCelular()
-  return {
-    email: emailConfigurado(),
-    celular: !!cel,
-    canalCelular: cel?.canal ?? null,
-    nombreCanalCelular: cel?.nombre ?? null,
-  }
+  return { email: emailConfigurado() }
 }
 
 function asuntoCodigo(codigo: string) {
@@ -94,7 +88,7 @@ async function avisarCuentaExistente(email: string) {
 }
 
 /**
- * Crea y manda un código. `destino` ya viene normalizado (email en minúsculas o celular E.164).
+ * Crea y manda un código. `destino` ya viene normalizado (email en minúsculas).
  * Con propósito "cuenta", `userId` es el de la sesión (el destino sale de la cuenta, nunca del body).
  */
 export async function enviarCodigo(p: {
@@ -104,12 +98,8 @@ export async function enviarCodigo(p: {
   userId?: string | null
   ip: string | null
 }): Promise<{ ok: true; venceEnSeg: number; reenviarEnSeg: number; canalNombre: string } | ErrorVerif> {
-  const cel = p.canal === 'celular' ? proveedorCelular() : null
-  if (p.canal === 'email' && !emailConfigurado()) {
+  if (!emailConfigurado()) {
     return { ok: false, status: 503, error: 'Todavía no podemos mandar mails para verificar el email. Probá de nuevo más tarde.', extra: { needsConfig: true } }
-  }
-  if (p.canal === 'celular' && !cel) {
-    return { ok: false, status: 503, error: 'La verificación del celular por SMS o WhatsApp todavía no está disponible en HomIA.', extra: { needsConfig: true } }
   }
 
   const desde = new Date(Date.now() - 3600_000)
@@ -134,7 +124,7 @@ export async function enviarCodigo(p: {
   // respuesta, código al azar que nunca se manda, y un aviso al dueño del email.
   let cuentaExistente = false
   let reservado = false
-  if (p.proposito === 'registro' && p.canal === 'email') {
+  if (p.proposito === 'registro') {
     const u = await db.user.findUnique({ where: { email: p.destino }, select: { id: true } })
     cuentaExistente = !!u
     // D29: el administrador ya no es una cuenta (entra a /admin con ADMIN_EMAIL/ADMIN_PASSWORD):
@@ -161,27 +151,18 @@ export async function enviarCodigo(p: {
     select: { id: true },
   })
 
-  const listo = { ok: true as const, venceEnSeg: CODIGO.venceMin * 60, reenviarEnSeg: CODIGO.reenvioSeg, canalNombre: p.canal === 'email' ? 'email' : cel!.nombre }
+  const listo = { ok: true as const, venceEnSeg: CODIGO.venceMin * 60, reenviarEnSeg: CODIGO.reenvioSeg, canalNombre: 'email' }
   if (cuentaExistente) {
     await avisarCuentaExistente(p.destino)
     return listo
   }
   if (reservado) return listo
 
-  if (p.canal === 'email') {
-    const r = await mandarCodigoPorMail(p.destino, codigo, p.proposito)
-    if (!r.ok) {
-      // si no salió, el código no cuenta para la espera ni para el tope
-      await db.verificationCode.delete({ where: { id: fila.id } }).catch(() => {})
-      return r
-    }
-    return listo
-  }
-  const r = await cel!.enviarCodigo(p.destino, codigo)
+  const r = await mandarCodigoPorMail(p.destino, codigo, p.proposito)
   if (!r.ok) {
-    console.error('[verificacion] no salió el código al celular', r.detalle)
+    // si no salió, el código no cuenta para la espera ni para el tope
     await db.verificationCode.delete({ where: { id: fila.id } }).catch(() => {})
-    return { ok: false, status: 503, error: `No pudimos mandar el código por ${cel!.nombre} a ${formatearCelular(p.destino)}. Revisá el número o probá de nuevo en un minuto.` }
+    return r
   }
   return listo
 }
@@ -231,7 +212,7 @@ export async function comprobarCodigo(p: {
   return { ok: true, id: fila.id }
 }
 
-/** Comprobante de "este email/celular se verificó" para crear la cuenta (30 min). */
+/** Comprobante de "este email se verificó" para crear la cuenta (30 min). */
 export async function firmarComprobante(canal: Canal, destino: string, id: string): Promise<string> {
   return new SignJWT({ c: canal, d: destino, v: id })
     .setProtectedHeader({ alg: 'HS256' })

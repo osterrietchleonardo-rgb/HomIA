@@ -122,8 +122,7 @@ export async function seccionUsuarios(f: Filtro): Promise<Seccion> {
       (SELECT count(*) FROM "AnalyticsEvent" e, p WHERE e.type = 'server' AND e.name = 'login_fallido' AND ${sinPrueba(f, 'e')} AND e."createdAt" >= p.d AND e."createdAt" < p.h)::int AS logins_fallidos,
       (SELECT count(*) FROM u WHERE "verificationStatus" = 'verificado')::int AS dni_verificados,
       (SELECT count(*) FROM u WHERE "verificationStatus" = 'en_revision')::int AS dni_revision,
-      (SELECT count(*) FROM u WHERE "emailVerifiedAt" IS NOT NULL)::int AS email_verificados,
-      (SELECT count(*) FROM u WHERE "phoneVerifiedAt" IS NOT NULL)::int AS cel_verificados`
+      (SELECT count(*) FROM u WHERE "emailVerifiedAt" IS NOT NULL)::int AS email_verificados`
   const [planes, porDia, origen] = await Promise.all([
     db.$queryRaw<Row[]>`
       WITH ${base(f)}
@@ -165,7 +164,6 @@ export async function seccionUsuarios(f: Filtro): Promise<Seccion> {
       { clave: 'dni_verificados', etiqueta: 'DNI verificado', valor: n(k.dni_verificados) },
       { clave: 'dni_revision', etiqueta: 'DNI en revisión', valor: n(k.dni_revision) },
       { clave: 'email_verificados', etiqueta: 'Email verificado', valor: n(k.email_verificados) },
-      { clave: 'cel_verificados', etiqueta: 'Celular verificado', valor: n(k.cel_verificados) },
       { clave: 'proveedores_pagos', etiqueta: 'Proveedores con plan pago', valor: pagos },
     ],
     tablas: {
@@ -450,7 +448,7 @@ export type ItemLinea = { fecha: string; fuente: 'uso' | 'negocio'; tipo: string
 
 export async function fichaUsuario(id: string) {
   const [u] = await db.$queryRaw<Row[]>`
-    SELECT u.id, u.email, u."displayName", u.roles, u."createdAt", u."deletedAt", u."verificationStatus", u."emailVerifiedAt", u."phoneVerifiedAt",
+    SELECT u.id, u.email, u."displayName", u.roles, u."createdAt", u."deletedAt", u."verificationStatus", u."emailVerifiedAt",
            u."howFoundUs", u.city, pp.id AS "proId", pv.id AS "provId", pv.subscription, pv."businessName"
     FROM "User" u LEFT JOIN "ProfessionalProfile" pp ON pp."userId" = u.id LEFT JOIN "ProviderProfile" pv ON pv."userId" = u.id
     WHERE u.id = ${id} LIMIT 1`
@@ -500,7 +498,7 @@ export async function fichaUsuario(id: string) {
     usuario: {
       id: String(u.id), email: String(u.email), nombre: String(u.displayName), roles: String(u.roles),
       creado: (u.createdAt as Date).toISOString(), eliminado: u.deletedAt ? (u.deletedAt as Date).toISOString() : null,
-      dni: String(u.verificationStatus || 'none'), emailVerificado: !!u.emailVerifiedAt, celVerificado: !!u.phoneVerifiedAt,
+      dni: String(u.verificationStatus || 'none'), emailVerificado: !!u.emailVerifiedAt,
       comoNosConocio: (u.howFoundUs as string | null) ?? null, ciudad: (u.city as string | null) ?? null,
       plan: (u.subscription as string | null) ?? null, comercio: (u.businessName as string | null) ?? null,
     },

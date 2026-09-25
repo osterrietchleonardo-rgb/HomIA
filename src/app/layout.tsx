@@ -11,21 +11,23 @@ const jakarta = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.somoshomia.com"),
-  title: "HomIA — Tu hogar en buenas manos",
-  description: "HomIA conecta tu hogar con profesionales y proveedores de tu zona: buscás con lenguaje natural, aprobás un presupuesto integral de mano de obra y materiales, pagás al finalizar por Mercado Pago o efectivo y devolvés los sobrantes al local.",
+  title: "HomIA | Arreglá tu casa y pagá al terminar",
+  description: "Plomeros, electricistas, gasistas, pintores y más. Compará presupuestos sin llamar a nadie, mirá quién validó su DNI y qué dicen otros clientes, y pagá cuando el trabajo está hecho, por Mercado Pago o en efectivo. Gratis para clientes.",
   keywords: [
     "HomIA",
     "servicios para el hogar",
     "profesionales verificados",
-    "presupuesto integral",
-    "inteligencia artificial",
+    "plomero",
+    "electricista",
+    "gasista",
+    "materiales de construcción",
     "Homy",
   ],
   authors: [{ name: "HomIA" }],
   openGraph: {
-    title: "HomIA — Tu hogar en buenas manos",
+    title: "HomIA | Arreglá tu casa y pagá al terminar",
     description:
-      "Contale qué necesita tu hogar y Homy te conecta con profesionales verificados con DNI y reseñas reales. Presupuesto integral, pago al finalizar por Mercado Pago o efectivo.",
+      "Presupuestos de profesionales con reseñas de otros clientes, materiales de varios proveedores en un solo carrito y pago cuando el trabajo está hecho. Gratis para clientes.",
     url: "https://www.somoshomia.com",
     siteName: "HomIA",
     type: "website",
@@ -33,9 +35,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "HomIA — Tu hogar en buenas manos",
+    title: "HomIA | Arreglá tu casa y pagá al terminar",
     description:
-      "Profesionales y proveedores del hogar en Argentina. Presupuesto integral, pago al finalizar, reseñas con foto.",
+      "Profesionales y materiales para tu casa, en Argentina. Pagás al terminar, reseñas con fotos, gratis para clientes.",
   },
 };
 

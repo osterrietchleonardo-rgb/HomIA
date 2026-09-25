@@ -14,9 +14,9 @@ import { SectionHeading } from "@/components/home/section-heading";
 const FEATURES = [
   {
     icon: Sparkles,
-    tag: "IA",
-    title: "Búsqueda en lenguaje natural",
-    body: "Contás qué necesitás con tus palabras y Homy lo traduce a un pedido técnico. Sin formularios eternos ni categorías raras: tu forma de hablar alcanza.",
+    tag: "Homy",
+    title: "Contalo como te salga",
+    body: "No hace falta saber cómo se llama la pieza. Escribís «pierde agua abajo de la bacha» y Homy te dice qué hace falta, quién lo vende y qué profesionales hay.",
     accent: "text-[#0092C4]",
     chip: "homy-chip-ai",
     glow: "group-hover:shadow-[0_24px_54px_-20px_rgba(0,196,255,0.45)]",
@@ -25,8 +25,8 @@ const FEATURES = [
   {
     icon: MapPin,
     tag: null,
-    title: "Geolocalización precisa",
-    body: "Encontramos profesionales verificados cerca de tu casa, filtrando por zona real y disponibilidad. La distancia deja de ser un problema.",
+    title: "Gente de tu zona",
+    body: "En el buscador elegís hasta cuántos kilómetros te sirve, de 1 a 100, y ves en el mapa a los profesionales y los materiales que hay cerca.",
     accent: "text-tech",
     chip: "homy-chip-blue",
     glow: "group-hover:shadow-[0_24px_54px_-20px_rgba(29,99,184,0.4)]",
@@ -35,8 +35,8 @@ const FEATURES = [
   {
     icon: ReceiptText,
     tag: null,
-    title: "Presupuesto integral",
-    body: "Mano de obra y materiales en un único presupuesto transparente. Ves cada línea antes de aprobar: nada de sorpresas a mitad del trabajo.",
+    title: "El precio, antes de empezar",
+    body: "El profesional te pasa el precio de su trabajo y te propone cada material con cantidad y precio. Aprobás o rechazás cada uno: nada se suma sin que lo veas.",
     accent: "text-action",
     chip: "homy-chip-orange",
     glow: "group-hover:shadow-[0_24px_54px_-20px_rgba(255,90,31,0.4)]",
@@ -45,8 +45,8 @@ const FEATURES = [
   {
     icon: ShieldCheck,
     tag: null,
-    title: "Pagás al finalizar",
-    body: "Aprobás el presupuesto y pagás recién cuando el trabajo está terminado, por Mercado Pago o en efectivo. Sin adelantos ni intermediarios: el dinero va directo a quien hizo el trabajo.",
+    title: "Sin adelantos",
+    body: "Pagás la factura cuando el trabajo está hecho, por Mercado Pago o en efectivo. La plata va directo a quien hizo el trabajo. Con Mercado Pago se suma un cargo de servicio del 1%; en efectivo, nada.",
     accent: "text-tech",
     chip: "homy-chip-mint",
     glow: "group-hover:shadow-[0_24px_54px_-20px_rgba(29,99,184,0.4)]",
@@ -54,9 +54,9 @@ const FEATURES = [
   },
   {
     icon: Recycle,
-    tag: "Circular",
-    title: "Devolvé los sobrantes al local",
-    body: "¿Sobró pintura, caños o cables? Los cargás en la app con foto y cantidad, el proveedor los acepta y los acercás al local. Si pagaste con Mercado Pago, el reembolso vuelve solo a tu medio de pago; si pagaste en efectivo, te lo devuelven en el mostrador.",
+    tag: "30 días",
+    title: "Lo que sobra, vuelve",
+    body: "Te sobraron dos latas de pintura o cinco metros de caño: sacás una foto, lo cargás en la app y se lo devolvés a quien te lo vendió. Si pagaste con Mercado Pago, la plata vuelve sola; si fue en efectivo, te la dan en mano.",
     accent: "text-action",
     chip: "homy-chip-orange",
     glow: "group-hover:shadow-[0_24px_54px_-20px_rgba(255,90,31,0.4)]",
@@ -65,8 +65,8 @@ const FEATURES = [
   {
     icon: Star,
     tag: null,
-    title: "Reseñas 360°",
-    body: "Clientes, profesionales y proveedores se califican entre sí. La reputación se construye con transparencia y se refleja en cada estrella dorada.",
+    title: "Reseñas de trabajos hechos",
+    body: "Solo deja reseña quien contrató o compró por HomIA, y no se pueden editar. Van con estrellas, comentario y fotos. El profesional también califica al cliente, así que los dos cuidan el trato.",
     accent: "text-[#B98A00]",
     chip: "homy-chip-gold",
     glow: "group-hover:shadow-[0_24px_54px_-20px_rgba(255,199,0,0.45)]",
@@ -79,13 +79,13 @@ export function Features() {
     <section
       id="beneficios"
       className="scroll-mt-24 py-24 sm:py-28"
-      aria-label="Beneficios de HomIA"
+      aria-label="Por qué contratar por HomIA"
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading
           kicker="Beneficios"
-          title="La seriedad de un servicio profesional, con la inteligencia de la IA."
-          description="Cada detalle de HomIA está pensado para que confiar sea lo más fácil: tecnología que trabaja, reglas claras y pagos sin vueltas."
+          title="Menos riesgo que llamar a un número que te pasaron."
+          description="Lo que suele salir mal cuando contratás a alguien, acá tiene respuesta: sabés a quién metés en tu casa, ves el precio antes de empezar y no dejás seña."
         />
 
         <div className="mt-16 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">

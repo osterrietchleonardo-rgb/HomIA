@@ -91,7 +91,7 @@ export function HomyWidget() {
               bienvenida={
                 user
                   ? `¡Hola, ${user.displayName.split(" ")[0]}! Contame qué necesita tu casa o qué querés hacer en HomIA y lo buscamos con datos reales.`
-                  : "¡Hola! Soy Homy. Contame qué necesita tu casa —con tus palabras— y te digo qué hace falta, quién lo tiene y a qué precio."
+                  : "Hola, soy Homy. Contame qué necesita tu casa, con tus palabras, y te digo qué hace falta, quién lo tiene y a qué precio."
               }
               sugerenciasIniciales={SUGERENCIAS}
               onNavegar={() => setOpen(false)}

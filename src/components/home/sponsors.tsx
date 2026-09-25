@@ -122,7 +122,7 @@ export function Sponsors() {
           Proveedores <span className="text-[#B98A00]">recomendados</span> de la comunidad
         </h2>
         <p className="mx-auto mt-3 max-w-xl text-[14px] leading-relaxed text-slate-500 sm:text-[15px]">
-          Negocios con plan PRO en HomIA: aparecen primeros y como Recomendados cuando buscás materiales o proveedores.
+          Negocios con plan PRO en HomIA: aparecen primero, como Recomendados, cuando buscás materiales o proveedores.
         </p>
       </div>
 

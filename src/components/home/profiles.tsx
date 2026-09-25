@@ -9,42 +9,51 @@ const PROFILES = [
   {
     icon: UserRound,
     role: "Para clientes",
-    headline: "Recuperá tu tiempo y tu tranquilidad",
+    headline: "Dejá de llamar a diez para que venga uno",
     points: [
-      "Describí tu necesidad en palabras simples",
-      "Aprobás presupuestos integrales con un clic",
-      "Pagás al finalizar, por Mercado Pago o efectivo",
-      "Devolvés los sobrantes al local y recuperás la plata",
+      "Publicás el trabajo una vez y te llegan presupuestos para comparar",
+      "Ves quién validó su DNI y qué dicen otros clientes, con fotos",
+      "Pagás al terminar, por Mercado Pago o en efectivo",
+      "Comprás materiales a varios proveedores en un solo carrito",
+      "Devolvés lo que sobra y recuperás esa plata",
+      "Tu cuenta es gratis y no tiene plan mensual",
     ],
-    cta: "Buscar un servicio",
+    cta: "Buscá un profesional",
+    track: "home: buscá un profesional",
     href: "/buscar?mode=cliente",
     highlight: false,
   },
   {
     icon: HardHat,
     role: "Para profesionales",
-    headline: "Trabajos a tu medida, cobros sin vueltas",
+    headline: "Más trabajos, sin pagar publicidad",
     points: [
-      "Ofertá en trabajos publicados de tu oficio",
-      "Presupuestá mano de obra y materiales en un solo lugar",
-      "Retirá materiales a cuenta del proyecto en proveedores vinculados",
-      "Cobrás al finalizar, por Mercado Pago o efectivo, sin comisión",
+      "Te avisamos cuando publican un trabajo de tu oficio y ofertás desde el celular",
+      "Cobrás el 100% en tu Mercado Pago o en efectivo: HomIA no te cobra comisión",
+      "La factura en PDF la arma la app sola",
+      "Un calendario que no te deja pisar dos trabajos en el mismo horario",
+      "Finanzas simples: cuánto facturaste, cuánto cobraste y cuánto te queda",
+      "Cada reseña buena te sube en el directorio",
     ],
-    cta: "Quiero recibir licitaciones",
+    cta: "Ofrecé tus servicios gratis",
+    track: "home: registrarse como profesional",
     href: "/registrarse?rol=profesional",
     highlight: true,
   },
   {
     icon: Package,
     role: "Para proveedores",
-    headline: "Nuevas ventas, stock bajo control",
+    headline: "Que te encuentren los que buscan lo que tenés",
     points: [
-      "Gestioná tu stock sobre un catálogo de más de 1.700 materiales",
-      "Recibís pedidos y cobrás por Mercado Pago o efectivo",
-      "Aceptás devoluciones de sobrantes desde la app",
-      "14 días gratis, después desde $50.000/mes",
+      "Tu stock aparece, con tu precio, cuando alguien busca ese material",
+      "Cargás productos de un catálogo de más de 1.700 materiales: la descripción ya está escrita",
+      "Pedidos, cobros y devoluciones ordenados en tu panel",
+      "Cobrás en tu Mercado Pago o en efectivo",
+      "Con PRO salís primero como Recomendado y ves qué se busca en tu rubro",
+      "14 días gratis, sin tarjeta. Después, Básico $50.000 o PRO $100.000 por mes",
     ],
-    cta: "Quiero vender en HomIA",
+    cta: "Probá 14 días gratis",
+    track: "home: registrarse como proveedor",
     href: "/registrarse?rol=proveedor",
     highlight: false,
   },
@@ -55,13 +64,13 @@ export function Profiles() {
     <section
       id="comunidad"
       className="scroll-mt-24 py-24 sm:py-28"
-      aria-label="Perfiles de la comunidad HomIA"
+      aria-label="Qué gana cada uno con HomIA"
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading
-          kicker="Una comunidad, tres protagonistas"
-          title="Todos ganan cuando el hogar funciona."
-          description="Clientes, profesionales y proveedores conectados en un mismo ecosistema, con reglas claras para cada uno y beneficios reales para todos."
+          kicker="Para quién es"
+          title="Qué ganás, según quién seas."
+          description="Para clientes y profesionales, HomIA es gratis. Los proveedores lo prueban 14 días sin pagar nada."
         />
 
         <div className="mt-16 grid gap-6 md:grid-cols-3">
@@ -80,7 +89,7 @@ export function Profiles() {
             >
               {p.highlight && (
                 <span className="absolute -top-3.5 left-8 rounded-full bg-action px-3.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white shadow-lg">
-                  Alta demanda
+                  Gratis
                 </span>
               )}
               <div className="flex items-center gap-3">
@@ -130,6 +139,7 @@ export function Profiles() {
               </ul>
               <button
                 onClick={() => navigate(p.href)}
+                data-track={p.track}
                 className={
                   p.highlight
                     ? "homy-btn-primary mt-7 w-full py-3 text-[14.5px]"
@@ -157,20 +167,21 @@ export function Profiles() {
             <Compass className="size-7" />
           </span>
           <div className="relative flex-1">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-tech">Directorio HomIA</p>
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-tech">Directorio</p>
             <h3 className="mt-1.5 text-xl font-extrabold leading-snug text-navy sm:text-2xl">
-              Mirá quién está en la comunidad antes de decidir
+              Mirá a quién le abrís la puerta antes de llamarlo
             </h3>
             <p className="mt-1.5 max-w-2xl text-[14.5px] leading-relaxed text-navy/60">
-              Todos los profesionales y proveedores registrados en la app, ordenados de más a menos reseñas positivas, con su experiencia, trabajos realizados, catálogo y precios promedio. Abrí su tarjeta y escribile al toque.
+              Todos los profesionales y proveedores de HomIA, primero los que tienen más reseñas positivas. Ves oficio, años de experiencia, obras, estrellas y precio promedio. Con tu cuenta gratis abrís su perfil y le escribís por chat.
             </p>
           </div>
           <div className="relative flex shrink-0 flex-col gap-2.5 sm:flex-row">
             <button
               onClick={() => navigate("/directorio")}
+              data-track="home: ver el directorio"
               className="homy-btn-primary inline-flex items-center justify-center gap-2 px-7 py-3.5 text-[15px]"
             >
-              Abrir el directorio
+              Ver el directorio
               <ArrowRight className="size-4" aria-hidden />
             </button>
           </div>

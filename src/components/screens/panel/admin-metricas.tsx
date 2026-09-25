@@ -19,7 +19,7 @@ type RespSeccion = {
   resumen: Resumen[]; tablas: Record<string, Tabla>
 }
 type Ficha = {
-  usuario: { id: string; email: string; nombre: string; roles: string; creado: string; eliminado: string | null; dni: string; emailVerificado: boolean; celVerificado: boolean; comoNosConocio: string | null; ciudad: string | null; plan: string | null; comercio: string | null }
+  usuario: { id: string; email: string; nombre: string; roles: string; creado: string; eliminado: string | null; dni: string; emailVerificado: boolean; comoNosConocio: string | null; ciudad: string | null; plan: string | null; comercio: string | null }
   uso: { sesiones: number; minutosActivos: number | null; vistas: number; eventos: number; primera: string | null; ultima: string | null }
   sesiones: { id: string; inicio: string; ultima: string; minutos: number | null; vistas: number; eventos: number; entrada: string | null; origen: string | null; dispositivo: string | null }[]
   linea: { fecha: string; fuente: 'uso' | 'negocio'; tipo: string; detalle: string; path: string | null; entityType: string | null; entityId: string | null }[]
@@ -406,7 +406,7 @@ function FichaUsuarioVista({ id }: { id: string }) {
         <p className="break-all text-[13px] text-slate-500">{u.email}</p>
         <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[12.5px] sm:grid-cols-4">
           {[
-            ['Roles', rolesTexto(u.roles)], ['Alta', soloFecha(u.creado)], ['DNI', u.dni], ['Email / celular', `${u.emailVerificado ? 'verificado' : 'sin verificar'} / ${u.celVerificado ? 'verificado' : 'sin verificar'}`],
+            ['Roles', rolesTexto(u.roles)], ['Alta', soloFecha(u.creado)], ['DNI', u.dni], ['Email', u.emailVerificado ? 'verificado' : 'sin verificar'],
             ['Cómo nos conoció', u.comoNosConocio || '—'], ['Ciudad', u.ciudad || '—'], ['Plan (proveedor)', u.plan || '—'], ['Comercio', u.comercio || '—'],
             ['Sesiones', num(f.uso.sesiones)], ['Tiempo activo', `${num(f.uso.minutosActivos || 0)} min`], ['Pantallas vistas', num(f.uso.vistas)], ['Última actividad', fechaHora(f.uso.ultima)],
           ].map(([k, v]) => (

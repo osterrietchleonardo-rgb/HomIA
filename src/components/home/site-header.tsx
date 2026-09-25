@@ -22,9 +22,9 @@ const NAV_ITEMS = [
   { label: "Directorio", href: "#/directorio", route: "/directorio" },
   { label: "Materiales", href: "#/materiales", route: "/materiales" },
   { label: "Cómo funciona", href: "#como-funciona" },
-  { label: "Motor IA", href: "#motor-ia" },
+  { label: "Homy, el asistente", href: "#motor-ia" },
   { label: "Beneficios", href: "#beneficios" },
-  { label: "Comunidad", href: "#comunidad" },
+  { label: "Para quién es", href: "#comunidad" },
   { label: "Ayuda", href: "#/ayuda", route: "/ayuda" },
 ];
 // En el header de escritorio van solo estas (el resto son secciones de la home:

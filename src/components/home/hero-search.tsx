@@ -24,7 +24,7 @@ const EXAMPLES = [
   "Se me gotea la canilla, ¿qué necesito?",
   "Busco plomero en Palermo",
   "Precio del cemento de 50kg",
-  "¿Cómo funcionan los pagos?",
+  "¿Cuándo le pago al profesional?",
 ];
 
 /* Coreografía ambiental del hero (máquina de vidrio): la consulta VUELA desde
@@ -37,23 +37,22 @@ const EXAMPLES = [
    cubren los 3 roles (cliente · profesional · proveedor) y NUNCA deja de
    aparecer: sigue aunque enfoques, escribas o pases el mouse — solo cede el
    escenario mientras una consulta real está en curso. */
-/* Pares ambientales: cubren el POTENCIAL completo del producto rotando los 3
-   roles — cliente (emergencia, presupuesto IA, pago, reseñas, categorías,
-   mudanza), profesional (bolsa, cobro, sobrantes) y proveedor
-   (precios, plan PRO, stock compartido). Sin números inventados. */
+/* Pares ambientales: rotan los 3 roles (cliente, profesional, proveedor).
+   Cada respuesta dice algo que la app hace de verdad (D31): nada de
+   "verificados" para todos, ni mudanzas, ni presupuestos armados por IA. */
 const DEMO_PAIRS = [
-  { q: "Necesito un plomero urgente", a: "Encontré plomeros verificados cerca tuyo" },
-  { q: "¿Qué hay para plomeros?", a: "Hay trabajos de plomería en la bolsa" },
-  { q: "Precio del cemento de 50kg", a: "Comparé precios entre proveedores" },
-  { q: "¿Cómo funcionan los pagos?", a: "Pagás al finalizar" },
-  { q: "¿Cuánto sale pintar un departamento?", a: "Presupuesto completo: obra y materiales" },
-  { q: "¿Cómo cobro sin riesgos?", a: "Acordás el pago al finalizar el trabajo" },
-  { q: "Busco un electricista de confianza", a: "Perfiles verificados y con reseñas reales" },
-  { q: "¿Cómo vendo más materiales?", a: "Con el plan PRO destacás primero" },
-  { q: "Me sobraron ladrillos de la obra", a: "Devolvelos y recuperá tu dinero" },
-  { q: "Necesito un gasista matriculado", a: "Hay gasistas habilitados en tu zona" },
-  { q: "Me mudo el mes que viene", a: "Organizamos la mudanza completa" },
-  { q: "Tengo materiales para vender", a: "Tu stock llega a profesionales cercanos" },
+  { q: "Necesito un plomero urgente", a: "Plomeros con reseñas de otros clientes" },
+  { q: "Soy plomero, ¿hay trabajo?", a: "Trabajos de plomería para ofertar" },
+  { q: "Precio del cemento de 50kg", a: "El precio de cada proveedor, lado a lado" },
+  { q: "¿Hay que dejar seña?", a: "No: pagás cuando está terminado" },
+  { q: "¿Cuánto sale pintar un depto?", a: "Publicalo y te llegan presupuestos" },
+  { q: "¿Cómo cobro mis trabajos?", a: "En tu Mercado Pago o en efectivo" },
+  { q: "Busco un electricista de confianza", a: "Mirá su DNI y sus reseñas antes" },
+  { q: "¿Cómo vendo más materiales?", a: "Con PRO salís primero, como Recomendado" },
+  { q: "Me sobraron ladrillos de la obra", a: "Devolvelos y te reintegran la plata" },
+  { q: "Necesito un gasista", a: "Gasistas con reseñas y obras con fotos" },
+  { q: "Se me rompió el termotanque", a: "Quién lo arregla y quién tiene repuestos" },
+  { q: "Tengo materiales para vender", a: "Te encuentran cuando buscan lo que tenés" },
 ] as const;
 
 type DemoFlight =
@@ -76,7 +75,7 @@ const DEMO_T = {
 
 const TYPE_PHRASES = [
   "Contame qué necesita tu hogar…",
-  "¿Una fuga, una pintura, una mudanza?",
+  "¿Una canilla, una pintura, un enchufe?",
   "Escribilo como se lo dirías a un vecino…",
 ];
 
@@ -581,7 +580,7 @@ export function HeroSearch() {
       </div>
 
       <p className="mt-4 text-center text-sm text-navy/50 sm:hidden">
-        Escribí con tus palabras: Homy interpreta y arma tu pedido.
+        Escribilo como te salga: Homy te dice qué hace falta y quién lo tiene.
       </p>
 
       {/* Panel de respuesta del súper agente (streaming: pasos, texto, tarjetas) */}
@@ -605,7 +604,7 @@ export function HeroSearch() {
                       Homy
                       <span className="inline-flex items-center gap-1 rounded-full bg-ai-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-tech">
                         <Sparkles className="size-3" aria-hidden />
-                        Agente IA
+                        Asistente
                       </span>
                     </p>
                     <p className="text-xs text-navy/45">Responde con datos reales de HomIA</p>

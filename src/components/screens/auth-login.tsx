@@ -53,7 +53,7 @@ export default function LoginScreen() {
           Que tu hogar vuelva a <span className="homy-gradient-text">funcionar</span>, hoy.
         </>
       }
-      sub="Ingresá para seguir tus trabajos, aprobar presupuestos y pagar con total tranquilidad."
+      sub="Ingresá para seguir tus trabajos, aprobar presupuestos y pagar cuando el trabajo está terminado."
     >
       <div className="homy-glass-strong homy-stagger rounded-[28px] p-6 sm:p-8">
         <header>

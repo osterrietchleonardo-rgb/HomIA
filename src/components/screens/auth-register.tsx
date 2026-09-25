@@ -1,13 +1,15 @@
 'use client'
 // Registro HomIA en 4 pasos (D26, 25/09/2026) — igual para cliente, profesional y proveedor:
 //   1 · Perfil: cómo va a usar HomIA.
-//   2 · Tus datos: nombre, apellido, email, celular (dos veces), contraseña y ciudad. Todo se
-//       estandariza mientras escribe (src/lib/registro.ts, la misma regla que el servidor): email en
-//       minúsculas con sugerencia si el dominio parece mal escrito, celular a +54 9 … a la vista.
-//   3 · Confirmar email: código de 6 números por mail (y por SMS/WhatsApp si HomIA tiene proveedor).
+//   2 · Tus datos: nombre, apellido, email, país del celular + celular (dos veces, sin pegar),
+//       contraseña y ciudad. Todo se estandariza mientras escribe (src/lib/registro.ts, la misma
+//       regla que el servidor): email en minúsculas con sugerencia si el dominio parece mal escrito,
+//       celular de cualquier país en formato internacional a la vista ("Se guardará como …").
+//   3 · Confirmar email: código de 6 números por mail. Es LA verificación de la cuenta; el celular
+//       no se verifica por código, solo se estandariza (Leonardo, 25/09/2026).
 //   4 · Tu cuenta: lo del rol (rubros y zona / comercio, tipo y dirección), DNI opcional y términos.
 // La cuenta se crea recién al final y con el email ya confirmado: nunca quedan cuentas a medias.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { navigate, useRoute } from '@/lib/router'
 import { useSession, useLocation, syncLocationToServer } from '@/lib/store'
 import { AuthShell } from '@/components/app/auth-shell'
@@ -18,8 +20,10 @@ import {
 } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp'
+import { SelectorPaisCelular } from '@/components/app/selector-pais-celular'
 import {
   normalizarEmail, normalizarCelular, normalizarNombre, problemaNombre, normalizarCuit, normalizarDniOCuil, CODIGO,
+  ejemploCelular, nombrePais, type CountryCode,
 } from '@/lib/registro'
 import { problemaDeContrasena } from '@/lib/password-policy'
 import { PROVIDER_KINDS } from '@/lib/search-match'
@@ -28,7 +32,6 @@ import { subirImagen } from '@/lib/upload-image'
 type Role = 'cliente' | 'profesional' | 'proveedor'
 type Step = 1 | 2 | 3 | 4
 type Errores = Record<string, string>
-type Disponible = { email: boolean; celular: boolean; nombreCanalCelular: string | null }
 
 const HOW_FOUND = [
   { value: 'google', label: 'Google / buscador' },
@@ -128,12 +131,12 @@ export default function RegisterScreen() {
   const [role, setRole] = useState<Role | null>(initialRole)
   const [busy, setBusy] = useState(false)
   const [errores, setErrores] = useState<Errores>({})
-  const [disp, setDisp] = useState<Disponible>({ email: true, celular: false, nombreCanalCelular: null })
 
   // datos personales
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
+  const [pais, setPais] = useState<CountryCode>('AR')
   const [phone, setPhone] = useState('')
   const [phoneConfirm, setPhoneConfirm] = useState('')
   const [password, setPassword] = useState('')
@@ -143,8 +146,7 @@ export default function RegisterScreen() {
   const [dniFront, setDniFront] = useState<string | null>(null)
   const [dniBack, setDniBack] = useState<string | null>(null)
 
-  // verificación
-  const [canal, setCanal] = useState<'email' | 'celular'>('email')
+  // verificación del email (la del celular no existe: solo se estandariza)
   const [codigo, setCodigo] = useState('')
   const [codigoError, setCodigoError] = useState<string | null>(null)
   const [codigoMuerto, setCodigoMuerto] = useState(false) // vencido/agotado/usado: solo queda pedir otro
@@ -152,7 +154,6 @@ export default function RegisterScreen() {
   const [enviando, setEnviando] = useState(false)
   const [comprobando, setComprobando] = useState(false)
   const [emailToken, setEmailToken] = useState<{ para: string; token: string } | null>(null)
-  const [phoneToken, setPhoneToken] = useState<{ para: string; token: string } | null>(null)
 
   // profesional
   const [personType, setPersonType] = useState<'persona' | 'empresa'>('persona')
@@ -187,21 +188,10 @@ export default function RegisterScreen() {
 
   // estandarización en vivo (la misma función que usa el servidor)
   const emailN = useMemo(() => normalizarEmail(email), [email])
-  const celN = useMemo(() => normalizarCelular(phone), [phone])
-  const celRepN = useMemo(() => normalizarCelular(phoneConfirm), [phoneConfirm])
+  const celN = useMemo(() => normalizarCelular(phone, pais), [phone, pais])
+  const celRepN = useMemo(() => normalizarCelular(phoneConfirm, pais), [phoneConfirm, pais])
   const celCoincide = celN.ok && celRepN.ok && celN.e164 === celRepN.e164
   const emailListo = emailN.ok && emailToken?.para === emailN.email
-  const celularListo = !disp.celular || (celN.ok && phoneToken?.para === celN.e164)
-
-  // qué se puede verificar hoy (el celular solo con proveedor de SMS/WhatsApp configurado)
-  useEffect(() => {
-    let vivo = true
-    fetch('/api/auth/verificacion')
-      .then((r) => r.json())
-      .then((d) => { if (vivo && d?.disponible) setDisp(d.disponible) })
-      .catch(() => { /* se queda con lo de por defecto: email sí, celular no */ })
-    return () => { vivo = false }
-  }, [])
 
   // cuenta regresiva del reenvío
   useEffect(() => {
@@ -210,10 +200,11 @@ export default function RegisterScreen() {
     return () => clearTimeout(t)
   }, [reenviarEn])
 
-  const topRef = useRef<HTMLDivElement | null>(null)
+  // Al cambiar de paso la ventana vuelve arriba de todo: se ven "Volver al inicio" y el paso a paso
+  // (antes se centraba en el paso y quedaba scrolleada unos píxeles, tapando el link).
   function irA(s: Step) {
     setStep(s)
-    requestAnimationFrame(() => topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
   }
 
   function setError(campo: string, msg: string | null) {
@@ -267,20 +258,19 @@ export default function RegisterScreen() {
     return e
   }
 
-  /** Pide un código. Devuelve true si salió. */
-  async function enviarCodigo(c: 'email' | 'celular'): Promise<boolean> {
-    const destino = c === 'email' ? (emailN.ok ? emailN.email : email) : (celN.ok ? celN.e164 : phone)
+  /** Pide el código del email. Devuelve true si salió. */
+  async function enviarCodigo(): Promise<boolean> {
+    const destino = emailN.ok ? emailN.email : email
     setEnviando(true)
     setCodigoError(null)
     try {
       const res = await fetch('/api/auth/verificacion/enviar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ canal: c, proposito: 'registro', destino }),
+        body: JSON.stringify({ canal: 'email', proposito: 'registro', destino }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok) {
-        setCanal(c)
         setCodigo('')
         setCodigoMuerto(false)
         setReenviarEn(data.reenviarEnSeg || CODIGO.reenvioSeg)
@@ -288,15 +278,14 @@ export default function RegisterScreen() {
       }
       if (res.status === 429 && data.esperarSeg) {
         // ya hay un código en camino: se puede usar ese mientras corre la espera
-        setCanal(c)
         setReenviarEn(Math.min(3600, data.esperarSeg))
         setCodigoError(data.error)
         return data.motivo === 'espera'
       }
       const msg = data.error || 'No pudimos mandar el código. Probá de nuevo.'
       if (step === 2) {
-        setError(c === 'email' ? 'email' : 'phone', msg)
-        enfocarPrimerError({ [c === 'email' ? 'email' : 'phone']: msg })
+        setError('email', msg)
+        enfocarPrimerError({ email: msg })
       } else setCodigoError(msg)
       return false
     } catch {
@@ -316,11 +305,7 @@ export default function RegisterScreen() {
     setFirstName(normalizarNombre(firstName))
     setLastName(normalizarNombre(lastName))
     if (!emailListo) {
-      if (await enviarCodigo('email')) irA(3)
-      return
-    }
-    if (!celularListo) {
-      if (await enviarCodigo('celular')) irA(3)
+      if (await enviarCodigo()) irA(3)
       return
     }
     irA(4)
@@ -328,28 +313,19 @@ export default function RegisterScreen() {
 
   async function comprobar(valor = codigo) {
     if (!/^\d{6}$/.test(valor) || comprobando) return
-    const destino = canal === 'email' ? (emailN.ok ? emailN.email : '') : (celN.ok ? celN.e164 : '')
+    const destino = emailN.ok ? emailN.email : ''
     setComprobando(true)
     setCodigoError(null)
     try {
       const res = await fetch('/api/auth/verificacion/comprobar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ canal, proposito: 'registro', destino, codigo: valor }),
+        body: JSON.stringify({ canal: 'email', proposito: 'registro', destino, codigo: valor }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.comprobante) {
-        if (canal === 'email') {
-          setEmailToken({ para: destino, token: data.comprobante })
-          toast.success('¡Email confirmado!')
-          if (disp.celular && !(celN.ok && phoneToken?.para === celN.e164)) {
-            await enviarCodigo('celular')
-            return
-          }
-        } else {
-          setPhoneToken({ para: destino, token: data.comprobante })
-          toast.success('¡Celular confirmado!')
-        }
+        setEmailToken({ para: destino, token: data.comprobante })
+        toast.success('¡Email confirmado!')
         irA(4)
         return
       }
@@ -386,8 +362,7 @@ export default function RegisterScreen() {
           roles,
           firstName, lastName, email,
           emailToken: emailToken?.token,
-          phone, phoneConfirm,
-          phoneToken: phoneToken?.token,
+          phone, phoneConfirm, phoneCountry: pais,
           password, city,
           howFoundUs: howFoundUs || undefined,
           lat: location.shared && location.lat ? location.lat : undefined,
@@ -412,9 +387,8 @@ export default function RegisterScreen() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         const campos: Errores = data.campos || {}
-        if (data.needsEmailCode || data.needsPhoneCode) {
-          if (data.needsEmailCode) setEmailToken(null)
-          if (data.needsPhoneCode) setPhoneToken(null)
+        if (data.needsEmailCode) {
+          setEmailToken(null)
           setErrores(campos)
           toast.error('La confirmación venció: te pedimos el código de nuevo')
           irA(2)
@@ -465,19 +439,18 @@ export default function RegisterScreen() {
     }
   }
 
-  const destinoCodigo = canal === 'email' ? (emailN.ok ? emailN.email : email) : (celN.ok ? celN.mostrar : phone)
+  const destinoCodigo = emailN.ok ? emailN.email : email
 
   return (
     <AuthShell
       homyState={busy || comprobando ? 'thinking' : 'happy'}
       headline={
         <>
-          Una cuenta, <span className="homy-gradient-text">todo tu ecosistema</span> del hogar.
+          Una sola cuenta para <span className="homy-gradient-text">arreglar, trabajar o vender</span>.
         </>
       }
-      sub="Clientes, profesionales y proveedores en una sola red: trabajos, materiales, pagos y reputación 360°."
+      sub="Si necesitás un arreglo, si hacés los trabajos o si vendés materiales: con la misma cuenta buscás, presupuestás, cobrás y pagás desde el celular."
     >
-      <div ref={topRef} className="scroll-mt-4" />
       <StepDots step={step} />
 
       {step === 1 && (
@@ -588,17 +561,26 @@ export default function RegisterScreen() {
               )}
             </div>
 
+            <SelectorPaisCelular id="reg-phoneCountry" required className="sm:col-span-2" value={pais}
+              onChange={(p) => { setPais(p); setError('phone', null); setError('phoneConfirm', null) }} />
             <div>
-              <Field id="reg-phone" label="Celular" required type="tel" inputMode="tel" autoComplete="tel" value={phone} placeholder="11 2345-6789"
+              <Field id="reg-phone" label="Celular" required type="tel" inputMode="tel" autoComplete="tel-national" value={phone} placeholder={ejemploCelular(pais) || 'Tu celular'}
                 error={errores.phone}
                 onChange={(v) => { setPhone(v); if (errores.phone) setError('phone', null) }}
-                onBlur={() => { if (phone.trim()) { const n = normalizarCelular(phone); setError('phone', n.ok ? null : n.error) } }} />
-              {celN.ok ? (
-                <p className="mt-1.5 text-xs text-slate-500" aria-live="polite">
-                  Se va a guardar como <b className="whitespace-nowrap text-navy">{celN.mostrar}</b>
-                </p>
-              ) : !errores.phone && (
-                <p className="mt-1.5 text-xs text-slate-400">Con código de área, como lo escribas: 011 15…, 11…, +54 9…</p>
+                onBlur={() => { if (phone.trim()) { const n = normalizarCelular(phone, pais); setError('phone', n.ok ? null : n.error) } }} />
+              {!errores.phone && (
+                celN.ok ? (
+                  <p className="mt-1.5 inline-flex items-center gap-1 text-xs text-slate-500" aria-live="polite">
+                    <CircleCheck className="size-3.5 shrink-0 text-[#0e9f6e]" aria-hidden />
+                    <span>Se guardará como <b className="whitespace-nowrap text-navy">{celN.mostrar}</b></span>
+                  </p>
+                ) : phone.replace(/\D/g, '').length >= 6 ? (
+                  <p className="mt-1.5 text-xs font-semibold text-[#8a6d00]" aria-live="polite">{celN.error}</p>
+                ) : (
+                  <p className="mt-1.5 text-xs text-slate-400">
+                    {pais === 'AR' ? 'Con código de área, como lo escribas: 011 15…, 11…, +54 9…' : `Como se escribe en ${nombrePais(pais)}, o con + y el código del país`}
+                  </p>
+                )
               )}
             </div>
             <div>
@@ -688,20 +670,19 @@ export default function RegisterScreen() {
             onClick={() => irA(2)}
             className="-ml-2 mb-4 inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-bold text-slate-500 transition-colors duration-300 hover:bg-navy/5 hover:text-[#1D63B8]"
           >
-            <ChevronLeft className="size-4" aria-hidden /> {canal === 'email' ? 'Cambiar email' : 'Cambiar celular'}
+            <ChevronLeft className="size-4" aria-hidden /> Cambiar email
           </button>
           <header className="text-center">
-            <span className={`homy-icon-chip mx-auto size-14 !rounded-2xl ${canal === 'email' ? 'homy-chip-blue' : 'homy-chip-mint'}`}>
-              {canal === 'email' ? <Mail className="size-7" aria-hidden /> : <Smartphone className="size-7" aria-hidden />}
+            <span className="homy-icon-chip homy-chip-blue mx-auto size-14 !rounded-2xl">
+              <Mail className="size-7" aria-hidden />
             </span>
             <span className="homy-eyebrow mt-4 block">Registro · Paso 3 de 4</span>
             <h1 className="mt-1.5 text-[1.75rem] font-extrabold leading-[1.15] tracking-tight text-navy">
-              {canal === 'email' ? 'Confirmá tu email' : 'Confirmá tu celular'}
+              Confirmá tu email
             </h1>
             <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-slate-500">
-              Te mandamos un código de 6 números {canal === 'email' ? 'a' : `por ${disp.nombreCanalCelular || 'SMS'} al`}{' '}
-              <b className="break-all text-navy">{destinoCodigo}</b>.
-              {canal === 'email' && ' Si no lo ves, mirá en spam o promociones.'}
+              Te mandamos un código de 6 números a{' '}
+              <b className="break-all text-navy">{destinoCodigo}</b>. Si no lo ves, mirá en spam o promociones.
             </p>
           </header>
 
@@ -746,7 +727,7 @@ export default function RegisterScreen() {
                 ¿No te llegó? Podés pedir otro en <b className="tabular-nums text-navy">{mmss(reenviarEn)}</b>
               </p>
             ) : (
-              <button type="button" onClick={() => enviarCodigo(canal)} disabled={enviando}
+              <button type="button" onClick={() => enviarCodigo()} disabled={enviando}
                 className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-bold text-[#1D63B8] hover:bg-[#1D63B8]/5 disabled:opacity-60">
                 {enviando ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <RotateCw className="size-4" aria-hidden />}
                 Mandarme un código nuevo
@@ -790,12 +771,9 @@ export default function RegisterScreen() {
               <CircleCheck className="size-4 shrink-0 text-[#0e9f6e]" aria-hidden />
               <span className="min-w-0 break-all">Email confirmado: <b className="text-navy">{emailN.ok ? emailN.email : email}</b></span>
             </li>
-            <li className="flex items-start gap-2 text-slate-600">
-              {disp.celular && phoneToken ? (
-                <><CircleCheck className="mt-0.5 size-4 shrink-0 text-[#0e9f6e]" aria-hidden /><span>Celular confirmado: <b className="whitespace-nowrap text-navy">{celN.ok ? celN.mostrar : phone}</b></span></>
-              ) : (
-                <><Smartphone className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden /><span>Celular <b className="whitespace-nowrap text-navy">{celN.ok ? celN.mostrar : phone}</b>: queda <b>sin verificar</b> por ahora (todavía no mandamos SMS; lo confirmaste escribiéndolo dos veces).</span></>
-              )}
+            <li className="flex items-center gap-2 text-slate-600">
+              <Smartphone className="size-4 shrink-0 text-slate-400" aria-hidden />
+              <span>Celular: <b className="whitespace-nowrap text-navy">{celN.ok ? celN.mostrar : phone}</b></span>
             </li>
           </ul>
 

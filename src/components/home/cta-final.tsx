@@ -25,14 +25,15 @@ export function CtaFinal() {
           <div className="relative flex flex-col items-center gap-10 lg:flex-row lg:justify-between lg:gap-6">
             <div className="max-w-xl text-center lg:text-left">
               <h2 className="text-balance text-3xl font-extrabold tracking-tight text-white sm:text-4xl lg:text-[2.6rem] lg:leading-[1.12]">
-                Tu hogar merece buenas manos.{" "}
+                La próxima vez que se rompa algo,{" "}
                 <span className="bg-gradient-to-r from-ai to-tech-2 bg-clip-text text-transparent">
-                  Empecemos hoy.
+                  ya sabés dónde buscar.
                 </span>
               </h2>
               <p className="mt-4 text-pretty text-base leading-relaxed text-white/60 sm:text-lg">
-                Creá tu cuenta gratis y dejale a Homy lo complicado. Vos solo
-                aprobá, disfrutá y volvé a vivir tu casa.
+                Crear la cuenta lleva unos minutos y es gratis para clientes y
+                profesionales. Mejor hacerla hoy, tranquilo, y no el domingo con
+                el agua en el piso.
               </p>
             </div>
 
@@ -43,6 +44,7 @@ export function CtaFinal() {
                   size="lg"
                   className="h-13 rounded-full bg-action px-8 text-base font-bold text-white shadow-[0_16px_36px_-12px_rgba(255,90,31,0.8)] transition-all hover:bg-action-2 hover:shadow-[0_20px_44px_-12px_rgba(255,90,31,0.9)] active:scale-[0.98]"
                   onClick={() => navigate("/registrarse")}
+                  data-track="home: crear cuenta gratis"
                 >
                   <Sparkles className="size-5" aria-hidden />
                   Crear cuenta gratis
@@ -52,9 +54,10 @@ export function CtaFinal() {
                   variant="outline"
                   className="h-13 rounded-full border-white/25 bg-white/5 px-8 text-base font-bold text-white backdrop-blur-sm transition-all hover:border-ai/60 hover:bg-white/10 hover:text-ai"
                   onClick={openHomy}
+                  data-track="home: preguntale a homy"
                 >
                   <MessagesSquare className="size-5" aria-hidden />
-                  Hablar con Homy
+                  Preguntale a Homy
                 </Button>
               </div>
             </div>

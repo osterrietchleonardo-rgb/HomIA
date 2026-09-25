@@ -10,12 +10,15 @@ import { toast } from 'sonner'
 import { MapPin, UserRound, Phone, Building2, Cake, Save, ShieldCheck, ArrowRight, RefreshCw } from 'lucide-react'
 import { AvisosMailCard } from '@/components/screens/panel/avisos-mail-card'
 import { VerificacionContactoCard } from '@/components/app/verificacion-contacto-card'
+import { SelectorPaisCelular, AvisoCelular } from '@/components/app/selector-pais-celular'
+import { paisDeCelular, ejemploCelular, type CountryCode } from '@/lib/registro'
 
 export default function ClientProfile() {
   const { user, refresh } = useSession()
   const location = useLocation()
   const [displayName, setDisplayName] = useState('')
   const [phone, setPhone] = useState('')
+  const [pais, setPais] = useState<CountryCode>('AR')
   const [address, setAddress] = useState('')
   const [city, setCity] = useState('')
   const [birthday, setBirthday] = useState('')
@@ -29,12 +32,13 @@ export default function ClientProfile() {
 
   async function loadProfile() {
     setLoadError(null)
-    const r = await apiFetch<{ user?: { displayName?: string; phone?: string; address?: string; city?: string; birthday?: string } }>('/api/profiles/me', { silent: true })
+    const r = await apiFetch<{ user?: { displayName?: string; phone?: string; phoneE164?: string | null; address?: string; city?: string; birthday?: string } }>('/api/profiles/me', { silent: true })
     if (r.ok) {
       const u = r.data?.user
       if (u) {
         setDisplayName(u.displayName || '')
         setPhone(u.phone || '')
+        setPais(paisDeCelular(u.phoneE164 || u.phone) || 'AR')
         setAddress(u.address || '')
         setCity(u.city || '')
         setBirthday((u.birthday || '').slice(0, 10))
@@ -63,7 +67,7 @@ export default function ClientProfile() {
     try {
       const r = await apiFetch('/api/profiles/me', {
         method: 'PUT',
-        json: { displayName: displayName.trim(), phone, address, city, birthday },
+        json: { displayName: displayName.trim(), phone, phoneCountry: pais, address, city, birthday },
       })
       if (!r.ok) return
       await refresh()
@@ -126,7 +130,7 @@ export default function ClientProfile() {
           <ArrowRight className="size-5 shrink-0 text-slate-300 transition-transform duration-300 group-hover:translate-x-1 group-hover:text-[#1D63B8]" aria-hidden />
         </button>
 
-        {/* D26: email y celular verificados o no, y verificarlos con un código */}
+        {/* D26: email verificado o no (y verificarlo con un código) y el celular estandarizado */}
         <VerificacionContactoCard />
 
         {/* identidad + datos */}
@@ -168,8 +172,13 @@ export default function ClientProfile() {
             <Field label="Nombre y apellido" value={displayName} required error={nameError}
               onChange={(v) => { setDisplayName(v); if (nameError) setNameError(validateName(v)) }}
               onBlur={() => setNameError(validateName(displayName))} icon={<UserRound />} />
-            <Field label="Celular" value={phone} onChange={setPhone} placeholder="+54 9 …" type="tel" icon={<Phone />} />
             <Field label="Dirección" value={address} onChange={setAddress} icon={<MapPin />} />
+            <SelectorPaisCelular id="perfil-cliente-pais" value={pais} onChange={setPais}
+              labelClassName="flex items-center gap-2 text-sm font-semibold text-[#0A2540]" selectClassName="py-3" gapClassName="mt-2" />
+            <div>
+              <Field label="Celular" value={phone} onChange={setPhone} placeholder={ejemploCelular(pais) || '+54 9 …'} type="tel" icon={<Phone />} />
+              <AvisoCelular phone={phone} pais={pais} />
+            </div>
             <Field label="Ciudad" value={city} onChange={setCity} icon={<Building2 />} />
             <Field label="Cumpleaños" value={birthday} onChange={setBirthday} type="date" icon={<Cake />} />
           </div>

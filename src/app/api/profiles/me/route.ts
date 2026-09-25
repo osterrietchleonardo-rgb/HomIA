@@ -5,7 +5,7 @@ import { db } from '@/lib/db'
 import { canonicalProviderKind } from '@/lib/search-match'
 import { signDniDocUrl, DNI_BUCKET } from '@/lib/dni-ai'
 import { esProActivo } from '@/lib/plans'
-import { normalizarCelular } from '@/lib/registro'
+import { normalizarCelular, esPaisCelular } from '@/lib/registro'
 
 // GET: mi perfil completo (usuario + perfiles + stock + documentos).
 // Los documentos de DNI viven en un bucket privado: acá se devuelven como
@@ -65,6 +65,8 @@ const PutSchema = z.object({
   // usuario
   displayName: z.string().trim().min(2, 'El nombre tiene que tener al menos 2 letras').max(80, 'El nombre es demasiado largo').optional(),
   phone: optionalText(30),
+  // país del celular (ISO-2: "AR", "UY"…) para leer el número como se escribe allá; sin él, Argentina
+  phoneCountry: z.string().refine(esPaisCelular, 'País del celular inválido').optional(),
   birthday: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida (AAAA-MM-DD)').optional().or(z.literal('')),
   address: optionalText(200),
   city: optionalText(120),
@@ -142,18 +144,19 @@ export async function PUT(req: NextRequest) {
   const userData: Record<string, unknown> = {}
   if (d.displayName !== undefined) userData.displayName = d.displayName
   if (d.phone !== undefined) {
-    // D26: el celular se guarda normalizado (+549… en phoneE164, "+54 9 11 2345-6789" en phone).
-    // Si cambia el número, deja de estar verificado. Vacío solo si la cuenta no tenía uno válido.
+    // D26: el celular se guarda estandarizado (+549… en phoneE164, "+54 9 11 2345-6789" en phone),
+    // de cualquier país con `phoneCountry` (25/09/2026: no se verifica por código). Vacío solo si la
+    // cuenta no tenía uno válido.
     const actual = await db.user.findUnique({ where: { id: auth.user.id }, select: { phoneE164: true } })
     if (!d.phone) {
       if (actual?.phoneE164) return fail('El celular es obligatorio: escribí tu número (ej.: 11 2345-6789)', 400, { campo: 'phone' })
       userData.phone = null
     } else {
-      const cel = normalizarCelular(d.phone)
+      const pais = d.phoneCountry && esPaisCelular(d.phoneCountry) ? d.phoneCountry : 'AR'
+      const cel = normalizarCelular(d.phone, pais)
       if (!cel.ok) return fail(cel.error, 400, { campo: 'phone' })
       userData.phone = cel.mostrar
       userData.phoneE164 = cel.e164
-      if (actual?.phoneE164 !== cel.e164) userData.phoneVerifiedAt = null
     }
   }
   if (d.birthday !== undefined) userData.birthday = d.birthday || null

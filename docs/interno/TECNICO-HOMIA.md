@@ -73,8 +73,9 @@ Dependencias declaradas pero sin uso verificado en `src/`: `next-auth`, `next-in
   cambio del 24/09 sin commitear). El botón flotante del panel es **uno solo** (`help-dock.tsx`) con
   dos vistas: "Homy" y "Guías y tour".
 - **Header público** (`src/components/home/site-header.tsx`): desde 1280 px (`xl`) muestra solo
-  `NAV_DESKTOP` (Directorio, Materiales, Cómo funciona, Ayuda); "Motor IA", "Beneficios" y
-  "Comunidad" quedan en el menú hamburguesa (`NAV_ITEMS`, por debajo de `xl`) y en el footer. Carrito
+  `NAV_DESKTOP` (Directorio, Materiales, Cómo funciona, Ayuda); "Homy, el asistente" (ancla
+  `#motor-ia`), "Beneficios" y "Para quién es" (ancla `#comunidad`) quedan en el menú hamburguesa
+  (`NAV_ITEMS`, por debajo de `xl`) y en el footer. Las anclas no cambiaron con el copy de D31. Carrito
   separado de Ingresar/Crear cuenta por una línea; textos sin partir (`whitespace-nowrap`). 24/09/2026.
 - **Rutas nuevas de la SPA:** `/carrito` (pública y dentro del panel), `/panel/cliente/pedidos[/<id>]`
   y `/panel/profesional/pedidos[/<id>]` (`app-root.tsx`). El carrito se sincroniza con la sesión con
@@ -97,6 +98,10 @@ src/
   components/
     app/                     app-root (router), hire-wizard, map-view, profile-gate, role-switcher…
     home/                    landing: hero, buscador, cinta de sponsors, widget Homy, header/footer
+                             (copy D31, 25/09/2026: hero, hero-search, how-it-works, ai-band,
+                             features, profiles, sponsors, cta-final, homy-widget, site-header,
+                             site-footer; más app/layout.tsx y lib/og-card.tsx. CTAs con data-track
+                             "home: …")
     screens/                 pantallas públicas (buscar, directorio, materiales, perfiles, auth, ayuda)
     screens/panel/{cliente,profesional,proveedor}/   páginas del panel por rol
     screens/panel/           panel-layout (nav), verificacion, review-form, sobrantes-section
@@ -748,53 +753,55 @@ GET privados de N.
   (server con `ADMIN_EMAILS=<prefijo>admin@homia.test`, `FEEDBACK_EMAIL=<prefijo>equipo@homia.test`
   y `--mail-sink`): 67/67. Visual `scratch/e2e-sugerencias/` (Playwright 390×844 y 1280×800): 52/52.
 
-### 4.14 Registro estandarizado y verificación de email y celular (D26, migración `0035`, 25/09/2026)
+### 4.14 Registro estandarizado, verificación del email y celular con país (D26, migración `0035`, 25/09/2026)
+
+> **Cambio del 25/09/2026 (Leonardo: "no pedí verificar celular, solo estandarizar"):** se sacó
+> toda la verificación del celular por código (se borró `src/lib/celular-proveedor.ts`, el canal
+> `celular` de las rutas de verificación, `phoneToken`/`needsPhoneCode`, las variables
+> `PHONE_VERIFY_PROVIDER`, `TWILIO_*` y `WHATSAPP_*`) y el celular se estandariza **con país**
+> (selector como PRISMA). La verificación de la cuenta es el código del email. **`User.phoneVerifiedAt`
+> queda en la base sin uso** (sin migración destructiva: la columna existe, nada la escribe salvo la
+> baja de cuenta, que la deja en `NULL`; `channel` de `VerificationCode` queda `email` siempre).
 
 **Modelo (aditivo):** `User.emailVerifiedAt` (DateTime?), `User.phoneE164` (String?, `+549…`),
 `User.phoneVerifiedAt` (DateTime?) y la tabla `VerificationCode` (`id`, `userId?` → `User` con
 cascade, `channel` email|celular, `purpose` registro|cuenta, `target` email normalizado o E.164,
 `codeHash`, `attempts`, `expiresAt`, `usedAt?`, `ip?`, `createdAt`; índices
 `(target, channel, purpose, createdAt)`, `(ip, createdAt)`, `(userId)`; RLS activado). `User.phone`
-sigue guardando lo que se muestra (`+54 9 11 2345-6789`). Las cuentas anteriores quedan con los tres
-campos en `NULL`.
+sigue guardando lo que se muestra (`+54 9 11 2345-6789`, `+598 99 123 456`). Las cuentas anteriores
+quedan con los tres campos en `NULL` (`GET /api/auth/verificacion` estandariza su `phone` al leer).
 
 **Archivos:**
 
 | Archivo | Qué hace |
 |---|---|
-| `src/lib/registro.ts` | Compartido cliente/servidor (sin imports de servidor): `normalizarEmail` + `sugerirEmail` (Damerau–Levenshtein contra `DOMINIOS_COMUNES`), `normalizarCelular` / `formatearCelular` / `mismoCelular` (`libphonenumber-js/min`, país AR, fuerza el 9, rechaza no geográficos), `normalizarNombre` / `problemaNombre`, `normalizarCuit` (DV módulo 11) / `normalizarDniOCuil`, constantes `CODIGO` (6 cifras, 10 min, 5 intentos, 60 s, 5/h) |
+| `src/lib/registro.ts` | Compartido cliente/servidor (sin imports de servidor): `normalizarEmail` + `sugerirEmail` (Damerau–Levenshtein contra `DOMINIOS_COMUNES`), `normalizarCelular(texto, pais = 'AR')` → `{ ok, e164, mostrar, pais }` de **cualquier país** (`libphonenumber-js/min`; con `+`/`00` es internacional; en Argentina fuerza el 9 y rechaza no geográficos; error "Número inválido para <país>: …"), `formatearCelular` (internacional, guion final solo en +54), `mismoCelular(a, b, pais)`, `paisesCelular(locale)` (bandera emoji, nombre con `Intl.DisplayNames`, código; AR/UY/CL/PY/BO/MX/ES/US primero, como `getPhoneCountries` de PRISMA), `esPaisCelular` (valida ISO-2 contra `getCountries()`), `paisDeCelular(e164)`, `ejemploCelular(pais)` (placeholder con `getExampleNumber` + `libphonenumber-js/examples.mobile.json`, 4 KB), `nombrePais`, `normalizarNombre` / `problemaNombre`, `normalizarCuit` (DV módulo 11) / `normalizarDniOCuil`, constantes `CODIGO` (6 cifras, 10 min, 5 intentos, 60 s, 5/h) |
 | `src/lib/verificacion.ts` | Reglas puras: `nuevoCodigo` (`crypto.randomInt`), `hashCodigo` (HMAC-SHA256), `hashesIguales` (`timingSafeEqual`), `estadoCodigo`, `permisoEnvio` (espera, tope por destino, `TOPE_IP_HORA` = 30), `MENSAJE_CODIGO` |
 | `src/lib/verificacion-server.ts` | `server-only`: `enviarCodigo` (topes en la base, cuenta existente → código señuelo + mail "Ya tenés una cuenta", borra el código si el envío falla, limpieza perezosa de códigos de más de 2 días), `comprobarCodigo` (intento descontado atómico con `updateMany`, uso único), `firmarComprobante` / `comprobanteValido` (jose, HS256, `aud` `homia-verificacion`, 30 min), `disponibilidad()`, `ipCliente()`. Claves derivadas de `AUTH_SECRET` con HMAC (`homia:codigos-verificacion`, `homia:comprobante-verificacion`) |
-| `src/lib/celular-proveedor.ts` | Proveedor **enchufable** del código al celular: `proveedorCelular()` devuelve `null` sin configuración (hoy), o Twilio (SMS, API `Messages` con Basic auth, `From` o `MessagingServiceSid`) o WhatsApp Cloud API (plantilla de autenticación con el código en el cuerpo y en el botón "copiar código"). Solo `fetch`, timeout 10 s, nunca tira |
+| `src/components/app/selector-pais-celular.tsx` | `SelectorPaisCelular` (`<select>` nativo con la lista de `paisesCelular`, `data-track="elegir país del celular"`, clases ajustables para combinar con cada pantalla) y `AvisoCelular` ("Se guardará como …" o el motivo, en vivo) |
 | `src/lib/email.ts` | `EmailContent.codigo`: bloque grande en monoespaciada en el HTML y `Código: …` en el texto |
-| `src/app/api/auth/verificacion/route.ts` | `GET`: disponibilidad + estado de la cuenta |
-| `src/app/api/auth/verificacion/enviar/route.ts` | `POST` (zod) |
-| `src/app/api/auth/verificacion/comprobar/route.ts` | `POST` (zod) |
+| `src/app/api/auth/verificacion/route.ts` | `GET`: `disponible.email` + estado de la cuenta (email verificado o no; celular estandarizado, sin estado) |
+| `src/app/api/auth/verificacion/enviar/route.ts` | `POST` (zod, `canal: 'email'`; `celular` → 400) |
+| `src/app/api/auth/verificacion/comprobar/route.ts` | `POST` (zod, `canal: 'email'`) |
 | `src/app/api/auth/register/route.ts` | Reescrito con `parseBody` + zod (antes `body<T>()` sin zod) y validación completa que devuelve todos los errores juntos; usuario y perfiles en un solo `user.create` anidado (P2002 → 409) |
-| `src/app/api/profiles/me/route.ts` | Celular normalizado; al cambiar el número `phoneVerifiedAt = null` |
+| `src/app/api/profiles/me/route.ts` | Celular estandarizado con `phoneCountry` opcional (zod `refine(esPaisCelular)`, AR por defecto) |
 | `src/lib/account-deletion.ts` | La baja borra `phoneE164`, las verificaciones y los `VerificationCode` del usuario |
-| `src/components/screens/auth-register.tsx` | Registro en 4 pasos (Perfil, Tus datos, Confirmar email, Tu cuenta) con errores por campo, sugerencia de dominio, celular a la vista, doble tipeo sin pegar, `InputOTP` (`autocomplete=one-time-code`), cuenta regresiva de reenvío; el DNI opcional se sube con `subirImagen` (`src/lib/upload-image.ts`) y muestra su error tal cual |
-| `src/components/app/verificacion-contacto-card.tsx` | Tarjeta "Email y celular" en Mi perfil de los tres roles |
+| `src/components/screens/auth-register.tsx` | Registro en 4 pasos (Perfil, Tus datos, Confirmar email, Tu cuenta) con errores por campo, sugerencia de dominio, país del celular (`SelectorPaisCelular`, AR por defecto, placeholder por país), "Se guardará como …" en vivo, doble tipeo sin pegar, `irA()` lleva la ventana arriba (`window.scrollTo({ top: 0 })`), `InputOTP` (`autocomplete=one-time-code`), cuenta regresiva de reenvío; el DNI opcional se sube con `subirImagen` (`src/lib/upload-image.ts`) y muestra su error tal cual |
+| `src/components/app/verificacion-contacto-card.tsx` | Tarjeta "Email y celular" en Mi perfil de los tres roles: email con Verificado / Sin verificar y "Verificar ahora"; celular estandarizado sin insignia |
+| `src/components/screens/panel/{cliente,profesional}/perfil.tsx` | Selector de país + `AvisoCelular` junto al celular; país inicial con `paisDeCelular(phoneE164 \|\| phone)`; mandan `phoneCountry`. El proveedor no edita el celular en su perfil |
+| `src/components/app/auth-shell.tsx` | Shell de Crear cuenta, Ingresar, Recuperar y Restablecer: el `aside` de marca es `lg:sticky lg:top-0 lg:h-screen lg:self-start` (fijo a la altura de la pantalla; antes crecía con el formulario y su `justify-between` bajaba el titular al pasar al paso 2); solo scrollea la ventana con el formulario |
 
-**Proveedor de SMS/WhatsApp (hoy: ninguno).** Se activa con variables, sin tocar código:
-
-| Opción | Variables | Qué hay que tener |
-|---|---|---|
-| SMS con Twilio | `PHONE_VERIFY_PROVIDER=twilio`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_SMS_FROM` (número de Twilio `+…` o Messaging Service `MG…`) | Cuenta de Twilio con saldo y un número o Messaging Service habilitado para mandar SMS a Argentina |
-| WhatsApp Cloud API (Meta) | `PHONE_VERIFY_PROVIDER=whatsapp`, `WHATSAPP_TOKEN` (token permanente de un usuario del sistema), `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_OTP_TEMPLATE` (nombre de la plantilla), `WHATSAPP_OTP_LANG` (opcional, `es_AR`) | Cuenta de WhatsApp Business verificada en Meta, un número dado de alta en la Cloud API y una plantilla de categoría **Autenticación** aprobada con botón "copiar código" |
-
-Los dos cobran por mensaje enviado (ver las tarifas vigentes de cada uno antes de activarlo). Con el
-proveedor cargado: `GET /api/auth/verificacion` da `disponible.celular = true`, el registro pide
-también el código del celular (`phoneToken`) y Mi perfil permite verificarlo. Sin variables, nada
-cambia y el celular queda "sin verificar".
-
-**Pruebas:** `src/lib/__tests__/registro.test.ts` (12: email, 15 celulares reales, nombres, CUIT,
-DNI/CUIL) y `src/lib/__tests__/verificacion.test.ts` (10: código, HMAC, estados, espera, topes,
-proveedor Twilio/WhatsApp con `fetch` doble, mail del código). Sección A de `e2e-integral.mjs`: alta
-de los tres roles con el código leído del mail (`--mail-sink`), faltantes → 400 con `faltan`,
-celular raro normalizado, email inválido, comprobante ajeno, sin enumeración, código
-correcto/incorrecto/usado/vencido/agotado, reenvío con espera, tope por hora, verificación desde la
-cuenta; helper `registrar()` usado por todas las secciones. Sin `--mail-sink`, el helper arma el
+**Pruebas:** `src/lib/__tests__/registro.test.ts` (20: email, 15 celulares argentinos, 7 países con
+su país elegido, internacional con `+`/`00` sin importar el país elegido, "Número inválido para
+Uruguay/España", doble tipeo por país, lista de países, `esPaisCelular`/`paisDeCelular`/
+`ejemploCelular`, formato; nombres, CUIT, DNI/CUIL) y `src/lib/__tests__/verificacion.test.ts`
+(código, HMAC, estados, espera, topes, mail del código). Sección A de `e2e-integral.mjs`: alta de
+los tres roles con el código leído del mail (`--mail-sink`), faltantes → 400 con `faltan`, celular
+raro normalizado, país inválido (`XX`, `uy`) → 400, número inválido para Uruguay/España → 400 con
+mensaje, Uruguay escrito como allá y repetido con `+598`, `+34` con país AR, alta real con celular
+de Uruguay, perfil con EE.UU. y España, canal `celular` → 400, email inválido, comprobante ajeno,
+sin enumeración, código correcto/incorrecto/usado/vencido/agotado, reenvío con espera, tope por
+hora, verificación desde la cuenta; helper `registrar()` usado por todas las secciones. Sin `--mail-sink`, el helper arma el
 código por la base (HMAC con el `AUTH_SECRET` del `.env`, solo para `@homia.test`).
 
 ### 4.15 Métricas de uso y panel del administrador (D27, migración `0036`, 25/09/2026)
@@ -1242,9 +1249,7 @@ Nombres exactos que lee el código (`grep process.env` en `src/`) y su documenta
 | `FEEDBACK_EMAIL` | No | `src/lib/feedback.ts` (`casillaEquipo`) | El mail de cada sugerencia nueva va a `TITULAR.email` (business@vakdor.com). En pruebas se pone una `@homia.test` para no ensuciar la casilla real |
 | `RESEND_API_URL` | No (solo pruebas locales) | `src/lib/email.ts` | Se ignora en producción. Apunta el envío a un doble de Resend (`e2e-integral.mjs --mail-sink`) |
 | `MP_API_BASE_PRUEBAS` | No (solo pruebas locales) | `src/lib/suscripciones-mp.ts` | Se ignora en producción. Apunta las consultas de cobros de suscripción a un doble de la API de MP (`e2e-integral.mjs --mp-double`) |
-| `PHONE_VERIFY_PROVIDER` | No (hoy vacía) | `src/lib/celular-proveedor.ts` | `twilio` o `whatsapp` activa el código al celular (§4.14). Vacía o sin sus credenciales: el celular queda "sin verificar" y no se pide código |
-| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_SMS_FROM` | Solo con `PHONE_VERIFY_PROVIDER=twilio` | `src/lib/celular-proveedor.ts` | Sin alguna, no hay proveedor (igual que vacía) |
-| `WHATSAPP_TOKEN` / `WHATSAPP_PHONE_NUMBER_ID` / `WHATSAPP_OTP_TEMPLATE` / `WHATSAPP_OTP_LANG` | Solo con `PHONE_VERIFY_PROVIDER=whatsapp` (`LANG` opcional, `es_AR`) | `src/lib/celular-proveedor.ts` | Sin alguna de las tres primeras, no hay proveedor |
+
 | `SUPABASE_PROJECT_URL` / `SUPABASE_SERVICE_ROLE` | Para subidas | `uploads/route.ts:44-45`, `dni-ai.ts`, `leftovers.ts:13` | Subidas 503; fotos de terceros rechazadas |
 | `SUPABASE_API_URL` / `NEXT_PUBLIC_SUPABASE_URL` | No | `leftovers.ts:13` (alternativas) | — |
 

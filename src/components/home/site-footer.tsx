@@ -7,18 +7,18 @@ const FOOTER_COLUMNS = [
   {
     title: "Plataforma",
     links: [
-      { label: "Buscar servicios", href: "/#/buscar", route: "/buscar" },
+      { label: "Buscar un profesional", href: "/#/buscar", route: "/buscar" },
       { label: "Comprar materiales", href: "/#/materiales", route: "/materiales" },
       { label: "Soy profesional", href: "/#/registrarse?rol=profesional", route: "/registrarse?rol=profesional" },
       { label: "Soy proveedor", href: "/#/registrarse?rol=proveedor", route: "/registrarse?rol=proveedor" },
-      { label: "Bolsa de trabajo", href: "/#/buscar?mode=profesional", route: "/buscar?mode=profesional" },
+      { label: "Bolsa de trabajos", href: "/#/buscar?mode=profesional", route: "/buscar?mode=profesional" },
     ],
   },
   {
     title: "HomIA",
     links: [
       { label: "Cómo funciona", href: "#como-funciona", route: "#como-funciona" },
-      { label: "Motor IA", href: "#motor-ia", route: "#motor-ia" },
+      { label: "Homy, el asistente", href: "#motor-ia", route: "#motor-ia" },
       { label: "Beneficios", href: "#beneficios", route: "#beneficios" },
       { label: "Directorio de la comunidad", href: "/#/directorio", route: "/directorio" },
     ],
@@ -28,7 +28,7 @@ const FOOTER_COLUMNS = [
     links: [
       { label: "Centro de ayuda: dónde hago cada cosa", href: "/#/ayuda", route: "/ayuda" },
       { label: "Pagos con Mercado Pago o efectivo", href: "/#/ayuda?tema=pagos", route: "/ayuda?tema=pagos" },
-      { label: "Verificación de identidad por IA", href: "/#/ayuda?tema=verificacion", route: "/ayuda?tema=verificacion" },
+      { label: "Cómo se valida el DNI", href: "/#/ayuda?tema=verificacion", route: "/ayuda?tema=verificacion" },
       { label: "Reseñas con fotos", href: "/#/ayuda?tema=resenas", route: "/ayuda?tema=resenas" },
       { label: "Términos y Condiciones", href: "/#/terminos", route: "/terminos" },
       { label: "Política de Privacidad", href: "/#/privacidad", route: "/privacidad" },
@@ -62,8 +62,8 @@ export function SiteFooter() {
               <HomIAWordmark className="text-2xl" />
             </div>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-navy/55">
-              Tu hogar en buenas manos. El ecosistema que conecta clientes,
-              profesionales y proveedores con la inteligencia de agentes de IA.
+              Profesionales, materiales y pagos para arreglar tu casa, en
+              Argentina. Pagás al terminar. Gratis para clientes y profesionales.
             </p>
           </div>
 
@@ -91,11 +91,11 @@ export function SiteFooter() {
 
         <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-line/80 pt-7 sm:flex-row">
           <p className="text-[13px] font-medium text-navy/45">
-            © {new Date().getFullYear()} HomIA — Tu hogar en buenas manos.
+            © {new Date().getFullYear()} HomIA. Tu hogar en buenas manos.
           </p>
           <p className="flex items-center gap-1.5 text-[13px] font-medium text-navy/45">
             <span className="inline-block size-1.5 rounded-full bg-ai" aria-hidden />
-            Potenciado por agentes de inteligencia artificial
+            Con Homy, el asistente que contesta con datos de HomIA
           </p>
         </div>
       </div>

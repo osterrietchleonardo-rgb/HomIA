@@ -4,10 +4,10 @@ import { BadgeCheck, Recycle, ShieldCheck, Star } from "lucide-react";
 import { HeroSearch } from "@/components/home/hero-search";
 
 const TRUST_CHIPS = [
-  { icon: ShieldCheck, label: "Pagás al finalizar: Mercado Pago o efectivo" },
-  { icon: BadgeCheck, label: "Profesionales verificados" },
-  { icon: Recycle, label: "Devolvé los sobrantes al local" },
-  { icon: Star, label: "Reseñas 360°" },
+  { icon: ShieldCheck, label: "Pagás cuando está terminado" },
+  { icon: BadgeCheck, label: "Ves quién validó su DNI" },
+  { icon: Star, label: "Reseñas de otros clientes, con fotos" },
+  { icon: Recycle, label: "Lo que sobra, lo devolvés" },
 ];
 
 export function Hero() {
@@ -33,26 +33,26 @@ export function Hero() {
               <span className="relative inline-flex size-2.5 rounded-full bg-ai" />
             </span>
             <span className="text-[13px] font-bold tracking-wide text-navy/75">
-              Potenciado por agentes de Inteligencia Artificial
+              Gratis para clientes y profesionales
             </span>
           </div>
 
           {/* Titular */}
           <h1 className="mt-7 max-w-4xl text-balance text-[2.6rem] font-extrabold leading-[1.05] tracking-[-0.02em] text-navy sm:text-6xl lg:text-[4.6rem]">
-            Tu hogar,
+            Arreglá tu casa
             <br />
-            en{" "}
-            <span className="homy-gradient-text">
-              buenas manos
+            y pagá{" "}
+            <span className="homy-gradient-text whitespace-nowrap">
+              al terminar
             </span>
             .
           </h1>
 
           <p className="mt-6 max-w-2xl text-pretty text-base leading-relaxed text-navy/60 sm:text-lg">
-            Contale qué necesitás, en tus palabras. Los agentes de HomIA
-            encuentran al profesional con DNI verificado y reseñas reales, arman
-            el presupuesto completo —mano de obra y materiales— y vos pagás al
-            finalizar, por Mercado Pago o en efectivo.
+            Contá qué pasó con tus palabras, como en un mensaje. Te llegan
+            presupuestos de profesionales de ese oficio, ves quién validó su DNI y
+            qué dicen otros clientes, y pagás cuando el trabajo está hecho: por
+            Mercado Pago o en efectivo, sin adelantos.
           </p>
 
           {/* Barra de búsqueda con Homy */}

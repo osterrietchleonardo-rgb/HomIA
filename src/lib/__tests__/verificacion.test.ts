@@ -1,5 +1,5 @@
-// Tests de los códigos de verificación (D26): vencimiento, intentos, reenvío, hash y el proveedor
-// enchufable de SMS/WhatsApp (sin red: `fetch` es un doble).
+// Tests de los códigos de verificación del email (D26): vencimiento, intentos, reenvío, hash y el
+// mail del código (sin red). El celular no se verifica por código (25/09/2026).
 // Correr con:
 //   node --test --import ./scripts/homy-test-alias.mjs src/lib/__tests__/verificacion.test.ts
 import { test, afterEach } from 'node:test'
@@ -8,7 +8,6 @@ import {
   nuevoCodigo, hashCodigo, hashesIguales, estadoCodigo, permisoEnvio, MENSAJE_CODIGO, TOPE_IP_HORA,
 } from '../verificacion'
 import { CODIGO } from '../registro'
-import { proveedorCelular } from '../celular-proveedor'
 
 const envReal = { ...process.env }
 const fetchReal = globalThis.fetch
@@ -37,7 +36,6 @@ test('hash: HMAC con clave, distinto por canal/propósito/destino, nunca el cód
   assert.notEqual(h, hashCodigo('otra-clave', 'email', 'registro', 'a@gmail.com', '123456'))
   assert.notEqual(h, hashCodigo('clave', 'email', 'cuenta', 'a@gmail.com', '123456'))
   assert.notEqual(h, hashCodigo('clave', 'email', 'registro', 'b@gmail.com', '123456'))
-  assert.notEqual(h, hashCodigo('clave', 'celular', 'registro', 'a@gmail.com', '123456'))
   assert.equal(hashesIguales(h, hashCodigo('clave', 'email', 'registro', 'a@gmail.com', '123456')), true)
   assert.equal(hashesIguales(h, hashCodigo('clave', 'email', 'registro', 'a@gmail.com', '123457')), false)
   assert.equal(hashesIguales(h, ''), false)
@@ -76,57 +74,6 @@ test('reenvío: tope de 5 códigos por hora por destino', () => {
 test('reenvío: tope por conexión', () => {
   const r = permisoEnvio({ ultimo: null, enviosDestinoHora: 0, enviosIpHora: TOPE_IP_HORA }, T0)
   assert.ok(!r.ok && r.motivo === 'tope_ip')
-})
-
-test('celular: sin proveedor configurado no hay envío (fallback honesto)', () => {
-  delete process.env.PHONE_VERIFY_PROVIDER
-  assert.equal(proveedorCelular(), null)
-  process.env.PHONE_VERIFY_PROVIDER = 'twilio' // elegido pero sin credenciales
-  delete process.env.TWILIO_ACCOUNT_SID
-  assert.equal(proveedorCelular(), null)
-  process.env.PHONE_VERIFY_PROVIDER = 'palomas'
-  assert.equal(proveedorCelular(), null)
-})
-
-test('celular: Twilio arma el SMS con el código', async () => {
-  process.env.PHONE_VERIFY_PROVIDER = 'twilio'
-  process.env.TWILIO_ACCOUNT_SID = 'AC123'
-  process.env.TWILIO_AUTH_TOKEN = 'tok'
-  process.env.TWILIO_SMS_FROM = 'MG999'
-  const llamadas: { url: string; init: RequestInit }[] = []
-  globalThis.fetch = (async (url: string, init: RequestInit) => {
-    llamadas.push({ url: String(url), init })
-    return new Response('{"sid":"SM1"}', { status: 201 })
-  }) as typeof fetch
-  const p = proveedorCelular()
-  assert.equal(p?.canal, 'sms')
-  const r = await p!.enviarCodigo('+5491123456789', '042137')
-  assert.deepEqual(r, { ok: true })
-  assert.equal(llamadas[0].url, 'https://api.twilio.com/2010-04-01/Accounts/AC123/Messages.json')
-  const body = new URLSearchParams(String(llamadas[0].init.body))
-  assert.equal(body.get('To'), '+5491123456789')
-  assert.equal(body.get('MessagingServiceSid'), 'MG999')
-  assert.match(body.get('Body') || '', /042137/)
-  assert.match(String((llamadas[0].init.headers as Record<string, string>).Authorization), /^Basic /)
-})
-
-test('celular: WhatsApp Cloud API con plantilla de autenticación; error → resultado, no excepción', async () => {
-  process.env.PHONE_VERIFY_PROVIDER = 'whatsapp'
-  process.env.WHATSAPP_TOKEN = 'EAAG'
-  process.env.WHATSAPP_PHONE_NUMBER_ID = '1055'
-  process.env.WHATSAPP_OTP_TEMPLATE = 'codigo_homia'
-  let cuerpo: Record<string, unknown> = {}
-  globalThis.fetch = (async (_url: string, init: RequestInit) => {
-    cuerpo = JSON.parse(String(init.body))
-    return new Response('{"error":{"message":"template"}}', { status: 400 })
-  }) as typeof fetch
-  const p = proveedorCelular()
-  assert.equal(p?.canal, 'whatsapp')
-  const r = await p!.enviarCodigo('+5491123456789', '042137')
-  assert.equal(r.ok, false)
-  assert.equal(cuerpo.to, '5491123456789')
-  assert.equal((cuerpo.template as { name: string }).name, 'codigo_homia')
-  assert.match(JSON.stringify(cuerpo), /042137/)
 })
 
 test('mail del código: el código se ve grande en el HTML y en el texto, escapado', async () => {

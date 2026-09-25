@@ -9,20 +9,20 @@ import { ArrowLeft, BadgeCheck, Recycle, ShieldCheck, Sparkles } from 'lucide-re
 const VALUE_PROPS = [
   {
     icon: Sparkles,
-    title: 'Agentes de IA que razonan',
-    desc: 'Contás qué necesitás con tus palabras y Homy arma el pedido técnico, el presupuesto y la coordinación.',
+    title: 'Contalo como te salga',
+    desc: 'Escribís qué pasó con tus palabras y Homy te dice qué hace falta, quién lo tiene y a qué precio.',
     tone: 'homy-chip-ai',
   },
   {
     icon: ShieldCheck,
-    title: 'Pagás al finalizar',
-    desc: 'Aprobás el presupuesto y pagás cuando el trabajo está terminado, por Mercado Pago o en efectivo. Sin adelantos ni letra chica.',
+    title: 'Pagás cuando está terminado',
+    desc: 'Por Mercado Pago o en efectivo, sin adelantos. La plata va directo a quien hizo el trabajo.',
     tone: 'homy-chip-blue',
   },
   {
     icon: BadgeCheck,
-    title: 'Profesionales verificados',
-    desc: 'Identidad, oficio y reputación 360° entre clientes, profesionales y proveedores.',
+    title: 'Sabés a quién le abrís la puerta',
+    desc: 'Ves si validó su DNI, sus estrellas y las reseñas con fotos de otros clientes.',
     tone: 'homy-chip-mint',
   },
 ]
@@ -40,8 +40,9 @@ export function AuthShell({
 }) {
   return (
     <div className="homy-screen min-h-screen w-full lg:grid lg:grid-cols-[1.05fr_1fr]">
-      {/* Panel de marca (desktop) */}
-      <aside className="relative hidden overflow-hidden p-10 xl:p-14 lg:flex lg:flex-col lg:justify-between homy-glass-dark rounded-none border-0 border-r border-white/8">
+      {/* Panel de marca (desktop): fijo a la altura de la pantalla, no se mueve nunca; solo scrollea
+          el lado del formulario (antes crecía con la página y el titular bajaba al pasar de paso) */}
+      <aside className="relative hidden overflow-hidden p-10 xl:p-14 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:justify-between lg:self-start homy-glass-dark rounded-none border-0 border-r border-white/8">
         {/* decoración */}
         <div aria-hidden className="pointer-events-none absolute inset-0">
           <div className="absolute -top-32 -right-24 size-[420px] rounded-full bg-ai/10 blur-3xl" />
@@ -78,7 +79,7 @@ export function AuthShell({
 
         <div className="relative z-10 flex items-center gap-3 text-[13px] font-semibold text-white/50">
           <Recycle className="size-4 text-ai" aria-hidden />
-          ¿Te sobró material? Lo devolvés al local del proveedor y recuperás la plata
+          ¿Te sobró material? Se lo devolvés a quien te lo vendió y te reintegran la plata.
         </div>
       </aside>
 

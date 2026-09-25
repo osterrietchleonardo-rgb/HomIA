@@ -13,12 +13,12 @@ import { SectionHeading } from "@/components/home/section-heading";
 import { Homy } from "@/components/homy/homy-character";
 
 const AGENT_NODES = [
-  { icon: Bot, label: "Homy interpreta", hint: "lenguaje natural" },
-  { icon: ScanSearch, label: "Matching inteligente", hint: "geolocalizado" },
-  { icon: ClipboardList, label: "Presupuesto integral", hint: "obra + materiales" },
-  { icon: ShieldCheck, label: "Pago al finalizar", hint: "Mercado Pago o efectivo" },
-  { icon: Recycle, label: "Devolución de sobrantes", hint: "al local del proveedor" },
-  { icon: Star, label: "Reputación 360°", hint: "confianza" },
+  { icon: Bot, label: "Le contás", hint: "con tus palabras" },
+  { icon: ScanSearch, label: "Te muestra quién", hint: "profesionales y proveedores" },
+  { icon: ClipboardList, label: "Compara precios", hint: "de cada proveedor" },
+  { icon: ShieldCheck, label: "Pagás al terminar", hint: "Mercado Pago o efectivo" },
+  { icon: Recycle, label: "Devolvés lo que sobra", hint: "y te reintegran" },
+  { icon: Star, label: "Reseñas con fotos", hint: "de otros clientes" },
 ];
 
 export function AiBand() {
@@ -26,7 +26,7 @@ export function AiBand() {
     <section
       id="motor-ia"
       className="homy-glass-dark relative scroll-mt-24 overflow-hidden py-24 sm:py-28"
-      aria-label="Motor de inteligencia artificial de HomIA"
+      aria-label="Homy, el asistente de HomIA"
     >
       {/* Decoración de fondo */}
       <div aria-hidden className="pointer-events-none absolute inset-0">
@@ -38,9 +38,9 @@ export function AiBand() {
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading
           dark
-          kicker="Motor HomIA"
-          title="Agentes de IA trabajando para tu hogar, no solo en la pantalla."
-          description="Cada pedido activa una cadena de agentes que interpretan, coordinan y verifican cada etapa. Vos ves resultados claros; detrás, la tecnología trabaja de forma continua y automatizada."
+          kicker="Homy, el asistente"
+          title="Preguntale como le preguntarías a un amigo que sabe."
+          description="Le escribís «se me tapó la pileta de la cocina» y Homy te dice qué hace falta, quién lo tiene en stock, a qué precio y qué profesionales hay. Sin cuenta tenés 8 consultas por día; con tu cuenta gratis, 60."
         />
 
         {/* Pipeline de agentes — desktop */}
@@ -102,12 +102,13 @@ export function AiBand() {
             <Homy size={64} state="idle" />
             <div className="text-left">
               <p className="text-sm font-bold text-white">
-                Automatización real, de punta a punta
+                No inventa nada
               </p>
               <p className="max-w-md text-[13px] leading-relaxed text-white/50">
-                Homy interpreta tu pedido, arma el presupuesto con materiales
-                reales de proveedores y verifica identidades con IA. Vos
-                aprobás, pagás al finalizar y vivís tu casa.
+                Homy contesta solo con lo que está cargado en HomIA: precios,
+                stock, reseñas y trabajos publicados. Si no encuentra algo, te
+                lo dice. Y si la IA se cae, igual te muestra los resultados de
+                la búsqueda y te avisa.
               </p>
             </div>
           </div>
