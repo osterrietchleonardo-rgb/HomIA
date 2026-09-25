@@ -26,7 +26,10 @@
 - **Campana (arriba):** tus avisos. Tocar un aviso te lleva a lo que pasó. Se actualiza sola cada
   15 segundos.
 - **Avisos por mail** *(D18, 24/09/2026)*: además de la campana, HomIA te manda un mail con lo más
-  importante, con un botón que te lleva directo a esa pantalla:
+  importante, con un botón que te lleva directo a esa pantalla. Todos los mails tienen el diseño de
+  la marca: logo de HomIA con la mascota sobre azul marino, la franja naranja, dorada y celeste, el
+  botón naranja y al pie los links a Ayuda, Términos y Privacidad y quién está detrás de HomIA. Todo
+  en español y se leen bien en el celu:
   - **Proveedor:** te compraron o te reservaron; te pagaron por Mercado Pago (una venta o un cobro);
     un profesional te pide devolver materiales.
   - **Profesional:** te contrataron o te aceptaron un presupuesto; te pagaron una factura por
@@ -346,8 +349,8 @@ Pensadas para leerse en el celu:
 - Todo lo que dicen (1% solo con Mercado Pago, 24 h / 7 días / 48 h, 30 días de sobrantes, planes
   $50.000 y $100.000, 14 días de prueba, 3 intentos de DNI por día, 8 y 60 consultas de Homy) es lo
   mismo que aplica el sistema.
-- **Contacto:** razón social, CUIT, domicilio y email de la empresa. Mientras no estén cargados, la
-  página lo dice ("Todavía no publicamos acá…"), sin inventarlos.
+- **Contacto:** "HomIA es un servicio de Leonardo Osterrietch, CUIT 20-39833562-8" y el email
+  business@vakdor.com para consultas, reclamos y derechos sobre los datos. Sin domicilio.
 - Es la versión vigente. No la revisa un abogado: lo decidió Leonardo el 25/09/2026 (D22).
 
 *Fuente: `src/lib/legal-content.ts`, `src/components/screens/legal-screen.tsx`.*

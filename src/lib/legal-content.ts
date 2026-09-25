@@ -9,6 +9,16 @@
 
 export const LEGAL_VERSION = '2026-09-24'
 
+// Titular de HomIA, responsable de la plataforma y de la base de datos. Datos públicos que dio
+// Leonardo el 25/09/2026. Sin domicilio: pedido expreso de Leonardo. Las variables
+// NEXT_PUBLIC_LEGAL_* (si se cargan en Vercel) reemplazan cada valor.
+export const TITULAR = {
+  nombre: process.env.NEXT_PUBLIC_LEGAL_RAZON_SOCIAL || 'Leonardo Osterrietch',
+  cuit: process.env.NEXT_PUBLIC_LEGAL_CUIT || '20-39833562-8',
+  domicilio: process.env.NEXT_PUBLIC_LEGAL_DOMICILIO || '',
+  email: process.env.NEXT_PUBLIC_LEGAL_EMAIL || 'business@vakdor.com',
+}
+
 /** Un bloque de texto: párrafo, lista con viñetas, tabla o nota destacada. */
 export type LegalBlock =
   | string
@@ -312,7 +322,7 @@ export const PRIVACIDAD: LegalDoc = {
       id: 'responsable',
       titulo: '1. Quién es responsable de tus datos',
       bloques: [
-        'El responsable de la base de datos es HomIA, con los datos de contacto que figuran al final de esta página. Esta política se rige por la Ley 25.326 de Protección de Datos Personales y sus normas complementarias.',
+        'El responsable de la base de datos es el titular de HomIA, cuyo nombre, CUIT y email de contacto figuran al final de esta página. Esta política se rige por la Ley 25.326 de Protección de Datos Personales y sus normas complementarias.',
       ],
     },
     {

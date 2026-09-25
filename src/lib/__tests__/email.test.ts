@@ -65,7 +65,9 @@ test('con clave: POST a Resend con Bearer, from, to, subject, html y texto plano
   assert.deepEqual(body.to, ['proveedor@ejemplo.com'])
   assert.equal(body.subject, 'Nueva compra: stock reservado')
   // HTML: marca, colores, botón con el link, texto escapado y pie de avisos
-  assert.match(body.html, /Hom<span style="color:#FF5A1F;">IA<\/span>/)
+  assert.match(body.html, /<img src="[^"]*\/email\/homia-logo-blanco\.png"[^>]*alt="HomIA"/)
+  assert.match(body.html, /#FF5A1F/)
+  assert.match(body.html, /HomIA es un servicio de Leonardo Osterrietch/)
   assert.match(body.html, /#0A2540/)
   assert.match(body.html, /href="https:\/\/www\.somoshomia\.com\/#\/panel\/proveedor\/cobros\?tab=ventas"/)
   assert.match(body.html, /Caño PVC &lt;110mm&gt;/)
@@ -143,4 +145,12 @@ test('política de contraseña igual al registro', () => {
   assert.match(problemaDeContrasena('ab12') || '', /al menos 8/)
   assert.match(problemaDeContrasena('soloLetrasLargas') || '', /letras y números/)
   assert.match(problemaDeContrasena('12345678') || '', /letras y números/)
+})
+
+test('plantilla: el signo $ no se separa del monto y el CUIT no se corta', () => {
+  const { html, text } = renderEmail({ to: 'a@b.com', subject: 's', heading: 'h', paragraphs: ['Te compraron por $ 45.600 y $ 1.200'] })
+  assert.match(html, /\$&nbsp;45\.600 y \$&nbsp;1\.200/)
+  assert.doesNotMatch(html, /nbsp;nbsp|\$ nbsp/)
+  assert.match(html, /<span style="white-space:nowrap;">CUIT /)
+  assert.match(text, /\$ 45\.600/)
 })

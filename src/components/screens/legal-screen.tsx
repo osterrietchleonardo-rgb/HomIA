@@ -6,14 +6,9 @@
 import { useState } from 'react'
 import { navigate } from '@/lib/router'
 import { ArrowLeft, Check, ChevronDown, FileText, Info, Printer, ShieldCheck } from 'lucide-react'
-import { LEGAL_VERSION, PRIVACIDAD, TERMINOS, type LegalBlock, type LegalDoc } from '@/lib/legal-content'
+import { LEGAL_VERSION, PRIVACIDAD, TERMINOS, TITULAR, type LegalBlock, type LegalDoc } from '@/lib/legal-content'
 
-const EMPRESA = {
-  nombre: process.env.NEXT_PUBLIC_LEGAL_RAZON_SOCIAL || '',
-  cuit: process.env.NEXT_PUBLIC_LEGAL_CUIT || '',
-  domicilio: process.env.NEXT_PUBLIC_LEGAL_DOMICILIO || '',
-  email: process.env.NEXT_PUBLIC_LEGAL_EMAIL || '',
-}
+const EMPRESA = TITULAR
 
 function fechaLegible(iso: string) {
   const [y, m, d] = iso.split('-')
@@ -231,7 +226,7 @@ export default function LegalScreen({ tipo }: { tipo: 'terminos' | 'privacidad' 
             <h2 className="text-lg font-extrabold text-[#0A2540] sm:text-xl">Quiénes somos y cómo contactarnos</h2>
             {hayEmpresa ? (
               <div className="mt-3 space-y-1.5 text-[15px] leading-relaxed text-slate-700">
-                <p><strong className="text-[#0A2540]">{EMPRESA.nombre}</strong>{EMPRESA.cuit ? ` · CUIT ${EMPRESA.cuit}` : ''}</p>
+                <p>HomIA es un servicio de <strong className="text-[#0A2540]">{EMPRESA.nombre}</strong>{EMPRESA.cuit ? `, CUIT ${EMPRESA.cuit}` : ''}.</p>
                 {EMPRESA.domicilio && <p>Domicilio: {EMPRESA.domicilio}</p>}
                 <p>
                   Consultas, reclamos y ejercicio de tus derechos:{' '}

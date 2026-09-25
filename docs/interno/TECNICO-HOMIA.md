@@ -465,9 +465,10 @@ GET privados de N.
   `app-root.tsx`, dentro de `withPublicShell`). Tablas → tarjetas por debajo de `sm`; índice con
   `scrollIntoView` diferido 60 ms (en el celu el índice se cierra al elegir y corre el contenido);
   `window.print()` para PDF.
-- **Datos de la empresa:** `NEXT_PUBLIC_LEGAL_RAZON_SOCIAL`, `NEXT_PUBLIC_LEGAL_CUIT`,
-  `NEXT_PUBLIC_LEGAL_DOMICILIO`, `NEXT_PUBLIC_LEGAL_EMAIL` (públicas, se leen en el build: después de
-  cargarlas en Vercel hay que redeployar). Sin nombre y email la página muestra el aviso honesto.
+- **Titular:** `TITULAR` en `src/lib/legal-content.ts` (25/09/2026): Leonardo Osterrietch, CUIT
+  20-39833562-8, email `business@vakdor.com`, **sin domicilio** (pedido de Leonardo). Son datos
+  públicos, por eso viven en el código; las variables `NEXT_PUBLIC_LEGAL_RAZON_SOCIAL`, `_CUIT`,
+  `_DOMICILIO` y `_EMAIL` (opcionales, se leen en el build) reemplazan cada valor.
 - **Ayuda por tema:** `/ayuda?tema=pagos|verificacion|resenas` abre la pregunta con ese `tema` en
   `FAQ` (`help-screen.tsx`) y la lleva a la vista (`#ayuda-<tema>`, diferido 250 ms para no pelear con
   `resetAppScroll()` de `navigate()`). Los links del footer usan esos temas.
@@ -535,10 +536,17 @@ GET privados de N.
   https://api.resend.com/emails`, `Authorization: Bearer RESEND_API_KEY`), con `fetch` y
   `AbortSignal.timeout(10 s)`; sin dependencias nuevas. `sendEmail()` **nunca tira**: devuelve
   `{ ok: true, id }` o `{ ok: false, reason: 'no_configurado' | 'destinatario_invalido' | 'error' }`.
-  Sin `RESEND_API_KEY` no intenta y hace un `console.warn` una vez por proceso. Plantilla HTML con
-  tablas y estilos en línea (logo de texto "HomIA", navy `#0A2540`, naranja `#FF5A1F`, botón, link
-  de respaldo) + texto plano; pie "Recibís este mail porque tenés una cuenta en HomIA. Podés dejar
-  de recibir avisos por mail desde tu perfil." (el de recuperar contraseña lleva otro pie).
+  Sin `RESEND_API_KEY` no intenta y hace un `console.warn` una vez por proceso. **Plantilla de marca
+  (25/09/2026, pedido de Leonardo):** tablas y estilos en línea, 560 px que se achica en el celu;
+  cabecera azul marino `#0A2540` con el logo PNG (`public/email/homia-logo-blanco.png`, mascota +
+  wordmark en Plus Jakarta Sans, generado desde `public/logo.svg` con Playwright; Gmail y Outlook no
+  muestran SVG; `alt="HomIA"` si bloquean imágenes) y "Tu hogar en buenas manos"; franja naranja
+  `#FF5A1F` / dorado `#FFC700` / celeste `#00C4FF`; título, párrafos, botón naranja con flecha y link
+  de respaldo; nota destacada con borde celeste; texto de vista previa oculto; pie gris con el motivo
+  del mail, links a Ayuda, Términos y Privacidad y "HomIA es un servicio de Leonardo Osterrietch, CUIT
+  …" (`TITULAR`). `$ 45.600` sale con espacio duro y el CUIT sin cortar. Todo en español. Pie de
+  avisos: "Recibís este mail porque tenés una cuenta en HomIA. Podés dejar de recibir avisos por mail
+  desde tu perfil." (el de recuperar contraseña lleva otro pie). Vista previa: `scratch/mail-render.mjs`.
   `linkAbsoluto()` convierte `#/panel/...` en `${APP_URL}/#/panel/...`. Los destinatarios de
   dominios reservados (`.test`, `.invalid`, `.example`, `.localhost`) no se mandan a Resend real.
   `RESEND_API_URL` (solo fuera de producción) apunta el envío a un doble local para las pruebas.
@@ -834,7 +842,7 @@ Nombres exactos que lee el código (`grep process.env` en `src/`) y su documenta
 | `NEXT_PUBLIC_LEGAL_RAZON_SOCIAL` / `NEXT_PUBLIC_LEGAL_CUIT` / `NEXT_PUBLIC_LEGAL_DOMICILIO` / `NEXT_PUBLIC_LEGAL_EMAIL` | Para las páginas legales | `legal-screen.tsx` | Sin nombre y email, `/terminos` y `/privacidad` muestran un contacto genérico (§4.8). Se leen en el build: cargarlas y redeployar |
 | `NEXT_DIST_DIR` | No (solo desarrollo) | `next.config.ts:4-7` | Carpeta de build alternativa para levantar un segundo `next dev` en la misma carpeta sin pisar `.next` |
 | `RESEND_API_KEY` | **Sí para mandar mails** (recuperar contraseña y avisos) | `src/lib/email.ts` | No se manda ningún mail (log `[email] RESEND_API_KEY no está configurada`); "olvidé mi contraseña" responde igual pero el link no llega. **No está cargada todavía** (§4.10, D18) |
-| `EMAIL_FROM` | Recomendada | `src/lib/email.ts` | Default `HomIA <avisos@somoshomia.com>`. El dominio tiene que estar verificado en Resend |
+| `EMAIL_FROM` | Opcional | `src/lib/email.ts` | Default `HomIA <avisos@vakbot.vakdor.com>`: el dominio verificado hoy en Resend (25/09/2026, prueba de envío entregada). Cuando se verifique `somoshomia.com`, se cambia con esta variable |
 | `RESEND_API_URL` | No (solo pruebas locales) | `src/lib/email.ts` | Se ignora en producción. Apunta el envío a un doble de Resend (`e2e-integral.mjs --mail-sink`) |
 | `SUPABASE_PROJECT_URL` / `SUPABASE_SERVICE_ROLE` | Para subidas | `uploads/route.ts:44-45`, `dni-ai.ts`, `leftovers.ts:13` | Subidas 503; fotos de terceros rechazadas |
 | `SUPABASE_API_URL` / `NEXT_PUBLIC_SUPABASE_URL` | No | `leftovers.ts:13` (alternativas) | — |
