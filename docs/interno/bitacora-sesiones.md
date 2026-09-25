@@ -26,6 +26,10 @@
 
 ---
 
+## 2026-09-25 — Videos de ayuda con afirmaciones falsas, fuera de la lista (Leonardo)
+
+Al preparar los guiones de los videos que faltan ("dame que tendría que contener cada uno de esos videos"), la narración de `scripts/medios/gen-videos.py` decía escrow / "el dinero queda protegido" / "liberamos tu dinero" (HomIA no retiene plata), que el profesional finaliza la obra, plan PRO de profesionales y que el cliente aprueba los pedidos al proveedor. Se sacaron de `src/lib/videos-content.ts` cli-bienvenida, cli-contratar, pro-bienvenida, pro-presupuestos, pro-cobros y prv-ventas (los MP4 quedan); siguen cli-materiales, cli-resenas, pro-materiales, prv-bienvenida y prv-stock. Guiones nuevos en el doc "Videos de ayuda de HomIA: guiones para producir".
+
 ## 2026-09-25 — Cuentas demo borradas y /admin solo con clientes reales (D32) (Leonardo)
 
 **El pedido:** "limpiar los 3 usuarios demo cuidadosamente" y "en /admin limpiar/no registrar lo generado/hecho por los demo y tuyos, deben ser 100% reales de clientes reales". **Antes de tocar:** inventario de solo lectura: 0 usuarios reales; las demo eran 5 (las 3 de ingreso + carolina y julian del seed); ningún vínculo con cuentas reales; el único pago con id de MP era inventado (`MP-DEMO-…`). **Lo hecho:** copia completa en `scratch/backup-demo-*.json`, purga de las 5 cuentas y todo lo suyo (46 de stock, 2 proyectos, 2 facturas, 6 reseñas, 3 chats, 34 sesiones de Homy, 62 eventos, 3 DNI…, 1 archivo) → 0; suscripción `pending` del proveedor demo cancelada en MP. `analytics/filtro.ts` (TÉCNICO §4.15) y borrado del uso registrado de pruebas. E2E T 94/94 con `ANALYTICS_EN_DESARROLLO=1`.

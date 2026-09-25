@@ -16,19 +16,12 @@ export const ROLE_VIDEO_LABEL: Record<VideoRole, string> = {
   proveedor: 'Proveedor',
 }
 
+// 25/09/2026: se sacaron de la lista (los MP4 siguen en /public/videos) los videos que decían cosas
+// que la app no hace: pago "protegido"/"reservado"/escrow (HomIA no retiene plata: se paga al terminar,
+// directo al vendedor), que el profesional da la obra por terminada (la finaliza el cliente), plan PRO de
+// profesionales (legado) y que el cliente aprueba los pedidos de materiales del proveedor (D15).
+// Vuelven cuando se graben de nuevo (guiones en el doc "Videos de ayuda de HomIA").
 export const VIDEOS: VideoItem[] = [
-  {
-    id: 'cli-bienvenida',
-    role: 'cliente',
-    title: 'Bienvenido a HomIA',
-    desc: 'Qué es HomIA, los tres roles y tu ruta recomendada para arrancar.',
-  },
-  {
-    id: 'cli-contratar',
-    role: 'cliente',
-    title: 'Publicar y contratar',
-    desc: 'De contarle a Homy qué necesitás hasta contratar y pagar al finalizar.',
-  },
   {
     id: 'cli-materiales',
     role: 'cliente',
@@ -40,24 +33,6 @@ export const VIDEOS: VideoItem[] = [
     role: 'cliente',
     title: 'Reseñas y mensajes',
     desc: 'Cuándo y dónde se deja la reseña, y por qué el chat arranca por vos.',
-  },
-  {
-    id: 'pro-bienvenida',
-    role: 'profesional',
-    title: 'Tu cuenta profesional',
-    desc: 'Tu vidriera, la verificación con DNI y tus obras publicadas.',
-  },
-  {
-    id: 'pro-presupuestos',
-    role: 'profesional',
-    title: 'Presupuestos y trabajos',
-    desc: 'De la oportunidad al trabajo aprobado y cobrado.',
-  },
-  {
-    id: 'pro-cobros',
-    role: 'profesional',
-    title: 'Cobrar tus facturas',
-    desc: 'Modos de pago, efectivo y el modo A con todo junto.',
   },
   {
     id: 'pro-materiales',
@@ -76,12 +51,6 @@ export const VIDEOS: VideoItem[] = [
     role: 'proveedor',
     title: 'Publicar y cuidar tu stock',
     desc: 'Publicar elementos, estados automáticos y edición sin fricción.',
-  },
-  {
-    id: 'prv-ventas',
-    role: 'proveedor',
-    title: 'Ventas y cobros',
-    desc: 'Pedidos desde la obra, cobro directo al cliente y facturas en PDF.',
   },
 ]
 
