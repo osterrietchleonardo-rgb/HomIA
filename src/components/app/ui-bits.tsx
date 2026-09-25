@@ -7,6 +7,7 @@ import { Avatar as ShadAvatar } from '@/components/ui/avatar'
 import { Loader2, BadgeCheck, ShieldAlert, ShieldQuestion, ShieldX, Upload } from 'lucide-react'
 import { initials, stars, URGENCY_COLOR, URGENCY_LABEL } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { subirImagen } from '@/lib/upload-image'
 
 /* Valor numérico que NUNCA se parte en dos líneas ni se desborda: mide el
    texto real y baja la fuente hasta que entra en el ancho de la tarjeta.
@@ -314,17 +315,18 @@ export function AvatarUploader({
     if (!files || files.length === 0) return
     const file = files[0]
     setLoading(true)
-    const formData = new FormData()
-    formData.append('file', file)
     try {
-      const res = await fetch('/api/uploads', { method: 'POST', body: formData })
-      if (!res.ok) throw new Error()
-      const data = await res.json()
-      await onUpload(data.url)
-    } catch (error) {
-      toast.error('No se pudo subir la foto')
+      // achica y comprime en el navegador: acepta fotos de cualquier tamaño y peso
+      const r = await subirImagen(file, 'avatares', { maxLado: 1024 })
+      if (!r.ok) { toast.error(r.error); return }
+      try {
+        await onUpload(r.url)
+      } catch {
+        toast.error('La foto se subió pero no pudimos guardarla en tu perfil. Probá de nuevo.')
+      }
     } finally {
       setLoading(false)
+      if (ref.current) ref.current.value = '' // permite volver a elegir la misma foto
     }
   }
 

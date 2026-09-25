@@ -26,6 +26,36 @@
 
 ---
 
+## 2026-09-25 — Ingresos de HomIA en /admin: cada cobro de suscripción y el 1%, con estado de cuenta de cada proveedor (D30) (Leonardo)
+
+"donde llega el pago de suscripcion de los proveedores? … la agregas en mi /admin?" → confirmado que llega a su cuenta de MP (misma cuenta de las dos apps); `SubscriptionCharge` + `SubscriptionEvent` + `Payment.mpApplicationFee` (migración `0037` aplicada), webhook `subscription_authorized_payment`, reconciliación en el cron, backfill con `--dry-run` (producción: 1 suscripción pendiente, 0 cobros; prueba: 1 cobro aprobado de $50.000, no se guarda), pantalla `/admin/ingresos`. Tests 24/24, E2E U 33/33, visual 38/38. Detalle en FUNCIONAL (Ingresos de HomIA), LÓGICA §19, TÉCNICO §4.17 y D30. Pendiente: evento "Planes y suscripciones" en Webhooks de la app Suscripciones y el backfill con OK.
+
+## 2026-09-25 — Finanzas del profesional y del proveedor (D24) (Leonardo)
+
+Pantalla Panel → Finanzas (Resumen, Resultados, Caja, Balance, Movimientos, Aprendé), lo de HomIA automático, carga manual con explicación de cada categoría, primer uso de 3 pasos, CSV. Migración `0033_finanzas.sql` aplicada (2 tablas + `ProviderStock.unitCost`, diff vacío después). Unitarias 117/117 (finanzas 20), E2E R 97/98 en la corrida completa (la falla era de la prueba; corregida), visual 46/46 pantallas en 390 y 1280 sin desbordes ni NaN. Detalle: `decisiones.md` D24, FUNCIONAL "Finanzas", LÓGICA §16, TÉCNICO §4.12/§9, AGENTS §3/§5/§6. Rama `feat/horas-y-logo`, sin commit.
+
+## 2026-09-25 — Métricas de uso de todos los usuarios y área /admin con ingreso propio (D27, D29) (Leonardo)
+
+"todo tiene que estar registrado, cada accion, cada boton…" y "es mejor iniciar sesion de una con mi admin_email y admin_password (en .env) en /admin" → registro propio de uso (`AnalyticsEvent`/`AnalyticsSession`, migración `0036` aplicada, `POST /api/analytics/collect`, tracker en AppRoot y home, eventos de servidor de login/logout/registro/plan/PDF/admin) + panel `/admin/metricas` (usuarios, uso, embudos, retención, negocio, fichas por usuario y activo, CSV) + área `/admin` con ingreso `ADMIN_EMAIL`/`ADMIN_PASSWORD` (Métricas y Sugerencias; `/panel/admin/*` redirige) + Privacidad `LEGAL_VERSION` 2026-09-25. Cargo 1% en función compartida `src/lib/ingresos.ts` (para la futura sección Ingresos). Pruebas: unitarias 14 + 5, E2E T 94/94 y A 151/151. Detalle en FUNCIONAL (Métricas y Área /admin), LÓGICA §17-§18, TÉCNICO §4.15-§4.16, decisiones D27/D29. Botones de pantallas de otros equipos sin `data-track` (se miden igual por texto/aria-label y por la API): integrar con la regla 11 de AGENTS.md. Pendiente: `ADMIN_EMAIL`/`ADMIN_PASSWORD` en Vercel y regla de Firewall para `/api/admin/login`.
+
+## 2026-09-25 — Registro estandarizado con email confirmado por código para los 3 roles (D26) (Leonardo)
+
+"usar la estandarizacion y doble verificacion de email y celular al cargar el formulario de registro de los 3 roles…" → registro en 4 pasos, datos estandarizados (`src/lib/registro.ts`, `libphonenumber-js`), código de 6 números por mail antes de crear la cuenta, celular escrito dos veces (código por SMS/WhatsApp solo con proveedor: hoy ninguno), tarjeta "Email y celular" en Mi perfil, `auth/register` con zod. Migración `0035` (solo aditiva) aplicada. Detalle: decisiones D26, FUNCIONAL 1.7/2.12, LÓGICA §1.3, TÉCNICO §4.14. Pruebas: unitarias 79/79, E2E A 189/189 con doble de Resend (suite completa 1336/1377: las 41 fallas en B/F/J/P/R no tocan el registro, ver informe), visual 144/144 (390 y 1280), purga verificada (0 usuarios y 0 códigos `e2e-reg-*`). **Falta:** contratar Twilio o WhatsApp Cloud API para verificar celulares (Leonardo).
+
+## 2026-09-25 — Sugerencias en los tres roles con fotos y bandeja del administrador (D25) (Leonardo)
+
+"agrega otro agente, para que agreguen otra seccion/pagina en los 3 roles, 'sugerencias' …" → Panel → Sugerencias (cliente, profesional, proveedor) + `/panel/admin/sugerencias` (admin por `ADMIN_EMAILS`). Migración `0034` (tabla `Feedback`, solo aditiva) y bucket privado `feedback-evidencias` creados en producción. Detalle: decisiones D25, FUNCIONAL "Sugerencias", LÓGICA §15, TÉCNICO §4.13. Pruebas: unitarias 8/8 (57/57 con el resto), E2E A+S 136/136 + 67/67 con doble de Resend, visual 52/52 (390 y 1280), purga verificada (0 usuarios `e2e-sug-*`, 0 `Feedback`, bucket vacío). **Falta:** `ADMIN_EMAILS` en Vercel (Leonardo).
+
+## 2026-09-25 — Fotos que no subían y catálogo ampliado (Leonardo)
+
+"cuando quiero subir una foto de perfil me dice 'no se pudo subir la foto', es mejor que especifique porque" → causa: Vercel corta > 4,5 MB (413 HTML) y los componentes mostraban un mensaje genérico. `subirImagen()` en las 11 pantallas con fotos (TÉCNICO §4.11). Catálogo: expansión 3 cargada en producción (546 nuevos → 1764, 0 actualizados, stock intacto 46); `canonicalCategoria` por palabra completa; `catalogScore`; texto de la home "más de 1.700 materiales".
+
+## 2026-09-25 — Horario en las fechas del trabajo: varios trabajos el mismo día sin pisarse (D23) (Leonardo)
+
+**El pedido:** "las fechas del calendario de los profesionales, pueden repartirse entre obras/proyectos, por eso se tendria que poder agregar hora en la fecha de inicio y fin. porque si de 7am a 12pm hace un proyecto pero despues de 2pm a 7pm hace otro, se tendria que poder visualizar en el calendario y no pisarse." Después: "la jornada de trabajo generalmente empieza desde las 6am a 18pm, como referencia, pero puede setearse otros horarios tranquilamente".
+**Lo hecho (rama `feat/horas-y-logo`, sin commit):** franja horaria diaria por proyecto y jornada por profesional (migración `0032`, solo aditiva, aplicada); choque con acordados → 409, con propuestas → aviso; calendario con agenda del día y "Mi jornada"; disponibilidad pública por día (libre / con lugar / completo). Detalle en decisiones D23, FUNCIONAL 3.15 y 3.16, LÓGICA §3.6 y TÉCNICO §4.7.1. Pruebas: unitarias 19/19 + Homy 19/19, E2E Q 107/107, visual 30 capturas, purga verificada.
+**Qué NO se tocó:** `src/lib/email.ts`, `email-logo.ts`, `email.test.ts` (otra terminal); el modelo `Feedback`/`0034` y `src/lib/finanzas/` que aparecieron en el árbol durante la sesión (otra terminal).
+
 ## 2026-09-24 — Calendario del profesional y acuerdo de fechas del trabajo (D21) (Leonardo)
 
 Con el presupuesto aprobado el profesional propone inicio y fin estimado, el cliente acepta/rechaza/contrapropone, se puede reprogramar (lo acordado sigue vigente), el solapamiento avisa sin bloquear; pantalla Panel → Calendario y "Disponibilidad" anónima en el perfil público; Homy conoce la próxima fecha libre. Migración `0031_calendario_profesional.sql` aplicada (8 columnas nullable + índice, diff vacío). E2E Q 60/60, unitarias 9/9, visual 26/26, purga verificada. Detalle: `decisiones.md` D21, `FUNCIONAL` 2.5/3.5/3.15/3.16, `LOGICA` §3.6/§13, `TECNICO` §4.7/§5/§9, `AGENTS.md` §6. Rama `feat/recuperar-mails`, sin commit.

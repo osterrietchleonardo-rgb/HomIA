@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 import { Search, MapPin, Package, Navigation, ChevronDown, ChevronUp, ShoppingCart, Loader2, Clock } from 'lucide-react'
 import { addToCart } from '@/lib/cart'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { trackBusqueda } from '@/lib/analytics/tracker'
 
 type Offer = {
   stockId: string; elementId: string; price: number; quantity: number; inStock: boolean; brand: string | null
@@ -74,6 +75,8 @@ export default function MarketplaceScreen({ embedded = false }: { embedded?: boo
       if (!d) { toast.error('No pudimos cargar los materiales. Reintentá'); return }
       setResults(d.results || [])
       if (d.categories) setCategories(d.categories)
+      // métricas (D27): término, filtros y resultados (0 = oportunidad de catálogo)
+      trackBusqueda('materiales', query, Array.isArray(d.results) ? d.results.length : 0, { cat: category, tipo: providerKind })
     } catch {
       toast.error('No pudimos conectar. Reintentá')
     } finally {

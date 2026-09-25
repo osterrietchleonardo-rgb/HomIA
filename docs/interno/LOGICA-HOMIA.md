@@ -21,10 +21,10 @@
     `profesional` o `proveedor` (`src/components/screens/auth-register.tsx:137-142`). No se puede
     registrar profesional y proveedor a la vez; no hay forma de sumar un rol después (no existe
     endpoint).
-  - La API acepta cualquier combinación de los tres (`auth/register/route.ts:65-68`). Las cuentas
+  - La API acepta cualquier combinación de los tres (`auth/register/route.ts`). Las cuentas
     demo son de un solo rol (`scripts/demo/demo-seed.mjs:16,24,32`).
 - **Perfiles:** el registro crea `ProfessionalProfile` si hay rol profesional y `ProviderProfile`
-  (con prueba de 14 días) si hay rol proveedor (`auth/register/route.ts:92-130`), y un tablero de
+  (con prueba de 14 días) si hay rol proveedor, en la misma escritura que el usuario (`auth/register/route.ts`, D26), y un tablero de
   CRM por defecto (`src/lib/pipelines.ts`).
 - **Cómo se chequea el permiso:** casi todas las rutas no miran el rol sino **la existencia del
   perfil** (p. ej. ofertar exige `ProfessionalProfile` — `jobs/[id]/bids/route.ts:69-70`; stock exige
@@ -87,7 +87,8 @@ Operaciones abiertas que bloquean la baja (`operacionesAbiertas`):
 
 Qué hace la anonimización (no borra la fila `User`, para no romper el historial de otros):
 
-- **Usuario:** email → `eliminado-<id>@homia.invalid`, nombre → "Usuario eliminado", teléfono,
+- **Usuario:** email → `eliminado-<id>@homia.invalid`, nombre → "Usuario eliminado", teléfono
+  (y `phoneE164`, `phoneVerifiedAt`, `emailVerifiedAt`, D26; sus códigos de verificación se borran),
   foto, cómo nos encontró, cumpleaños, dirección, ciudad, lat/lng → `NULL`, ubicación compartida
   apagada, contraseña → hash de 32 bytes aleatorios, verificación → `none`, avisos por mail
   apagados, `deletedAt` = ahora. **Los roles se conservan.**
@@ -126,6 +127,92 @@ profesionales y trabajos). El aviso "Nuevo trabajo en tu rubro" tampoco se manda
 eliminadas.
 
 ---
+
+### 1.3 Registro: datos obligatorios, estandarización y verificación (D26, 25/09/2026)
+
+**Método** (tomado de PRISMA-SYSTEM y adaptado, ver `decisiones.md` D26): normalizar todo con UNA
+función compartida por la pantalla y el servidor (`src/lib/registro.ts`), el celular escrito dos
+veces y comparado normalizado, y validar todo **antes** de crear la cuenta. A diferencia de PRISMA
+(link de confirmación de Supabase Auth), el email se confirma con un **código de 6 números** antes de
+crear la cuenta.
+
+**Obligatorio para crear la cuenta** (`POST /auth/register`; si falta algo → **400** con `campos`
+{campo: mensaje} y `faltan` [campos], todo junto; nada se crea):
+
+| Rol | Obligatorio | Opcional (se valida si viene) |
+|---|---|---|
+| Todos | `firstName`, `lastName` (2+ letras, hasta 40), `email` válido **con `emailToken`** (comprobante del código), `phone` celular argentino válido + `phoneConfirm` que coincida, `password` (≥ 8, letras y números), `city` (2+), `acceptTerms: true` | `howFoundUs` (google/redes/recomendacion/publicidad/otro), `lat`/`lng`, `birthday` |
+| Profesional | + `professions` (≥ 1 slug) ; zona = `city` + `serviceRadiusKm` (1–100, por defecto 15) | `personType`, `dniCuil` (DNI 7-8 cifras o CUIL con dígito verificador), `companyCuit` (CUIT con DV), `companyName`, `companyWebsite`, `employeesCount`, `skills`, `experienceYears`, `bio` |
+| Proveedor | + `businessName` (2–120), `kind` (uno de los 18 de `PROVIDER_KINDS`, se canoniza), `address` (calle y número: ≥ 5 caracteres con al menos un número) | `cuit` (con DV, se guarda `30-12345678-9`), `description` |
+| Con proveedor de SMS/WhatsApp configurado | + `phoneToken` (comprobante del código del celular) | — |
+
+Por qué eso y no más: es lo mínimo para operar con confianza (a quién contactar y por dónde, dónde
+trabaja o dónde retiran); el DNI, el CUIT y lo demás se piden después (verificación de identidad
+existente y perfil) para no espantar en el celu.
+
+**Estandarización** (`src/lib/registro.ts`, idéntica en cliente y servidor):
+
+- **Email:** `trim` + minúsculas; regex estricta (sin espacios, sin `..`, terminación de 2+
+  letras). Sugerencia de dominio mal escrito (`sugerirEmail`): distancia de edición contra 17
+  dominios comunes en Argentina (gmail, hotmail, outlook, yahoo(.com.ar), live, icloud, fibertel…),
+  ≤ 1 cambio para dominios de hasta 8 letras y ≤ 2 para más largos, más reemplazos fijos
+  (`gmail.com.ar` → `gmail.com`). Solo se **sugiere**; nunca se corrige solo.
+- **Celular:** `libphonenumber-js` (metadata mínima) con país AR: saca el 0 y el 15, conoce los
+  códigos de área de 2, 3 y 4 cifras y valida el largo. Si no vino con 9 ni 15 se agrega el 9 (el
+  campo es "Celular", igual que PRISMA). Se guarda `phoneE164` (`+5491123456789`) y `phone` para
+  mostrar (`+54 9 11 2345-6789`). Rechaza: menos de 8 cifras, letras, no argentinos ("Por ahora solo
+  aceptamos celulares de Argentina"), 0800/0810/0600 y largos que no cierran.
+- **Nombre y apellido:** espacios de más fuera; mayúscula inicial solo en palabras escritas todas en
+  minúscula o todas en mayúscula ("juan PÉREZ" → "Juan Pérez"); "de/del/la/y…" en minúscula salvo
+  al principio; lo mezclado ("McDonald") o con números/símbolos queda igual. `displayName` =
+  nombre + apellido.
+- **CUIT/CUIL:** 11 cifras, prefijo 20/23/24/25/26/27/30/33/34 y dígito verificador módulo 11
+  (pesos 5,4,3,2,7,6,5,4,3,2).
+
+**Códigos de verificación** (`src/lib/verificacion.ts` reglas puras; `verificacion-server.ts`):
+
+| Regla | Valor |
+|---|---|
+| Código | 6 cifras, `crypto.randomInt` |
+| Se guarda | `HMAC-SHA256(clave derivada de AUTH_SECRET, canal:propósito:destino:código)` — nunca el código |
+| Vence | 10 minutos |
+| Intentos | 5 por código; cada intento se descuenta **antes** de comparar, de forma atómica |
+| Un solo uso | al acertar se marca `usedAt`; el mismo código otra vez → "ya se usó" |
+| Reenvío | 60 s entre códigos al mismo destino; hasta 5 por hora por destino; 30 por hora por IP (contados en la base) |
+| Comparación | `timingSafeEqual` |
+| Cuál vale | solo el último código pedido para ese destino y propósito |
+| Comprobante de registro | JWT HS256 de 30 min con clave derivada distinta de la de sesión (`aud` `homia-verificacion`, `{c: canal, d: destino, v: id}`); no sirve como cookie de sesión |
+
+- **Sin enumeración:** pedir un código de registro para un email que ya tiene cuenta responde
+  **igual** (200 con las mismas claves); se guarda un código al azar que nunca se manda y al dueño
+  le llega "Ya tenés una cuenta en HomIA" (Ingresar / recuperar contraseña). Cualquier código da
+  "incorrecto". El registro sin comprobante da 400 `needsEmailCode` (no 409): el 409 "Ya existe una
+  cuenta" solo lo ve quien tiene el código de ese email. (Desde D29 ningún email está reservado
+  para administración: el admin entra a `/admin` con `ADMIN_EMAIL`/`ADMIN_PASSWORD`, §18.)
+- **Sin mail configurado** (`RESEND_API_KEY` vacía): 503 `needsConfig` "Todavía no podemos mandar
+  mails…" y no se puede crear la cuenta (fallback honesto: no se simula la verificación). Si el mail
+  no sale, el código se borra (no cuenta para la espera) y responde 503; si la dirección es
+  inválida o reservada (`.test`, `.invalid`…), 400.
+- **Celular:** solo si hay proveedor de SMS/WhatsApp (`PHONE_VERIFY_PROVIDER`, TÉCNICO §4.14).
+  **Hoy no hay:** el pedido de código al celular responde 503 `needsConfig`, el registro no pide
+  `phoneToken` y la cuenta nace con `phoneVerifiedAt = NULL` ("sin verificar"). Nunca se simula.
+
+**Qué se bloquea sin email verificado:** crear la cuenta. Toda cuenta creada desde D26 nace con
+`emailVerifiedAt`. **Cuentas anteriores** (`emailVerifiedAt = NULL`): **no se les bloquea nada**
+(pueden mirar, contratar, comprar, ofertar y vender como antes); ven "Sin verificar" en Mi perfil y
+lo verifican cuando quieran. Por qué: al 25/09/2026 todas las cuentas de la base son de prueba o
+demo (D20) y bloquear operaciones en curso por un dato nuevo rompería pedidos y proyectos abiertos;
+si en el futuro hubiera cuentas reales sin verificar se decide aparte. El **celular sin verificar no
+bloquea nada** (no hay cómo verificarlo todavía).
+
+**Después, desde la cuenta** (propósito `cuenta`): el destino sale de la sesión (el email de la
+cuenta o su `phoneE164`), nunca del body. Al acertar se marca `emailVerifiedAt` / `phoneVerifiedAt`
+solo si el dato sigue siendo el mismo (409 si cambió en el medio). Ya verificado → 200
+`yaVerificado`.
+
+**Cambiar el celular** (`PUT /profiles/me`): se normaliza igual (400 con el motivo si no es válido);
+si cambia el número, `phoneVerifiedAt` vuelve a `NULL`; no se puede dejar vacío si la cuenta ya
+tenía un celular válido. El email no se puede cambiar.
 
 ## 2. Trabajos publicados (`JobPost`) y ofertas (`JobBid`)
 
@@ -288,13 +375,55 @@ las pagadas con `paidAt` desde el día 1 del mes en hora argentina (UTC−3); `p
 Mercado Pago. Confirmar el efectivo desde Cobros usa el mismo `POST /api/invoices/[id]/cash
 {action:'confirmar'}` (mismas reglas).
 
-### 3.6 Fechas del trabajo y calendario del profesional (D21, 24/09/2026)
+### 3.6 Fechas del trabajo y calendario del profesional (D21, 24/09/2026; horarios D23, 25/09/2026)
 
 Campos en `Project` (migración `0031`): `startDate`, `endDate` (fin estimado), `scheduleStatus`
 (`null` = sin fechas | `propuesta` | `acordada`), `scheduleProposedBy` (`profesional`|`cliente`),
-`scheduleNote`, `scheduleUpdatedAt`, `prevStartDate`/`prevEndDate`. Máquina de estados pura en
-`src/lib/schedule.ts` (`scheduleTransition`, con tests en `src/lib/__tests__/schedule.test.ts`);
-endpoint `POST /api/projects/[id]/schedule`.
+`scheduleNote`, `scheduleUpdatedAt`, `prevStartDate`/`prevEndDate`; y (migración `0032`, D23)
+`dailyStart`/`dailyEnd` (franja de cada día) y `prevDailyStart`/`prevDailyEnd` (franja acordada
+vigente durante una reprogramación). En `ProfessionalProfile` (`0032`): `workdayStart`/`workdayEnd`
+(jornada). Máquina de estados pura en `src/lib/schedule.ts` (`scheduleTransition`, con tests en
+`src/lib/__tests__/schedule.test.ts`); endpoint `POST /api/projects/[id]/schedule`.
+
+**Franja horaria diaria (D23):** un proyecto ocupa, **cada día** entre `startDate` y `endDate`
+(inclusive), la franja `dailyStart`–`dailyEnd` ("HH:MM", hora argentina). Reglas: las dos horas o
+ninguna; formato `HH:MM` (00–23 : 00–59) y **múltiplo de 15 minutos**; **fin > inicio el mismo día**
+(nada cruza la medianoche). Sin franja (las dos `null`) = **día completo**; así quedan los proyectos
+que ya tenían fechas antes de D23. Cualquier hora del día es válida: la franja **no** queda limitada a
+la jornada del profesional.
+
+**Choque de dos trabajos del mismo profesional** (`schedulesCollide`): se cruzan los **días** (rangos
+inclusive) **y** las **franjas** (intervalos semiabiertos `[inicio, fin)`: 07:00–12:00 y 14:00–19:00
+no chocan; 07:00–12:00 y 11:00–15:00 sí; 07:00–12:00 y 12:00–15:00 **no**, los bordes que se tocan no
+chocan). Día completo choca con cualquier franja de ese día.
+
+**Bloquea vs. avisa** (`findCollisions`, reemplaza el "avisa y no bloquea" de D21):
+- Contra trabajos **acordados** del mismo profesional (`scheduleStatus = acordada`, más las `prev*`
+  de un proyecto en reprogramación, que siguen vigentes) → **bloquea: 409** con `choque: true` y
+  `conflictos` (fechas y horario de cada uno; **id y título solo al profesional**). Mensaje al
+  profesional: "Ese horario choca con otro trabajo tuyo ya acordado: «Baño de Juan» (el 28/09, de
+  07:00 a 12:00). Elegí otro día u horario."; al cliente: "El profesional ya tiene ese horario ocupado
+  (el 28/09, de 07:00 a 12:00). Elegí otro día u horario." (sin títulos). Aplica al **proponer**
+  (cualquiera de los dos, también la contrapropuesta y la reprogramación) y al **aceptar**. No se
+  guarda nada.
+- Contra **propuestas** pendientes (por confirmar) → **solo avisa**: 200 con
+  `solapamiento.cantidad` (y `proyectos` con título solo al profesional). La que se acepte primero se
+  queda con el horario; la otra, al aceptarla, recibe 409.
+- **Carreras:** proponer y aceptar corren en una transacción que primero bloquea la fila del
+  `ProfessionalProfile` (`SELECT … FOR UPDATE`) y recién después re-lee los acordados y escribe. Dos
+  aceptaciones simultáneas de proyectos distintos que se pisan: una 200 y la otra 409 (probado en E2E
+  Q). Rechazar no chequea choques (rechazar una reprogramación restaura lo que ya estaba acordado).
+
+**Jornada del profesional (D23):** `workdayStart`/`workdayEnd` ("HH:MM", de a 15 min, fin > inicio);
+`null` = jornada de referencia **06:00–18:00** (`JORNADA_INICIO`/`JORNADA_FIN` en `schedule.ts`,
+pedido de Leonardo 25/09/2026). La cambia solo el propio profesional (`PATCH
+/api/professional/calendar`); si elige exactamente 06:00–18:00 se guarda `null` (sigue a la de
+referencia). **No limita** los horarios de los trabajos: solo decide el estado de cada día.
+
+**Estado de un día** (`dayStatus`, con la jornada del profesional): **libre** (ningún trabajo lo
+toca), **completo** (la unión de las franjas ocupadas —acordadas **y** propuestas, criterio
+conservador— cubre entera la jornada) o **con lugar** (hay trabajos pero queda algún hueco dentro de
+la jornada; un trabajo fuera de la jornada deja el día "con lugar", nunca "libre").
 
 **Cuándo se pueden acordar fechas** (`scheduleBlockReason`): proyecto `activo`, etapa distinta de
 `finalizado`, mano de obra cotizada (> 0) **y presupuesto aprobado**. En HomIA no existe un botón de
@@ -316,41 +445,52 @@ Proyecto cancelado o finalizado → 409 para toda acción.
 | `acordada` o sin fechas | `aceptar`/`rechazar` | — | 409 "no hay ninguna propuesta pendiente" |
 
 - **Validación:** días `AAAA-MM-DD` reales (zod + `isDayKey`: 30/02 → 400); fin ≥ inicio (400);
-  inicio ≥ hoy en hora argentina (400); duración ≤ 365 días; inicio a ≤ 730 días.
+  inicio ≥ hoy en hora argentina (400); duración ≤ 365 días; inicio a ≤ 730 días. Franja
+  (`validateSlot`): una hora sin la otra, formato inválido ("7:00", "25:00"), minutos que no son
+  múltiplo de 15 ("07:10") o fin ≤ inicio ("12:00"–"12:00", "22:00"–"02:00") → 400.
 - **Permisos:** 401 sin sesión; 403 si no sos el cliente ni el profesional del proyecto; 404 si no
   existe. El rol sale de la sesión, nunca del body.
 - **Carreras:** el `update` es condicional sobre `scheduleStatus` y `scheduleUpdatedAt` leídos
   (concurrencia optimista): si otro pedido cambió las fechas en el medio → 409 "Las fechas cambiaron
-  mientras tanto". Dos "Aceptar" simultáneos: uno 200 y el otro 409 (probado en E2E Q).
+  mientras tanto". Dos "Aceptar" simultáneos del mismo proyecto: uno 200 y el otro 409; de dos
+  proyectos que se pisan: ver "Bloquea vs. avisa" (los dos casos probados en E2E Q).
 - **Avisos** en cada acción, a la otra parte: `Notification` con link al proyecto (tipos
   `fechas_propuestas`, `fechas_reprogramacion`, `fechas_acordadas`, `fechas_rechazadas`; los dos
   primeros además por mail vía `src/lib/notify.ts`), un mensaje en el chat cliente↔profesional si
-  existe ("Fechas del trabajo: …", enviado por quien actuó) y un `ActivityEvent` del proyecto.
-- **Solapamiento (avisa, no bloquea):** al proponer, el servidor busca otros proyectos `activo` del
-  mismo profesional con fechas `acordada` o `propuesta` (incluidas las `prev*` de una reprogramación)
-  que se toquen con el rango (días inclusive). Devuelve `solapamiento.cantidad`; **solo al
-  profesional** le agrega `proyectos` (id, título, rango, estado). Al cliente nunca le llegan títulos
-  de otros proyectos. La UI del profesional también avisa en vivo mientras elige las fechas.
+  existe ("Fechas del trabajo: …", enviado por quien actuó) y un `ActivityEvent` del proyecto (con
+  `dailyStart`/`dailyEnd` en `data`). Todos los textos llevan el horario (`scheduleText`): "del 03/10
+  al 05/10, de 07:00 a 12:00 cada día", "el 03/10, de 14:00 a 19:00" o "el 03/10, todo el día"; el
+  mail sale con ese mismo texto.
 - **Ocupación de un profesional** (`busyRangesOf`): `acordada` → rango "ocupado"; `propuesta` →
-  rango "por confirmar" y, si es una reprogramación, además las `prev*` como "ocupado". Solo
-  proyectos `activo` (los cancelados o finalizados no ocupan).
-- **Próxima fecha libre:** primer día desde hoy que no cae en ningún rango ocupado **ni** por
-  confirmar (criterio conservador: no promete un día que puede quedar tomado). **Disponible esta
-  semana:** hay algún día libre entre hoy y el domingo.
+  rango "por confirmar" y, si es una reprogramación, además las `prev*` (con su franja `prevDaily*`)
+  como "ocupado". Cada rango lleva su franja. Solo proyectos `activo` (los cancelados o finalizados no
+  ocupan).
+- **Próximo día con lugar** (`nextDayWithRoom`, reemplaza la "próxima fecha libre" de D21): primer
+  día desde hoy que **no está completo** según la jornada del profesional (contando acordado y
+  propuesto: no promete horas que pueden quedar tomadas). **Con lugar esta semana**
+  (`disponibleEstaSemana`): hay algún día con lugar entre hoy y el domingo.
 - **Privacidad de la disponibilidad pública** (`GET /profiles/professional/[id]/availability`, sin
-  sesión): solo rangos de días **unidos** por estado (no deja contar proyectos) con `estado`
-  `ocupado`|`por_confirmar`, `proximaFechaLibre` y `disponibleEstaSemana`. Nunca título, cliente,
-  dirección, nota ni ids de proyectos. Ventana por defecto hoy → +91 días, máximo 186 (≈ 6 meses),
-  no antes del mes en curso. Cuentas eliminadas o demo con `HIDE_DEMO_USERS=1` → 404
-  (`src/lib/visibility.ts`, D20).
+  sesión): `jornada` del profesional, `dias` = solo los días con trabajos, cada uno con `estado`
+  (`con_lugar`|`completo`), `franjas` ocupadas **unidas por estado** (`ocupado`|`por_confirmar`;
+  "00:00"–"24:00" = todo el día; unir no deja contar proyectos) y `libres` (huecos dentro de la
+  jornada); los días que no aparecen están libres. Más `proximoDiaConLugar` y `disponibleEstaSemana`.
+  Nunca título, cliente, dirección, nota ni ids de proyectos. Ventana por defecto hoy → +91 días,
+  máximo 186 (≈ 6 meses), no antes del mes en curso. Cuentas eliminadas o demo con
+  `HIDE_DEMO_USERS=1` → 404 (`src/lib/visibility.ts`, D20).
 - **Calendario del profesional** (`GET /professional/calendar?from&to`, solo el propio profesional,
   sale de la sesión): sus proyectos `activo`/`finalizado` con fechas que tocan la ventana (título,
-  cliente, etapa, estado y rangos), `sinFecha` = activos con presupuesto aprobado y sin fechas (con
-  quién rechazó y el motivo si corresponde) y `pendientes` = propuestas del cliente que esperan su
-  respuesta. Ventana por defecto: el mes en curso; máximo 190 días.
-- **Homy:** `buscar_profesionales` devuelve `proxima_fecha_libre` y `disponible_esta_semana` de cada
-  profesional (una sola consulta para todos, `nextFreeForPros`); la nota de la herramienta le dice que
-  la disponibilidad es orientativa y que no diga nada si viene `null`.
+  cliente, etapa, estado, horario y rangos con franja), `sinFecha` = activos con presupuesto aprobado
+  y sin fechas (con quién rechazó y el motivo si corresponde), `pendientes` = propuestas del cliente
+  que esperan su respuesta, y `jornada` + `jornadaPorDefecto`. Ventana por defecto: el mes en curso;
+  máximo 190 días. **`PATCH`** `{ workdayStart, workdayEnd }` cambia la jornada (las dos `null` =
+  volver a 06:00–18:00): 401 sin sesión, 403 sin perfil profesional, 400 formato/15 min/fin ≤ inicio
+  o una sola hora.
+- **Detalle del proyecto** (`GET /projects/[id]`): `schedule` con la franja y `proWorkday` (jornada
+  del profesional, para sugerirla en el diálogo de fechas).
+- **Homy:** `buscar_profesionales` devuelve `proximo_dia_con_lugar` y `disponible_esta_semana` de
+  cada profesional con su jornada (una sola consulta para todos, `nextFreeForPros`, que recibe los
+  perfiles ya leídos); la nota de la herramienta le dice que es el primer día con horas libres (no un
+  día libre entero), que es orientativa y que no diga nada si viene `null`.
 
 ---
 
@@ -508,6 +648,8 @@ Reglas:
   total del pedido.
 - **El vendedor cobra el 100%** de su precio en su propia cuenta: el cargo va a HomIA como
   `marketplace_fee` de la preferencia creada con el token del vendedor.
+- **A qué cuenta llega el 1%:** a la cuenta de Mercado Pago de HomIA (la misma de las dos apps).
+  Se registra y se muestra en `/admin/ingresos` (§19, D30).
 - **Vendedor sin Mercado Pago conectado → solo efectivo:** 503 `{ needsConfig: true }` con el
   mensaje "‹Nombre› todavía no conectó Mercado Pago: podés pagar en efectivo" (`src/lib/seller-pay.ts`).
 - El cargo cobrado se guarda en `serviceFee` (se fija al crear la preferencia y el webhook lo
@@ -592,6 +734,9 @@ profesionales" (`pro/subscription/route.ts`).
 - **No hay botón para cancelar** la suscripción en la app: se cancela desde la cuenta de Mercado
   Pago (texto de `src/components/screens/panel/proveedor/plan.tsx:263`).
 - Al degradarse, se conservan datos, reseñas y vinculaciones.
+- **Cada cobro mensual** llega a la cuenta de MP de HomIA y queda registrado en `SubscriptionCharge`
+  (webhook `subscription_authorized_payment` + reconciliación del cron + backfill); cada alta paga,
+  cambio de plan y baja queda en `SubscriptionEvent` (§19, D30).
 
 ---
 
@@ -806,6 +951,9 @@ Acuerdo proveedor ↔ profesional para retirar materiales a cuenta de proyectos;
 
 Ambos exigen `Authorization: Bearer <CRON_SECRET>`.
 
+**D30:** el cron de suscripciones además registra la baja (`SubscriptionEvent`) antes de degradar y
+reconcilia los cobros de suscripción con MP (producción), sin tirar nunca el cron (§19).
+
 ---
 
 ### Proyectos que un profesional contrató (24/09/2026)
@@ -825,7 +973,10 @@ externo no disponible. Rutas relativas a `src/app/api/`. Cualquier `/api/*` que 
 
 | Método y ruta | Auth | Valida / hace | Errores clave |
 |---|---|---|---|
-| `POST /auth/register` | — (8/h por IP) | Email válido y único, contraseña ≥ 8 con letras y números, nombre 2–60, **`acceptTerms: true`** (guarda `termsAcceptedAt`/`termsVersion`, §1.1), roles válidos, nombre de negocio si es proveedor; crea usuario, perfiles, prueba de 14 días, CRM y sesión | 400 (`needsTerms`), 409 "Ya existe una cuenta con ese email", 429 |
+| `POST /auth/register` | — (8/h por IP) | **D26:** zod + validación completa (§1.3): nombre, apellido, email con `emailToken` válido para ESE email, celular + repetido (y `phoneToken` si hay proveedor), contraseña ≥ 8 con letras y números, ciudad, **`acceptTerms: true`** (§1.1); profesional: rubros; proveedor: comercio, tipo y dirección. Todo estandarizado. Crea usuario y perfiles en **una sola escritura** (`emailVerifiedAt` = ahora), prueba de 14 días, CRM y sesión | 400 con `campos`/`faltan` (+ `needsTerms`, `needsEmailCode`, `needsPhoneCode`), 409 "Ya existe una cuenta…" (solo con comprobante válido), 429 |
+| `GET /auth/verificacion` | — | Qué se puede verificar (`disponible.email`, `disponible.celular`, canal) y, con sesión, `cuenta` { email, emailVerificado, celular, celularNormalizado, celularVerificado } (D26) | — |
+| `POST /auth/verificacion/enviar` | — / Sesión (`cuenta`) | zod `{ canal: email\|celular, proposito: registro\|cuenta, destino? }`. Registro: normaliza el destino; cuenta: el destino sale de la sesión. Crea el código (hash), lo manda y responde `{ venceEnSeg: 600, reenviarEnSeg: 60, canal }`; misma respuesta si el email ya tiene cuenta (§1.3) | 400 destino inválido, 401 (`cuenta` sin sesión), 429 `motivo` = espera\|tope_destino\|tope_ip + `esperarSeg`, 503 `needsConfig` (sin mail o sin proveedor de celular) |
+| `POST /auth/verificacion/comprobar` | — / Sesión (`cuenta`) | zod `{ canal, proposito, destino?, codigo: 6 cifras }`. Registro → `{ comprobante }` (JWT 30 min); cuenta → marca verificado | 400 `motivo` = incorrecto (+ `intentosRestantes`)\|vencido\|usado\|sin_codigo, 409 dato cambiado, 429 agotado (60 intentos / 15 min por IP en memoria) |
 | `POST /auth/login` | — (10 fallos email+IP, 30 por IP / 15 min) | Verifica contraseña, crea sesión | 401 "Email o contraseña incorrectos", 429 |
 | `POST /auth/logout` | — | Borra la cookie | — |
 | `GET /auth/me` | — | Usuario de la sesión o `null` | — |
@@ -838,10 +989,10 @@ externo no disponible. Rutas relativas a `src/app/api/`. Cualquier `/api/*` que 
 | Método y ruta | Auth | Valida / hace | Errores clave |
 |---|---|---|---|
 | `GET /profiles/me` | Sesión | Perfil completo; DNI como URL firmada de 10 min; sin tokens MP | 401 |
-| `PUT /profiles/me` | Sesión | zod: datos personales, profesionales y de proveedor; avatar/logo solo de HomIA; marca solo con PRO; `emailNotifications` (boolean, avisos por mail, §14.1); escribe todo en una transacción | 403 `needsRole`/`needsPro` |
+| `PUT /profiles/me` | Sesión | zod: datos personales, profesionales y de proveedor; avatar/logo solo de HomIA; marca solo con PRO; `emailNotifications` (boolean, avisos por mail, §14.1); **celular normalizado** (`phoneE164`; si cambia, `phoneVerifiedAt` vuelve a NULL; no se vacía si había uno — D26, §1.3); escribe todo en una transacción | 400 (celular inválido o vacío), 403 `needsRole`/`needsPro` |
 | `POST /profiles/me/eliminar` | Sesión | zod `confirm: "ELIMINAR"` + `password`; bloquea con operaciones abiertas; borra DNI del bucket y anonimiza (§1.1, D19) | 400, 401, 403 contraseña, 409 `pendientes`, 429, 503 Storage |
 | `GET /profiles/professional/[id]` | Sesión | Perfil, 12 obras, 20 reseñas, `chatBlocked`; cuenta eliminada o demo con `HIDE_DEMO_USERS=1` → 404 salvo al propio usuario (§1.2) | 401, 404 |
-| `GET /profiles/professional/[id]/availability` | — (público) | zod en query (`from`/`to` `AAAA-MM-DD`, máx. 186 días). Solo rangos anónimos unidos (`ocupado`/`por_confirmar`), `proximaFechaLibre`, `disponibleEstaSemana` (§3.6, D21) | 400, 404 |
+| `GET /profiles/professional/[id]/availability` | — (público) | zod en query (`from`/`to` `AAAA-MM-DD`, máx. 186 días). `jornada`, `dias` con `estado` (`con_lugar`/`completo`), franjas ocupadas unidas (`ocupado`/`por_confirmar`) y `libres`; `proximoDiaConLugar`, `disponibleEstaSemana`. Sin datos del trabajo (§3.6, D21/D23) | 400, 404 |
 | `GET /profiles/provider/[id]` | Sesión | Perfil, stock (100), reseñas, `recommended`, `chatBlocked`; misma regla de visibilidad (§1.2) | 401, 404 |
 | `GET /users/[id]/client-summary` | Sesión | Reputación del cliente: proyectos finalizados/activos, compras, 10 reseñas | 401, 404 |
 | `PUT /users/location` | Sesión | lat/lng/radio 1–500/compartir; sincroniza el perfil profesional | 400 |
@@ -881,8 +1032,9 @@ externo no disponible. Rutas relativas a `src/app/api/`. Cualquier `/api/*` que 
 | `GET /projects/hire-sources` | Sesión | zod en query (`professionalProfileId` opcional). Solo del usuario de la sesión: `jobs` = sus trabajos `abierto` (hasta 30: título, rubro, fecha, ofertas pendientes, datos para precargar y `targetBidAmount` si el profesional a contratar ya ofertó) y `projects` = sus proyectos `activo` no finalizados como profesional a cargo (hasta 30: título, cliente, etapa, datos para precargar) | 400, 401 |
 | `GET /projects/[id]` | Partes | Detalle con materiales, facturas, cobros, cuentas de retiro, id del chat; `subcontracts` (solo al profesional a cargo) y `parentProject` (solo al profesional que subcontrató) (D16); `schedule` (fechas del trabajo) y `scheduleBlocked` (por qué todavía no se pueden acordar, o `null`) (D21) | 403, 404 |
 | `PATCH /projects/[id]` | Partes | zod; etapa, cancelación, mano de obra, modo de materiales (§3.2) | 403, 409 |
-| `POST /projects/[id]/schedule` | Partes | zod (`accion` = `proponer` con `startDate`/`endDate`/`nota` \| `aceptar` \| `rechazar` con `motivo`); máquina de estados de fechas, aviso de solapamiento (§3.6, D21) | 400, 401, 403, 404, 409 |
-| `GET /professional/calendar` | Profesional (de la sesión) | zod en query (`from`/`to`, máx. 190 días); sus proyectos con fechas, `sinFecha` y `pendientes` (§3.6) | 400, 401, 403 |
+| `POST /projects/[id]/schedule` | Partes | zod (`accion` = `proponer` con `startDate`/`endDate`/`dailyStart`/`dailyEnd`/`nota` \| `aceptar` \| `rechazar` con `motivo`); máquina de estados de fechas con franja horaria; choque con acordados → 409 `choque` (al proponer y al aceptar, en transacción con bloqueo); con propuestas → aviso (§3.6, D21/D23) | 400, 401, 403, 404, 409 |
+| `GET /professional/calendar` | Profesional (de la sesión) | zod en query (`from`/`to`, máx. 190 días); sus proyectos con fechas y horario, `sinFecha`, `pendientes` y `jornada` (§3.6) | 400, 401, 403 |
+| `PATCH /professional/calendar` | Profesional (de la sesión) | zod (`workdayStart`/`workdayEnd` "HH:MM" de a 15 min, fin > inicio; las dos `null` = 06:00–18:00): cambia SU jornada (§3.6, D23) | 400, 401, 403 |
 | `POST /projects/[id]/materials` | Profesional del proyecto | zod; §3.4 | 403, 409 |
 | `PATCH /projects/[id]/materials` | Partes según acción | zod; aprobar/rechazar/eliminar/reemplazar (§3.4) | 403, 404, 409 |
 | `GET /projects/[id]/invoice` | Partes | Facturas con ítems | 403 |
@@ -932,6 +1084,19 @@ externo no disponible. Rutas relativas a `src/app/api/`. Cualquier `/api/*` que 
 | `POST /pro/subscription` | Perfil profesional | Legado: siempre 403 "HomIA es gratis para profesionales" | 403 |
 | `GET /pro/subscription` | — | `{ free: true }` | — |
 
+### Finanzas (D24, §16)
+
+| Método y ruta | Auth | Valida / hace | Errores clave |
+|---|---|---|---|
+| `GET /finanzas/resumen?role=&periodo=` (o `desde`/`hasta`) | Sesión + rol con perfil | Reporte completo (resultados, anterior, caja con serie mensual, balance, métricas, obras/productos, recomendaciones), movimientos del período, config, obras, stock, `sugerenciaSuscripcion` | 401, 403, 400 período |
+| `GET /finanzas/movimientos?role=` | Idem | Movimientos cargados (sin los borrados) | 401, 403 |
+| `POST /finanzas/movimientos` | Idem | zod + reglas §16.2; alta (máximo 5.000 por rol) | 400, 409 |
+| `PATCH /finanzas/movimientos/[id]` | Dueño | Edición parcial validada completa; terminar recurrente | 404 ajeno o borrado, 400 |
+| `DELETE /finanzas/movimientos/[id]` | Dueño | Baja lógica | 404 |
+| `PUT /finanzas/config` | Sesión + rol | Saldo inicial (al cierre del día, no futuro), margen estimado 1-99 (proveedor), primer uso hecho, asignar compra a obra o personal (profesional) | 400, 403 obra ajena, 404 compra ajena |
+| `PUT /finanzas/costos` | Perfil proveedor | `unitCost` de hasta 500 productos propios | 403 stock ajeno |
+| `GET /finanzas/export.csv?role=&periodo=` | Sesión + rol | CSV con `;`, BOM y montos `1.234,56`: estado de resultados + movimientos | 401, 403 |
+
 ### Mercado Pago
 
 | Método y ruta | Auth | Valida / hace | Errores clave |
@@ -940,6 +1105,8 @@ externo no disponible. Rutas relativas a `src/app/api/`. Cualquier `/api/*` que 
 | `GET /mp/oauth/callback` | Sesión dueña del `state` | Canjea el código y guarda tokens | Redirige con `?mp=…` |
 | `DELETE /mp/oauth?kind=provider\|professional` | Perfil del tipo | Desconecta | 403 |
 | `POST /payments/webhook` | Firma MP (no bloqueante) | Pista `?ref=<tipo>:<id>` → consulta con el token del vendedor; monto = subtotal + cargo ±1; guarda `Payment.collector` (técnico §6.1) | 200 `deferred` si MP falla; 500 si falla la base |
+| `POST /payments/webhook?type=subscription_authorized_payment` | Firma MP (no bloqueante) | D30: cobro mensual de suscripción → re-consulta factura y pago con el token de Suscripciones y guarda `SubscriptionCharge` (idempotente por `mpPaymentId`) | **503** si MP no responde o no se pudo guardar; 200 ignorado si la factura no existe |
+| `GET /admin/ingresos`, `GET /admin/ingresos/proveedor` | Sesión de `/admin` | Ingresos de HomIA (§19) | 404 sin sesión de admin; 400 parámetros |
 
 ### Comunicación, reputación y otros
 
@@ -961,7 +1128,17 @@ externo no disponible. Rutas relativas a `src/app/api/`. Cualquier `/api/*` que 
 | `GET/POST /favorites` | Sesión | Lista / alterna favorito | 404 |
 | `GET/POST /crm/pipelines` | Sesión | Tablero (crea el default) / tablero nuevo con 3 etapas | 400 |
 | `POST/PATCH/DELETE /crm/deals` | Dueño del tablero | Tratos; el tablero sale de la etapa validada | 403, 404 |
-| `POST /uploads` | Sesión | JPG/PNG/WEBP por bytes, ≤ 8 MB; `folder=dni` al bucket privado | 400, 503 |
+| `POST /uploads` | Sesión | JPG/PNG/WEBP por bytes, ≤ 8 MB; `folder=dni` y `folder=sugerencias` a buckets privados (devuelven path, no URL) | 400, 503 |
+| `GET /feedback` | Sesión | Mis sugerencias (fotos firmadas 10 min), `isAdmin`, `quedanHoy` (§15) | 401 |
+| `POST /feedback` | Sesión | zod; alta de sugerencia; tope 10/día; mail al equipo (§15) | 400, 401, 403, 429 |
+| `GET /feedback/[id]` | Autor o admin | Un envío con fotos firmadas | 401, 404 |
+| `POST /admin/login` · `GET /admin/login` · `POST /admin/logout` | — | Ingreso de administración (§18): zod; `ADMIN_EMAIL`/`ADMIN_PASSWORD` en tiempo constante; cookie `homia_admin` 12 h; GET → `{ admin }` | 400, 401 genérico, 429 (5 fallos/IP/15 min), 503 `needsConfig` |
+| `GET /admin/feedback` | Sesión de `/admin` | Bandeja: filtros `status`, `type`, `role`, `area`, `q` (difusa); conteo por estado | 401, 404 |
+| `PATCH /admin/feedback/[id]` | Sesión de `/admin` | zod; estado y/o respuesta; avisa al autor (§15) | 400, 401, 404 |
+| `POST /analytics/collect` | — (público; el usuario sale de la cookie) | zod estricto; lote de 1–50 eventos ≤ 48 KB; tope 30 lotes/min por navegador y 240/min por IP; UNA consulta; 204 (§17) | 400, 413, 429 (sin cuerpo), 503 |
+| `GET /admin/metricas?seccion=&periodo=[&prueba=incluir][&csv=]` | Sesión de `/admin` | Usuarios, uso, embudos, retención o negocio (§17); `csv=<tabla>` → `text/csv` | 400, 401, 404 |
+| `GET /admin/metricas/usuario?q=` · `?id=[&csv=linea\|sesiones]` | Sesión de `/admin` | Buscar (≥ 2 letras, 20) / ficha: uso + hechos de negocio, sesiones, activos | 400, 401, 404 |
+| `GET /admin/metricas/activo?tipo=&id=[&csv=linea]` | Sesión de `/admin` | Ficha de un activo: quién hizo qué y cuándo | 400, 401, 404 |
 | `GET/POST /verification/dni` | Sesión | §11 | 429 |
 | `POST /homy/agent` | — (cupo 8/día por IP o 60/día por usuario) | zod; súper agente con stream NDJSON; registra `HomyRun` y la sesión (§11) | 400; evento `limite` con el cupo agotado |
 | `GET /homy/agent?sessionId=` | Dueño de la sesión (usuario o token de visitante) | Historial (30 mensajes) y cupo | — |
@@ -992,6 +1169,7 @@ profesional (antes apuntaba a una página inexistente; corregido en `2eed864`).
   | `factura_emitida` | Cliente | `projects/[id]/invoice/route.ts` |
   | `compra_pagada_prov`, `cobro_pagado` (solo al proveedor, no al que paga), `factura_pagada` | Quien cobra por Mercado Pago | `payments/webhook/route.ts` |
   | `devolucion_solicitada` | Quien recibe el pedido de devolución (proveedor o profesional) | `returns/route.ts` |
+  | `sugerencia_respuesta`, `sugerencia_estado` | Autor de una sugerencia (D25) | `admin/feedback/[id]/route.ts` |
 
 - **No mandan mail:** mensajes del chat (`message`), ni el resto de los avisos.
 - **Preferencia:** `User.emailNotifications` (default `true`). Se cambia con
@@ -1004,6 +1182,378 @@ profesional (antes apuntaba a una página inexistente; corregido en `2eed864`).
 - **Sin `RESEND_API_KEY`:** no se intenta enviar (un `console.warn` por proceso).
 - Emails de dominios reservados (`.test`, `.invalid`, `.example`, `.localhost`, como las cuentas
   demo `@homia.test`) nunca se mandan a Resend real.
+
+## 15. Sugerencias (`Feedback`, D25, 25/09/2026)
+
+- **Quién manda:** cualquier usuario con sesión, desde el panel de un rol que tiene (`role` del
+  cuerpo tiene que estar en sus roles → si no, 403). El autor sale siempre de la sesión.
+- **Campos:** `type` ∈ sugerencia · queja · mejora · oportunidad · problema · otro; `area` ∈ la
+  lista de secciones del rol (`areasDelRol`, p. ej. `stock` y `plan` solo proveedor; una sección
+  que no es del rol → 400); título 4–120; descripción 10–4000 (se recortan espacios); `photos`
+  0–4 paths privados **del propio usuario** (`feedback-evidencias/<userId>/sugerencias/<archivo>`,
+  sin repetir; cualquier otro path, una URL o una foto de otro usuario → 400); `contactOk`
+  (default sí). `context` solo se guarda si `type = problema`: pantalla anterior, dispositivo,
+  fecha, zona horaria (del formulario, estricto: campos de más → 400) y **navegador tomado del
+  encabezado `User-Agent` real**, no del formulario.
+- **Tope:** 10 envíos por usuario por día (día calendario de Argentina, UTC-3) → el 11.º responde
+  **429** "Llegaste al máximo de 10 envíos por día. Probá de nuevo mañana." y no crea nada.
+- **Estados:** `recibida` (al nacer) · `en_revision` · `planificada` · `resuelta` · `descartada`.
+  Solo el administrador los cambia, en cualquier orden (no hay máquina de estados: es una bandeja
+  de trabajo). `adminResponse` (≤ 4000) con `respondedAt`; borrar la respuesta la deja en null.
+- **Quién ve qué:**
+  - El autor: sus envíos (`GET /feedback`, hasta 100, más nuevos primero) y cada uno
+    (`GET /feedback/[id]`); a cualquier otro usuario → **404** (no se revela que existe).
+  - El administrador (sesión de `/admin`, §18): todo, con el nombre del autor y **su email solo
+    si `contactOk` y la cuenta no fue eliminada**. Sin esa sesión, la bandeja o el PATCH → **404**.
+  - Las fotos nunca tienen URL pública: se devuelven firmadas por 10 minutos solo al autor y al
+    admin; la API nunca devuelve el path interno.
+- **Administrador:** no es un rol ni una cuenta (D29, §18): entra a `/admin` con `ADMIN_EMAIL` y
+  `ADMIN_PASSWORD`. Las respuestas que recibe el autor van firmadas "Equipo HomIA". (Reemplaza la
+  regla vieja de `ADMIN_EMAILS` y del email reservado en el registro.)
+- **Avisos:**
+  - Envío nuevo → mail al equipo (`FEEDBACK_EMAIL` o `TITULAR.email` = business@vakdor.com) con
+    tipo, sección, rol, título, descripción (hasta 1500 caracteres), autor (con email solo si
+    acepta contacto), cantidad de fotos (no se adjuntan) y botón a la bandeja. Sale después de
+    responder; si falla, el envío queda igual.
+  - El admin guarda: si cambió la respuesta (y no quedó vacía) → notificación
+    `sugerencia_respuesta` ("Te respondimos tu sugerencia", con estado y respuesta); si solo cambió
+    el estado → `sugerencia_estado` ("Tu sugerencia está: <estado>"). Las dos mandan mail (lista
+    `TIPOS_CON_MAIL`, respeta "Recibir avisos por mail"). Link:
+    `#/panel/<rol del envío>/sugerencias?id=<id>`. Guardar sin cambios → `changed: false`, sin aviso.
+- **Baja de cuenta:** se borran sus envíos y todas sus fotos del bucket (también las que subió y
+  quitó antes de mandar).
+
+## 17. Métricas de uso y de negocio (D27, 25/09/2026)
+
+**Dos fuentes, sin duplicar.** *Uso* = registro propio en `AnalyticsEvent`/`AnalyticsSession`
+(desde el 25/09/2026). *Negocio* = las tablas reales (fuente de verdad); nunca se copian a eventos.
+
+### 17.1 Qué evento se registra y cuándo
+
+| `type` | Cuándo | `name` | Extra (`props`, `entityType/Id`) |
+|---|---|---|---|
+| `page_view` | Cada cambio de ruta (hash de la SPA, `popstate`, `pushState`/`replaceState`) y la carga inicial; misma ruta normalizada seguida = una sola | la ruta normalizada (`/panel/cliente/proyectos/:id`) | `rol`, `tab`, `mode`, `tipo` de la query si son cortos; activo de la ruta |
+| `click` | Clic en `a`, `button`, `[role=button\|tab\|menuitem\|link\|option\|switch\|checkbox\|radio\|combobox]`, `summary`, `select`, `label`, `[data-track]`, checkbox/radio/submit | `data-track` > `aria-label` > `title` > texto visible si ≤ 5 palabras y ≤ 40 caracteres > `link:<ruta>` > `<tag>:sin-etiqueta`; de un campo solo `campo:<tipo>` | `tag`, `rol_ui`, `destino` (ruta interna normalizada o `externo`); activo = `data-entity` del elemento o un ancestro > link > ruta actual |
+| `submit` | (a) envío de un `<form>`; (b) toda llamada `POST/PUT/PATCH/DELETE` a `/api/*` (menos `/api/analytics`) al volver la respuesta | (a) `data-track`/`aria-label`/`name`/`id` o `form:<ruta>`; (b) `MÉTODO /api/ruta/:id` | (b) `via=api`, `status`, `ok` (2xx–3xx), `ms`; activo de la ruta de la API |
+| `dialog` | Aparece un `[role=dialog\|alertdialog]` (portal hijo de `<body>`) | `data-track` > `aria-label` > título corto | activo de la ruta |
+| `search` | 1,5 s después del último cambio de búsqueda en `/buscar`, directorio o materiales, si hay término o filtros | el término limpio (minúsculas; teléfonos/DNI de 7+ dígitos y emails tapados; ≤ 80) o `(solo filtros)` | `pantalla`, `resultados`, filtros no vacíos |
+| `error` | `window.onerror`, promesa rechazada sin manejar (máx. 20 por carga) o GET a `/api` con 5xx/red | mensaje técnico limpio (≤ 80) | — |
+| `heartbeat` | Cada 30 s con la pestaña visible, y al ocultarla/cerrarla | — (**no se guarda como fila**) | `ms` del tramo → suma a `AnalyticsSession.activeMs` |
+| `server` | `login_ok` (login), `login_fallido` (`props.existe`, huella de IP; **sin email ni contraseña ni userId**), `logout`, `registro` (`props.roles`), `plan_solicitado` (`desde`, `hacia`), `plan_activado` (webhook, solo si el update cambió algo), `plan_degradado` (webhook o cron, `motivo`), `factura_pdf` (activo `invoice`, `como`) | el nombre del evento | `ipHash` = sha256(sal + IP) truncado; se escribe con `after()`, nunca demora ni rompe la respuesta |
+
+- **Nunca se registra:** valores de campos, contraseñas, texto de mensajes, montos tipeados,
+  cuerpos de las llamadas a la API. En etiquetas: emails → `[email]`, links → `[link]`, montos
+  `$ 12.500` → `$#`, números → `#`.
+- **Usuario:** sale del JWT de la cookie `homy_session` y se confirma en la misma consulta que la
+  cuenta existe y no está eliminada. El cuerpo no puede traer `userId` (zod estricto → 400).
+- **Visitante y vinculación:** `anonId` aleatorio en `localStorage.homia_anon_id` + cookie propia
+  `homia_anon_id=<anonId>.<sessionId>` (1 año, `SameSite=Lax`) para que los eventos de servidor
+  caigan en la misma línea. Al `login_ok` y al `registro` (y en cada lote con sesión) todo evento
+  o sesión con ese `anonId` y sin usuario pasa a ser del usuario. Al cerrar sesión el navegador
+  genera un `anonId` nuevo.
+- **Sesión:** id aleatorio en `localStorage.homia_ses_v1`; se abre una nueva si pasaron **más de
+  30 minutos sin actividad** (cualquier evento). Guarda inicio, última actividad, pantalla de
+  entrada, dominio de origen (no la URL), `utm_*` de ese ingreso y dispositivo.
+- **Tiempo activo:** cada tramo cuenta si la pestaña estuvo visible **y** hubo interacción
+  (clic, tecla, scroll, toque) en los últimos 5 minutos; tope 35 s por latido y 10 min por lote.
+- **Rol activo:** el de la pantalla (`/panel/<rol>/…`); fuera del panel, vacío.
+- **Tope:** 30 lotes por minuto por navegador y 240 por IP (contador en memoria de cada instancia:
+  en Vercel es aproximado) → 429 sin cuerpo; el navegador descarta. Reintento: un evento se
+  reintenta una sola vez si el servidor respondió 5xx o no hubo red.
+- **Retención:** eventos crudos **13 meses** (396 días; el cron diario `/cron/subscriptions`
+  borra hasta 50.000 por corrida); sesiones sin vencimiento. **Baja de cuenta:** se borran todos
+  sus eventos y sesiones.
+
+### 17.2 Definiciones de las métricas
+
+- **Período:** hoy (desde las 00:00 de Argentina), 7/30/90 días (incluye hoy) o rango de días de
+  Argentina (máx. 400 días). **Excluir prueba** (por defecto): fuera las cuentas `@homia.test`,
+  los navegadores que alguna vez usaron esas cuentas y los `anonId` que empiezan con `e2e-`.
+- **Usuarios (cuentas):** `User` sin `deletedAt`; por rol si `roles` lo contiene. **Nuevos:**
+  `createdAt` en el período. **Bajas:** `deletedAt` en el período.
+- **Activo:** usuario con al menos un evento de uso o de servidor. DAU/WAU/MAU = en las 24 h /
+  7 días / 30 días anteriores al fin del período. **Activos en el período:** con evento en el
+  período. **Iniciaron sesión:** usuarios distintos con `login_ok` en el período.
+- **Verificados:** DNI `verificationStatus = verificado` (y `en_revision` aparte); email
+  `emailVerifiedAt`; celular `phoneVerifiedAt`. **Plan:** `ProviderProfile.subscription`;
+  pagos = `basic` + `pro`.
+- **Sesión:** fila de `AnalyticsSession` iniciada en el período. **Duración promedio y mediana:**
+  de `activeMs` de las sesiones con tiempo activo > 0. **Horas totales:** suma de `activeMs`.
+  **Una sola pantalla:** sesiones con `pageViews ≤ 1`. **Visitantes únicos:** `anonId` distintos.
+- **Pantallas y botones:** conteo de `page_view`/`click` por `name` y `path`; "personas" =
+  distintos `userId` o, si no hay, `anonId`. **Horario:** hora de Argentina de los `page_view`.
+- **Búsquedas sin resultado:** `search` con `props.resultados = 0`.
+- **Homy:** `HomyRun` del período (consultas, usuarios, `costoUsd` estimado, demora promedio).
+- **Embudos** (cuentas creadas en el período; los pasos siguientes pueden ser posteriores):
+  general: visitantes únicos del período → registros → con `Project` como cliente u `Order`;
+  cliente: → `JobPost` → `Project` → `Invoice` pagada o `ProviderCharge` pagada;
+  profesional: → `JobBid` → `Project` como profesional → `Invoice` pagada;
+  proveedor: → `ProviderStock` → `ProviderCharge` pagada o `Purchase` `pagado/entregado` →
+  plan `basic/pro`. **Visita previa trazada:** el usuario tiene un evento de uso anterior a su
+  alta (vinculado por el `anonId`). Porcentajes con 1 decimal; sin divisor → vacío.
+- **Retención:** cohorte = semana (lunes, hora de Argentina) de alta, últimas 8 semanas. Volvió en
+  la semana *k* (1–8) = tuvo un evento de uso o una acción de negocio (`Message` enviado,
+  `JobPost`, `JobBid`, `Project` como cliente, `Order`, `Review`, `ProviderStock`) en la semana
+  alta + *k*. Semanas que todavía no pasaron: vacío (no 0).
+- **Negocio** (todo por su fecha en el período):
+  - **Proyectos creados:** `Project.createdAt`; tabla por estado actual.
+  - **Facturado:** suma de `Invoice.total` con `issuedAt` en el período.
+  - **Cobrado en facturas:** `Invoice.total` con `status = pagada` y `paidAt` en el período (sin
+    el cargo). Ticket = cobrado / cantidad.
+  - **GMV (volumen de materiales cobrado):** `ProviderCharge.amount` con `status = pagada` y
+    `paidAt` en el período (sub-pedidos y materiales modo B) + `Purchase.total` históricas sin
+    cobro (`chargeId` nulo) en `pagado/entregado` (por `updatedAt`). Sin el cargo.
+  - **Volumen total cobrado** = cobrado en facturas + GMV. **Cobrado por MP:** lo mismo con
+    `paymentMethod`/`method = mercadopago`.
+  - **Cargo de servicio 1% recaudado:** `Invoice.serviceFee` (pagada por MP) + `ProviderCharge.serviceFee`
+    (pagada por MP) + `Purchase.serviceFee` (sin cobro, pagada por MP). No se suma el
+    `serviceFee` de un `Purchase` con cobro (es el mismo que el del cobro: sería doble).
+  - **Pedidos:** `Order.createdAt`; sub-pedidos por tipo y estado. **Reseñas:** cantidad y
+    promedio de `rating`. **Mensajes:** `Message.createdAt`. **Ofertas:** `JobBid` (aceptadas =
+    `status = aceptado`). **Devoluciones:** `LeftoverReturn.requestedAt` por estado y vendedor.
+    **Sugerencias:** `Feedback` por tipo y estado.
+- **Ficha por usuario:** eventos de uso (sin latidos) + hechos de negocio del usuario (proyectos
+  como cliente o profesional, trabajos, ofertas, pedidos, ventas, facturas emitidas y pagadas,
+  cobros pagados, reseñas escritas y recibidas, **mensajes enviados solo como "mensaje enviado"
+  y su conversación**, devoluciones, stock, sugerencias), 400 más recientes; 40 sesiones.
+- **Ficha por activo:** proyecto, pedido, sub-pedido, factura, trabajo o conversación (solo
+  metadatos: participantes, cantidad, fechas y leído/no leído, nunca el texto) con su
+  `ActivityEvent`, pagos, ofertas o mensajes, más los eventos de uso con ese `entityType/Id`.
+- **Acceso:** todo el panel y sus APIs solo con la sesión de administración de `/admin` (§18);
+  sin ella 404 (también con una sesión de usuario común).
+
+## 18. Área de administración `/admin` con ingreso propio (D29, 25/09/2026)
+
+- **Quién:** el equipo de HomIA, con `ADMIN_EMAIL` y `ADMIN_PASSWORD` (variables del servidor).
+  **No es un rol ni una cuenta de usuario**; no hay registro ni recuperación de contraseña: se
+  cambia la variable en Vercel y se redeploya.
+- **Ingreso** `POST /api/admin/login { email, password }` (zod: los dos obligatorios): el email se
+  compara sin mayúsculas ni espacios y la contraseña exacta, **siempre las dos** y en tiempo
+  constante (`timingSafeEqual` sobre sha256). Falta alguna variable → **503** "El acceso de
+  administración no está configurado" (`needsConfig`). Mal → **401** "Email o contraseña
+  incorrectos" (nunca dice cuál). **5 fallos por IP en 15 minutos → 429** (también con la clave
+  correcta, hasta que venza la ventana; contador en memoria de cada instancia: en Vercel va además
+  una regla de Firewall para `/api/admin/login`).
+- **Sesión:** cookie `homia_admin` httpOnly, `SameSite=Strict`, `Secure` en HTTPS, `path=/`, 12 h;
+  JWT firmado con `AUTH_SECRET` (`sub: 'admin'`, audiencia `homia-admin`). Es independiente de
+  `homy_session`: una sesión de usuario nunca abre `/admin` (ni poniendo su JWT en la cookie de
+  admin) y la de admin no da acceso a ningún panel de usuario. `POST /api/admin/logout` la borra.
+  `GET /api/admin/login` → `{ admin: true|false }` para la pantalla.
+- **APIs de administración** (`/api/admin/feedback*`, `/api/admin/metricas*`): `requireAdmin()`;
+  sin la sesión → **404** (no se revela que existen). `GET /api/feedback/[id]` también acepta la
+  sesión de admin. `GET /api/feedback` devuelve `isAdmin: false` siempre (la bandeja no se abre
+  desde el panel del usuario).
+- **Pantallas:** `/admin` sin sesión → formulario "Administración HomIA"; con sesión → Métricas.
+  Menú: Métricas (`/admin/metricas`), Sugerencias (`/admin/sugerencias`), Salir.
+  `/panel/admin/metricas` y `/panel/admin/sugerencias` (con su `?id=`) redirigen a las nuevas; el
+  mail al equipo por cada sugerencia apunta a `/admin/sugerencias?id=…`.
+- **Registro de uso (D27):** `admin_login_ok`, `admin_login_fallido` (sin email ni contraseña,
+  solo la huella de la IP) y `admin_logout` como eventos de servidor.
+- **Respuestas a sugerencias:** la notificación y el mail al autor dicen "Equipo HomIA: <respuesta>".
+
+## 19. Ingresos de HomIA (D30, 25/09/2026)
+
+**A qué cuenta llega cada cobro (verificado el 25/09/2026):** `MP_SUB_ACCESS_TOKEN` (app
+Suscripciones) y `MP_ACCESS_TOKEN` (app Checkout Pro) son de la **misma cuenta de Mercado Pago de
+HomIA** (usuario 2259060339, producción, Argentina). Por eso:
+
+| Ingreso | Cómo se cobra | Llega a |
+|---|---|---|
+| Suscripción mensual del proveedor | Preapproval de la app Suscripciones | Cuenta de MP de HomIA |
+| Cargo de servicio 1% | `marketplace_fee` de la preferencia creada con el token OAuth del vendedor | Cuenta de MP de HomIA (el resto, al vendedor) |
+
+`/admin` no conecta nada: lee Mercado Pago con los tokens del servidor, solo lectura.
+
+**Registro de cada cobro de suscripción (`SubscriptionCharge`), fuente de verdad = Mercado Pago:**
+- **Webhook** `subscription_authorized_payment` (la "factura" mensual de la suscripción): se
+  re-consulta `GET /authorized_payments/{id}` y el pago `GET /v1/payments/{payment.id}` con el token
+  de Suscripciones (si no aparece en producción, con el de prueba → `mpEnvironment = test`). También
+  un aviso `payment` cuyo `external_reference` es `plan:provider:…` registra el cobro.
+  **Idempotente** por `mpPaymentId` (dos avisos → una fila; un reaviso actualiza estado, reembolsos,
+  comisión y neto). **Nunca 200 si no quedó guardado:** MP caído → 503; error de base → 503; factura
+  inexistente o ajena → 200 ignorado; factura programada sin pago → 200 sin guardar.
+- **Reconciliación** en el cron diario de suscripciones: trae de MP todas las suscripciones de la
+  cuenta (producción), sus facturas y pagos, e inserta/actualiza los que falten.
+- **Backfill** único (`scripts/pagos/backfill-suscripciones.mjs`, con `--dry-run`): lo histórico.
+- Se guarda lo que MP informa: estado tal cual (`approved`, `rejected`, `pending`, `in_process`,
+  `refunded`, `cancelled`, `charged_back`…), motivo (`status_detail`), monto, moneda, reembolsado,
+  **comisión** (suma de `fee_details`) y **neto** (`net_received_amount`), fecha del intento, de
+  aprobación y del período. **Si MP no los informa, quedan vacíos: no se estiman.** Nada de tarjeta
+  ni del pagador.
+
+**Cargo de servicio 1%:** misma definición que Métricas › Negocio (función única
+`cargoServicioRecaudado`, `src/lib/ingresos.ts`): suma de `serviceFee` de facturas `pagada` por MP
+(por `paidAt`), cobros de materiales `pagada` por MP (por `paidAt`, incluye los sub-pedidos del
+carrito) y compras históricas sin cobro pagadas por MP. **Reembolsos:** una cancelación con
+reembolso total deja el cobro en `reembolsada`/`cancelado` → **no cuenta** (MP devuelve también el
+1%); en **sobrantes el 1% no se devuelve** (D14) → sigue contando. Cada operación muestra además el
+`application_fee` que MP informó en el pago (`Payment.mpApplicationFee`, desde el 25/09/2026).
+
+**Estado de cuenta de cada proveedor** (`clasificarCuenta`, puro y testeado):
+
+| Estado | Definición exacta |
+|---|---|
+| **Al día** | Plan `basic`/`pro` con cobro aprobado hace ≤ 35 días y sin rechazos posteriores |
+| **En deuda** | Plan pago cuyo **último intento fue rechazado**, o **sin cobro aprobado en 35 días** (mismo umbral del cron). *Desde* = primer rechazo posterior al último cobro aprobado, o el vencimiento del último cobro (+1 mes). *Deuda* = meses completos o empezados desde ahí (mínimo 1) × precio del plan. Lista cada intento rechazado con fecha y motivo de MP |
+| **Plan pago sin cobro registrado** | Plan pago sin ningún cobro en HomIA: alta manual/demo (sin `mpPreapprovalId`) o primer cobro en proceso/no llegado |
+| **En prueba** | `trial` con `trialEndsAt` futuro; días restantes en días de calendario argentino (vence hoy = 0, sigue en prueba hasta la hora exacta) |
+| **Prueba vencida sin plan** | `trial` vencido sin ningún plan pago en su historia |
+| **Dado de baja** | Tuvo plan pago y hoy no. *Motivo:* evento registrado (`cancelada`, `pausada`, `impago`); si no hay evento, el estado de la suscripción en MP (`cancelled`/`paused` → fecha `last_modified`; `authorized` con el plan degradado → falta de pago). Si el último cobro todavía cubría el mes, lo aclara |
+
+Casos borde (tests): prueba que vence hoy → en prueba (0 días); rechazo seguido de aprobación → al
+día; cambio de plan a mitad de mes (cobros de dos suscripciones) → al día en el plan nuevo;
+cancelación con período pago vigente → baja con nota.
+
+**Movimientos del plan (`SubscriptionEvent`, idempotentes por clave):** `activada` (primera
+suscripción paga), `reactivada` (volvió después de una baja), `cambio_plan` (Básico ↔ PRO),
+`cancelada`, `pausada`, `impago` (bajas) y `reemplazada` (la suscripción vieja que HomIA cancela en
+un cambio de plan: **no es una baja**). Los registra el webhook y el cron **desde el 25/09/2026**;
+lo anterior se reconstruye con fechas de MP (fecha del primer cobro de cada suscripción; cancelación
+= `last_modified`; un checkout abandonado sin cobros no es baja). Las **altas** (registro = inicio de
+la prueba) salen de `ProviderProfile.createdAt`.
+
+**Números de la pantalla:**
+- **Ingresos del período** = suscripciones (cobros aprobados por fecha de aprobación, menos
+  reembolsado) + cargo 1%. **Variación** = contra el período anterior del mismo largo (sin
+  anterior → "sin período anterior para comparar").
+- **MRR** = Σ precio mensual del plan de cada proveedor con plan pago **y suscripción de MP**, al
+  día o en deuda (`PLAN_PRICE_ARS`); no cuenta pruebas, bajas ni altas manuales/demo.
+- **Churn del mes** = bajas del mes / proveedores con un cobro aprobado en el mes anterior al día 1.
+- **Conversión prueba → pago** (por mes de alta) = de los registrados ese mes, cuántos tuvieron
+  alguna vez un cobro aprobado.
+- **Neto del movimiento** = primeras suscripciones pagas + reactivaciones − bajas.
+- **Próximos cobros** = `next_payment_date` y monto de cada suscripción autorizada, según MP.
+- **Excluir cuentas demo y cobros de prueba** (por defecto): saca proveedores `@homia.test`, los
+  cobros del entorno de prueba de MP y las cuentas dadas de baja (sus cobros quedan en el registro).
+
+**Endpoints (solo sesión de `/admin`, 404 sin ella):**
+- `GET /api/admin/ingresos?periodo=&desde=&hasta=&gran=dia|semana|mes&prueba=incluir&proveedor=&plan=basic|pro&estado=<estado MP>&fuente=suscripcion|cargo&estadoCuenta=<estado>&csv=<tabla>`
+  (zod; 400 si un parámetro no vale; CSV de `cobros`, `cargos`, `cuentas`, `proximos`,
+  `movimiento`, `mensual`, `ranking_proveedores`, `ranking_vendedores`).
+- `GET /api/admin/ingresos/proveedor?id=<providerId>` → ficha y línea de tiempo (404 si no existe).
+
+## 16. Finanzas del profesional y del proveedor (D24, 25/09/2026)
+
+Cálculo puro en `src/lib/finanzas/calculos.ts`; datos de la base en `src/lib/finanzas/datos.ts`;
+contenido (tipos, categorías, glosario) en `src/lib/finanzas/conceptos.ts`. Disponible para todo
+usuario con perfil profesional o proveedor, **en todos los planes** (sin chequeo de plan). Un
+usuario con los dos roles tiene finanzas separadas (`FinanceEntry.role`, `FinanceConfig` por
+`userId`+`role`). Fechas en hora argentina (UTC-3); los días cargados se guardan al mediodía
+argentino (15:00 UTC).
+
+### 16.1 De dónde sale cada número automático (nunca se estima)
+
+| Dato | Profesional | Proveedor |
+|---|---|---|
+| **Facturado** (devengado) | `Invoice` de sus proyectos, `total` en `issuedAt` (todas: `pendiente`, `pagada`, `vencida`). Separa `laborCost` y `materialsCost` | `ProviderCharge` propios con `status` distinto de `anulada`/`reembolsada`, `amount` en `createdAt` (nace al confirmar la compra o aprobar la reserva, §5) |
+| **Cobrado** (caja) | `status = pagada`, en `paidAt` (MP por webhook o efectivo confirmado) | `status = pagada`, en `paidAt` |
+| **Cuentas por cobrar** | Facturas emitidas no pagadas a la fecha | Cobros emitidos no pagados a la fecha |
+| **Devoluciones** (restan ventas) | `LeftoverReturn` `reembolsada` con `sellerKind = profesional` y él como vendedor; `refundTotal` en `refundedAt` (o la última fecha disponible) | `LeftoverReturn` `reembolsada` del proveedor (incluye `profesional_a_proveedor`, cuya venta fue por fuera de HomIA); lo recibido revierte su costo de mercadería |
+| **Reintegros** (restan costo directo) | `LeftoverReturn` `reembolsada` donde él es el solicitante | — |
+| **Materiales comprados en HomIA** (costo directo) | `ProviderCharge` `pagada` donde es el cliente y sin proyecto (sub-pedidos del carrito), en `paidAt`. Se asigna a una obra o se marca "no es del negocio" (`FinanceConfig.tags`); marcado personal no cuenta en ningún informe | — |
+| **Subcontratos por HomIA** (costo directo) | `Invoice` de un proyecto hijo (D16) donde él es el cliente y el padre es suyo; devengado en `issuedAt`, pagado en `paidAt` (si no, cuenta a pagar); asignado a la obra padre | — |
+| **Costo de lo vendido** | — | Por cada línea vendida (`PurchaseItem` del cobro o `ProjectMaterial` de `materialIds`): cantidad × `ProviderStock.unitCost` del mismo elemento; si no hay costo y el proveedor declaró `estimatedCostPct`, cantidad × precio × % (marcado **estimado**); si no, **sin dato** (se informa el monto vendido sin costo) |
+| **Costo de ventas de mostrador** | — | Ingresos por fuera de categoría `ventas_fuera`: no hay productos, así que solo se costean con el margen estimado declarado (marcado estimado); sin margen quedan "sin costo" y se avisa (`fueraSinCosto`) |
+| **Inventario** (balance) | — | Stock actual con cantidad > 0 × `unitCost` (o estimado); los productos sin costo se cuentan y se avisan. Es el valor de hoy (no hay historial de costos) |
+| **Ofertas** | `JobBid` propios para la tasa de aceptación | — |
+
+**Lo que NO se carga solo:**
+
+- **Cargo de servicio HomIA (1%)**: lo paga el cliente aparte (§6); no es ingreso ni gasto del vendedor.
+- **Comisiones de Mercado Pago**: `Payment` guarda solo lo que pagó el cliente (`amount`), no el
+  neto ni la comisión (webhook `recordPayment`). No se estiman: categoría manual "Comisiones
+  bancarias y de Mercado Pago".
+- **Suscripción del proveedor**: no hay registro de sus cobros (el webhook solo actualiza el plan).
+  Con plan `basic`/`pro` y sin un gasto `suscripcion_homia` cargado, el resumen devuelve
+  `sugerenciaSuscripcion` y la pantalla ofrece cargarla como gasto mensual; solo se carga si el
+  proveedor lo confirma.
+
+### 16.2 Movimientos cargados (`FinanceEntry`)
+
+| Tipo | Resultados | Caja (si `status = pagado`) | Balance |
+|---|---|---|---|
+| `otro_ingreso` | Ventas por fuera de HomIA (en su fecha) | + | `pendiente` = cuenta por cobrar |
+| `costo_directo` | Costo directo | − | `pendiente` = cuenta a pagar |
+| `compra_mercaderia` (proveedor) | Nada (va al stock; cuenta cuando se vende, vía costo de lo vendido) | − | `pendiente` = cuenta a pagar |
+| `gasto` | Gastos fijos/operativos (por categoría) | − | `pendiente` = cuenta a pagar |
+| `inversion` | Amortización: `amount / usefulLifeMonths` por mes, el 1.er mes en la fecha de compra y después el día 1 de cada mes, solo hasta hoy | − (entera) | Bienes de uso = monto − amortización acumulada; `pendiente` = cuenta a pagar |
+| `retiro` | No (se informa aparte) | − | Baja el patrimonio |
+| `aporte` | No | + | Sube el patrimonio |
+| `prestamo` | No | + | Deuda |
+| `pago_prestamo` | Solo `interestAmount` (intereses) | − (cuota entera) | El capital (`amount − interestAmount`) baja la deuda |
+
+Reglas de alta y edición (`src/lib/finanzas/servidor.ts`): categoría del tipo y del rol; monto > 0;
+fecha no futura; interés ≤ cuota; `recurring = mensual` solo en gasto, costo directo, ingreso por
+fuera, compra de mercadería, retiro y cuota; `recurringUntil` ≥ fecha; `pendiente` solo en gasto,
+costo directo, inversión, compra de mercadería e ingreso por fuera; `projectId` solo del
+profesional y de una obra propia; `usefulLifeMonths` 1-600 (por defecto la vida útil orientativa
+de la categoría: herramientas y computación 36, maquinaria, vehículo y mejoras 60, mobiliario 120);
+`attachmentUrl` solo del bucket público `homia-uploads/<userId>/`. Baja lógica (`deletedAt`).
+**Recurrentes**: una ocurrencia por mes el mismo día (el 31 cae el último día del mes) desde la
+fecha hasta `min(hoy, recurringUntil)`, sin cron; "Terminar hoy" fija `recurringUntil`.
+
+### 16.3 Fórmulas
+
+- **Período**: [desde, hasta) en hora argentina; mes actual por defecto, mes anterior, 3/6/12
+  meses, año o rango (máximo 5 años); el anterior es el de igual largo inmediatamente antes.
+- **Estado de resultados**: ventas brutas = facturado HomIA + ingresos por fuera; ventas netas =
+  brutas − devoluciones; costo directo = costos cargados + compras HomIA + subcontratos −
+  reintegros (+ costo de lo vendido conocido + estimado − revertido, en el proveedor); margen
+  bruto = netas − costo directo (% sobre netas); resultado operativo = margen bruto − gastos;
+  resultado antes de intereses = operativo − amortizaciones; resultado neto = antes de intereses −
+  intereses (margen neto % sobre netas). Los retiros se informan aparte.
+- **Caja**: saldo inicial (`openingCash`) = la plata **al cierre** del día `openingDate` (lo de ese
+  día ya está adentro). Caja al instante t = saldo inicial + cobrado − pagado entre la fecha del
+  saldo y t; si t es anterior al saldo, se reconstruye hacia atrás (así inicio + entró − salió =
+  final en cualquier período). Sin saldo inicial se suma desde cero y se avisa.
+- **Balance** (al fin del período o hoy): activos = caja + cuentas por cobrar + inventario +
+  bienes de uso; pasivos = préstamos pendientes (recibido − capital pagado, mínimo 0) + cuentas a
+  pagar; patrimonio = activos − pasivos.
+- **Métricas**: ventas netas y variación % contra el anterior; margen bruto %; margen neto %;
+  gastos fijos por mes = gastos ÷ meses del período (meses = días hasta hoy ÷ 30,44 redondeado,
+  mínimo 1); **punto de equilibrio** = (gastos + amortizaciones + intereses) por mes ÷ margen
+  bruto % (sin dato si el margen ≤ 0 o no hay costos fijos); ticket promedio = ventas brutas ÷
+  cantidad (facturas/cobros de HomIA + ingresos por fuera); **días de cobro** = promedio de
+  (cobro − emisión) de lo cobrado en el período; **sin cobrar +15 días** = emitido hace más de 15
+  días y no cobrado; **meses de supervivencia** = caja de hoy ÷ promedio mensual de gastos +
+  intereses de los últimos 3 meses (sin dato sin saldo inicial o sin gastos); **crecimiento** =
+  ventas netas del mes calendario contra el anterior; **clientes recurrentes** = clientes del
+  período con 2 o más ventas de HomIA hasta el fin del período ÷ clientes del período; en el
+  profesional, **tasa de aceptación** = ofertas `aceptado` ÷ ofertas del período sin `retirado` (se
+  informan las pendientes) y **rentabilidad por obra** (histórica) = facturado de la obra −
+  devoluciones − costos asignados (compras, subcontratos y movimientos con `projectId`, menos
+  reintegros); en el proveedor, **días de stock** = inventario ÷ costo de lo vendido por día y
+  **top productos** por ganancia (sin costo → "sin dato"). Toda división por cero da `null`
+  ("Sin dato" y el motivo).
+- **Rangos orientativos**: solo el de meses de supervivencia (3 a 6 meses de colchón, dicho como
+  referencia orientativa); el resto se compara con los meses propios.
+
+### 16.4 Recomendaciones (reglas en `recomendar()`, sin IA; cada una muestra el dato)
+
+| Id | Se dispara si | Tono |
+|---|---|---|
+| `perdida` | ventas netas > 0 y resultado neto < 0 | alerta |
+| `margen_negativo` | ventas netas > 0 y margen bruto < 0 | alerta |
+| `sin_gastos` | ventas netas > 0 y ningún gasto ni costo cargado en el período | atención |
+| `gastos_suben` | gastos crecieron ≥ 20% contra el anterior y ≥ 10 puntos más que las ventas | atención |
+| `cobrar` | hay emitido sin cobrar hace más de 15 días | atención |
+| `equilibrio` / `equilibrio_ok` | hay punto de equilibrio: ventas netas por mes por debajo / por encima (el positivo no se muestra si el proveedor tiene ventas sin costo: el margen estaría inflado) | atención / bien |
+| `obras` | 2 o más obras con %; mejor − peor ≥ 15 puntos | info |
+| `caja_negativa` | hay saldo inicial y la caja estimada da negativa | alerta |
+| `colchon` | caja no negativa y meses de supervivencia < 3 | atención |
+| `saldo_inicial` | no hay saldo inicial | info |
+| `costos_stock` | el proveedor vendió productos sin costo ni estimación | atención |
+| `retiros` | retiros > max(0, resultado neto) | atención |
+| `asignar` | profesional con compras de HomIA sin obra en el período | info |
+| `aceptacion` | 5 o más ofertas respondidas y menos del 25% aceptadas | info |
+| `bien` | ninguna otra y resultado neto > 0 | bien |
+
+### 16.5 Permisos
+
+Todo con `getSessionUser`; el dueño sale de la sesión (nunca del body ni del query). 401 sin
+sesión; 403 si el usuario no tiene ese rol con su perfil; un movimiento ajeno o borrado responde
+404 (igual que uno inexistente); asignar una compra ajena da 404 y a una obra ajena 403; costos de
+stock ajeno 403. "Eliminar mi cuenta" borra movimientos y configuración.
 
 ## Textos legales = espejo de las reglas (24/09/2026)
 

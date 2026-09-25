@@ -3,6 +3,7 @@ import { ok, fail, body } from '@/lib/api'
 import { verifyPassword, createSession, parseRoles } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { rateLimit, loginRateKey, ipRateKey } from '@/lib/rate-limit'
+import { registrarEvento } from '@/lib/analytics/server'
 
 export async function POST(req: NextRequest) {
   const { email, password } = await body<{ email: string; password: string }>(req)
@@ -20,6 +21,8 @@ export async function POST(req: NextRequest) {
   // una cuenta eliminada (D19) nunca vuelve a entrar (además su email y su contraseña ya se reemplazaron)
   const passwordOk = user && !user.deletedAt ? await verifyPassword(password, user.passwordHash) : false
   if (!user || !passwordOk) {
+    // métricas (D27): sin el email tipeado ni la contraseña; solo si la cuenta existe y la huella de la IP
+    registrarEvento(req, { name: 'login_fallido', path: '/ingresar', props: { existe: !!user && !user.deletedAt } })
     const perEmail = rateLimit(`loginfail:${loginRateKey(req, email)}`, 10, 15 * 60 * 1000)
     const perIp = rateLimit(`loginfail:${ipRateKey(req, 'login')}`, 30, 15 * 60 * 1000)
     if (!perIp.allowed) {
@@ -31,6 +34,7 @@ export async function POST(req: NextRequest) {
     return fail('Email o contraseña incorrectos', 401)
   }
   await createSession(user.id)
+  registrarEvento(req, { name: 'login_ok', userId: user.id, path: '/ingresar', vincular: true })
   return ok({
     user: {
       id: user.id,

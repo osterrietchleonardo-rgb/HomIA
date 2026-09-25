@@ -13,6 +13,7 @@ import {
 import { Plus, ImageIcon, X, HardHat, Trash2, RefreshCw, WifiOff } from 'lucide-react'
 import { apiFetch, NETWORK_ERROR } from '@/lib/api-client'
 import { useCategories, categoryName } from '@/lib/categories'
+import { subirImagen } from '@/lib/upload-image'
 
 
 type Work = {
@@ -74,15 +75,12 @@ export default function ProWorks() {
   }
 
   async function uploadPhoto(file: File): Promise<string | null> {
-    const form = new FormData()
-    form.append('file', file)
-    form.append('folder', 'obras')
-    const r = await apiFetch<{ url: string }>('/api/uploads', { method: 'POST', body: form, silent: true })
-    if (!r.ok || !r.data?.url) {
-      toast.error(`No se pudo subir “${file.name}”: ${r.error || 'reintentá'}. No publicamos la obra para que no quede incompleta.`)
+    const r = await subirImagen(file, 'obras')
+    if (!r.ok) {
+      toast.error(`“${file.name}”: ${r.error} No publicamos la obra para que no quede incompleta.`)
       return null
     }
-    return r.data.url
+    return r.url
   }
 
   async function publish() {

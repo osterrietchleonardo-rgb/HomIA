@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import { getSessionUser } from '@/lib/auth'
 import { SERVICE_FEE_LABEL } from '@/lib/fees'
+import { registrarEvento } from '@/lib/analytics/server'
 
 // Formato de moneda para el PDF (es-AR, sin decimales)
 function ars(n: number): string {
@@ -49,6 +50,8 @@ export async function GET(
   const isClient = user.id === invoice.clientId
   const isPro = pro ? user.id === pro.userId : false
   if (!isClient && !isPro) return fail('No tenés acceso a esta factura', 403)
+  // métricas (D27): descarga de la factura (no demora la respuesta)
+  registrarEvento(_req, { name: 'factura_pdf', userId: user.id, entityType: 'invoice', entityId: invoice.id, props: { como: isClient ? 'cliente' : 'profesional' } })
 
   // ── PDF ────────────────────────────────────────────────────────────
   const pdf = await PDFDocument.create()

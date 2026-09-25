@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { planTransicion } from '@/lib/plans'
+import { registrarEvento, purgarEventosViejos } from '@/lib/analytics/server'
+import { registrarBaja, sincronizarCobros } from '@/lib/suscripciones-mp'
 
 // ── RECONCILIACIÓN DIARIA DE SUSCRIPCIONES (Vercel Cron) ──
 // El webhook de Mercado Pago puede perderse (caída, reintentos agotados). Una vez
@@ -126,6 +128,8 @@ export async function GET(request: Request) {
 
       const t = planTransicion(prov, { id: preId, status }, plan, motivo)
       if (t.kind !== 'degradar') continue
+      // D30: movimiento del plan antes del update (idempotente por dedupeKey)
+      await registrarBaja({ providerId: prov.id, plan, preapprovalId: preId, tipo: motivo === 'impago' ? 'impago' : status === 'paused' ? 'pausada' : 'cancelada', source: 'cron' })
       const upd = await db.providerProfile.updateMany({
         where: { id: prov.id, mpPreapprovalId: preId, subscription: { in: ['basic', 'pro'] } },
         data: t.data,
@@ -133,10 +137,25 @@ export async function GET(request: Request) {
       if (upd.count > 0) {
         downgraded++
         await db.notification.create({ data: { userId: prov.userId, ...t.notificacion } })
+        registrarEvento(null, { name: 'plan_degradado', userId: prov.userId, path: '/panel/proveedor/plan', props: { desde: prov.subscription, motivo } })
       }
     }
 
-    return NextResponse.json({ success: true, checked, downgraded, total: provs.length, errors })
+    // D30: reconciliación de los cobros de suscripción con Mercado Pago (los que el webhook no
+    // registró) + movimientos del plan reconstruidos con fechas de MP. Nunca tira el cron.
+    let cobros: { nuevos: number; actualizados: number; errores: string[] } | { error: string }
+    try {
+      const rep = await sincronizarCobros({ fuente: 'cron', reconstruirEventos: true, entornos: ['live'] })
+      const ents = Object.values(rep.entornos)
+      cobros = { nuevos: ents.reduce((s, r) => s + (r?.nuevos ?? 0), 0), actualizados: ents.reduce((s, r) => s + (r?.actualizados ?? 0), 0), errores: rep.errores }
+    } catch (e) {
+      console.error('[cron subscriptions] reconciliación de cobros', e)
+      cobros = { error: e instanceof Error ? e.message : 'error' }
+    }
+
+    // retención de métricas de uso (D27): eventos crudos de más de 13 meses (nunca tira)
+    const metricasPurgadas = await purgarEventosViejos()
+    return NextResponse.json({ success: true, checked, downgraded, total: provs.length, errors, metricasPurgadas, cobros })
   } catch (error) {
     console.error('Error in subscriptions cron:', error)
     return new NextResponse('Internal Server Error', { status: 500 })

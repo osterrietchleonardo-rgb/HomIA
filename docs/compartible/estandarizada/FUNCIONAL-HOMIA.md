@@ -89,6 +89,14 @@
   lateral), el botón flotante de Homy se oculta para no tapar los botones de esa ventana, y vuelve al
   cerrarla.
 
+- **Categorías nuevas (25/09/2026):** "Electrodomésticos · Repuestos" y "Control de plagas", con su
+  pestaña en Materiales y en el buscador, y como oficios para profesionales (técnico en
+  electrodomésticos, fumigador).
+- **Fotos (en toda la app):** podés subir fotos de cualquier tamaño y peso, también las de la
+  cámara del celu: HomIA las achica solas antes de subirlas, sin que se note. Si algo falla, te dice
+  exactamente qué pasó (sin conexión, sesión vencida, formato que tu navegador no puede abrir —como
+  HEIC del iPhone en una computadora— o imagen dañada) y qué hacer.
+
 ## 1. Visitante (sin cuenta)
 
 ### 1.1 Portada (home)
@@ -257,33 +265,79 @@ En el perfil de un proveedor, los productos **sin stock** muestran el botón **R
 
 ### 1.7 Crear cuenta e ingresar
 
-**Crear cuenta, en 3 pasos:**
+**Crear cuenta, en 4 pasos** *(D26, 25/09/2026: datos obligatorios, estandarizados y email confirmado con un código)*:
 
 1. **Cómo vas a usar HomIA:** "Soy cliente", "Soy profesional" o "Soy proveedor".
-2. **Tus datos:**
-   - Obligatorios: nombre, email y contraseña (mínimo 8 caracteres, con letras y números).
-   - Opcionales: celular, fecha de nacimiento, dirección y ciudad.
-   - "¿Cómo nos encontraste?" y compartir ubicación.
-3. **Datos del rol:**
-   - Todos pueden subir su DNI (frente y dorso) para verificarse, de forma opcional.
-   - Profesional: persona o empresa, oficios (obligatorio), habilidades, experiencia y radio de
-     trabajo.
-   - Proveedor: nombre del local (obligatorio), CUIT y descripción. Se muestra el aviso "14 días
-     gratis para probar. Después: Básico $50.000/mes o PRO $100.000/mes".
+2. **Tus datos** (todos obligatorios, iguales para los tres roles):
+   - **Nombre** y **Apellido** (por separado). Al salir del campo se acomodan las mayúsculas:
+     "juan PÉREZ" queda "Juan Pérez"; "de la" queda en minúscula.
+   - **Email.** Se guarda en minúsculas y sin espacios. Si el dominio parece mal escrito
+     ("gmial.com", "hotmial.com", "gmail.con", "gmail.com.ar") aparece **"¿Quisiste decir
+     juan@gmail.com?"** con el botón **Sí, usar ese**; no se corrige solo (un dominio raro puede ser
+     el de tu empresa).
+   - **Celular**, como lo escribas: "011 15 2345-6789", "11 2345 6789", "+54 9 11…", con o sin 0 y
+     15. Debajo muestra **cómo quedó**: "Se va a guardar como +54 9 11 2345-6789". Si no es un
+     celular argentino válido lo dice claro (por ejemplo "Al celular le faltan números: poné el
+     código de área…").
+   - **Repetí el celular:** se escribe otra vez (no se puede pegar) y avisa "Coinciden" o "Todavía
+     no coinciden". Así se evita un número mal tipeado que nadie puede usar después.
+   - **Contraseña** (mínimo 8 caracteres, con letras y números; el ojito la muestra u oculta).
+   - **Ciudad o localidad** (ej.: "Palermo, CABA").
+   - Opcionales: "¿Cómo nos encontraste?" y compartir ubicación.
+   - Cada error aparece **debajo de su campo** en rojo, y el cursor va al primero que falta.
+   - El botón dice **Continuar y confirmar mi email**.
+3. **Confirmar email:** llega un mail de HomIA con asunto "123456 es tu código de HomIA" y el
+   código grande. Se escriben los 6 números (en el celu, el teclado numérico y el autocompletado
+   del código funcionan) y se confirma solo al completar el sexto.
+   - El código **vence en 10 minutos**, sirve **una vez** y tiene **5 intentos**. Si fallás, dice
+     "El código no es correcto… (te quedan 4 intentos)". Si venció o se agotaron los intentos, lo
+     dice y ofrece pedir uno nuevo.
+   - **"¿No te llegó? Podés pedir otro en 0:59"**: cuenta regresiva de 60 segundos y después el botón
+     **Mandarme un código nuevo** (hasta 5 códigos por hora para el mismo email).
+   - "Cambiar email" vuelve al paso 2 sin perder nada.
+   - **Celular:** hoy HomIA **no manda códigos por SMS ni WhatsApp** (no hay proveedor contratado).
+     Por eso el celular no pide código: queda **"sin verificar"**, confirmado solo por haberlo
+     escrito dos veces. Cuando se active un proveedor, este paso pedirá también el código del
+     celular.
+4. **Tu cuenta** (lo del rol):
+   - Arriba recuerda "Email confirmado: …" y "Celular +54 9 …: queda sin verificar por ahora".
+   - **Profesional:** **rubros en los que trabajás** (al menos uno) y **zona de trabajo** ("Trabajás
+     en Palermo, CABA y hasta 15 km a la redonda", con la barra de 1 a 100 km). Lo demás es opcional
+     y está plegado en "Más datos de tu trabajo": persona o empresa, DNI o CUIL (se revisa el dígito
+     verificador del CUIL), razón social y CUIT de la empresa, web, empleados, habilidades,
+     experiencia y "Sobre vos".
+   - **Proveedor:** **nombre del comercio**, **tipo de comercio** (corralón, ferretería,
+     pinturería… 18 tipos) y **dirección del local** (calle y número: es donde retiran lo que
+     compran). El aviso "14 días gratis para probar. Después: Básico $50.000/mes o PRO $100.000/mes".
+     Opcional y plegado: **CUIT** (con dígito verificador; queda "30-12345678-9") y "Sobre el
+     comercio".
+   - **Cliente:** nada más que lo de todos.
+   - **Todos:** "Verificá tu identidad con tu DNI" (opcional, plegado): frente y dorso; si una foto
+     no se puede subir, el aviso dice exactamente por qué (pesada, HEIC, sin conexión…) y se puede
+     hacer después desde el perfil.
    - **Al final, la casilla obligatoria** "Acepto los Términos y Condiciones y la Política de
      Privacidad de HomIA". Los dos nombres son links que abren las páginas en **otra pestaña**, así
      no se pierde lo que cargaste. Sin tildarla, el botón **Crear mi cuenta** queda apagado. HomIA
      guarda cuándo aceptaste y qué versión de los textos. *(D19, 24/09/2026.)*
+   - Si pasan más de 30 minutos entre el código y **Crear mi cuenta**, la confirmación vence: la
+     pantalla vuelve a "Tus datos" y pide un código nuevo.
 
 **Cosas a saber:**
 
+- La cuenta se crea **recién al final**, con el email ya confirmado: nunca queda una cuenta a medias
+  ni una cuenta con un email mal escrito.
+- **Si el email ya tiene cuenta**, la pantalla se comporta igual (dice que mandó el código), pero a
+  ese email le llega "Ya tenés una cuenta en HomIA" con el botón **Ingresar** y cómo recuperar la
+  contraseña. Así nadie puede averiguar qué emails están registrados.
 - Toda cuenta queda también como **cliente**: un profesional o un proveedor puede contratar y
   comprar con la misma cuenta.
 - No se puede ser profesional y proveedor con la misma cuenta.
-- Hoy **no hay forma de sumar un perfil después**, aunque el texto de la pantalla diga "después
-  podés sumar otros".
+- Hoy **no hay forma de sumar un perfil después**.
 - Al terminar te lleva a tu panel, o de vuelta a donde estabas (por ejemplo, al carrito que armaste
   sin cuenta).
+- **Cuentas creadas antes del 25/09/2026:** siguen funcionando igual; en **Mi perfil → Email y
+  celular** ven su email "Sin verificar" y lo pueden verificar con un código cuando quieran (ver
+  2.12).
 
 **Ingresar:** email y contraseña.
 
@@ -314,7 +368,7 @@ demás dejan de servir.
 > ver `decisiones.md` D18). Sin eso, la pantalla responde igual pero **no llega ningún mail**.
 
 *Fuente: `src/components/screens/auth-register.tsx`, `auth-login.tsx`, `auth-recuperar.tsx`,
-`auth-restablecer.tsx`.*
+`auth-restablecer.tsx`, `src/components/app/verificacion-contacto-card.tsx` (D26).*
 
 ### 1.8 Ayuda
 
@@ -374,6 +428,7 @@ Pensadas para leerse en el celu:
 | **Directorio** | Más | Buscar profesionales y proveedores |
 | **Verificación** | Más | Validar tu DNI |
 | **Mi perfil** | Más | Tus datos y ubicación |
+| **Sugerencias** | Más | Mandar ideas, quejas, mejoras o problemas con fotos, y ver la respuesta (ver "Sugerencias" abajo) |
 | **Ayuda** | Más | Guías |
 
 *Fuente: `src/components/screens/panel/panel-layout.tsx:43-55`.*
@@ -486,24 +541,35 @@ vuelven atrás.
   - **Modo B — "los pagás directamente al proveedor":** cada proveedor te manda un cobro aparte y
     la factura del profesional es solo por la mano de obra.
 - Contacto: **Abrir chat**, llamar o mandar un email.
-- **Fechas del trabajo** *(24/09/2026)*: cuándo arranca y cuándo termina (estimado). Ver abajo.
+- **Fechas del trabajo** *(24/09/2026; con horario desde el 25/09/2026)*: cuándo arranca, cuándo
+  termina (estimado) y en qué horario. Ver abajo.
 
-**Fechas del trabajo (inicio y fin estimado):**
+**Fechas del trabajo (inicio, fin estimado y horario):**
 
 - Aparecen cuando el presupuesto quedó aprobado (aceptaste su oferta en la bolsa, o el proyecto ya
   pasó a Materiales). Antes, la tarjeta te explica por qué todavía no.
 - **Las propone primero el profesional.** Te llega un aviso (en la app y por mail) y un mensaje en el
   chat. En la tarjeta **"Fechas del trabajo"** tenés tres botones:
   - **Aceptar fechas** → quedan **acordadas**.
-  - **Proponer otras** → elegís inicio y fin estimado (y una nota si querés). Ahora el profesional
-    decide: las acepta, las rechaza o te propone otras.
+  - **Proponer otras** → elegís inicio, fin estimado y el **horario de trabajo**: **Todo el día** o
+    **Elegir horario** (desde / hasta, de a 15 minutos; te sugiere la jornada habitual del
+    profesional), y una nota si querés. Ahora el profesional decide: las acepta, las rechaza o te
+    propone otras.
   - **Rechazar** → podés contar el motivo; el proyecto queda sin fechas y el profesional propone otras.
+- La tarjeta muestra el horario: **"De 07:00 a 12:00 cada día"** (si son varios días), **"De 14:00 a
+  19:00"** (un día) o **"Todo el día"**. Los proyectos que ya tenían fechas antes del 25/09/2026
+  quedan como "Todo el día".
 - Nadie acepta su propia propuesta: siempre decide el otro.
 - **Reprogramar:** con fechas acordadas, tocá **Pedir reprogramar**. Mientras el profesional decide,
-  **siguen valiendo las fechas acordadas** (la tarjeta muestra las dos). Si las rechaza, siguen las
-  de antes; si las acepta, pasan a ser las nuevas. El profesional también puede pedirte reprogramar.
-- Si el profesional ya tiene otros trabajos en parte de esas fechas, te avisamos cuántos (sin decirte
-  cuáles). No es un impedimento: puede llevar trabajos en paralelo.
+  **siguen valiendo las fechas y el horario acordados** (la tarjeta muestra las dos). Si las rechaza,
+  siguen las de antes (con su horario); si las acepta, pasan a ser las nuevas. El profesional también
+  puede pedirte reprogramar.
+- **El profesional no puede estar en dos lugares a la vez:** si el día y el horario que proponés (o
+  que querés aceptar) chocan con otro trabajo que el profesional **ya tiene acordado**, HomIA no lo
+  deja y te lo dice ahí mismo: *"El profesional ya tiene ese horario ocupado (el 28/09, de 07:00 a
+  12:00). Elegí otro día u horario."* Nunca te dice de qué trabajo se trata. Si solo choca con otra
+  propuesta que todavía no se confirmó, se puede igual (te avisamos): la que se acepte primero se
+  queda con el horario.
 
 **Materiales por aprobar:**
 
@@ -761,7 +827,14 @@ sobrantes**.
 
 ### 2.12 Mi perfil
 
-- Podés cambiar tu foto, nombre, celular, dirección, ciudad y cumpleaños.
+- **Email y celular** *(D26)*: tarjeta con el email y el celular y su estado, **Verificado** (verde)
+  o **Sin verificar** (amarillo), como la insignia del DNI. Si el email está sin verificar (cuentas
+  anteriores al 25/09/2026), **Verificar** manda un código de 6 números a tu email y lo escribís
+  ahí mismo (misma regla: 10 minutos, 5 intentos, otro código a los 60 segundos). El celular hoy
+  queda "Sin verificar" con la nota "Todavía no podemos mandar códigos por SMS ni WhatsApp".
+- Podés cambiar tu foto, nombre, celular, dirección, ciudad y cumpleaños. El celular se guarda
+  estandarizado (+54 9 …); si no es un celular válido, no se guarda y te dice por qué; si lo
+  cambiás, vuelve a quedar "sin verificar". No se puede dejar vacío si ya tenías uno.
 - Podés compartir tu ubicación y elegir el **radio de búsqueda** (1 a 100 km).
 - El email no se puede cambiar.
 - **Avisos por mail:** interruptor "Recibir avisos por mail" (prendido de fábrica). Dice a qué email
@@ -785,7 +858,8 @@ sobrantes**.
 | **Proyectos** | Barra de abajo | Obras en curso |
 | **Mensajes** | Barra de abajo | Chats |
 | **Cobros** | Más | Conectar Mercado Pago, lo cobrado y lo pendiente, todas tus facturas (3.8) |
-| **Calendario** | Más | Tus trabajos por fecha: acordados, por confirmar, días libres y proyectos sin fecha (3.16) |
+| **Finanzas** | Más | Ganancia, caja, balance, métricas y gastos; tus facturas se cargan solas (ver "Finanzas") |
+| **Calendario** | Más | Tus trabajos por fecha y horario: acordados, por confirmar, días completos / con lugar / libres, agenda del día, tu jornada y proyectos sin fecha (3.16) |
 | **Materiales** | Más | Buscar materiales, carrito y comparar precios |
 | **Mis pedidos** | Más | Seguir y pagar los pedidos de materiales |
 | **Mis ofertas** | Más | Presupuestos que mandaste |
@@ -793,7 +867,7 @@ sobrantes**.
 | **CRM clientes** | Más | Tu tablero de oportunidades |
 | **Mis obras** | Más | Tu portafolio con fotos |
 | **Cuentas de retiro** | Más | Vínculos con proveedores |
-| **Directorio / Verificación / Mi perfil / Ayuda** | Más | — |
+| **Directorio / Verificación / Mi perfil / Sugerencias / Ayuda** | Más | — |
 
 *Fuente: `panel-layout.tsx:57-72`.*
 
@@ -884,8 +958,8 @@ Si también publicaste trabajos como cliente, el selector muestra los dos grupos
 - **Finalizar:** no podés finalizar la obra vos. Cuando termines, pasala a **Revisión**; el cliente
   revisa y la da por finalizada.
 - **Cancelar:** se puede solo en Presupuesto o Materiales.
-- **Fechas del trabajo:** con el presupuesto aprobado, proponé inicio y fin estimado desde la tarjeta
-  "Fechas del trabajo" del proyecto (ver 3.16).
+- **Fechas del trabajo:** con el presupuesto aprobado, proponé inicio, fin estimado y horario (o todo
+  el día) desde la tarjeta "Fechas del trabajo" del proyecto (ver 3.16).
 - **Contacto con el cliente:**
   - **Abrir chat:** si el cliente todavía no te escribió, ves "El cliente todavía no abrió el chat".
   - **Ver reputación:** te muestra con quién vas a trabajar (sus reseñas de otros profesionales,
@@ -1097,6 +1171,8 @@ proyectos. **No es una cuenta bancaria ni guarda plata.**
 - **Mi perfil:**
   - Datos de contacto, persona o empresa, oficios (al menos uno), habilidades, experiencia y bio.
   - **Radio de servicio:** a qué distancia aceptás trabajar.
+  - **Email y celular** *(D26)*: la misma tarjeta que el cliente (2.12): verificado o sin
+    verificar, y **Verificar** el email con un código.
   - Acceso **"Cobros y Mercado Pago"** (lleva a Cobros, ver 3.8).
   - Un aviso: usar HomIA es gratis; cuando alguien paga por Mercado Pago se suma un cargo de
     servicio del 1% que paga quien compra (vos cobrás el 100% de tu factura).
@@ -1127,10 +1203,15 @@ como cliente: su cotización, el avance, el pago y la reseña.
 - **Atajo a tus reseñas** "★ 4,5 · 12 reseñas" que baja hasta la sección Reseñas (ver 1.5).
 - Cifras (obras, años de experiencia, reseñas), bio y habilidades, **Disponibilidad**,
   **Trabajos realizados** y **Reseñas** con fotos.
-- **Disponibilidad** *(24/09/2026)*: un calendario de los próximos 3 meses (se pasa de mes con las
-  flechas) con tus días **ocupados** (fechas acordadas, en azul oscuro), **por confirmar** (fechas
-  propuestas, punteado) y **libres** (verde claro), más un resumen: **"Disponible esta semana"** o
-  **"Próxima fecha libre: 14/10"**. Nunca se ve de qué trabajo se trata, para quién ni dónde.
+- **Disponibilidad** *(24/09/2026; con horarios desde el 25/09/2026)*: un calendario de los
+  próximos 3 meses (se pasa de mes con las flechas) donde cada día es **Completo** (azul oscuro: no te
+  quedan horas libres en tu jornada), **Con lugar** (celeste con una rayita: tenés trabajos pero te
+  quedan horas), **Por confirmar** (punteado: solo hay trabajos propuestos) o **Libre** (verde claro).
+  **Tocando un día** se ven los horarios **ocupados** (ej. "07:00–12:00", "14:00–19:00", o "Todo el
+  día"; los propuestos dicen "por confirmar") y los **libres en tu jornada** (ej. "12:00–14:00").
+  Arriba, un resumen: **"Con lugar esta semana"** o **"Próximo día con lugar: 14/10"**. Nunca se ve
+  de qué trabajo se trata, para quién ni dónde (ni cuántos trabajos son: los horarios se muestran
+  unidos).
   Como el perfil pide cuenta (ver 1.5), la ven clientes, proveedores y otros profesionales con
   sesión; un visitante sin cuenta ve "Ingresá para ver este profesional".
 - Botones **Contactar**, **Contratar**, favorito y compartir.
@@ -1142,32 +1223,56 @@ como cliente: su cotización, el avance, el pago y la reseña.
 **Acordar las fechas de un proyecto** (tarjeta **"Fechas del trabajo"** en el detalle del proyecto):
 
 1. Cuando el presupuesto queda aprobado (el cliente aceptó tu oferta en la bolsa, o el proyecto ya
-   pasó a Materiales), tocá **Proponer fechas**: inicio, fin estimado y una nota opcional (ej.
-   "arranco a las 8"). El inicio no puede ser anterior a hoy y el fin no puede ser antes del inicio.
-2. Si esas fechas se pisan con otros trabajos tuyos, el cuadro te avisa en el momento con cuáles
-   ("Se superpone con 2 trabajos ese período"). **No te bloquea**: podés llevar trabajos en paralelo.
+   pasó a Materiales), tocá **Proponer fechas**: inicio, fin estimado, **horario de trabajo** y una
+   nota opcional. El inicio no puede ser anterior a hoy y el fin no puede ser antes del inicio.
+   - **Horario de trabajo:** **Todo el día** (lo que viene marcado) o **Elegir horario**: desde y
+     hasta, de a 15 minutos, cualquier hora del día (el fin tiene que ser después del inicio, el
+     mismo día). Vale para **cada día** del rango. Debajo dice "Tu jornada: 06:00 a 18:00" y el
+     botón **Usar ese horario** la carga de un toque.
+   - Así podés tener **varios trabajos el mismo día**: por ejemplo de 07:00 a 12:00 en un baño y de
+     14:00 a 19:00 en una cocina. Si se tocan justo (uno termina 12:00 y el otro empieza 12:00) no
+     chocan.
+2. **No se pisan:** si el día y el horario chocan con otro trabajo tuyo **ya acordado**, el cuadro te
+   lo dice en rojo en el momento, con cuál ("Ese horario choca con «Baño de Juan» (el 28/09, de 07:00
+   a 12:00). Elegí otro día u horario.") y **no te deja enviar**. Si choca solo con otra
+   **propuesta** tuya que el cliente todavía no aceptó, te avisa en amarillo pero te deja: la que se
+   acepte primero se queda con el horario (la otra ya no se va a poder aceptar).
 3. Al cliente le llega un aviso (app y mail) y un mensaje en el chat. Mientras decide, la tarjeta
    dice **"Esperando respuesta"**; podés **Cambiar mi propuesta**.
 4. El cliente las **acepta** (quedan **acordadas**), las **rechaza** (con motivo: proponé otras) o
    **te propone otras**: ahí la tarjeta dice **"Te toca responder"** y vos aceptás, rechazás o
    contraproponés. Nadie acepta su propia propuesta.
 5. **Reprogramar:** con fechas acordadas, cualquiera de los dos toca **Pedir reprogramar**. Hasta que
-   el otro responda siguen valiendo las acordadas; si rechaza, quedan las de antes.
+   el otro responda siguen valiendo las acordadas (con su horario); si rechaza, quedan las de antes.
+6. Si al **aceptar** el horario ya quedó ocupado por otro trabajo que se acordó mientras tanto, no se
+   puede aceptar: la tarjeta lo muestra en rojo y hay que proponer otro día u horario.
 
 **Pantalla Calendario** (menú → Calendario):
 
-- **Resumen del mes:** días **ocupados** (acordados), **propuestos** (por confirmar) y **libres**.
+- **Mi jornada** *(25/09/2026)*: arriba dice **"Mi jornada: 06:00 a 18:00"** (la de referencia) con
+  el botón **Cambiar**: elegís desde y hasta (de a 15 minutos) y **Guardar**; **Volver a
+  06:00–18:00** la restablece. Sirve para decidir qué días están **completos** o **con lugar**, en tu
+  calendario, en tu perfil y en lo que responde Homy. Tus trabajos pueden estar en cualquier horario,
+  aunque sea fuera de tu jornada.
+- **Resumen del mes:** días **completos** (sin horas libres en tu jornada), **con lugar** (tenés
+  trabajos pero te quedan horas) y **libres**.
 - **El mes** (flechas para ir al anterior o al siguiente; hoy en naranja): en la compu, cada día
-  muestra barritas con el nombre del trabajo (azul = acordado, punteado = por confirmar, gris =
-  finalizado); en el celu, puntitos. Tocando un día ves abajo sus trabajos; tocando un trabajo vas
-  al proyecto.
+  dice si está **Completo** o **Con lugar** y muestra barritas con la **hora de inicio** y el nombre
+  del trabajo ("07:00 Baño de Juan"; sin hora si es todo el día; azul = acordado, punteado = por
+  confirmar, gris = finalizado); en el celu, un recuadrito con **cuántos trabajos** tiene ese día
+  (azul oscuro con un punto = completo, celeste = con lugar, punteado = solo propuestos).
+- **Tocando un día** ves abajo sus trabajos **ordenados por hora** ("07:00–12:00 · Baño de Juan",
+  "Todo el día · …") y la **Agenda del día**: una línea de tiempo por hora (tu jornada, estirada si
+  algún trabajo cae afuera) con cada trabajo como un bloque en su horario (acordado sólido, propuesto
+  punteado; si dos se cruzan van uno al lado del otro) y los **huecos libres** en verde ("Libre ·
+  12:00–14:00"). Tocando un trabajo (o un bloque) vas al proyecto.
 - **Próximos trabajos:** los de los próximos 6 meses con su estado ("Arranca en 3 días", "En curso",
   "Esperando al cliente", "Te toca responder").
 - **Sin fecha todavía:** proyectos con presupuesto aprobado que no tienen fechas, con el botón
   **Proponer fechas** (y el motivo, si el cliente rechazó las anteriores).
 - Si un cliente te propuso fechas, arriba aparece el aviso "N clientes te propusieron fechas".
-- Lo acordado y lo propuesto se ve en tu perfil público como **Disponibilidad** (3.15), sin datos
-  de cada trabajo.
+- Lo acordado y lo propuesto se ve en tu perfil público como **Disponibilidad** (3.15): cada día
+  libre, con lugar o completo y sus horarios ocupados y libres, sin datos de cada trabajo.
 
 *Fuente: `src/components/screens/panel/profesional/calendario.tsx`, `src/components/app/schedule-card.tsx`;
 reglas en `LOGICA-HOMIA.md` §3.6.*
@@ -1187,10 +1292,11 @@ plan: **Básico, $50.000 por mes**, o **PRO, $100.000 por mes**.
 | **Stock** | Barra de abajo | Tus materiales, precios y cantidades |
 | **Cobros** | Barra de abajo | Tres pestañas: Cobros de proyectos, **Ventas (pedidos)** y **Devoluciones**; y el recuadro para conectar tu Mercado Pago |
 | **Mensajes** | Barra de abajo | Chats |
+| **Finanzas** | Más | Ganancia, caja, balance, costo del stock y métricas; tus ventas se cargan solas (ver "Finanzas") |
 | **Mi plan** | Más | Prueba, Básico o PRO |
 | **CRM** | Más | Tablero de tratos |
 | **Vinculaciones** | Más | Cuentas de retiro de profesionales |
-| **Directorio / Verificación / Mi perfil / Ayuda** | Más | — |
+| **Directorio / Verificación / Mi perfil / Sugerencias / Ayuda** | Más | — |
 
 Arriba de todo se ve el estado del plan:
 
@@ -1477,6 +1583,8 @@ En la cinta de sponsors aparecen primero los proveedores que cargaron logo propi
 - **Foto, plan y verificación:** foto del negocio, el estado de tu plan y el acceso a la
   verificación.
 - **Marca en la portada:** solo PRO (ver 4.9).
+- **Email y celular** *(D26)*: la misma tarjeta que el cliente (2.12): verificado o sin verificar, y
+  **Verificar** el email con un código.
 - **Avisos por mail:** interruptor "Recibir avisos por mail" (te compraron o reservaron, te pagaron
   por MP, te piden devolver materiales). Ver "Lo básico para todos".
 - Al final: **Eliminar mi cuenta** (ver "Lo básico para todos"). Si tenés un plan pago activo,
@@ -1505,6 +1613,296 @@ En la cinta de sponsors aparecen primero los proveedores que cargaron logo propi
 - **Contactar:** los clientes te escriben con el botón **Contactar**.
 
 *Fuente: `src/components/screens/provider-profile.tsx`.*
+
+---
+
+## Finanzas (profesional y proveedor) *(D24, 25/09/2026)*
+
+Pedido de Leonardo: "una sección de finanzas donde pueden ver su estado de resultado, su balance,
+con todas las métricas […] donde la facturación se carga automáticamente, pero que se pueda cargar
+los gastos, costos, inversiones […] explicando cada concepto". Está en **Panel → Finanzas** del
+profesional (`/panel/profesional/finanzas`) y del proveedor (`/panel/proveedor/finanzas`); en el
+celular, dentro de **Más**. Es **gratis en todos los planes** (Básico y PRO del proveedor; el
+profesional no paga). Si tenés los dos roles, cada uno tiene sus finanzas separadas.
+
+**Qué se carga solo** (dice **"Automático · viene de HomIA"**, no se edita y se abre el origen con
+"Ver origen"):
+
+| Profesional | Proveedor |
+|---|---|
+| Tus facturas: lo **facturado** (cuando la emitís) y lo **cobrado** (cuando te pagan por Mercado Pago o confirmás el efectivo), con mano de obra y materiales por separado | Tus ventas y cobros: lo **facturado** (el cobro emitido al confirmar la compra o aprobar la reserva) y lo **cobrado** |
+| Las devoluciones de sobrantes que le reembolsaste a un cliente (restan ventas) | Las devoluciones de sobrantes que reembolsaste (restan ventas; lo que volvió al stock deja de ser costo) |
+| Los materiales que compraste en HomIA (costo directo; los asignás a una obra o marcás "No es del negocio") y lo que te reembolsaron por sobrantes | — |
+| Los subcontratos que hiciste por HomIA desde tu proyecto | — |
+
+**Lo que NO se carga solo, y por qué:** el cargo de servicio del 1% lo paga el cliente (no es tuyo
+ni es gasto tuyo); las **comisiones de Mercado Pago** no llegan a HomIA (se cargan a mano en
+"Comisiones bancarias y de Mercado Pago"); la **suscripción del proveedor** tampoco (HomIA no
+guarda los cobros del plan): la pantalla ofrece "¿Sumamos tu plan como gasto mensual?" y la carga
+solo si tocás **"Sí, cargarlo"**.
+
+**Pestañas** (en el celular se desplazan de costado):
+
+1. **Resumen** — Ventas netas (con la variación contra el período anterior), ganancia o pérdida,
+   caja estimada y margen bruto. **"Qué mirar ahora"**: recomendaciones con el dato que las dispara
+   (ej. "Tenés $ X sin cobrar hace más de 15 días", "Todavía no cargaste gastos en este período",
+   "Con tu margen, necesitás vender $ X por mes para no perder"). **Métricas clave**, cada una con
+   un **?** que explica qué es, cómo se calcula y qué hacer: margen bruto y neto, gastos fijos por
+   mes, punto de equilibrio, ticket promedio, cantidad, días promedio de cobro, sin cobrar hace más
+   de 15 días, meses de supervivencia, crecimiento mes a mes, clientes recurrentes; el profesional
+   suma presupuestos aceptados y **rentabilidad por obra** (ranking); el proveedor, días de stock y
+   **productos que más ganancia dejan**. Lo que no se puede calcular dice "Sin dato" y por qué.
+2. **Resultados** — El estado de resultados renglón por renglón (ventas de HomIA, por fuera,
+   devoluciones, ventas netas, costo directo, margen bruto, gastos fijos por categoría, resultado
+   operativo, amortizaciones, intereses, resultado neto), cada uno con **"¿Qué es esto?"** y la
+   cuenta hecha con tus números. Aparte, tus retiros (no son gasto). Proveedor: **Costo de tu
+   mercadería** → "Cargar costos": el costo de compra de cada producto y, opcional, un margen
+   estimado ("compro al X% del precio de venta") para los que no tengan costo, siempre marcado como
+   estimación.
+3. **Caja** — Tu **saldo inicial** (la plata del negocio al cierre de un día, se carga una vez y se
+   puede corregir), caja al empezar + entró − salió = caja al terminar, "¿Por qué mi ganancia no es
+   igual a mi plata?" y el gráfico de entradas y salidas por mes (con vista de tabla).
+4. **Balance** — Foto a la fecha: caja, cuentas por cobrar, mercadería al costo (proveedor) y
+   herramientas/vehículos menos lo amortizado; menos préstamos y cuentas a pagar = **patrimonio
+   neto** ("lo que tenés − lo que debés").
+5. **Movimientos** — Todo lo del período (automático y cargado por vos), con filtros; editar,
+   terminar un gasto mensual ("Terminar hoy"), borrar, ver el comprobante.
+6. **Aprendé** — Guía de los tres informes, qué se carga y dónde va (con ejemplo de un plomero o de
+   una ferretería), glosario completo y el aviso de que no es asesoramiento impositivo.
+
+**Cargar un movimiento** (botón **"Cargar movimiento"**): elegís qué es (ingreso por fuera de
+HomIA, costo directo, compra de mercadería —proveedor—, gasto fijo, inversión, retiro, aporte,
+préstamo o cuota de préstamo) y ves qué le hace a cada informe; elegís la categoría y ves qué es y
+ejemplos; completás descripción, monto (se puede escribir "25.000"), fecha (no futura), si ya lo
+pagaste/cobraste o lo debés, si **se repite todos los meses** (se carga una vez), medio de pago,
+la obra (profesional) y la foto del comprobante (queda con un link: no aparece en ningún listado,
+pero quien tenga el link la ve). Inversión: meses de vida útil (sugeridos por categoría, editables)
+y cuánto se amortiza por mes. Cuota: cuánto es interés.
+
+**Primer uso guiado** (tarjeta "Arrancá en 3 pasos" o desde Aprendé): 1) cuánta plata tiene hoy el
+negocio; 2) gastos fijos del mes sugeridos por rubro (solo los que completás; los mensuales se
+repiten solos); 3) herramientas o bienes que ya tenés (se amortizan y no bajan la caja porque se
+pagaron antes). "Ahora no" oculta la tarjeta.
+
+**Período:** este mes (por defecto), mes anterior, últimos 3/6/12 meses, este año o fechas a
+elección; siempre se compara con el período anterior de igual largo. **"Exportar a Excel"** baja un
+CSV (separador ";", montos "1.234,56") con el estado de resultados y todos los movimientos.
+
+*Fuente: `src/components/screens/panel/finanzas/*`, `src/lib/finanzas/*`; reglas en
+`LOGICA-HOMIA.md` §16.*
+
+---
+
+## Sugerencias (los tres roles) y bandeja del administrador *(D25, 25/09/2026)*
+
+### Mandar una sugerencia (cliente, profesional y proveedor)
+
+- **Dónde:** en el menú de tu panel, **Sugerencias** (cerca de Ayuda; en el celular, en **Más**).
+  Es la misma pantalla en los tres roles; lo que mandás queda asociado al panel desde el que
+  escribiste.
+- **Arriba:** la tarjeta **Nueva sugerencia**. Al tocarla se abre el formulario:
+  1. **¿Qué nos querés contar?** Elegís una de seis tarjetas, cada una con su ícono y una
+     explicación corta: **Sugerencia** (una idea), **Queja** (algo que te molestó), **Mejora** (algo
+     que ya existe y podría ser más fácil), **Oportunidad** (algo nuevo que HomIA podría ofrecer),
+     **Problema técnico** (algo no funciona) u **Otro**.
+  2. **¿Sobre qué parte de HomIA?** Una lista con las secciones de tu rol (por ejemplo Búsqueda y
+     mapa, Directorio, Contratar, Proyectos, Materiales y carrito, Pedidos, Pagos y Mercado Pago,
+     Facturas y cobros, Mensajes, Reseñas, Sobrantes, Calendario, Finanzas, Stock, Mi plan, Homy,
+     Mi perfil, Otra). Stock y Mi plan solo aparecen para el proveedor; Contratar y Publicar
+     trabajo, para el cliente; Bolsa de trabajos, para el profesional.
+  3. **Título** (obligatorio, de 4 a 120 letras, con contador).
+  4. **Descripción** (obligatoria, al menos 10 letras) con la ayuda "Contanos qué pasó, qué
+     esperabas y qué te gustaría".
+  5. **Fotos de evidencia** (opcional, hasta 4): en el celular hay dos botones, **Sacar foto**
+     (abre la cámara) y **Galería**; en la computadora, **Agregar fotos**. Cada foto se ve en
+     miniatura mientras sube y tiene una cruz para quitarla. Si una foto pesa mucho, la app la
+     achica sola; si no se puede subir, abajo dice exactamente por qué.
+  6. Si elegiste **Problema técnico**, aparece el recuadro **Se adjunta automáticamente** con lo
+     que se manda para encontrar el error: la pantalla desde la que venías, tu navegador y sistema,
+     el tipo de dispositivo con el tamaño de pantalla, y la fecha.
+  7. **Pueden contactarme por este tema** (tildado de entrada). Si lo destildás, el equipo igual te
+     responde en la app, pero no ve tu email.
+  8. **Enviar.** Si falta algo, cada campo dice qué corregir y la pantalla te lleva al primero.
+     Al mandar: "¡Gracias! Recibimos tu envío".
+- **Tope:** hasta **10 envíos por día**. Al llegar, la tarjeta lo avisa y no deja abrir otro
+  formulario hasta mañana.
+- **Abajo, "Mis envíos":** cada envío con su tipo y sección, el título, la fecha, el **estado**
+  (Recibida, En revisión, Planificada, Resuelta o Descartada, cada uno con su color), la
+  descripción (con "Ver todo" si es larga), las fotos (se abren al tocarlas) y, cuando el equipo
+  responde, el recuadro **Respuesta de HomIA** con la fecha.
+- **Cuando el equipo responde o cambia el estado** te llega un aviso a la campana y un mail
+  ("Te respondimos tu sugerencia" o "Tu sugerencia está: …") con un botón que te lleva directo a
+  ese envío, resaltado.
+- **Privacidad:** las fotos se guardan en un almacenamiento privado: solo las ven quien las mandó
+  y el equipo de HomIA, con links que vencen a los 10 minutos. Al eliminar tu cuenta se borran tus
+  envíos y sus fotos.
+
+### Bandeja del administrador
+
+- **Quién la ve:** solo el equipo de HomIA, desde el **área de administración** (`/admin/sugerencias`,
+  ver "Área de administración" más abajo, D29). Ya no está dentro del panel de ningún rol; la
+  dirección vieja `/panel/admin/sugerencias` lleva sola a la nueva.
+- **Qué tiene:**
+  - Arriba, botones por estado con la cantidad (Todas, Recibida, En revisión, Planificada,
+    Resuelta, Descartada): tocar uno filtra.
+  - Un buscador por palabras (título y descripción, tolera acentos y plurales) y tres filtros:
+    tipo, rol y sección. **Limpiar filtros** vuelve todo atrás.
+  - La lista: tipo, rol, sección, título, autor, fecha, cantidad de fotos y estado.
+  - Al tocar uno, el **detalle** (en la computadora a la derecha; en el celular reemplaza la lista,
+    con "Volver a la bandeja"): autor y su rol, su email como link para escribirle **solo si
+    aceptó que lo contacten**, la descripción completa, las fotos, el contexto técnico si es un
+    problema, y abajo el **Estado** y la **Respuesta al usuario** con el botón **Guardar y
+    avisar**. Si no cambiaste nada, no se avisa de nuevo.
+- **Mail al equipo:** por cada envío nuevo llega un mail a `business@vakdor.com` con el tipo, la
+  sección, el rol, el título, la descripción y un botón a la bandeja. Las fotos no se adjuntan (se
+  ven en la bandeja).
+
+*Fuente: `src/components/screens/panel/sugerencias.tsx`, `admin-sugerencias.tsx`,
+`src/lib/feedback.ts`.*
+
+---
+
+## Métricas: qué se registra y el panel del administrador *(D27, 25/09/2026)*
+
+### Qué registra HomIA de cada visita (todos los usuarios y los visitantes)
+
+Desde el 25/09/2026 HomIA lleva **su propio registro de uso** (sin Google Analytics ni ninguna
+herramienta de afuera). No cambia nada de lo que la persona ve ni hace: no hay carteles ni demoras.
+
+- **Qué se anota:** cada pantalla que se abre (sin el número del proyecto o pedido: "Proyecto de
+  cliente"), cada botón o link que se toca (con su nombre: "Publicar trabajo", "Pagar con Mercado
+  Pago"), cada envío al servidor (qué acción y si salió bien o dio error, nunca lo que se mandó),
+  las ventanas que se abren, las búsquedas (qué se buscó, con qué filtros y cuántos resultados
+  hubo), los errores de la app y **el tiempo de uso real** (solo cuenta mientras la pestaña está a
+  la vista y la persona la está usando; a los 5 minutos sin tocar nada deja de contar). También
+  el tipo de dispositivo (celu o compu, navegador, sistema), el tamaño de la pantalla y de dónde
+  llegó (por ejemplo "google.com" o una campaña con `utm_source`).
+- **Qué NUNCA se anota:** lo que se escribe en los formularios (nombres, direcciones, montos,
+  contraseñas), el texto de los mensajes, ni datos de pago. Si un botón muestra un nombre o un
+  título largo (por ejemplo la tarjeta de un profesional), se guarda solo "abrió un perfil de
+  profesional" y cuál, no el texto.
+- **Del servidor:** cada ingreso (y los intentos fallidos: solo si la cuenta existía, nunca el
+  email tipeado ni la contraseña), cada cierre de sesión, cada registro completo, cada pedido y
+  cambio de plan del proveedor y cada descarga de una factura en PDF.
+- **Visitante → cuenta:** el navegador recibe un número al azar (`homia_anon_id`). Si esa persona
+  después se registra o ingresa, lo que hizo como visitante queda unido a su cuenta: así se ve el
+  camino "entró por Google → miró el directorio → se registró → contrató". Al cerrar sesión el
+  número se cambia por uno nuevo.
+- **Lo demás no se duplica:** proyectos, facturas, pagos, pedidos, reseñas, mensajes y ofertas ya
+  quedan guardados con su usuario y su fecha; las métricas de negocio se calculan desde ahí.
+- **Privacidad:** está explicado en la Política de Privacidad (versión del 25/09/2026). Al eliminar
+  la cuenta se borra su registro de uso.
+
+### Área de administración `/admin` *(D29, 25/09/2026)*
+
+- **Cómo se entra:** escribiendo `www.somoshomia.com/admin`. Aparece la pantalla **Administración
+  HomIA** con email y contraseña: son los del equipo (`ADMIN_EMAIL` y `ADMIN_PASSWORD`, cargados en
+  el servidor), **no** una cuenta de cliente, profesional ni proveedor. No hay botón en los paneles
+  de los usuarios.
+- **Si falla:** "Email o contraseña incorrectos" (nunca dice cuál de los dos). Después de 5 intentos
+  fallidos desde la misma conexión: "Demasiados intentos. Esperá 15 minutos". Si las variables no
+  están cargadas: "El acceso de administración no está configurado".
+- **Adentro:** arriba "HomIA · Administración", el menú **Métricas** y **Sugerencias**, y el botón
+  **Salir**. `/admin` abre Métricas. La sesión de administración dura 12 horas y es aparte de la de
+  usuario: se puede estar como usuario y como administración a la vez sin que se mezclen.
+- **Direcciones viejas:** `/panel/admin/metricas` y `/panel/admin/sugerencias` llevan solas a las
+  nuevas (sirve para los mails viejos al equipo).
+- **Respuestas a sugerencias:** le llegan al usuario firmadas como "Equipo HomIA".
+
+### Panel de métricas del administrador (`/admin/metricas`)
+
+- **Quién lo ve:** solo quien entró al área de administración (arriba). Sin esa sesión, las APIs
+  responden "no existe".
+- **Arriba:** pestañas **Usuarios · Uso · Embudos · Retención · Negocio · Fichas**; el período
+  (**Hoy, 7 días, 30 días, 90 días o Rango** con fecha desde/hasta) y la casilla **Excluir cuentas
+  demo y de prueba** (prendida: saca las cuentas `@homia.test` y los navegadores de las pruebas).
+  Si todavía no hay uso registrado lo dice: "se registra desde el 25/09/2026".
+- **Usuarios:** cuentas por rol, nuevas por día, bajas, activos del último día / 7 días / 30 días,
+  cuántos iniciaron sesión (y los ingresos fallidos), verificados (DNI, email, celular),
+  proveedores por plan (Prueba, Básico, PRO, Vencido) y cuántos pagan, y "cómo nos conocieron".
+- **Uso:** sesiones, visitantes únicos, duración promedio y mediana (tiempo activo real), horas
+  totales, pantallas por sesión, pantallas más usadas, botones más tocados, acciones (con cuántas
+  salieron bien y cuántas con error), ventanas abiertas, dispositivos, orígenes y campañas, horario
+  de uso por hora, búsquedas más frecuentes y **búsquedas sin resultado** (qué pide la gente que
+  todavía no hay: oportunidades de catálogo), errores de la app y uso de Homy (consultas, costo,
+  demora, por puerta y resultado).
+- **Embudos:** visita → registro → primer proyecto o compra; cliente: registro → publicó un
+  trabajo → contrató → pagó; profesional: registro → primera oferta → primer proyecto → primera
+  factura cobrada; proveedor: registro → cargó stock → primera venta cobrada → plan pago. Cada paso
+  con el porcentaje respecto del anterior y del inicio.
+- **Retención:** por semana de registro (las últimas 8), qué porcentaje volvió a usar HomIA en
+  cada una de las 8 semanas siguientes. Casillero más oscuro = más gente volvió.
+- **Negocio:** proyectos creados (por estado), trabajos publicados, ofertas y aceptadas, facturas
+  emitidas y facturado, cobrado en facturas, volumen de materiales cobrado, ventas y ticket
+  promedio, cobrado por Mercado Pago, **cargo de servicio del 1% recaudado**, pedidos y sub-pedidos
+  por estado, reseñas y promedio de estrellas, mensajes y conversaciones, devoluciones y
+  reembolsado, sugerencias y la actividad por día.
+- **Fichas:** buscar a un usuario por email o nombre y ver su ficha: datos de la cuenta, sesiones
+  con su duración, tiempo total de uso, **línea de tiempo** que mezcla el uso (gris) con los hechos
+  de negocio (azul: proyectos, ofertas, pedidos, ventas, facturas, cobros, reseñas, mensajes
+  enviados —sin su texto—, devoluciones, stock, sugerencias) y la lista de **activos vinculados**.
+  Tocar un activo (proyecto, pedido, factura, trabajo, conversación…) abre su ficha: **quién hizo
+  qué y cuándo**.
+- **Exportar:** cada tabla tiene su botón **CSV** (se abre en Excel; separador punto y coma).
+- **Salud del registro:** al pie, el último evento de cada tipo, para ver que el registro sigue
+  andando.
+
+*Fuente: `src/components/screens/panel/admin-metricas.tsx`, `src/lib/analytics/*`,
+`src/app/api/analytics/collect`, `src/app/api/admin/metricas/*`.*
+
+### Ingresos de HomIA (`/admin/ingresos`) *(D30, 25/09/2026)*
+
+- **A qué cuenta llega la plata:** las **suscripciones de los proveedores** (Básico $50.000 y PRO
+  $100.000 por mes) y el **cargo de servicio del 1%** de los pagos por Mercado Pago entran a la
+  **cuenta de Mercado Pago de HomIA** (la misma cuenta dueña de las dos apps, Checkout Pro y
+  Suscripciones). No hay que "conectar" nada en `/admin`: la pantalla solo lee lo que ya cobró esa
+  cuenta. El resto de cada venta va directo a la cuenta del proveedor o del profesional.
+- **Dónde está:** en el área de administración, menú **Ingresos** (al lado de Métricas y
+  Sugerencias).
+- **Arriba:** una línea que aclara "Estos son los cobros registrados en HomIA; el saldo real de tu
+  cuenta de Mercado Pago puede diferir por comisiones, impuestos y retenciones de Mercado Pago" (y,
+  si Mercado Pago informó su comisión, cuánto fue). Pestañas **Resumen · Proveedores · Cobros de
+  suscripción · Cargo 1%**; el período (**Hoy, 7 días, 30 días, 90 días, 12 meses o Rango**),
+  **Día / Semana / Mes** para agrupar, y la casilla **Excluir cuentas demo y cobros de prueba**.
+- **Resumen:** ingresos del período (total, suscripciones y cargo 1%, cada uno con la variación
+  contra el período anterior del mismo largo), **MRR** (cuánto entra por mes con las suscripciones
+  vigentes: Básicos × $50.000 + PRO × $100.000), proveedores pagando por plan, en prueba (y cuál
+  vence primero), con cobro rechazado o en deuda, bajas y altas del período; el gráfico **Ingresos
+  por fecha** (tocá una barra para ver el detalle); pruebas que vencen pronto; **próximos cobros
+  esperados** (fecha y monto que informa Mercado Pago); ranking de **proveedores por lo que
+  pagaron** y de **vendedores por cargo de servicio generado**; **churn y conversión por mes**.
+- **Proveedores:** el **estado de cuenta** de cada proveedor, con filtros por estado, plan y
+  búsqueda por nombre del comercio:
+  - **Al día:** tiene plan pago y su último cobro aprobado fue hace 35 días o menos.
+  - **En deuda:** su último intento de cobro fue rechazado, o pasaron más de 35 días sin un cobro
+    aprobado. Muestra desde cuándo, cuánto debe (meses × precio del plan) y cada intento rechazado
+    con fecha y motivo.
+  - **Plan pago sin cobro registrado:** alta manual o demo, o el primer cobro todavía no llegó.
+  - **En prueba:** con los días que le quedan y la fecha en que vence ("vence hoy" = 0 días).
+  - **Prueba vencida sin plan:** terminó la prueba y nunca pagó.
+  - **Dado de baja:** tuvo plan pago y hoy no (canceló o pausó la suscripción en Mercado Pago, o se
+    dio de baja por falta de pago), con fecha y motivo; si se fue con un mes ya pagado, lo avisa.
+  Tocando un proveedor se abre su **ficha de cuenta**: datos, plan, total pagado, último cobro,
+  hasta cuándo tiene pago, la suscripción en Mercado Pago (activa, pausada, cancelada, próximo
+  cobro) y el **historial completo** (alta, fin de la prueba, cada cobro aprobado o rechazado,
+  cambios de plan, bajas y reactivaciones, con fecha y monto), más el botón **Ver su uso en
+  Métricas**. Debajo: gráfico de **altas, primeras suscripciones y bajas**, la tabla **Movimiento
+  por fecha** (altas, primeras suscripciones pagas, reactivaciones, bajas, cambios de plan, neto e
+  ingresos) y **churn y conversión por mes**.
+- **Cobros de suscripción:** cada cobro con fecha, proveedor, plan, monto, estado (aprobado,
+  rechazado, pendiente, reembolsado…), motivo del rechazo, comisión y neto de Mercado Pago (si los
+  informó), el **id del pago de Mercado Pago** (se copia con un toque) y si fue de producción o de
+  prueba. Filtros por estado, plan y proveedor.
+- **Cargo 1%:** cada factura, cobro de materiales o compra pagada por Mercado Pago con vendedor,
+  comprador, subtotal, el cargo según HomIA y el que informó Mercado Pago (desde el 25/09/2026).
+- **Exportar:** cada tabla tiene su **CSV** para el contador (separador punto y coma, fechas y
+  decimales argentinos; respeta los filtros).
+- **Desde cuándo hay datos:** los cobros se traen de Mercado Pago (también los anteriores); los
+  movimientos del plan (altas pagas, cambios, bajas) se registran en vivo desde el 25/09/2026 y lo
+  anterior se reconstruyó con las fechas de Mercado Pago. La pantalla lo dice al pie.
+
+*Fuente: `src/components/screens/admin/admin-ingresos.tsx`, `src/lib/ingresos-admin.ts`,
+`src/lib/suscripciones-core.ts`, `src/app/api/admin/ingresos/*`.*
 
 ---
 

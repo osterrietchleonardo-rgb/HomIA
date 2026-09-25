@@ -56,6 +56,7 @@ type Project = {
   // D21: fechas del trabajo y, si todavía no se pueden acordar, por qué
   schedule?: ScheduleInfo | null
   scheduleBlocked?: string | null
+  proWorkday?: { desde: string; hasta: string } | null
   professional: {
     id: string; userId: string; displayName: string; avatarUrl: string | null; verificationStatus?: string
     personType: string; companyName: string | null; phone: string | null; email: string | null
@@ -360,7 +361,7 @@ export default function ClientProjectDetail({ id }: { id: string }) {
 
       {/* D21: fechas del trabajo (el profesional propone, vos aceptás, rechazás o proponés otras) */}
       {(isActive || p.schedule?.status) && (
-        <ScheduleCard projectId={p.id} role="cliente" otherName={proName} schedule={p.schedule} blocked={p.scheduleBlocked} onChanged={load} />
+        <ScheduleCard projectId={p.id} role="cliente" otherName={proName} schedule={p.schedule} blocked={p.scheduleBlocked} workday={p.proWorkday} onChanged={load} />
       )}
 
       {/* etapas + números */}

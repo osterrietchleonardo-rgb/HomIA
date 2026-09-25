@@ -6,6 +6,8 @@ import { round2, serviceFeeFor } from '@/lib/fees'
 import { logActivity } from '@/lib/activity'
 import { parseJson } from '@/lib/api'
 import { notificar, notificarVarios } from '@/lib/notify'
+import { registrarEvento } from '@/lib/analytics/server'
+import { procesarAvisoSuscripcion, registrarCobroPorPago, registrarActivacion, registrarBaja, registrarEventoPlan } from '@/lib/suscripciones-mp'
 
 // Webhook de Mercado Pago (Checkout Pro + Suscripciones).
 // Confirma pagos de facturas de proyecto (invoice:<id>, o <invoiceId> histórico),
@@ -95,11 +97,15 @@ async function recordPayment(
       status,
       amount: payment.transactionAmount,
       refundedAmount: payment.transactionAmountRefunded ?? 0,
+      mpApplicationFee: payment.applicationFee ?? null,
+      mpApprovedAt: payment.approvedAt ?? null,
     },
     update: {
       status,
       amount: payment.transactionAmount,
       refundedAmount: payment.transactionAmountRefunded ?? 0,
+      ...(payment.applicationFee != null ? { mpApplicationFee: payment.applicationFee } : {}),
+      ...(payment.approvedAt ? { mpApprovedAt: payment.approvedAt } : {}),
     },
   })
 }
@@ -110,8 +116,9 @@ export async function POST(req: NextRequest) {
 
   // (b) tipo de notificación
   const rawType = String(bodyData.type || sp.get('type') || bodyData.topic || sp.get('topic') || '').toLowerCase()
-  const type: 'payment' | 'subscription_preapproval' | null =
-    rawType === 'payment' ? 'payment' : rawType === 'subscription_preapproval' ? 'subscription_preapproval' : null
+  const type: 'payment' | 'subscription_preapproval' | 'subscription_authorized_payment' | null =
+    rawType === 'payment' ? 'payment' : rawType === 'subscription_preapproval' ? 'subscription_preapproval'
+      : rawType === 'subscription_authorized_payment' ? 'subscription_authorized_payment' : null
   if (!type) return NextResponse.json({ received: true, ignored: true })
 
   // (c) firma
@@ -145,6 +152,15 @@ export async function POST(req: NextRequest) {
   }
 
   if (!dataId) return NextResponse.json({ received: true })
+
+  // D30: cobro mensual de una suscripción de proveedor (evento "Planes y suscripciones" →
+  // subscription_authorized_payment). Se re-consulta a MP y se guarda en SubscriptionCharge
+  // (idempotente por mpPaymentId). Nunca 200 si no quedó guardado: 503 para que MP reintente.
+  if (type === 'subscription_authorized_payment') {
+    const r = await procesarAvisoSuscripcion(String(dataId))
+    if (r.status !== 200) console.error('[mp webhook] cobro de suscripción sin guardar: MP reintenta', { dataId, motivo: r.body.motivo })
+    return NextResponse.json(r.body, { status: r.status })
+  }
 
   // (d) entorno del pago
   const live = bodyData.live_mode !== false
@@ -235,6 +251,11 @@ async function handlePayment(paymentId: string, live: boolean, refHint: string |
   })
   const ref = payment.externalReference
   if (!ref) return
+  // D30: pago de una suscripción de proveedor (plan:provider:…) → registro del cobro con el token de Suscripciones
+  if (ref.startsWith('plan:provider:')) {
+    await registrarCobroPorPago(paymentId)
+    return
+  }
 
   if (ref.startsWith('purchase:')) {
     // el pago tiene que existir en la cuenta del proveedor (es quien cobra)
@@ -475,7 +496,7 @@ async function handlePreapproval(preapprovalId: string, live: boolean) {
 
   const prov = await db.providerProfile.findUnique({
     where: { id: planRef.profileId },
-    select: { id: true, userId: true, subscription: true, mpPreapprovalId: true },
+    select: { id: true, userId: true, subscription: true, mpPreapprovalId: true, trialEndsAt: true },
   })
   if (!prov) return
 
@@ -485,6 +506,9 @@ async function handlePreapproval(preapprovalId: string, live: boolean) {
   if (t.kind === 'ignorar') return
 
   if (t.kind === 'activar') {
+    // D30: el movimiento del plan se registra ANTES del update (idempotente por dedupeKey): si el
+    // update falla, el reintento de MP lo vuelve a intentar sin duplicarlo.
+    await registrarActivacion({ providerId: prov.id, anterior: prov.subscription, nuevo: planRef.plan, preapprovalId: pre.id, trialEndsAt: prov.trialEndsAt, source: 'webhook' })
     // Update condicional (idempotente ante avisos duplicados/concurrentes): si
     // otro aviso ya dejó este plan con esta suscripción, no se notifica de nuevo.
     const upd = await db.providerProfile.updateMany({
@@ -505,6 +529,7 @@ async function handlePreapproval(preapprovalId: string, live: boolean) {
     if (t.cancelarAnterior) {
       try {
         await cancelPreapproval(t.cancelarAnterior)
+        await registrarEventoPlan({ providerId: prov.id, type: 'reemplazada', fromPlan: prov.subscription, mpPreapprovalId: t.cancelarAnterior, dedupeKey: `reemp:${t.cancelarAnterior}`, occurredAt: new Date(), source: 'webhook', motivo: 'cambio de plan' })
         console.info('[mp webhook] suscripción anterior cancelada por cambio de plan', { vieja: t.cancelarAnterior, nueva: pre.id })
       } catch (e) {
         console.error('[mp webhook] no se pudo cancelar la suscripción anterior', t.cancelarAnterior, e)
@@ -513,16 +538,20 @@ async function handlePreapproval(preapprovalId: string, live: boolean) {
     if (upd.count > 0 && t.notificacion) {
       await db.notification.create({ data: { userId: prov.userId, ...t.notificacion } })
     }
+    // métricas (D27): cambio de plan efectivo (idempotente: solo si el update cambió algo)
+    if (upd.count > 0) registrarEvento(null, { name: 'plan_activado', userId: prov.userId, path: '/panel/proveedor/plan', props: { desde: prov.subscription, hacia: t.data.subscription ?? null } })
     return
   }
 
   // degradar: solo si la suscripción cancelada/pausada es la VIGENTE y el plan
   // sigue siendo de pago (condición en el WHERE → idempotente)
+  await registrarBaja({ providerId: prov.id, plan: prov.subscription, preapprovalId: pre.id, tipo: pre.status === 'paused' ? 'pausada' : 'cancelada', source: 'webhook' })
   const upd = await db.providerProfile.updateMany({
     where: { id: prov.id, mpPreapprovalId: pre.id, subscription: { in: ['basic', 'pro'] } },
     data: t.data,
   })
   if (upd.count > 0) {
     await db.notification.create({ data: { userId: prov.userId, ...t.notificacion } })
+    registrarEvento(null, { name: 'plan_degradado', userId: prov.userId, path: '/panel/proveedor/plan', props: { desde: prov.subscription, motivo: 'mercadopago' } })
   }
 }

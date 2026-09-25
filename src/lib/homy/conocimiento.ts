@@ -8,6 +8,7 @@ import { HOWTOS, TROUBLES } from '@/lib/howto-content'
 import { TOURS, type TourRole } from '@/lib/tour-content'
 import { PLAN_PRICE_ARS, TRIAL_DAYS } from '@/lib/plans'
 import type { RolHomy } from './tipos'
+import { entradasHomyFinanzas } from '@/lib/finanzas/conceptos'
 
 export type Entrada = {
   id: string
@@ -141,7 +142,7 @@ const NUCLEO: Entrada[] = [
     titulo: 'Crear cuenta',
     roles: ['visitante', 'todos'],
     texto:
-      'Crear la cuenta es gratis y tarda un minuto: elegís tu rol (cliente, profesional o proveedor), tus datos y listo. Sin cuenta podés buscar y mirar; para contactar, contratar, comprar, publicar u ofertar necesitás cuenta.',
+      'Crear la cuenta es gratis y tarda un par de minutos: elegís tu rol (cliente, profesional o proveedor); cargás nombre, apellido, email, celular (se escribe dos veces), contraseña y ciudad; confirmás el email con un código de 6 números que llega por mail (vence en 10 minutos); y al final lo de tu rol (el profesional, sus rubros y su zona de trabajo; el proveedor, el nombre, el tipo y la dirección de su comercio) y aceptás los términos. El DNI es opcional y se puede verificar después. Hoy el celular queda "sin verificar": HomIA todavía no manda códigos por SMS ni WhatsApp. Sin cuenta podés buscar y mirar; para contactar, contratar, comprar, publicar u ofertar necesitás cuenta.',
     ruta: '/registrarse',
     claves: 'registrarme crear cuenta registro alta sumarme',
   },
@@ -177,9 +178,9 @@ const NUCLEO: Entrada[] = [
     titulo: 'Calendario y fechas del trabajo',
     roles: ['todos', 'profesional', 'cliente'],
     texto:
-      'Con el presupuesto aprobado, en el detalle del proyecto aparece "Fechas del trabajo": el profesional propone inicio y fin estimado, y el cliente las acepta, las rechaza o propone otras (el profesional también puede aceptar, rechazar o contraproponer lo que proponga el cliente; nadie acepta su propia propuesta). Lo acordado se puede reprogramar: mientras el otro decide, siguen las fechas acordadas. Cada paso le llega al otro como aviso. El profesional ve todo en Panel → Calendario (mes con lo acordado y lo propuesto, días libres y ocupados, próximos trabajos y proyectos sin fecha). En el perfil del profesional, clientes y proveedores ven su Disponibilidad de los próximos 3 meses: días ocupados, por confirmar y la próxima fecha libre, sin ver de qué trabajo se trata. Si dos trabajos se superponen, HomIA avisa pero no lo bloquea.',
+      'Con el presupuesto aprobado, en el detalle del proyecto aparece "Fechas del trabajo": el profesional propone inicio, fin estimado y el horario de cada día (por ejemplo de 07:00 a 12:00, o todo el día), y el cliente las acepta, las rechaza o propone otras, también con otro horario (el profesional también puede aceptar, rechazar o contraproponer lo que proponga el cliente; nadie acepta su propia propuesta). Lo acordado se puede reprogramar: mientras el otro decide, siguen las fechas acordadas. Cada paso le llega al otro como aviso. Un profesional puede tener varios trabajos el mismo día en horarios distintos; si el horario choca con otro trabajo YA ACORDADO, HomIA no deja proponerlo ni aceptarlo; si choca solo con otra propuesta sin confirmar, avisa pero no bloquea. El profesional ve todo en Panel → Calendario (cuántos trabajos por día, si el día está completo o con lugar según su jornada —por defecto 06:00 a 18:00, la puede cambiar en "Mi jornada"—, la agenda de cada día por hora con los huecos libres, próximos trabajos y proyectos sin fecha). En el perfil del profesional, clientes y proveedores ven su Disponibilidad de los próximos 3 meses: cada día libre, con lugar o completo, los horarios ocupados y libres de cada día y el próximo día con lugar, sin ver de qué trabajo se trata.',
     ruta: '/panel/profesional/calendario',
-    claves: 'calendario agenda fechas fecha inicio fin disponibilidad disponible ocupado cuando empieza reprogramar turno',
+    claves: 'calendario agenda fechas fecha inicio fin horario hora horas jornada disponibilidad disponible ocupado completo lugar cuando empieza reprogramar turno',
   },
   {
     id: 'homy',
@@ -232,6 +233,16 @@ const NUCLEO: Entrada[] = [
       'Para crear una cuenta hay que aceptar los Términos y Condiciones y la Política de Privacidad (casilla obligatoria en el último paso del registro). Las dos páginas están en el pie de la portada ("Términos y Condiciones" y "Política de Privacidad") y explican las reglas de uso, pagos, plazos, qué datos se guardan y para qué.',
     claves: 'terminos condiciones politica privacidad legal datos personales aceptar',
   },
+  // Sugerencias (D25): una entrada por rol para que Homy lleve a la pantalla del panel correcto
+  ...(['cliente', 'profesional', 'proveedor'] as const).map((rol): Entrada => ({
+    id: `sugerencias-${rol}`,
+    titulo: 'Dejar una sugerencia, queja o reportar un problema',
+    roles: [rol],
+    ruta: `/panel/${rol}/sugerencias`,
+    texto:
+      'En Panel → Sugerencias (en los tres roles, cerca de Ayuda) se toca "Nueva sugerencia" y se elige el tipo: Sugerencia, Queja, Mejora, Oportunidad (algo nuevo que HomIA podría ofrecer), Problema técnico (algo no funciona) u Otro; después sobre qué parte de HomIA es, un título y la descripción (qué pasó, qué esperabas y qué te gustaría). Se pueden sumar hasta 4 fotos (desde la cámara o la galería, JPG, PNG o WEBP de hasta 8 MB); se guardan en un almacenamiento privado que solo ven quien la manda y el equipo de HomIA. En "Problema técnico" se adjunta solo la pantalla desde la que venías, el navegador, el dispositivo y la fecha. Se pueden mandar hasta 10 por día. Abajo, en "Mis envíos", se ve el estado (Recibida, En revisión, Planificada, Resuelta o Descartada) y la respuesta del equipo, que además llega como notificación y por mail. Homy no puede mandar sugerencias por vos.',
+    claves: 'sugerencia sugerencias queja reclamo mejora idea oportunidad problema error falla bug reportar no funciona anda mal feedback opinion comentario contacto equipo',
+  })),
   {
     id: 'no-existe',
     titulo: 'Lo que HomIA NO hace (hoy)',
@@ -278,7 +289,8 @@ function desdeGuias(): Entrada[] {
   return out
 }
 
-export const CONOCIMIENTO: Entrada[] = [...NUCLEO, ...desdeGuias()]
+// Finanzas (D24): cómo usar la sección y el glosario, desde la única fuente (conceptos.ts)
+export const CONOCIMIENTO: Entrada[] = [...NUCLEO, ...desdeGuias(), ...entradasHomyFinanzas()]
 
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 const VACIAS = new Set(['que', 'los', 'las', 'por', 'para', 'con', 'del', 'como', 'una', 'uno', 'hay', 'mas', 'esta', 'este', 'donde', 'cuando', 'hago', 'puedo', 'tengo', 'quiero', 'necesito'])

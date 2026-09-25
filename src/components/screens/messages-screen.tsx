@@ -336,6 +336,8 @@ export default function MessagesScreen({ embedded = false }: { embedded?: boolea
                 return (
                   <button
                     key={c.id}
+                    data-track="abrir conversación"
+                    data-entity={`conversation:${c.id}`}
                     onClick={() => openConv(c.id)}
                     aria-current={isActive ? 'true' : undefined}
                     className={`homy-focus mb-1 flex w-full items-center gap-3 rounded-2xl p-3 text-left transition-all duration-300 ${
@@ -415,6 +417,7 @@ export default function MessagesScreen({ embedded = false }: { embedded?: boolea
                 </div>
                 {thread.conv.otherProfileHref && (
                   <button
+                    data-track="ver perfil desde el chat"
                     onClick={() => navigate(thread.conv.otherProfileHref!)}
                     className="homy-focus inline-flex items-center gap-1.5 rounded-full homy-glass-soft px-3.5 py-2 text-xs font-bold text-[#1D63B8] hover:translate-y-[-1px] transition sm:px-4"
                   >

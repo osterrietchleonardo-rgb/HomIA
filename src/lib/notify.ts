@@ -40,6 +40,9 @@ export const TIPOS_CON_MAIL: Record<string, string> = {
   // fechas del trabajo (D21): la otra parte tiene que responder una propuesta o reprogramación
   fechas_propuestas: 'Ver las fechas',
   fechas_reprogramacion: 'Ver las fechas',
+  // Sugerencias (D25): el equipo de HomIA respondió o cambió el estado de un envío
+  sugerencia_respuesta: 'Ver la respuesta',
+  sugerencia_estado: 'Ver mi sugerencia',
 }
 
 export function mandaMail(type: string): boolean {

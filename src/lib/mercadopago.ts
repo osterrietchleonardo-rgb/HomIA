@@ -134,6 +134,10 @@ export type MpPaymentInfo = {
   transactionAmountRefunded: number
   currencyId: string
   liveMode: boolean
+  /** D30: lo que MP informa del cargo de servicio (fee_details tipo application_fee); null = sin dato */
+  applicationFee?: number | null
+  /** D30: date_approved */
+  approvedAt?: Date | null
 }
 
 /** Consulta un pago. `live === false` → token de prueba (si existe); `accessToken`
@@ -154,7 +158,17 @@ export async function getPayment(
     transactionAmountRefunded: Number(res.transaction_amount_refunded || 0),
     currencyId: String(res.currency_id || ''),
     liveMode: res.live_mode !== false,
+    applicationFee: applicationFeeDe(res.fee_details),
+    approvedAt: res.date_approved ? new Date(res.date_approved) : null,
   }
+}
+
+/** Suma de `fee_details` tipo application_fee (el marketplace_fee que MP acreditó a HomIA). null si no vino. */
+export function applicationFeeDe(fees: { type?: string; amount?: number }[] | null | undefined): number | null {
+  if (!Array.isArray(fees)) return null
+  const app = fees.filter((f) => f?.type === 'application_fee')
+  if (!app.length) return null
+  return round2(app.reduce((s, f) => s + Number(f.amount || 0), 0))
 }
 
 // ── PLANES DE PROVEEDOR (basic | pro) ──

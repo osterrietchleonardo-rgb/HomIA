@@ -10,6 +10,7 @@ const comunes = (rol: 'cliente' | 'profesional' | 'proveedor'): Seccion[] => [
   { ruta: `/panel/${rol}/mensajes`, nombre: 'Mensajes', rol },
   { ruta: `/panel/${rol}/verificacion`, nombre: 'Verificación de identidad (DNI)', rol },
   { ruta: `/panel/${rol}/ayuda`, nombre: 'Centro de ayuda', rol },
+  { ruta: `/panel/${rol}/sugerencias`, nombre: 'Sugerencias (ideas, quejas, mejoras, problemas)', rol },
 ]
 
 export const SECCIONES: Seccion[] = [
@@ -39,6 +40,7 @@ export const SECCIONES: Seccion[] = [
   { ruta: '/panel/profesional/proyectos', nombre: 'Proyectos', rol: 'profesional' },
   { ruta: '/panel/profesional/cobros', nombre: 'Cobros (facturas, cobrado y pendiente, conectar Mercado Pago)', rol: 'profesional' },
   { ruta: '/panel/profesional/calendario', nombre: 'Calendario (fechas de tus trabajos, días libres y ocupados)', rol: 'profesional' },
+  { ruta: '/panel/profesional/finanzas', nombre: 'Finanzas (ganancia, caja, balance, gastos y métricas)', rol: 'profesional' },
   { ruta: '/panel/profesional/presupuestos', nombre: 'Mis ofertas (presupuestos)', rol: 'profesional' },
   { ruta: '/panel/profesional/crm', nombre: 'CRM clientes', rol: 'profesional' },
   { ruta: '/panel/profesional/obras', nombre: 'Mis obras', rol: 'profesional' },
@@ -51,6 +53,7 @@ export const SECCIONES: Seccion[] = [
   { ruta: '/panel/proveedor/stock', nombre: 'Stock', rol: 'proveedor' },
   { ruta: '/panel/proveedor/cobros', nombre: 'Cobros (y conectar Mercado Pago)', rol: 'proveedor' },
   { ruta: '/panel/proveedor/plan', nombre: 'Mi plan', rol: 'proveedor' },
+  { ruta: '/panel/proveedor/finanzas', nombre: 'Finanzas (ganancia, caja, balance, costo del stock y métricas)', rol: 'proveedor' },
   { ruta: '/panel/proveedor/crm', nombre: 'CRM', rol: 'proveedor' },
   { ruta: '/panel/proveedor/vinculaciones', nombre: 'Vinculaciones', rol: 'proveedor' },
   { ruta: '/panel/proveedor/perfil', nombre: 'Mi perfil', rol: 'proveedor' },

@@ -1,6 +1,7 @@
 'use client'
 // Estado global HomIA: sesión + ubicación
 import { create } from 'zustand'
+import { reiniciarVisitante } from '@/lib/analytics/tracker'
 
 export type SessionUserClient = {
   id: string
@@ -58,6 +59,8 @@ export const useSession = create<SessionStore>((set, get) => ({
   },
   logout: async () => {
     await fetch('/api/auth/logout', { method: 'POST' })
+    // métricas (D27): lo que haga otra persona en este navegador no se pega a esta cuenta
+    reiniciarVisitante()
     meFetchedAt = 0
     meSeq++ // un /me en curso de antes del logout ya no escribe
     set({ user: null })

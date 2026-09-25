@@ -17,6 +17,7 @@ import {
   MapPin, CalendarDays, Wallet, MessageSquare, Zap, CalendarClock, Infinity as InfinityIcon, Trash2,
   Link2, Info,
 } from 'lucide-react'
+import { subirImagen } from '@/lib/upload-image'
 
 export type HireTarget = {
   id: string // professionalProfileId
@@ -157,13 +158,9 @@ export default function HireWizard({
     setUploading(true)
     try {
       for (const f of Array.from(files).slice(0, 4 - photos.length)) {
-        const fd = new FormData()
-        fd.append('file', f)
-        fd.append('folder', 'hire')
-        const res = await fetch('/api/uploads', { method: 'POST', body: fd })
-        const d = await res.json()
-        if (res.ok) setPhotos((p) => [...p, { url: d.url, name: d.name }])
-        else toast.error(d.error || 'No se pudo subir la foto')
+        const r = await subirImagen(f, 'hire')
+        if (r.ok) setPhotos((p) => [...p, { url: r.url, name: f.name }])
+        else toast.error(`${f.name}: ${r.error}`)
       }
     } finally {
       setUploading(false)

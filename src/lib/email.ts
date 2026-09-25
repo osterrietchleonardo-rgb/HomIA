@@ -22,6 +22,8 @@ export type EmailContent = {
   unsubscribeFooter?: boolean
   /** Nota chica debajo del botón (ej. "El link vence en 1 hora"). */
   note?: string
+  /** Código de verificación (D26): se muestra grande y separado, fácil de copiar en el celu. */
+  codigo?: string
 }
 
 // Colores de marca (los mismos tokens de src/app/globals.css)
@@ -100,6 +102,9 @@ export function renderEmail(c: EmailContent): { html: string; text: string } {
       `</td></tr></table>` +
       `<p style="margin:0;font-size:12px;line-height:1.5;color:${GRIS};">Si el botón no funciona, copiá este link en tu navegador:<br><a href="${esc(c.button.url)}" style="color:${AZUL};word-break:break-all;">${esc(c.button.url)}</a></p>`
     : ''
+  const codigo = c.codigo
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 18px;"><tr><td align="center" style="background:${CONFORT};border:1px solid ${LINEA};border-radius:12px;padding:14px 22px;font-family:'Courier New',Courier,monospace;font-size:32px;font-weight:700;letter-spacing:8px;color:${NAVY};">${esc(c.codigo)}</td></tr></table>`
+    : ''
   const nota = c.note
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0 0;"><tr><td style="background:${CONFORT};border-left:3px solid ${CELESTE};border-radius:8px;padding:12px 14px;font-size:13px;line-height:1.5;color:${TEXTO};">${esc(c.note)}</td></tr></table>`
     : ''
@@ -122,7 +127,7 @@ export function renderEmail(c: EmailContent): { html: string; text: string } {
 </tr></table></td></tr>
 <tr><td style="padding:28px 24px 26px;">
 <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;font-weight:800;color:${NAVY};">${esc(c.heading)}</h1>
-${parrafos}${boton}${nota}
+${parrafos}${codigo}${boton}${nota}
 </td></tr>
 <tr><td bgcolor="${CONFORT}" style="background:${CONFORT};padding:18px 24px 20px;border-top:1px solid ${LINEA};font-size:12px;line-height:1.6;color:${GRIS};">
 <p style="margin:0 0 8px;">${esc(pie)}</p>
@@ -138,6 +143,7 @@ ${parrafos}${boton}${nota}
     c.heading,
     '',
     ...c.paragraphs.flatMap((p) => [p, '']),
+    ...(c.codigo ? [`Código: ${c.codigo}`, ''] : []),
     ...(c.button ? [`${c.button.label}: ${c.button.url}`, ''] : []),
     ...(c.note ? [c.note, ''] : []),
     '—',

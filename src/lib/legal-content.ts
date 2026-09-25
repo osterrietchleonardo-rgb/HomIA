@@ -7,7 +7,7 @@
 // Los datos de la empresa (razón social, CUIT, domicilio, email) salen de variables de entorno
 // públicas NEXT_PUBLIC_LEGAL_*; si faltan, la página lo dice en vez de inventarlos.
 
-export const LEGAL_VERSION = '2026-09-24'
+export const LEGAL_VERSION = '2026-09-25' // D27: registro de uso de la plataforma (Privacidad §2, §3, §9, §11 y §12)
 
 // Titular de HomIA, responsable de la plataforma y de la base de datos. Datos públicos que dio
 // Leonardo el 25/09/2026. Sin domicilio: pedido expreso de Leonardo. Las variables
@@ -90,6 +90,7 @@ export const TERMINOS: LegalDoc = {
         {
           lista: [
             'Tenés que ser mayor de 18 años y dar datos verdaderos, completos y actualizados.',
+            'Para crear la cuenta confirmás tu email con un código de 6 números que te mandamos por mail (vence a los 10 minutos). Tu celular lo escribís dos veces; por ahora no lo verificamos con un código y figura como "sin verificar".',
             'Una misma cuenta puede tener perfil de cliente, de profesional y de proveedor.',
             'Sos responsable de cuidar tu contraseña y de todo lo que se haga desde tu cuenta. Si creés que alguien entró sin permiso, cambiá la contraseña y avisanos.',
             'Si te olvidaste la contraseña, la recuperás desde "¿Olvidaste tu contraseña?" con un enlace que te llega por email.',
@@ -333,7 +334,8 @@ export const PRIVACIDAD: LegalDoc = {
           tabla: {
             columnas: ['Tipo de dato', 'Ejemplos', 'De dónde sale'],
             filas: [
-              ['Cuenta', 'Nombre, email, contraseña (guardada cifrada, nunca en texto), roles, cómo nos conociste, fecha y versión de los términos aceptados', 'Lo cargás al registrarte'],
+              ['Cuenta', 'Nombre, apellido, email, celular, ciudad, contraseña (guardada cifrada, nunca en texto), roles, cómo nos conociste, fecha y versión de los términos aceptados, y cuándo confirmaste tu email o tu celular', 'Lo cargás al registrarte'],
+              ['Códigos de verificación', 'El código de 6 números que te mandamos para confirmar tu email o tu celular (guardado cifrado, vence a los 10 minutos) y la dirección IP desde la que se pidió, para frenar abusos', 'Se genera al registrarte o al verificar tu email o celular'],
               ['Perfil', 'Foto, teléfono, fecha de nacimiento, dirección, ciudad, oficios, descripción, obras realizadas', 'Lo cargás vos'],
               ['Negocio (proveedor)', 'Razón social, CUIT, logo, tipo de comercio, stock y precios', 'Lo cargás vos'],
               ['Ubicación', 'Ubicación aproximada para buscar cerca', 'Solo si la compartís desde el navegador'],
@@ -343,6 +345,7 @@ export const PRIVACIDAD: LegalDoc = {
               ['Conexión con Mercado Pago', 'Credenciales para crear cobros a tu nombre', 'Solo si conectás tu cuenta para cobrar'],
               ['Asistente Homy', 'Tus preguntas, las respuestas y qué datos consultó', 'Se genera al usar Homy'],
               ['Búsquedas', 'Qué buscaste, para mejorar los resultados y la analítica agregada', 'Se genera al buscar'],
+              ['Uso de la plataforma', 'Pantallas que visitás, botones que tocás, envíos que hacés (solo si salieron bien o no), tiempo de uso y dispositivo aproximado (celu o compu, navegador y sistema). Nunca lo que escribís en los formularios ni el contenido de tus mensajes', 'Se genera al usar HomIA, con un registro propio (sin herramientas de terceros)'],
               ['Técnicos', 'Una huella cifrada e irreversible de tu dirección IP, para limitar el uso gratuito de Homy', 'Tu conexión'],
             ],
           },
@@ -360,6 +363,7 @@ export const PRIVACIDAD: LegalDoc = {
             'Cuidar a la comunidad: verificar identidades, prevenir fraudes y abusos y limitar el uso indebido.',
             'Cumplir obligaciones legales y fiscales y responder pedidos de autoridades.',
             'Mejorar HomIA con estadísticas de uso. La analítica del plan PRO usa datos agregados de demanda que no identifican a nadie.',
+            'Medir cómo se usa la plataforma (qué pantallas y herramientas se usan, cuánto tiempo, dónde se traban las personas) para mejorarla. Ese registro de uso solo lo ve el equipo de HomIA; no se vende ni se comparte.',
           ],
         },
         'No usamos tus datos para publicidad de terceros ni para armar perfiles comerciales para vender.',
@@ -446,6 +450,8 @@ export const PRIVACIDAD: LegalDoc = {
               ['homia_cart_v1', 'Almacenamiento local', 'Guardar el carrito de visitante hasta que ingreses', 'Hasta que lo vacíes o ingreses'],
               ['homy_geo_denied', 'Almacenamiento local', 'Recordar que no quisiste compartir tu ubicación', 'Hasta que borres los datos del navegador'],
               ['homy_dock_hint', 'Almacenamiento local', 'No volver a mostrarte la ayuda del botón de Homy', 'Hasta que borres los datos del navegador'],
+              ['homia_anon_id', 'Almacenamiento local y cookie propia (no es de publicidad)', 'Un número al azar que identifica a este navegador para medir el uso de HomIA; al ingresar se vincula a tu cuenta', '1 año, o hasta que cierres sesión (se cambia por uno nuevo)'],
+              ['homia_ses_v1', 'Almacenamiento local', 'Saber si seguís en la misma visita (se corta tras 30 minutos sin actividad)', 'Hasta que borres los datos del navegador'],
             ],
           },
         },
@@ -471,6 +477,7 @@ export const PRIVACIDAD: LegalDoc = {
               ['Facturas, pagos y pedidos', 'El tiempo que exigen las leyes fiscales y comerciales, aunque elimines la cuenta, sin tu nombre visible'],
               ['Reseñas que escribiste', 'Se conservan para no romper la reputación de otros, firmadas como "Usuario eliminado"'],
               ['Huella cifrada de IP para el límite de Homy', 'Se usa solo para el conteo del día'],
+              ['Registro de uso de la plataforma (pantallas, botones, tiempo de uso)', 'El detalle, 13 meses; el resumen de cada visita (duración y cantidad de pantallas), mientras tengas la cuenta. Todo se borra al eliminar la cuenta'],
             ],
           },
         },
@@ -484,7 +491,7 @@ export const PRIVACIDAD: LegalDoc = {
         {
           lista: [
             'Se borran tu nombre, email, teléfono, dirección, fecha de nacimiento, foto y ubicación. En su lugar queda "Usuario eliminado".',
-            'Se borran las fotos y los datos de tu DNI, tu carrito, tus favoritos, tus conversaciones con Homy y tus notificaciones.',
+            'Se borran las fotos y los datos de tu DNI, tu carrito, tus favoritos, tus conversaciones con Homy, tus notificaciones y tu registro de uso de la plataforma.',
             'Tu perfil de profesional o de proveedor y tu stock dejan de verse.',
             'Se conservan, sin tu nombre, las facturas, pagos, pedidos cerrados y reseñas, por obligaciones legales y para no afectar el historial de las otras personas.',
             'Se cierra tu sesión y ya no se puede ingresar con esa cuenta.',

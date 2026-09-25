@@ -5,6 +5,7 @@ import { db } from '@/lib/db'
 import { canonicalProviderKind } from '@/lib/search-match'
 import { signDniDocUrl, DNI_BUCKET } from '@/lib/dni-ai'
 import { esProActivo } from '@/lib/plans'
+import { normalizarCelular } from '@/lib/registro'
 
 // GET: mi perfil completo (usuario + perfiles + stock + documentos).
 // Los documentos de DNI viven en un bucket privado: acá se devuelven como
@@ -140,7 +141,21 @@ export async function PUT(req: NextRequest) {
 
   const userData: Record<string, unknown> = {}
   if (d.displayName !== undefined) userData.displayName = d.displayName
-  if (d.phone !== undefined) userData.phone = d.phone || null
+  if (d.phone !== undefined) {
+    // D26: el celular se guarda normalizado (+549… en phoneE164, "+54 9 11 2345-6789" en phone).
+    // Si cambia el número, deja de estar verificado. Vacío solo si la cuenta no tenía uno válido.
+    const actual = await db.user.findUnique({ where: { id: auth.user.id }, select: { phoneE164: true } })
+    if (!d.phone) {
+      if (actual?.phoneE164) return fail('El celular es obligatorio: escribí tu número (ej.: 11 2345-6789)', 400, { campo: 'phone' })
+      userData.phone = null
+    } else {
+      const cel = normalizarCelular(d.phone)
+      if (!cel.ok) return fail(cel.error, 400, { campo: 'phone' })
+      userData.phone = cel.mostrar
+      userData.phoneE164 = cel.e164
+      if (actual?.phoneE164 !== cel.e164) userData.phoneVerifiedAt = null
+    }
+  }
   if (d.birthday !== undefined) userData.birthday = d.birthday || null
   if (d.address !== undefined) userData.address = d.address || null
   if (d.city !== undefined) userData.city = d.city || null

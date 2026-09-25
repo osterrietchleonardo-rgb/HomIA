@@ -84,6 +84,19 @@ type SessionRow = {
   searchRadiusKm: number; hasProfessional: boolean; hasProvider: boolean
 }
 
+/** Solo el id del JWT de la sesión, SIN consultar la base (métricas de uso, D27: quien lo use
+ *  tiene que confirmar en su propia consulta que el usuario existe y no está eliminado). */
+export async function getSessionUserIdFromCookie(): Promise<string | null> {
+  try {
+    const token = (await cookies()).get(COOKIE)?.value
+    if (!token) return null
+    const { payload } = await jwtVerify(token, SECRET)
+    return typeof payload.sub === 'string' && payload.sub ? payload.sub : null
+  } catch {
+    return null
+  }
+}
+
 export async function getSessionUser(): Promise<SessionUser | null> {
   try {
     const store = await cookies()

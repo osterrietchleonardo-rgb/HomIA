@@ -3,11 +3,16 @@ import { ok, fail } from '@/lib/api'
 import { getSessionUser } from '@/lib/auth'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
+import { FEEDBACK_BUCKET, FEEDBACK_UPLOAD_FOLDER } from '@/lib/feedback'
 
 // Subida real de imágenes a Supabase Storage.
 //   · folder 'dni' → bucket PRIVADO `dni-docs`; se devuelve el path interno
 //     ("dni-docs/<userId>/dni/<archivo>"), nunca una URL pública. Solo el dueño
 //     obtiene una signed URL (GET /api/profiles/me, GET /api/verification/dni).
+//   · folder 'sugerencias' → bucket PRIVADO `feedback-evidencias` (fotos de evidencia de
+//     Sugerencias, D25: pueden mostrar datos personales); path interno
+//     ("feedback-evidencias/<userId>/sugerencias/<archivo>"). Las ven solo el autor y el
+//     administrador, con URL firmada de 10 min (GET /api/feedback, /api/admin/feedback).
 //   · resto → bucket público `homia-uploads` (obras, reseñas, avatares).
 // Solo JPG/PNG/WEBP (validados por magic bytes, no por el content-type que dice
 // el navegador), máximo 8 MB.
@@ -66,7 +71,8 @@ export async function POST(req: NextRequest) {
   const name = `${crypto.randomBytes(8).toString('hex')}.${ext}`
   const path = `${user.id}/${folder}/${name}`
   const isDni = folder === 'dni'
-  const bucket = isDni ? DNI_BUCKET : PUBLIC_BUCKET
+  const isFeedback = folder === FEEDBACK_UPLOAD_FOLDER
+  const bucket = isDni ? DNI_BUCKET : isFeedback ? FEEDBACK_BUCKET : PUBLIC_BUCKET
 
   const supabase = createClient(supabaseUrl, serviceRole, { auth: { persistSession: false } })
   const { error } = await supabase.storage.from(bucket).upload(path, bytes, {
@@ -81,6 +87,10 @@ export async function POST(req: NextRequest) {
   if (isDni) {
     // path interno, sin URL pública: el documento es privado
     return ok({ url: `${DNI_BUCKET}/${path}`, name, size: file.size, type: realType, private: true }, 201)
+  }
+  if (isFeedback) {
+    // evidencia de una sugerencia: path interno, sin URL pública
+    return ok({ url: `${FEEDBACK_BUCKET}/${path}`, name, size: file.size, type: realType, private: true }, 201)
   }
   const { data: { publicUrl } } = supabase.storage.from(PUBLIC_BUCKET).getPublicUrl(path)
   return ok({ url: publicUrl, name, size: file.size, type: realType }, 201)

@@ -1,12 +1,14 @@
-// Disponibilidad PÚBLICA de un profesional (D21): la ven visitantes, clientes y proveedores.
-// Privacidad: solo rangos de días anónimos y unidos ("ocupado" = fechas acordadas,
-// "por_confirmar" = fechas propuestas). Nunca título, cliente, dirección, nota ni ids de proyectos.
+// Disponibilidad PÚBLICA de un profesional (D21 + horarios D23): la ven visitantes, clientes y proveedores.
+// Por día con trabajos: "con_lugar" o "completo" según SU jornada (por defecto 06:00–18:00), las
+// franjas ocupadas UNIDAS por estado ("ocupado" = acordado, "por_confirmar" = propuesto) y los
+// huecos libres dentro de la jornada. Los días que no aparecen están libres.
+// Privacidad: nunca título, cliente, dirección, nota ni ids de proyectos.
 // Ventana: por defecto hoy + 3 meses; máximo 6 meses; no antes del mes en curso.
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { ok, fail } from '@/lib/api'
 import { db } from '@/lib/db'
-import { addDays, diffDays, isDayKey, todayKey } from '@/lib/schedule'
+import { addDays, diffDays, isDayKey, jornadaOf, todayKey } from '@/lib/schedule'
 import { availabilityOf } from '@/lib/schedule-server'
 import { whereUsuarioPublico } from '@/lib/visibility'
 
@@ -21,7 +23,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // Misma regla que el resto de lo público (D20, src/lib/visibility.ts): cuentas eliminadas y,
   // con HIDE_DEMO_USERS=1, las demo → 404.
-  const pro = await db.professionalProfile.findFirst({ where: { id, user: whereUsuarioPublico() }, select: { id: true } })
+  const pro = await db.professionalProfile.findFirst({ where: { id, user: whereUsuarioPublico() }, select: { id: true, workdayStart: true, workdayEnd: true } })
   if (!pro) return fail('Profesional no encontrado', 404)
 
   const today = todayKey()
@@ -32,6 +34,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (to < from) return fail('El fin de la ventana no puede ser anterior al inicio')
   if (diffDays(from, to) > MAX_VENTANA) return fail('La disponibilidad se consulta de a 6 meses como máximo')
 
-  const a = await availabilityOf(pro.id, from, to)
+  const a = await availabilityOf(pro.id, from, to, jornadaOf(pro.workdayStart, pro.workdayEnd))
   return ok({ today, ...a })
 }

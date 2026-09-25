@@ -1,6 +1,6 @@
 'use client'
 // AppRoot HomIA — router SPA por hash con todas las pantallas
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { useRoute, navigate, Link, markSpaMounted, unmarkSpaMounted } from '@/lib/router'
 import { useSession, useLocation, syncLocationToServer } from '@/lib/store'
@@ -13,6 +13,8 @@ import { Toaster } from '@/components/ui/sonner'
 import TourOverlay from '@/components/help/tour-overlay'
 import HelpDock from '@/components/help/help-dock'
 import VideoModal from '@/components/help/video-modal'
+import AnalyticsTracker from '@/components/app/analytics-tracker'
+import { rutaAdminNueva } from '@/lib/admin-rutas'
 import {
   ArrowLeft, ArrowRight, BadgeCheck, Boxes, Compass, CornerDownRight,
   HardHat, ShieldCheck, Sparkles, User,
@@ -73,7 +75,18 @@ const ProviderLinks = dynamic(() => import('@/components/screens/panel/proveedor
 const ProviderPlan = dynamic(() => import('@/components/screens/panel/proveedor/plan'), { ssr: false, loading: () => <Loading /> })
 const ProviderProfileEdit = dynamic(() => import('@/components/screens/panel/proveedor/perfil'), { ssr: false, loading: () => <Loading /> })
 
+// Finanzas del profesional y del proveedor (D24): un módulo, el rol como parámetro
+const FinanzasScreen = dynamic(() => import('@/components/screens/panel/finanzas/finanzas'), { ssr: false, loading: () => <Loading /> })
+
 // Común a los 3 roles: verificación de identidad por DNI + IA
+// Común a los 3 roles: Sugerencias (D25) + bandeja del administrador (ADMIN_EMAILS)
+const SugerenciasScreen = dynamic(() => import('@/components/screens/panel/sugerencias'), { ssr: false, loading: () => <Loading /> })
+const AdminSugerenciasScreen = dynamic(() => import('@/components/screens/panel/admin-sugerencias'), { ssr: false, loading: () => <Loading /> })
+// Área /admin (D29): layout propio + Métricas (D27) y la bandeja de Sugerencias (D25)
+const AdminMetricasScreen = dynamic(() => import('@/components/screens/panel/admin-metricas'), { ssr: false, loading: () => <Loading /> })
+const AdminLayout = dynamic(() => import('@/components/screens/admin/admin-layout'), { ssr: false, loading: () => <Loading /> })
+// Ingresos de HomIA (D30): suscripciones + cargo 1%, estado de cuenta de proveedores
+const AdminIngresosScreen = dynamic(() => import('@/components/screens/admin/admin-ingresos'), { ssr: false, loading: () => <Loading /> })
 const VerificationScreen = dynamic(() => import('@/components/screens/panel/verificacion').then((m) => m.default), { ssr: false, loading: () => <Loading /> })
 
 const PanelLayout = dynamic(() => import('@/components/screens/panel/panel-layout'), { ssr: false, loading: () => <Loading /> })
@@ -88,6 +101,15 @@ export default function AppRoot() {
 
   // carrito: se sincroniza con la sesión (y fusiona el del visitante al ingresar)
   useCartSync()
+
+  // pantalla anterior (para el contexto de "Problema técnico" en Sugerencias, D25)
+  const pathAnterior = useRef<string | null>(null)
+  useEffect(() => {
+    const prev = pathAnterior.current
+    pathAnterior.current = route.path
+    if (!prev || prev === route.path || /\/sugerencias$/.test(prev)) return
+    try { sessionStorage.setItem('homy_prev_path', prev) } catch { /* sin storage: no pasa nada */ }
+  }, [route.path])
 
   useEffect(() => {
     refresh()
@@ -164,9 +186,17 @@ export default function AppRoot() {
     if (loading) screen = <Loading text="Verificando tu sesión…" />
     else if (!user) {
       screen = <AuthGate path={route.path} />
+    } else if (s[1] === 'admin') {
+      // rutas viejas de administración (D25) → área /admin propia (D29); cubre links y mails viejos
+      const nueva = rutaAdminNueva(route.path, route.raw.split('?')[1] || '')
+      screen = nueva ? <Redirigir to={nueva} /> : <NotFound />
     } else {
       screen = <PanelLayout route={route}>{panelScreen(route)}</PanelLayout>
     }
+  } else if (s[0] === 'admin') {
+    // Área de administración (D29): ingreso PROPIO con ADMIN_EMAIL/ADMIN_PASSWORD, sin cuenta de
+    // usuario ni rol. Sin sesión de admin muestra su formulario; /admin a secas → Métricas.
+    screen = <AdminLayout route={route}>{s[1] === 'metricas' || !s[1] ? <AdminMetricasScreen /> : s[1] === 'sugerencias' ? <AdminSugerenciasScreen /> : s[1] === 'ingresos' ? <AdminIngresosScreen /> : <NotFound />}</AdminLayout>
   } else {
     screen = <NotFound />
   }
@@ -180,6 +210,8 @@ export default function AppRoot() {
       <TourOverlay />
       <HelpDock />
       <VideoModal />
+      {/* métricas de uso propias (D27): no dibuja nada */}
+      <AnalyticsTracker />
       <Toaster position="top-center" richColors />
     </>
   )
@@ -196,6 +228,7 @@ function panelScreen(route: ReturnType<typeof useRoute>) {
   if (page === 'mensajes') return <MessagesScreen embedded />
   if (page === 'verificacion') return <VerificationScreen />
   if (page === 'ayuda') return <HelpScreen embedded />
+  if (page === 'sugerencias' && (role === 'cliente' || role === 'profesional' || role === 'proveedor')) return <SugerenciasScreen role={role} />
 
   if (role === 'cliente') {
     if (page === '' ) return <ClientDashboard />
@@ -225,6 +258,7 @@ function panelScreen(route: ReturnType<typeof useRoute>) {
     if (page === 'devoluciones') return <ProReturns />
     if (page === 'cobros') return <ProCobros />
     if (page === 'calendario') return <ProCalendar />
+    if (page === 'finanzas') return <FinanzasScreen rol="profesional" />
     if (page === 'perfil') return <ProProfileEdit />
     return <NotFound />
   }
@@ -235,6 +269,7 @@ function panelScreen(route: ReturnType<typeof useRoute>) {
     if (page === 'plan') return <ProviderPlan />
     if (page === 'crm') return <ProviderCRM />
     if (page === 'vinculaciones') return <ProviderLinks />
+    if (page === 'finanzas') return <FinanzasScreen rol="proveedor" />
     if (page === 'perfil') return <ProviderProfileEdit />
     return <NotFound />
   }
@@ -326,6 +361,12 @@ function AuthGate({ path }: { path: string }) {
       </div>
     </div>
   )
+}
+
+/** Redirección dentro de la SPA (reemplaza la entrada del historial: "atrás" no vuelve al rebote). */
+function Redirigir({ to }: { to: string }) {
+  useEffect(() => { navigate(to, { replace: true }) }, [to])
+  return <Loading />
 }
 
 function NotFound() {

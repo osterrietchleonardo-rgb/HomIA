@@ -9,7 +9,10 @@
 //   node scripts/e2e-integral.mjs --purge-only        → borra TODO lo creado por la suite (barrido por email)
 //   node scripts/e2e-integral.mjs --only A,B,D        → solo esos flujos (A siempre corre: crea los usuarios)
 //   node scripts/e2e-integral.mjs --mail-sink 3199    → levanta un doble de Resend en 3199 y verifica los mails
+//   node scripts/e2e-integral.mjs --only U --mp-double 3172 → doble de la API de MP (server con MP_API_BASE_PRUEBAS=http://localhost:3172)
 //     (el server tiene que correr con RESEND_API_KEY=re_test y RESEND_API_URL=http://127.0.0.1:3199/emails)
+//     D26: toda alta necesita el código de 6 números del mail; con el doble se lee del mail, sin él
+//     se arma por la base (helper `registrar`) y los checks de códigos que leen el mail no corren.
 //
 // El server tiene que correr con HIDE_DEMO_USERS distinto de 1 (los usuarios de la suite son
 // @homia.test y con el flag prendido quedan ocultos de lo público — D20).
@@ -70,7 +73,8 @@ const FLOWS = {
   A: 'Auth y perfil', B: 'Proveedor: stock, catálogo IA, plan', C: 'Búsqueda y directorio', D: 'Trabajos y ofertas',
   E: 'Proyectos, materiales, facturas', F: 'Compra directa', G: 'Sobrantes', H: 'Reseñas', I: 'Mensajería',
   J: 'Notificaciones', K: 'Verificación DNI', L: 'Obras', M: 'CRM y favoritos', N: 'Seguridad transversal', O: 'IA',
-  P: 'Carrito y pedidos multiproveedor', Q: 'Calendario y fechas del trabajo',
+  P: 'Carrito y pedidos multiproveedor', Q: 'Calendario y fechas del trabajo', R: 'Finanzas', S: 'Sugerencias',
+  T: 'Métricas de uso y panel del admin', U: 'Ingresos de HomIA (suscripciones y cargo 1%)',
 }
 const results = Object.fromEntries(Object.keys(FLOWS).map((k) => [k, { pass: 0, fail: 0, external: 0, items: [] }]))
 
@@ -110,6 +114,8 @@ const ANON = new Actor('anon', null)
 async function http(actor, method, url, { json, form, headers = {}, raw = false } = {}) {
   const h = { ...headers }
   if (actor?.cookie) h.cookie = actor.cookie
+  // D29: sesión de administración propia (cookie homia_admin), aparte de la de usuario
+  if (actor?.adminCookie) h.cookie = [h.cookie, actor.adminCookie].filter(Boolean).join('; ')
   h['x-forwarded-for'] = actor?.ip || RUN_IP
   let body
   if (json !== undefined) {
@@ -119,6 +125,11 @@ async function http(actor, method, url, { json, form, headers = {}, raw = false 
   const res = await fetch(BASE + url, { method, headers: h, body, redirect: 'manual' })
   const setCookies = typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : []
   for (const c of setCookies) {
+    const ma = c.match(/^homia_admin=([^;]*)/)
+    if (ma && actor && actor !== ANON) {
+      actor.adminSetCookie = c
+      actor.adminCookie = !ma[1] || /Max-Age=0/i.test(c) || /Expires=Thu, 01 Jan 1970/i.test(c) ? '' : `homia_admin=${ma[1]}`
+    }
     const m = c.match(/^homy_session=([^;]*)/)
     if (m && actor && actor !== ANON) {
       const expired = !m[1] || /Max-Age=0/i.test(c) || /Expires=Thu, 01 Jan 1970/i.test(c)
@@ -152,6 +163,62 @@ async function upload(actor, folder, seed = 1, { buffer, type = 'image/jpeg', na
   return http(actor, 'POST', '/api/uploads', { form: fd })
 }
 
+// ─────────────────────────── registro con email verificado (D26) ───────────────────────────
+// Toda cuenta nueva necesita el código de 6 números que llega por mail. Con `--mail-sink` el
+// código se lee del mail real (doble de Resend). Sin el doble, se usa la base: se reemplaza el
+// hash del último código por el de uno conocido (misma clave que el server: AUTH_SECRET del .env)
+// — solo para usuarios de prueba @homia.test; en producción no hay ningún atajo.
+const { createHmac } = await import('node:crypto')
+const CLAVE_CODIGOS = createHmac('sha256', process.env.AUTH_SECRET || 'homy-dev-secret-cambiar-en-produccion-9f2a').update('homia:codigos-verificacion').digest('hex')
+const hashCodigoE2E = (canal, proposito, destino, codigo) => createHmac('sha256', CLAVE_CODIGOS).update(`${canal}:${proposito}:${destino}:${codigo}`, 'utf8').digest('hex')
+const codigoDelAsunto = (m) => (m?.body?.subject || '').match(/^(\d{6}) es tu código de HomIA$/)?.[1] || null
+
+/** Pide el código de registro para `email` y devuelve el código (del mail o puesto por la base). */
+async function codigoRegistro(actor, email, { viaBase = false } = {}) {
+  const desde = Date.now()
+  if (MAIL_SINK_PORT && !viaBase) {
+    const r = await post(actor, '/api/auth/verificacion/enviar', { canal: 'email', proposito: 'registro', destino: email })
+    if (r.status !== 200) throw new Error(`no se pudo pedir el código para ${email}: ${brief(r)}`)
+    const m = await waitMail(email.toLowerCase(), desde, { ms: 10_000 })
+    const c = codigoDelAsunto(m)
+    if (!c) throw new Error(`no llegó el mail con el código a ${email}`)
+    return c
+  }
+  const codigo = '246810'
+  await db.verificationCode.create({
+    data: { channel: 'email', purpose: 'registro', target: email.toLowerCase(), codeHash: hashCodigoE2E('email', 'registro', email.toLowerCase(), codigo), expiresAt: new Date(Date.now() + 10 * 60_000), ip: actor.ip },
+  })
+  return codigo
+}
+
+/** Comprobante de email verificado (lo que pide el registro). */
+async function comprobanteEmail(actor, email, opts = {}) {
+  const codigo = await codigoRegistro(actor, email, opts)
+  const r = await post(actor, '/api/auth/verificacion/comprobar', { canal: 'email', proposito: 'registro', destino: email, codigo })
+  if (r.status !== 200 || !r.data?.comprobante) throw new Error(`código de ${email} rechazado: ${brief(r)}`)
+  return r.data.comprobante
+}
+
+/**
+ * Registra con el alta de D26 a partir de un payload "viejo" (displayName, city…): completa lo
+ * obligatorio que falte (apellido, celular repetido, tipo de comercio, dirección) y verifica el
+ * email. `displayName` "[E2E] Cliente Q" → nombre "[E2E]" + apellido "Cliente Q" (queda igual).
+ */
+async function registrar(actor, payload, opts = {}) {
+  const { displayName = `${MARK} Usuario`, ...resto } = payload
+  const [firstName, ...ap] = displayName.split(' ')
+  const esProv = (payload.roles || []).includes('proveedor')
+  const body = {
+    phone: '11 2345-6789', phoneConfirm: '011 15 2345-6789', city: 'CABA',
+    ...(esProv ? { kind: 'corralon', address: 'Av. Corrientes 1234' } : {}),
+    ...resto,
+    firstName, lastName: ap.join(' ') || 'E2E',
+    emailToken: await comprobanteEmail(actor, payload.email, opts),
+  }
+  if (resto.phone && !resto.phoneConfirm) body.phoneConfirm = resto.phone
+  return post(actor, '/api/auth/register', body)
+}
+
 // ─────────────────────────── estado compartido ───────────────────────────
 const C = new Actor('cliente', 'cliente')
 const P = new Actor('profesional', 'profesional')
@@ -163,10 +230,10 @@ const manifest = { ts: TS, base: BASE, catalogElementIds: [], identityDocIdsInse
 // Rutas SPA válidas (espejo de src/components/app/app-root.tsx → panelScreen)
 const PANEL_PAGES = {
   cliente: ['', 'publicar', 'trabajos', 'materiales', 'pedidos', 'proyectos', 'facturas', 'perfil'],
-  profesional: ['', 'bolsa', 'materiales', 'pedidos', 'proyectos', 'presupuestos', 'crm', 'obras', 'vinculaciones', 'devoluciones', 'cobros', 'calendario', 'perfil'],
-  proveedor: ['', 'stock', 'cobros', 'plan', 'crm', 'vinculaciones', 'perfil'],
+  profesional: ['', 'bolsa', 'materiales', 'pedidos', 'proyectos', 'presupuestos', 'crm', 'obras', 'vinculaciones', 'devoluciones', 'cobros', 'calendario', 'finanzas', 'perfil'],
+  proveedor: ['', 'stock', 'cobros', 'finanzas', 'plan', 'crm', 'vinculaciones', 'perfil'],
 }
-const PANEL_COMMON = ['directorio', 'mensajes', 'verificacion', 'ayuda']
+const PANEL_COMMON = ['directorio', 'mensajes', 'verificacion', 'ayuda', 'sugerencias']
 const TOP_ROUTES = ['', 'buscar', 'ingresar', 'registrarse', 'notificaciones', 'directorio', 'materiales', 'mensajes', 'ayuda', 'carrito']
 function linkProblem(link, roles) {
   if (!link) return null
@@ -197,35 +264,73 @@ async function flowA() {
     profesional2: { ...base, email: P2.email, displayName: `${MARK} Pro2 Q`, roles: ['profesional'], professions: ['pintura'] },
     proveedor: { ...base, email: V.email, displayName: `${MARK} Proveedor Q`, roles: ['proveedor'], businessName: `${MARK} Corralón Q`, address: 'Av. Corrientes 1234' },
   }
+  // D26: el cliente escribe su celular "a su manera" y el nombre en minúsculas: se guarda estandarizado
+  payloads.cliente = { ...payloads.cliente, displayName: `${MARK} cliente q`, phone: '(011) 15-2345-6789', phoneConfirm: '+54 9 11 2345 6789' }
+  await startMailSink()
   for (const [a, key] of [[C, 'cliente'], [P, 'profesional'], [P2, 'profesional2'], [V, 'proveedor']]) {
-    const r = await post(a, '/api/auth/register', payloads[key])
+    const r = await registrar(a, payloads[key])
     st(F, `registro ${key}`, r, 201)
     check(F, `registro ${key} deja sesión (cookie)`, !!a.cookie)
     a.id = r.data?.user?.id
     check(F, `registro ${key} roles`, JSON.stringify(r.data?.user?.roles) === JSON.stringify(payloads[key].roles), brief(r))
+    check(F, `registro ${key}: email verificado y celular sin verificar (no hay proveedor de SMS)`, r.data?.user?.emailVerified === true && r.data?.user?.phoneVerified === false, brief(r))
   }
   if (!C.id || !P.id || !P2.id || !V.id) throw new Error('No se pudieron crear los usuarios E2E')
+  const uC0 = await db.user.findUnique({ where: { id: C.id }, select: { displayName: true, phone: true, phoneE164: true, phoneVerifiedAt: true, emailVerifiedAt: true } })
+  check(F, 'celular raro normalizado a E.164 (+549…) y mostrado "+54 9 11 2345-6789"', uC0?.phoneE164 === '+5491123456789' && uC0?.phone === '+54 9 11 2345-6789', JSON.stringify(uC0))
+  check(F, 'nombre con mayúsculas iniciales ("cliente q" → "Cliente Q")', uC0?.displayName === `${MARK} Cliente Q`, uC0?.displayName)
+  check(F, 'cuenta nueva: emailVerifiedAt guardado, phoneVerifiedAt vacío', !!uC0?.emailVerifiedAt && uC0?.phoneVerifiedAt === null, JSON.stringify(uC0))
+  const uV0 = await db.providerProfile.findUnique({ where: { userId: V.id }, select: { kind: true, address: true } })
+  check(F, 'proveedor: tipo de comercio y dirección del local guardados', uV0?.kind === 'corralon' && uV0?.address === 'Av. Corrientes 1234', JSON.stringify(uV0))
 
-  // validaciones (IP distinta para no consumir el cupo del registro válido)
+  // validaciones (IPs distintas para no consumir el cupo del registro válido: 8 por IP por hora)
+  const ipN = (n) => `10.${240 + n}.${(TS >> 8) & 255}.${TS & 255}`
   const bad = new Actor('bad', null)
-  bad.ip = `10.250.${(TS >> 8) & 255}.${TS & 255}`
-  st(F, 'registro con email repetido', await post(bad, '/api/auth/register', payloads.cliente), 409)
-  st(F, 'registro con contraseña sin números', await post(bad, '/api/auth/register', { ...payloads.cliente, email: `${EMAIL_PREFIX}bad1-${TS}${EMAIL_DOMAIN}`, password: 'soloLetrasLargas' }), 400)
-  st(F, 'registro con contraseña corta', await post(bad, '/api/auth/register', { ...payloads.cliente, email: `${EMAIL_PREFIX}bad2-${TS}${EMAIL_DOMAIN}`, password: 'ab12' }), 400)
-  st(F, 'registro con email inválido', await post(bad, '/api/auth/register', { ...payloads.cliente, email: 'no-es-email' }), 400)
-  st(F, 'registro proveedor sin nombre de negocio', await post(bad, '/api/auth/register', { ...payloads.proveedor, email: `${EMAIL_PREFIX}bad3-${TS}${EMAIL_DOMAIN}`, businessName: '' }), 400)
-  check(F, 'los registros inválidos no crean usuarios', (await db.user.count({ where: { email: { in: [1, 2, 3].map((n) => `${EMAIL_PREFIX}bad${n}-${TS}${EMAIL_DOMAIN}`) } } })) === 0)
+  bad.ip = ipN(0)
+  const bad2 = new Actor('bad2', null)
+  bad2.ip = ipN(1)
+  const bad3 = new Actor('bad3', null)
+  bad3.ip = ipN(2)
+  const mailNuevo = (k) => `${EMAIL_PREFIX}${k}-${TS}${EMAIL_DOMAIN}`
+  const completo = { ...payloads.cliente, email: mailNuevo('bad1'), firstName: 'Ana', lastName: 'Prueba' }
+
+  // obligatorios faltantes → 400 con TODO lo que falta
+  const vacio = await post(bad, '/api/auth/register', { roles: ['proveedor'], acceptTerms: true })
+  st(F, 'registro proveedor sin datos', vacio, 400)
+  const faltanV = vacio.data?.faltan || []
+  check(F, 'el 400 dice qué falta: nombre, apellido, email, celular, contraseña, ciudad, comercio, tipo y dirección', ['firstName', 'lastName', 'email', 'phone', 'password', 'city', 'businessName', 'kind', 'address'].every((k) => faltanV.includes(k)) && typeof vacio.data?.campos?.kind === 'string', brief(vacio))
+  const sinRubro = await post(bad, '/api/auth/register', { ...completo, roles: ['profesional'] })
+  check(F, 'profesional sin rubro → 400 con "professions"', sinRubro.status === 400 && sinRubro.data?.faltan?.includes('professions'), brief(sinRubro))
+  st(F, 'registro con contraseña sin números', await post(bad, '/api/auth/register', { ...completo, password: 'soloLetrasLargas' }), 400)
+  st(F, 'registro con contraseña corta', await post(bad, '/api/auth/register', { ...completo, password: 'ab12' }), 400)
+  const emailMalo = await post(bad, '/api/auth/register', { ...completo, email: 'no-es-email' })
+  check(F, 'registro con email inválido → 400 en "email"', emailMalo.status === 400 && !!emailMalo.data?.campos?.email, brief(emailMalo))
+  st(F, 'registro proveedor sin nombre de negocio', await post(bad, '/api/auth/register', { ...payloads.proveedor, firstName: 'Ana', lastName: 'Prueba', email: mailNuevo('bad3'), businessName: '' }), 400)
+  const celMalo = await post(bad, '/api/auth/register', { ...completo, phone: '15 2345-6789', phoneConfirm: '15 2345-6789' })
+  check(F, 'celular sin código de área → 400 en "phone" con mensaje claro', celMalo.status === 400 && /código de área/.test(celMalo.data?.campos?.phone || ''), brief(celMalo))
+  const celDistinto = await post(bad2, '/api/auth/register', { ...completo, phone: '11 2345-6789', phoneConfirm: '11 2345-6788' })
+  check(F, 'celular repetido distinto → 400 en "phoneConfirm"', celDistinto.status === 400 && !!celDistinto.data?.campos?.phoneConfirm, brief(celDistinto))
+  const sinCodigo = await post(bad2, '/api/auth/register', completo)
+  check(F, 'sin el código del mail no se crea la cuenta (needsEmailCode)', sinCodigo.status === 400 && sinCodigo.data?.needsEmailCode === true, brief(sinCodigo))
+  const otroComp = await comprobanteEmail(bad2, mailNuevo('otro'))
+  const compAjeno = await post(bad2, '/api/auth/register', { ...completo, emailToken: otroComp })
+  check(F, 'el comprobante de OTRO email no sirve', compAjeno.status === 400 && compAjeno.data?.needsEmailCode === true, brief(compAjeno))
+  const repetido = await post(bad2, '/api/auth/register', { ...completo, email: C.email })
+  check(F, 'email ya registrado sin su código → 400 needsEmailCode (no revela que existe)', repetido.status === 400 && repetido.data?.needsEmailCode === true, brief(repetido))
+  check(F, 'los registros inválidos no crean usuarios', (await db.user.count({ where: { email: { in: ['bad1', 'bad2', 'bad3', 'otro'].map(mailNuevo) } } })) === 0)
 
   // D19: aceptación de Términos y Política de Privacidad
-  const { acceptTerms: _t, ...sinTerminos } = payloads.cliente
+  const { acceptTerms: _t, ...sinTerminos } = completo
   void _t
-  const nt = await post(bad, '/api/auth/register', { ...sinTerminos, email: `${EMAIL_PREFIX}bad4-${TS}${EMAIL_DOMAIN}` })
+  const nt = await post(bad3, '/api/auth/register', { ...sinTerminos, email: mailNuevo('bad4') })
   st(F, 'registro sin aceptar los términos', nt, 400)
   check(F, 'registro sin términos avisa needsTerms', nt.data?.needsTerms === true, brief(nt))
-  st(F, 'registro con acceptTerms no booleano', await post(bad, '/api/auth/register', { ...payloads.cliente, email: `${EMAIL_PREFIX}bad5-${TS}${EMAIL_DOMAIN}`, acceptTerms: 'true' }), 400)
-  check(F, 'sin aceptar los términos no se crea la cuenta', (await db.user.count({ where: { email: { in: [4, 5].map((n) => `${EMAIL_PREFIX}bad${n}-${TS}${EMAIL_DOMAIN}`) } } })) === 0)
+  st(F, 'registro con acceptTerms no booleano', await post(bad3, '/api/auth/register', { ...completo, email: mailNuevo('bad5'), acceptTerms: 'true' }), 400)
+  check(F, 'sin aceptar los términos no se crea la cuenta', (await db.user.count({ where: { email: { in: ['bad4', 'bad5'].map(mailNuevo) } } })) === 0)
   const terms = await db.user.findUnique({ where: { id: C.id }, select: { termsAcceptedAt: true, termsVersion: true } })
   check(F, 'registro guarda termsAcceptedAt y termsVersion = LEGAL_VERSION', !!terms?.termsAcceptedAt && terms?.termsVersion === LEGAL_VERSION && Date.now() - new Date(terms.termsAcceptedAt).getTime() < 10 * 60_000, `${JSON.stringify(terms)} esperado ${LEGAL_VERSION}`)
+
+  await flowACodigos({ ipN, mailNuevo, completo })
 
   // DB: perfiles por rol, trial del proveedor, pipelines CRM
   const [uC, uP, uV] = await Promise.all([
@@ -275,8 +380,11 @@ async function flowA() {
   check(F, 'PUT rechazado (403) no deja cambios a medias en el usuario', afterCity === beforeCity, `city antes="${beforeCity}" después="${afterCity}"`, 'src/app/api/profiles/me/route.ts:152')
   if (afterCity !== beforeCity) await db.user.update({ where: { id: C.id }, data: { city: beforeCity } })
   check(F, 'no se creó perfil profesional para el cliente', !(await db.professionalProfile.findUnique({ where: { userId: C.id } })))
+  st(F, 'PUT perfil con celular inválido', await put(C, '/api/profiles/me', { phone: '123' }), 400)
+  st(F, 'PUT perfil sin celular (la cuenta tiene uno) → 400', await put(C, '/api/profiles/me', { phone: '' }), 400)
   st(F, 'PUT perfil cliente válido', await put(C, '/api/profiles/me', { displayName: `${MARK} Cliente Q`, city: 'CABA', phone: '1122334455' }), 200)
-  check(F, 'perfil cliente persistido', (await db.user.findUnique({ where: { id: C.id } })).phone === '1122334455')
+  const uCel = await db.user.findUnique({ where: { id: C.id } })
+  check(F, 'perfil cliente persistido con el celular normalizado (y sin verificar: cambió)', uCel.phoneE164 === '+5491122334455' && uCel.phone === '+54 9 11 2233-4455' && uCel.phoneVerifiedAt === null, `${uCel.phone} ${uCel.phoneE164}`)
   st(F, 'PUT perfil profesional válido', await put(P, '/api/profiles/me', { bio: `${MARK} Pintor con 5 años`, professions: ['pintura'], serviceRadiusKm: 20 }), 200)
   st(F, 'PUT perfil proveedor válido', await put(V, '/api/profiles/me', { description: `${MARK} corralón de prueba`, kind: 'Corralón' }), 200)
   const prov = await db.providerProfile.findUnique({ where: { id: V.provId } })
@@ -285,6 +393,127 @@ async function flowA() {
   check(F, 'GET perfil no expone tokens OAuth', meV.status === 200 && !JSON.stringify(meV.data).includes('mpOauthAccessToken'), brief(meV))
 
   await flowARecuperarYMails()
+}
+
+// ── A1. Códigos de verificación de email y celular (D26, migración 0035) ──
+// Con `--mail-sink` se leen los códigos de los mails; sin el doble se prueba lo que no necesita
+// leer el mail (límites, vencido, agotado vía base) y se avisa que el resto quedó sin probar.
+async function flowACodigos({ ipN, mailNuevo, completo }) {
+  const F = 'A'
+  const enviar = (a, body) => post(a, '/api/auth/verificacion/enviar', body)
+  const comprobar = (a, body) => post(a, '/api/auth/verificacion/comprobar', body)
+  const ultimaFila = (target) => db.verificationCode.findFirst({ where: { target }, orderBy: { createdAt: 'desc' } })
+
+  const disp = await get(ANON, '/api/auth/verificacion')
+  check(F, 'qué se puede verificar: email sí, celular no (sin proveedor de SMS/WhatsApp)', disp.status === 200 && disp.data?.disponible?.celular === false && disp.data?.cuenta === null && (MAIL_SINK_PORT ? disp.data?.disponible?.email === true : true), brief(disp))
+  const cel503 = await enviar(ANON, { canal: 'celular', proposito: 'registro', destino: '11 2345-6789' })
+  check(F, 'código al celular sin proveedor → 503 needsConfig (no se simula nada)', cel503.status === 503 && cel503.data?.needsConfig === true, brief(cel503))
+  check(F, 'sin proveedor no se guarda ningún código de celular', (await db.verificationCode.count({ where: { target: '+5491123456789', purpose: 'registro' } })) === 0)
+  st(F, 'enviar con email inválido', await enviar(ANON, { canal: 'email', proposito: 'registro', destino: 'juan@@gmail.com' }), 400)
+  st(F, 'enviar con canal inválido', await enviar(ANON, { canal: 'paloma', proposito: 'registro', destino: 'a@gmail.com' }), 400)
+  st(F, 'comprobar con código de letras', await comprobar(ANON, { canal: 'email', proposito: 'registro', destino: 'a@gmail.com', codigo: 'abc123' }), 400)
+  st(F, 'verificar la cuenta sin sesión', await enviar(ANON, { canal: 'email', proposito: 'cuenta' }), 401)
+
+  if (!MAIL_SINK_PORT) {
+    console.log('  · (sin --mail-sink: los checks que leen el código del mail quedan sin correr)')
+    return
+  }
+  const A1 = new Actor('cod', null)
+  A1.ip = ipN(3)
+
+  // ── código correcto / incorrecto / usado, espera de 60 s ──
+  const e1 = mailNuevo('cod1')
+  const t1 = Date.now()
+  const s1 = await enviar(A1, { canal: 'email', proposito: 'registro', destino: `  ${e1.toUpperCase()} ` })
+  check(F, 'enviar código (email con mayúsculas y espacios) → 200 con vence 600 s y reenvío 60 s', s1.status === 200 && s1.data?.venceEnSeg === 600 && s1.data?.reenviarEnSeg === 60, brief(s1))
+  const m1 = await waitMail(e1, t1)
+  const c1 = codigoDelAsunto(m1)
+  check(F, 'llega el mail con el código de 6 números (asunto y cuerpo)', !!c1 && (m1.body.html || '').includes(c1) && (m1.body.text || '').includes(c1), m1?.body?.subject)
+  check(F, 'el mail del código usa la plantilla de marca y dice que vence en 10 minutos', (m1?.body?.html || '').includes('cid:homia-logo') && /10 minutos/.test(m1?.body?.text || ''), '')
+  const f1 = await ultimaFila(e1)
+  check(F, 'en la base se guarda el hash (64 hex), nunca el código', !!f1 && /^[0-9a-f]{64}$/.test(f1.codeHash) && !f1.codeHash.includes(c1) && f1.attempts === 0, JSON.stringify(f1))
+  const s1b = await enviar(A1, { canal: 'email', proposito: 'registro', destino: e1 })
+  check(F, 'reenviar enseguida → 429 con la espera en segundos', s1b.status === 429 && s1b.data?.motivo === 'espera' && s1b.data?.esperarSeg > 50 && s1b.data?.esperarSeg <= 60, brief(s1b))
+  const malo = c1 === '000000' ? '111111' : '000000'
+  const w1 = await comprobar(A1, { canal: 'email', proposito: 'registro', destino: e1, codigo: malo })
+  check(F, 'código incorrecto → 400 con intentos restantes (4)', w1.status === 400 && w1.data?.motivo === 'incorrecto' && w1.data?.intentosRestantes === 4, brief(w1))
+  const ok1 = await comprobar(A1, { canal: 'email', proposito: 'registro', destino: e1, codigo: c1 })
+  check(F, 'código correcto → 200 con comprobante', ok1.status === 200 && typeof ok1.data?.comprobante === 'string', brief(ok1))
+  const re1 = await comprobar(A1, { canal: 'email', proposito: 'registro', destino: e1, codigo: c1 })
+  check(F, 'el mismo código otra vez → 400 "ya se usó"', re1.status === 400 && re1.data?.motivo === 'usado', brief(re1))
+  check(F, 'el comprobante no sirve como cookie de sesión', (await get(Object.assign(new Actor('tok', null), { cookie: `homy_session=${ok1.data?.comprobante}` }), '/api/auth/me')).data?.user === null)
+  // con el comprobante se crea la cuenta; un segundo alta con el mismo comprobante → 409
+  const E1 = new Actor('cod1', 'cliente')
+  E1.ip = ipN(4)
+  const alta = await post(E1, '/api/auth/register', { ...completo, email: e1, emailToken: ok1.data?.comprobante, phone: '0351 15 555-1234', phoneConfirm: '351 555 1234' })
+  st(F, 'alta con el comprobante del código', alta, 201)
+  check(F, 'alta: celular de Córdoba normalizado (+5493515551234)', alta.data?.user?.phone === '+54 9 351 555-1234', brief(alta))
+  st(F, 'segunda alta con el mismo comprobante → 409 (la cuenta ya existe)', await post(E1, '/api/auth/register', { ...completo, email: e1, emailToken: ok1.data?.comprobante }), 409)
+
+  // ── vencido ──
+  const e2 = mailNuevo('cod2')
+  const t2 = Date.now()
+  st(F, 'enviar código (para vencer)', await enviar(A1, { canal: 'email', proposito: 'registro', destino: e2 }), 200)
+  const c2 = codigoDelAsunto(await waitMail(e2, t2))
+  await db.verificationCode.updateMany({ where: { target: e2 }, data: { expiresAt: new Date(Date.now() - 1000) } })
+  const v2 = await comprobar(A1, { canal: 'email', proposito: 'registro', destino: e2, codigo: c2 || '123456' })
+  check(F, 'código vencido (10 min) → 400 "venció"', v2.status === 400 && v2.data?.motivo === 'vencido' && /venci/.test(v2.data?.error || ''), brief(v2))
+
+  // ── agotado (5 intentos) y reenvío después de la espera ──
+  const e3 = mailNuevo('cod3')
+  const t3 = Date.now()
+  st(F, 'enviar código (para agotar)', await enviar(A1, { canal: 'email', proposito: 'registro', destino: e3 }), 200)
+  const c3 = codigoDelAsunto(await waitMail(e3, t3))
+  const mal3 = c3 === '000000' ? '111111' : '000000'
+  let ult
+  for (let i = 0; i < 5; i++) ult = await comprobar(A1, { canal: 'email', proposito: 'registro', destino: e3, codigo: mal3 })
+  check(F, 'quinto intento incorrecto → 429 agotado', ult.status === 429 && ult.data?.motivo === 'agotado', brief(ult))
+  const tarde = await comprobar(A1, { canal: 'email', proposito: 'registro', destino: e3, codigo: c3 })
+  check(F, 'agotado: ni el código correcto sirve → 429', tarde.status === 429 && tarde.data?.motivo === 'agotado', brief(tarde))
+  // pasó la espera de 60 s (se corre la fecha del código en la base) → código nuevo que sí sirve
+  await db.verificationCode.updateMany({ where: { target: e3 }, data: { createdAt: new Date(Date.now() - 61_000) } })
+  const t3b = Date.now()
+  st(F, 'reenviar después de la espera', await enviar(A1, { canal: 'email', proposito: 'registro', destino: e3 }), 200)
+  const c3b = codigoDelAsunto(await waitMail(e3, t3b))
+  const ok3 = await comprobar(A1, { canal: 'email', proposito: 'registro', destino: e3, codigo: c3b })
+  check(F, 'el código reenviado sirve', ok3.status === 200 && !!ok3.data?.comprobante, brief(ok3))
+
+  // ── tope de 5 códigos por hora para el mismo email ──
+  const e4 = mailNuevo('cod4')
+  const hace = (min) => new Date(Date.now() - min * 60_000)
+  await db.verificationCode.createMany({
+    data: [50, 40, 30, 20, 10].map((m) => ({ channel: 'email', purpose: 'registro', target: e4, codeHash: 'x'.repeat(64), expiresAt: hace(m - 10), createdAt: hace(m), ip: '10.0.0.1' })),
+  })
+  const tope = await enviar(A1, { canal: 'email', proposito: 'registro', destino: e4 })
+  check(F, '6.º código en la hora → 429 "Probá de nuevo en N minutos"', tope.status === 429 && tope.data?.motivo === 'tope_destino' && /minuto/.test(tope.data?.error || ''), brief(tope))
+
+  // ── sin enumeración: email con cuenta → misma respuesta; le llega "ya tenés cuenta", no un código ──
+  // (el código con el que C se registró hace segundos todavía cuenta para la espera de 60 s: se corre)
+  await db.verificationCode.updateMany({ where: { target: C.email }, data: { createdAt: new Date(Date.now() - 61_000) } })
+  const tC = Date.now()
+  const sC = await enviar(A1, { canal: 'email', proposito: 'registro', destino: C.email })
+  const sN = s1
+  check(F, 'email con cuenta: misma respuesta que uno nuevo (200 y mismas claves)', sC.status === 200 && JSON.stringify(Object.keys(sC.data || {}).sort()) === JSON.stringify(Object.keys(sN.data || {}).sort()), `${brief(sC)} vs ${brief(sN)}`)
+  const mC = await waitMail(C.email, tC)
+  check(F, 'al dueño le llega "Ya tenés una cuenta" sin código', mC?.body?.subject === 'Ya tenés una cuenta en HomIA' && !/\b\d{6}\b/.test(mC?.body?.text || ''), mC?.body?.subject)
+  const cC = await comprobar(A1, { canal: 'email', proposito: 'registro', destino: C.email, codigo: '123456' })
+  check(F, 'email con cuenta: cualquier código da "incorrecto" como uno nuevo', cC.status === 400 && cC.data?.motivo === 'incorrecto', brief(cC))
+
+  // ── verificar después, desde la cuenta (cuentas anteriores a D26) ──
+  await db.user.update({ where: { id: C.id }, data: { emailVerifiedAt: null } })
+  const est = await get(C, '/api/auth/verificacion')
+  check(F, 'cuenta sin verificar: el estado lo dice (email no, celular no)', est.data?.cuenta?.emailVerificado === false && est.data?.cuenta?.celularVerificado === false && est.data?.cuenta?.email === C.email, brief(est))
+  const tK = Date.now()
+  const sK = await enviar(C, { canal: 'email', proposito: 'cuenta', destino: 'otro@gmail.com' })
+  st(F, 'pedir código para verificar el email de la cuenta', sK, 200)
+  const mK = await waitMail(C.email, tK)
+  check(F, 'el código va al email de la cuenta (el destino del body se ignora)', !!codigoDelAsunto(mK) && mailsTo('otro@gmail.com').length === 0, mK?.body?.subject)
+  const okK = await comprobar(C, { canal: 'email', proposito: 'cuenta', codigo: codigoDelAsunto(mK) })
+  check(F, 'código correcto → la cuenta queda con email verificado', okK.status === 200 && okK.data?.verificado === true && !!(await db.user.findUnique({ where: { id: C.id } }))?.emailVerifiedAt, brief(okK))
+  const ya = await enviar(C, { canal: 'email', proposito: 'cuenta' })
+  check(F, 'ya verificado: no manda otro código', ya.status === 200 && ya.data?.yaVerificado === true, brief(ya))
+  const celK = await enviar(C, { canal: 'celular', proposito: 'cuenta' })
+  check(F, 'verificar el celular de la cuenta sin proveedor → 503 needsConfig', celK.status === 503 && celK.data?.needsConfig === true, brief(celK))
 }
 
 // ── A2. Recuperar contraseña y avisos por mail (D18, migración 0028) ──
@@ -475,10 +704,10 @@ async function flowBajaInner(F) {
   XP.ip = BAJA_IP
   XV.ip = BAJA_IP
   const base = { password: PASSWORD, lat: CABA.lat, lng: CABA.lng, city: 'CABA', howFoundUs: 'otro', acceptTerms: true, phone: '1133334444', address: 'Calle Falsa 123', birthday: '1990-01-01' }
-  const rp = await post(XP, '/api/auth/register', { ...base, email: XP.email, displayName: `${MARK} Pro Baja`, roles: ['profesional'], professions: ['pintura'], bio: `${MARK} pintor que se va` })
+  const rp = await registrar(XP, { ...base, email: XP.email, displayName: `${MARK} Pro Baja`, roles: ['profesional'], professions: ['pintura'], bio: `${MARK} pintor que se va` })
   st(F, 'baja: registro del profesional', rp, 201)
   XP.id = rp.data?.user?.id
-  const rv = await post(XV, '/api/auth/register', { ...base, email: XV.email, displayName: `${MARK} Prov Baja`, roles: ['proveedor'], businessName: `${MARK} Corralón Baja` })
+  const rv = await registrar(XV, { ...base, email: XV.email, displayName: `${MARK} Prov Baja`, roles: ['proveedor'], businessName: `${MARK} Corralón Baja` })
   st(F, 'baja: registro del proveedor', rv, 201)
   XV.id = rv.data?.user?.id
   if (!XP.id || !XV.id) throw new Error('No se pudieron crear los usuarios de la baja')
@@ -734,7 +963,7 @@ async function flowI() {
   // (sección A, mails), y entonces el POST devuelve ese hilo en vez de 403, que es lo correcto.
   const CI = new Actor('clientei', 'cliente')
   CI.ip = `10.253.${(TS >> 8) & 255}.${TS & 255}`
-  st(F, 'registro de un cliente sin chats previos', await post(CI, '/api/auth/register', { email: CI.email, password: PASSWORD, displayName: `${MARK} Cliente I`, roles: ['cliente'], howFoundUs: 'otro', acceptTerms: true }), 201)
+  st(F, 'registro de un cliente sin chats previos', await registrar(CI, { email: CI.email, password: PASSWORD, displayName: `${MARK} Cliente I`, roles: ['cliente'], howFoundUs: 'otro', acceptTerms: true }), 201)
   CI.id = (await db.user.findUnique({ where: { email: CI.email } }))?.id
   const r2 = await post(V, '/api/messages/conversations', { targetUserId: CI.id })
   check(F, 'proveedor NO puede iniciar chat con un cliente', r2.status === 403 && r2.data?.clientesFirst === true, brief(r2))
@@ -2119,7 +2348,7 @@ async function flowP() {
   const F = 'P'
   const base = { password: PASSWORD, lat: CABA.lat, lng: CABA.lng, city: 'CABA', howFoundUs: 'otro', acceptTerms: true }
   for (const [a, name] of [[VA, 'Ferretería A'], [VB, 'Corralón B']]) {
-    const r = await post(a, '/api/auth/register', { ...base, email: a.email, displayName: `${MARK} Prov ${name}`, roles: ['proveedor'], businessName: `${MARK} ${name}`, address: 'Av. Siempreviva 742' })
+    const r = await registrar(a, { ...base, email: a.email, displayName: `${MARK} Prov ${name}`, roles: ['proveedor'], businessName: `${MARK} ${name}`, address: 'Av. Siempreviva 742' })
     st(F, `registro proveedor ${name}`, r, 201)
     a.id = r.data?.user?.id
     a.provId = a.id ? (await db.providerProfile.findUnique({ where: { userId: a.id } }))?.id : undefined
@@ -2147,7 +2376,7 @@ async function flowP() {
   st(F, 'preview con cantidad inválida', await post(ANON, '/api/cart/preview', { items: [{ stockId: sA1, quantity: -1 }] }), 400)
 
   // el visitante crea su cuenta y su carrito local se fusiona con el de la cuenta
-  const rv = await post(CV, '/api/auth/register', { ...base, email: CV.email, displayName: `${MARK} Visitante`, roles: ['cliente'] })
+  const rv = await registrar(CV, { ...base, email: CV.email, displayName: `${MARK} Visitante`, roles: ['cliente'] })
   st(F, 'el visitante crea su cuenta', rv, 201)
   CV.id = rv.data?.user?.id
   const mg = await post(CV, '/api/cart/merge', { items: [{ stockId: sA1, quantity: 2 }, { stockId: sB2, quantity: 1 }, { stockId: 'no-existe', quantity: 1 }] })
@@ -2357,14 +2586,15 @@ async function flowP() {
   await db.providerProfile.update({ where: { id: VA.provId }, data: { mpOauthAccessToken: null, mpOauthStatus: 'disconnected', mpOauthExpiresAt: null } })
 }
 
-// ═════════════════════════════ Q. CALENDARIO Y FECHAS (D21) ═════════════════════════════
+// ═════════════════════════ Q. CALENDARIO, FECHAS Y HORARIOS (D21 + D23) ═════════════════════════
 async function flowQ() {
   const F = 'Q'
   const hoyAR = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
   const dia = (n) => { const d = new Date(`${hoyAR}T12:00:00.000Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
   const sched = (id) => `/api/projects/${id}/schedule`
   const wz = (t) => ({ professionalProfileId: P.proId, title: `${MARK} Cal ${t}`, description: `${MARK} Pintar ${t}`, address: 'Calle Privada 742', urgency: 'normal', firstMessage: `${MARK} hola, te contrato para ${t}` })
-  const hasR = (d, a, b, e) => (d.data?.ranges || []).some((r) => r.start === a && r.end === b && r.estado === e)
+  // ¿el día `k` de la disponibilidad pública tiene una franja con ese estado? (D23: por día, no por rangos)
+  const diaCon = (d, k, e) => (d.data?.dias || []).some((x) => x.dia === k && x.franjas.some((f) => f.estado === e))
 
   // proyecto A (asistente Contratar): sin cotizar → no se agenda
   const pa = await post(C, '/api/projects', wz('living'))
@@ -2414,7 +2644,7 @@ async function flowQ() {
   check(F, 'cliente pide reprogramar', r1.status === 200 && r1.data?.evento === 'reprogramacion' && r1.data?.schedule?.prevStartDate === dia(5), brief(r1))
   check(F, 'profesional notificado de la reprogramación', !!(await db.notification.findFirst({ where: { userId: P.id, type: 'fechas_reprogramacion' } })))
   const av1 = await get(ANON, `/api/profiles/professional/${P.proId}/availability`)
-  check(F, 'disponibilidad: lo acordado sigue ocupado y el cambio figura por confirmar', hasR(av1, dia(5), dia(9), 'ocupado') && hasR(av1, dia(12), dia(14), 'por_confirmar'), brief(av1))
+  check(F, 'disponibilidad: lo acordado sigue ocupado y el cambio figura por confirmar', diaCon(av1, dia(5), 'ocupado') && diaCon(av1, dia(9), 'ocupado') && diaCon(av1, dia(12), 'por_confirmar') && diaCon(av1, dia(14), 'por_confirmar'), brief(av1))
   const rr = await post(P, sched(A), { accion: 'rechazar', motivo: `${MARK} esa semana no puedo` })
   check(F, 'rechazar la reprogramación restaura lo acordado', rr.status === 200 && rr.data?.evento === 'reprogramacion_rechazada' && rr.data?.schedule?.status === 'acordada' && rr.data?.schedule?.startDate === dia(5) && rr.data?.schedule?.prevStartDate === null, brief(rr))
   const r2 = await post(P, sched(A), { accion: 'proponer', startDate: dia(6), endDate: dia(10) })
@@ -2422,22 +2652,133 @@ async function flowQ() {
   const r2a = await post(C, sched(A), { accion: 'aceptar' })
   check(F, 'cliente acepta la reprogramación', r2a.status === 200 && r2a.data?.schedule?.status === 'acordada' && r2a.data?.schedule?.startDate === dia(6), brief(r2a))
 
-  // proyecto B: rechazo sin fechas previas, solapamiento y carrera de aceptaciones
+  // proyecto B: choque con lo ACORDADO (bloquea, D23), rechazo sin fechas previas y carrera de aceptaciones
   const pb = await post(C, '/api/projects', wz('cocina'))
   const B = pb.data?.project?.id
   S.calB = B
   await patch(P, `/api/projects/${B}`, { laborCost: 30000 })
   st(F, 'proyecto B en materiales', await patch(P, `/api/projects/${B}`, { stage: 'materiales' }), 200)
+  const dbAv = await db.project.findUnique({ where: { id: A } })
+  check(F, 'A sin horario = día completo (dailyStart/dailyEnd null, como un proyecto viejo)', dbAv.dailyStart === null && dbAv.dailyEnd === null, JSON.stringify({ ds: dbAv.dailyStart, de: dbAv.dailyEnd }))
   const pB1 = await post(P, sched(B), { accion: 'proponer', startDate: dia(8), endDate: dia(9) })
-  check(F, 'solapamiento: el profesional ve con qué trabajo se pisa (sin bloquear)', pB1.status === 200 && pB1.data?.solapamiento?.cantidad === 1 && pB1.data?.solapamiento?.proyectos?.[0]?.id === A, brief(pB1))
+  check(F, 'D23: choca con A (acordado, día completo) → 409 y el profesional ve con qué trabajo', pB1.status === 409 && pB1.data?.choque === true && pB1.data?.conflictos?.[0]?.id === A && pB1.data?.conflictos?.[0]?.title === `${MARK} Cal living` && pB1.data?.error?.includes(`${MARK} Cal living`), brief(pB1))
+  const pB1b = await post(P, sched(B), { accion: 'proponer', startDate: dia(8), endDate: dia(8), dailyStart: '20:00', dailyEnd: '21:00' })
+  check(F, 'D23: un día completo acordado choca con cualquier franja (20:00–21:00) → 409', pB1b.status === 409 && pB1b.data?.choque === true, brief(pB1b))
+  check(F, 'D23: el 409 no guardó nada', (await db.project.findUnique({ where: { id: B } }))?.scheduleStatus === null)
+  st(F, 'profesional propone B en días libres', await post(P, sched(B), { accion: 'proponer', startDate: dia(15), endDate: dia(15) }), 200)
   const rjB = await post(C, sched(B), { accion: 'rechazar', motivo: `${MARK} prefiero otro mes` })
   check(F, 'rechazo sin fechas previas → sin fechas, con quién y motivo', rjB.status === 200 && rjB.data?.schedule?.status === null && rjB.data?.schedule?.startDate === null && rjB.data?.schedule?.proposedBy === 'cliente' && rjB.data?.schedule?.note === `${MARK} prefiero otro mes`, brief(rjB))
   check(F, 'profesional notificado del rechazo', !!(await db.notification.findFirst({ where: { userId: P.id, type: 'fechas_rechazadas' } })))
   st(F, 'después del rechazo el profesional propone otra', await post(P, sched(B), { accion: 'proponer', startDate: dia(20), endDate: dia(21) }), 200)
   const cB = await post(C, sched(B), { accion: 'proponer', startDate: dia(7), endDate: dia(7) })
-  check(F, 'solapamiento al cliente: solo la cantidad (sin títulos de otros proyectos)', cB.status === 200 && cB.data?.solapamiento?.cantidad === 1 && cB.data?.solapamiento?.proyectos === undefined && !JSON.stringify(cB.data).includes('living'), brief(cB))
+  check(F, 'D23: el cliente también es bloqueado si choca con lo acordado, sin ver títulos', cB.status === 409 && cB.data?.choque === true && /El profesional ya tiene ese horario ocupado/.test(cB.data?.error || '') && cB.data?.conflictos?.length === 1 && cB.data.conflictos[0].title === undefined && cB.data.conflictos[0].id === undefined && !JSON.stringify(cB.data).includes('living') && !JSON.stringify(cB.data).includes(A), brief(cB))
+  const cB2 = await post(C, sched(B), { accion: 'proponer', startDate: dia(22), endDate: dia(22) })
+  check(F, 'cliente contrapropone en un día libre', cB2.status === 200 && cB2.data?.evento === 'contrapropuesta', brief(cB2))
   const [x1, x2] = await Promise.all([post(P, sched(B), { accion: 'aceptar' }), post(P, sched(B), { accion: 'aceptar' })])
-  check(F, 'dos aceptaciones simultáneas: una sola pasa', [x1.status, x2.status].sort().join(',') === '200,409', `${x1.status} ${x2.status}`)
+  check(F, 'dos aceptaciones simultáneas del mismo proyecto: una sola pasa', [x1.status, x2.status].sort().join(',') === '200,409', `${x1.status} ${x2.status}`)
+
+  // ── horarios (D23): dos trabajos el mismo día sin pisarse ──
+  const mk = async (t) => {
+    const r = await post(C, '/api/projects', wz(t))
+    const id = r.data?.project?.id
+    await patch(P, `/api/projects/${id}`, { laborCost: 20000 })
+    await patch(P, `/api/projects/${id}`, { stage: 'materiales' })
+    return id
+  }
+  const H1 = await mk('baño mañana')
+  const H2 = await mk('balcón tarde')
+  const H3 = await mk('pasillo mediodía')
+  const H4 = await mk('reja')
+  S.calH = [H1, H2, H3, H4]
+  const D = dia(40)
+  const D2 = dia(41)
+  // validación del horario (400)
+  st(F, 'horario: solo la hora de inicio → 400', await post(P, sched(H1), { accion: 'proponer', startDate: D, endDate: D, dailyStart: '07:00' }), 400)
+  st(F, 'horario: solo la hora de fin → 400', await post(P, sched(H1), { accion: 'proponer', startDate: D, endDate: D, dailyEnd: '12:00' }), 400)
+  st(F, 'horario: formato inválido (7:00) → 400', await post(P, sched(H1), { accion: 'proponer', startDate: D, endDate: D, dailyStart: '7:00', dailyEnd: '12:00' }), 400)
+  st(F, 'horario: hora que no existe (25:00) → 400', await post(P, sched(H1), { accion: 'proponer', startDate: D, endDate: D, dailyStart: '25:00', dailyEnd: '26:00' }), 400)
+  st(F, 'horario: no múltiplo de 15 min (07:10) → 400', await post(P, sched(H1), { accion: 'proponer', startDate: D, endDate: D, dailyStart: '07:10', dailyEnd: '12:00' }), 400)
+  st(F, 'horario: fin igual al inicio → 400', await post(P, sched(H1), { accion: 'proponer', startDate: D, endDate: D, dailyStart: '12:00', dailyEnd: '12:00' }), 400)
+  st(F, 'horario: fin antes del inicio (cruza la medianoche) → 400', await post(P, sched(H1), { accion: 'proponer', startDate: D, endDate: D, dailyStart: '22:00', dailyEnd: '02:00' }), 400)
+  // 07–12 y 14–19 el mismo día: los dos se acuerdan
+  const tMail = Date.now()
+  const h1 = await post(P, sched(H1), { accion: 'proponer', startDate: D, endDate: D, dailyStart: '07:00', dailyEnd: '12:00' })
+  check(F, 'propone con horario 07:00–12:00', h1.status === 200 && h1.data?.schedule?.dailyStart === '07:00' && h1.data?.schedule?.dailyEnd === '12:00', brief(h1))
+  const nH1 = await db.notification.findFirst({ where: { userId: C.id, type: 'fechas_propuestas', link: `#/panel/cliente/proyectos/${H1}` } })
+  check(F, 'la notificación incluye el horario', !!nH1 && nH1.body.includes(`el ${D.slice(8, 10)}/${D.slice(5, 7)}, de 07:00 a 12:00`), nH1?.body)
+  check(F, 'el mensaje del chat incluye el horario', !!(await db.message.findFirst({ where: { senderId: P.id, body: { contains: `el ${D.slice(8, 10)}/${D.slice(5, 7)}, de 07:00 a 12:00` } } })))
+  const evH1 = await db.activityEvent.findFirst({ where: { projectId: H1, type: 'fechas_propuestas' } })
+  check(F, 'la línea de tiempo incluye el horario', !!evH1 && evH1.message.includes('de 07:00 a 12:00'), evH1?.message)
+  if (MAIL_SINK_PORT) {
+    const m = await waitMail(C.email, tMail, { subject: 'Te propusieron fechas' })
+    check(F, 'el mail de la propuesta incluye el horario', !!m && JSON.stringify(m.body).includes('de 07:00 a 12:00'), JSON.stringify(m?.body || {}).slice(0, 300))
+  }
+  st(F, 'cliente acepta H1 (07:00–12:00)', await post(C, sched(H1), { accion: 'aceptar' }), 200)
+  const h2 = await post(P, sched(H2), { accion: 'proponer', startDate: D, endDate: D, dailyStart: '14:00', dailyEnd: '19:00' })
+  check(F, '14:00–19:00 el mismo día: no choca (ni aviso)', h2.status === 200 && h2.data?.solapamiento?.cantidad === 0, brief(h2))
+  const a2 = await post(C, sched(H2), { accion: 'aceptar' })
+  check(F, 'cliente acepta H2: los dos quedan acordados el mismo día', a2.status === 200 && a2.data?.schedule?.status === 'acordada', brief(a2))
+  const both = await db.project.findMany({ where: { id: { in: [H1, H2] } }, select: { scheduleStatus: true } })
+  check(F, 'H1 y H2 acordados', both.length === 2 && both.every((x) => x.scheduleStatus === 'acordada'), JSON.stringify(both))
+  // borde: 12:00–14:00 toca los dos pero no choca
+  const hb = await post(P, sched(H4), { accion: 'proponer', startDate: D, endDate: D, dailyStart: '12:00', dailyEnd: '14:00' })
+  check(F, 'bordes que se tocan (12:00–14:00 entre 07–12 y 14–19) no chocan', hb.status === 200, brief(hb))
+  // 11–15 choca con los dos acordados → 409 (el profesional ve títulos; el cliente no)
+  const h3 = await post(P, sched(H3), { accion: 'proponer', startDate: D, endDate: D, dailyStart: '11:00', dailyEnd: '15:00' })
+  const tit = (h3.data?.conflictos || []).map((c) => c.title).sort()
+  check(F, '11:00–15:00 choca con los dos acordados → 409 con títulos, fechas y horario', h3.status === 409 && h3.data?.choque === true && tit.length === 2 && tit[0] === `${MARK} Cal balcón tarde` && tit[1] === `${MARK} Cal baño mañana` && (h3.data?.conflictos || []).some((c) => c.dailyStart === '07:00' && c.dailyEnd === '12:00' && c.startDate === D) && /de 07:00 a 12:00/.test(h3.data?.error || ''), brief(h3))
+  st(F, 'H3 se propone otro día (11:00–15:00)', await post(P, sched(H3), { accion: 'proponer', startDate: D2, endDate: D2, dailyStart: '11:00', dailyEnd: '15:00' }), 200)
+  const c3 = await post(C, sched(H3), { accion: 'proponer', startDate: D, endDate: D, dailyStart: '11:00', dailyEnd: '15:00' })
+  check(F, 'el cliente que contrapropone 11–15 ese día: 409 sin títulos ni ids', c3.status === 409 && /El profesional ya tiene ese horario ocupado/.test(c3.data?.error || '') && !JSON.stringify(c3.data).includes(MARK) && !JSON.stringify(c3.data).includes(H1) && (c3.data?.conflictos || []).every((c) => c.title === undefined && c.id === undefined && !!c.dailyStart), brief(c3))
+  // choque SOLO con otra propuesta → avisa y no bloquea
+  const h4 = await post(P, sched(H4), { accion: 'proponer', startDate: D2, endDate: D2, dailyStart: '12:00', dailyEnd: '13:00' })
+  check(F, 'choca solo con otra propuesta (H3 pendiente) → 200 con aviso y el título al profesional', h4.status === 200 && h4.data?.solapamiento?.cantidad === 1 && h4.data?.solapamiento?.proyectos?.[0]?.id === H3, brief(h4))
+  // carrera: el cliente acepta H3 y H4 a la vez (se pisan) → una 200 y otra 409
+  const [y3, y4] = await Promise.all([post(C, sched(H3), { accion: 'aceptar' }), post(C, sched(H4), { accion: 'aceptar' })])
+  check(F, 'carrera de dos aceptaciones que se pisan: una 200 y otra 409 (choque)', [y3.status, y4.status].sort().join(',') === '200,409' && [y3, y4].find((r) => r.status === 409)?.data?.choque === true, `${y3.status} ${y4.status} ${brief(y3.status === 409 ? y3 : y4)}`)
+  const acordH34 = await db.project.count({ where: { id: { in: [H3, H4] }, scheduleStatus: 'acordada' } })
+  check(F, 'después de la carrera queda UNA sola acordada', acordH34 === 1, String(acordH34))
+  // reprogramar guarda y restaura también la franja
+  const rp1 = await post(C, sched(H1), { accion: 'proponer', startDate: dia(43), endDate: dia(43) })
+  check(F, 'reprogramar H1 a todo el día: la franja acordada queda en prev*', rp1.status === 200 && rp1.data?.schedule?.dailyStart === null && rp1.data?.schedule?.prevDailyStart === '07:00' && rp1.data?.schedule?.prevDailyEnd === '12:00', brief(rp1))
+  const rp1r = await post(P, sched(H1), { accion: 'rechazar' })
+  check(F, 'rechazar la reprogramación restaura días Y horario', rp1r.status === 200 && rp1r.data?.schedule?.startDate === D && rp1r.data?.schedule?.dailyStart === '07:00' && rp1r.data?.schedule?.dailyEnd === '12:00' && rp1r.data?.schedule?.prevDailyStart === null, brief(rp1r))
+  const dH1 = await get(C, `/api/projects/${H1}`)
+  check(F, 'detalle (cliente) con horario y jornada del profesional', dH1.data?.project?.schedule?.dailyStart === '07:00' && dH1.data?.project?.proWorkday?.desde === '06:00' && dH1.data?.project?.proWorkday?.hasta === '18:00', brief(dH1))
+
+  // disponibilidad pública con horarios: "con lugar", franjas unidas y libres, sin datos privados
+  const avH = await get(ANON, `/api/profiles/professional/${P.proId}/availability`)
+  const dD = (avH.data?.dias || []).find((x) => x.dia === D)
+  check(F, 'disponibilidad: el día de 07–12 y 14–19 está "con lugar" con esas franjas y los huecos 06–07 y 12–14', !!dD && dD.estado === 'con_lugar'
+    && JSON.stringify(dD.franjas.filter((f) => f.estado === 'ocupado')) === JSON.stringify([{ desde: '07:00', hasta: '12:00', estado: 'ocupado' }, { desde: '14:00', hasta: '19:00', estado: 'ocupado' }])
+    && JSON.stringify(dD.libres.slice(0, 2)) === JSON.stringify([{ desde: '06:00', hasta: '07:00' }, { desde: '12:00', hasta: '14:00' }]), JSON.stringify(dD))
+  check(F, 'disponibilidad: jornada de referencia 06:00–18:00', avH.data?.jornada?.desde === '06:00' && avH.data?.jornada?.hasta === '18:00', brief(avH))
+  const dA6 = (avH.data?.dias || []).find((x) => x.dia === dia(6))
+  check(F, 'disponibilidad: proyecto sin franja = día completo (00:00–24:00, "completo")', !!dA6 && dA6.estado === 'completo' && dA6.franjas.some((f) => f.desde === '00:00' && f.hasta === '24:00' && f.estado === 'ocupado') && dA6.libres.length === 0, JSON.stringify(dA6))
+  const avHTxt = JSON.stringify(avH.data)
+  const clavesH = avHTxt.replace(/"(dias|dia|estado|franjas|libres|desde|hasta|jornada|from|to|today|proximoDiaConLugar|disponibleEstaSemana)"/g, '')
+  check(F, 'disponibilidad con horarios: sin título, cliente, dirección, nota ni ids', !avHTxt.includes(MARK) && !avHTxt.includes('Calle Privada') && !avHTxt.includes(C.id) && ![A, B, H1, H2, H3, H4].some((x) => avHTxt.includes(x)) && !/"[a-zA-Z_]+":/.test(clavesH.replace(/"(ocupado|por_confirmar|con_lugar|completo)"/g, '')), avHTxt.slice(0, 300))
+  check(F, 'disponibilidad: "próximo día con lugar"', typeof avH.data?.proximoDiaConLugar === 'string' && avH.data?.proximaFechaLibre === undefined, brief(avH))
+
+  // jornada del profesional (D23): configurable; decide "completo"
+  const J = '/api/professional/calendar'
+  st(F, 'jornada: sin sesión → 401', await patch(ANON, J, { workdayStart: '07:00', workdayEnd: '12:00' }), 401)
+  st(F, 'jornada: alguien sin perfil profesional → 403', await patch(C, J, { workdayStart: '07:00', workdayEnd: '12:00' }), 403)
+  st(F, 'jornada: formato inválido → 400', await patch(P, J, { workdayStart: '7:00', workdayEnd: '12:00' }), 400)
+  st(F, 'jornada: una sola hora → 400', await patch(P, J, { workdayStart: '07:00', workdayEnd: null }), 400)
+  st(F, 'jornada: fin antes del inicio → 400', await patch(P, J, { workdayStart: '12:00', workdayEnd: '07:00' }), 400)
+  st(F, 'jornada: no múltiplo de 15 min → 400', await patch(P, J, { workdayStart: '07:05', workdayEnd: '12:00' }), 400)
+  const jp = await patch(P, J, { workdayStart: '07:00', workdayEnd: '12:00' })
+  check(F, 'jornada: el propio profesional la cambia (07:00–12:00)', jp.status === 200 && jp.data?.jornada?.desde === '07:00' && jp.data?.jornadaPorDefecto === false, brief(jp))
+  const p2j = await patch(P2, J, { workdayStart: '09:00', workdayEnd: '10:00' })
+  check(F, 'jornada: otro profesional cambia SOLO la suya', p2j.status === 200 && (await db.professionalProfile.findUnique({ where: { id: P.proId } }))?.workdayStart === '07:00', brief(p2j))
+  const avJ = await get(ANON, `/api/profiles/professional/${P.proId}/availability`)
+  const dJ = (avJ.data?.dias || []).find((x) => x.dia === D)
+  check(F, 'con jornada 07–12, el día de 07–12 + 14–19 queda "completo" en lo público', avJ.data?.jornada?.desde === '07:00' && dJ?.estado === 'completo' && dJ.libres.length === 0 && !JSON.stringify(avJ.data).includes(MARK), JSON.stringify(dJ))
+  const calJ = await get(P, `${J}?from=${D}&to=${D}`)
+  check(F, 'el calendario devuelve la jornada y los horarios', calJ.data?.jornada?.desde === '07:00' && (calJ.data?.projects || []).some((p) => p.id === H1 && p.ranges?.[0]?.dailyStart === '07:00'), brief(calJ))
+  const jr = await patch(P, J, { workdayStart: null, workdayEnd: null })
+  check(F, 'jornada: volver a la de referencia (null → 06:00–18:00)', jr.status === 200 && jr.data?.jornada?.desde === '06:00' && jr.data?.jornadaPorDefecto === true, brief(jr))
 
   // proyecto C (oferta aceptada en la bolsa): se agenda aunque siga en presupuesto
   const jb = await post(C, '/api/jobs', { title: `${MARK} Cal bolsa`, description: `${MARK} Pintar un balcón`, categorySlug: 'pintura', urgency: 'normal', budgetMin: 10000, budgetMax: 30000, address: 'Calle Privada 742', lat: CABA.lat, lng: CABA.lng })
@@ -2466,9 +2807,9 @@ async function flowQ() {
   const av = await get(ANON, `/api/profiles/professional/${P.proId}/availability`)
   st(F, 'disponibilidad pública sin sesión', av, 200)
   const avTxt = JSON.stringify(av.data)
-  const soloClaves = avTxt.replace(/"(ranges|start|end|estado|from|to|today|proximaFechaLibre|disponibleEstaSemana)"/g, '')
+  const soloClaves = avTxt.replace(/"(dias|dia|estado|franjas|libres|desde|hasta|jornada|from|to|today|proximoDiaConLugar|disponibleEstaSemana)"/g, '')
   check(F, 'disponibilidad: sin título, cliente, dirección, nota ni ids', !avTxt.includes(MARK) && !avTxt.includes('Calle Privada') && !avTxt.includes(C.id) && !avTxt.includes(A) && !avTxt.includes(B) && !/title|client|address|note|nota/i.test(soloClaves), avTxt.slice(0, 300))
-  check(F, 'disponibilidad: rango acordado de A ocupado y próxima fecha libre', hasR(av, dia(6), dia(10), 'ocupado') && typeof av.data?.proximaFechaLibre === 'string' && typeof av.data?.disponibleEstaSemana === 'boolean', avTxt.slice(0, 300))
+  check(F, 'disponibilidad: días acordados de A ocupados y próximo día con lugar', diaCon(av, dia(6), 'ocupado') && diaCon(av, dia(10), 'ocupado') && typeof av.data?.proximoDiaConLugar === 'string' && typeof av.data?.disponibleEstaSemana === 'boolean', avTxt.slice(0, 300))
   st(F, 'disponibilidad de profesional inexistente', await get(ANON, '/api/profiles/professional/no-existe/availability'), 404)
   st(F, 'disponibilidad con ventana de más de 6 meses', await get(ANON, `/api/profiles/professional/${P.proId}/availability?from=${dia(0)}&to=${dia(200)}`), 400)
   st(F, 'disponibilidad con fecha inválida', await get(ANON, `/api/profiles/professional/${P.proId}/availability?from=mañana`), 400)
@@ -2476,6 +2817,226 @@ async function flowQ() {
   // detalle del proyecto para cada parte
   const dA = await get(C, `/api/projects/${A}`)
   check(F, 'detalle (cliente) trae las fechas acordadas', dA.data?.project?.schedule?.status === 'acordada' && dA.data?.project?.schedule?.startDate === dia(6), brief(dA))
+}
+
+// ═════════════════════════ R. FINANZAS DEL PROFESIONAL Y DEL PROVEEDOR (D24) ═════════════════════════
+// Usa lo que dejaron las secciones anteriores (facturas de E, ventas de F/P, devoluciones de G) y
+// verifica que los automáticos coincidan con la base con las MISMAS reglas (LOGICA §16). Después:
+// carga/edición/baja de movimientos, recurrente, inversión con amortización, préstamo, 401/403/IDOR y CSV.
+async function flowR() {
+  const F = 'R'
+  const near = (a, b) => Math.abs((a ?? NaN) - b) < 0.02
+  const hoyAR = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10)
+  const mesAR = hoyAR.slice(0, 7)
+  const addMes = (k, n) => { const [y, m] = k.split('-').map(Number); const t = new Date(Date.UTC(y, m - 1 + n, 1)); return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}` }
+  const resumen = async (a, role, periodo = 'mes') => {
+    const r = await get(a, `/api/finanzas/resumen?role=${role}&periodo=${periodo}`)
+    if (r.status !== 200) throw new Error(`resumen ${role} ${periodo}: ${brief(r)}`)
+    return r.data
+  }
+
+  // ── 401 / 403 / 400 ──
+  st(F, 'resumen sin sesión', await get(ANON, '/api/finanzas/resumen?role=profesional'), 401)
+  st(F, 'alta sin sesión (aunque el body esté mal)', await post(ANON, '/api/finanzas/movimientos', { role: 'profesional' }), 401)
+  st(F, 'CSV sin sesión', await get(ANON, '/api/finanzas/export.csv?role=proveedor'), 401)
+  st(F, 'config sin sesión', await put(ANON, '/api/finanzas/config', { role: 'profesional', saldoInicial: 1 }), 401)
+  st(F, 'costos sin sesión', await put(ANON, '/api/finanzas/costos', { items: [{ stockId: 'x', unitCost: 1 }] }), 401)
+  st(F, 'editar sin sesión', await patch(ANON, '/api/finanzas/movimientos/cualquiera', { amount: 1 }), 401)
+  st(F, 'cliente no ve Finanzas de profesional', await get(C, '/api/finanzas/resumen?role=profesional'), 403)
+  st(F, 'profesional no ve Finanzas de proveedor', await get(P, '/api/finanzas/resumen?role=proveedor'), 403)
+  st(F, 'proveedor no carga costos de otro rol (cliente)', await put(C, '/api/finanzas/costos', { items: [{ stockId: S.stock1, unitCost: 1 }] }), 403)
+  st(F, 'rol inválido', await get(P, '/api/finanzas/resumen?role=admin'), 400)
+  st(F, 'período inválido', await get(P, '/api/finanzas/resumen?role=profesional&periodo=semana'), 400)
+  st(F, 'rango al revés', await get(P, '/api/finanzas/resumen?role=profesional&desde=2026-09-10&hasta=2026-09-01'), 400)
+
+  // ── automáticos del PROFESIONAL = base ──
+  const rp = await resumen(P, 'profesional', '12m')
+  const desde = new Date(rp.reporte.periodo.desde)
+  const hasta = new Date(rp.reporte.periodo.hasta)
+  const enR = (d) => d && d >= desde && d < hasta
+  const invs = await db.invoice.findMany({ where: { project: { pro: { userId: P.id } } } })
+  const facturado = invs.filter((i) => enR(i.issuedAt)).reduce((a, i) => a + i.total, 0)
+  const cobrado = invs.filter((i) => i.status === 'pagada' && enR(i.paidAt || i.issuedAt)).reduce((a, i) => a + i.total, 0)
+  const porCobrar = invs.filter((i) => i.status !== 'pagada').reduce((a, i) => a + i.total, 0)
+  check(F, `profesional: facturado = suma de sus facturas en la base (${invs.length} facturas)`, near(rp.reporte.resultados.ventasHomia, facturado), `api ${rp.reporte.resultados.ventasHomia} base ${facturado}`)
+  check(F, 'profesional: hay facturas de las secciones anteriores para comparar', invs.length > 0, `facturas ${invs.length}`)
+  const lineaCobradas = (rp.reporte.caja.detalleEntradas.find((l) => l.concepto === 'Facturas cobradas (HomIA)') || { monto: 0 }).monto
+  check(F, 'profesional: cobrado (caja) = facturas pagadas en la base', near(lineaCobradas, cobrado), `api ${lineaCobradas} base ${cobrado}`)
+  check(F, 'profesional: cuentas por cobrar = facturas no pagadas', near(rp.reporte.balance.cuentasPorCobrarHomia, porCobrar), `api ${rp.reporte.balance.cuentasPorCobrarHomia} base ${porCobrar}`)
+  const manoObra = invs.filter((i) => enR(i.issuedAt)).reduce((a, i) => a + i.laborCost, 0)
+  check(F, 'profesional: mano de obra separada de materiales', near(rp.reporte.resultados.manoObra, manoObra), `api ${rp.reporte.resultados.manoObra} base ${manoObra}`)
+  const devPro = await db.leftoverReturn.findMany({ where: { status: 'reembolsada', sellerKind: 'profesional', professional: { userId: P.id } } })
+  const devProMonto = devPro.filter((d) => enR(d.refundedAt || d.receivedAt || d.respondedAt || d.requestedAt)).reduce((a, d) => a + d.refundTotal, 0)
+  check(F, `profesional: devoluciones = reembolsos de sobrantes que hizo (${devPro.length})`, near(rp.reporte.resultados.devoluciones, devProMonto), `api ${rp.reporte.resultados.devoluciones} base ${devProMonto}`)
+  const comprasP = await db.providerCharge.findMany({ where: { clientId: P.id, status: 'pagada', projectId: null } })
+  const comprasMonto = comprasP.filter((c) => enR(c.paidAt || c.createdAt)).reduce((a, c) => a + c.amount, 0)
+  check(F, `profesional: materiales comprados en HomIA = cobros pagados donde es cliente (${comprasP.length})`, near(rp.reporte.resultados.comprasHomia, comprasMonto), `api ${rp.reporte.resultados.comprasHomia} base ${comprasMonto}`)
+  check(F, 'profesional: el reporte no tiene NaN ni Infinity', !/NaN|Infinity/.test(JSON.stringify(rp)))
+  check(F, 'profesional: cada métrica tiene valor o explicación de "sin dato"', rp.reporte.metricas.every((m) => m.valor !== null || !!m.sinDato), JSON.stringify(rp.reporte.metricas.filter((m) => m.valor === null && !m.sinDato)))
+  check(F, 'profesional: tasa de aceptación presente', rp.reporte.metricas.some((m) => m.id === 'tasa_aceptacion'))
+  manifest.finanzasTiempos = { profesional: rp.tiempos }
+  console.log(`  · automáticos profesional: facturado ${facturado} · cobrado ${cobrado} · por cobrar ${porCobrar} · devoluciones ${devProMonto} · compras ${comprasMonto} · ${rp.tiempos.totalMs} ms`)
+
+  // ── automáticos del PROVEEDOR = base ──
+  const rv = await resumen(V, 'proveedor', '12m')
+  const chs = await db.providerCharge.findMany({ where: { provider: { userId: V.id }, status: { notIn: ['anulada', 'reembolsada'] } } })
+  const vend = chs.filter((c) => enR(c.createdAt)).reduce((a, c) => a + c.amount, 0)
+  const cobV = chs.filter((c) => c.status === 'pagada' && enR(c.paidAt || c.createdAt)).reduce((a, c) => a + c.amount, 0)
+  check(F, `proveedor: ventas = sus cobros no anulados en la base (${chs.length})`, near(rv.reporte.resultados.ventasHomia, vend), `api ${rv.reporte.resultados.ventasHomia} base ${vend}`)
+  check(F, 'proveedor: hay ventas de las secciones anteriores para comparar', chs.length > 0, `cobros ${chs.length}`)
+  const lineaV = (rv.reporte.caja.detalleEntradas.find((l) => l.concepto === 'Ventas cobradas (HomIA)') || { monto: 0 }).monto
+  check(F, 'proveedor: cobrado (caja) = cobros pagados en la base', near(lineaV, cobV), `api ${lineaV} base ${cobV}`)
+  const devV = await db.leftoverReturn.findMany({ where: { status: 'reembolsada', provider: { userId: V.id } } })
+  const devVMonto = devV.filter((d) => enR(d.refundedAt || d.receivedAt || d.respondedAt || d.requestedAt)).reduce((a, d) => a + d.refundTotal, 0)
+  check(F, `proveedor: devoluciones = sobrantes reembolsados (${devV.length})`, near(rv.reporte.resultados.devoluciones, devVMonto), `api ${rv.reporte.resultados.devoluciones} base ${devVMonto}`)
+  check(F, 'proveedor: sin costos cargados, lo vendido queda "sin costo" (no se inventa)', rv.reporte.resultados.mercaderia.conocido === 0 && rv.reporte.resultados.mercaderia.estimado === 0, JSON.stringify(rv.reporte.resultados.mercaderia))
+  check(F, 'proveedor: el reporte no tiene NaN ni Infinity', !/NaN|Infinity/.test(JSON.stringify(rv)))
+  check(F, 'proveedor: trae su stock para cargar costos', Array.isArray(rv.stock) && rv.stock.length > 0, `stock ${rv.stock?.length}`)
+  manifest.finanzasTiempos.proveedor = rv.tiempos
+  console.log(`  · automáticos proveedor: vendido ${vend} · cobrado ${cobV} · devoluciones ${devVMonto} · ${rv.tiempos.totalMs} ms`)
+
+  // costo de la mercadería: se carga el costo de TODO su stock (la mitad del precio) y se compara con la base
+  const stockV = await db.providerStock.findMany({ where: { provider: { userId: V.id } }, select: { id: true, elementId: true, price: true } })
+  const cst = await put(V, '/api/finanzas/costos', { items: stockV.map((s) => ({ stockId: s.id, unitCost: Math.round(s.price * 50) / 100 })) })
+  st(F, 'proveedor carga el costo de sus productos', cst, 200)
+  const otroStock = await db.providerStock.findFirst({ where: { provider: { userId: { not: V.id } } }, select: { id: true } })
+  if (otroStock) st(F, 'IDOR: no carga costos en stock ajeno', await put(V, '/api/finanzas/costos', { items: [{ stockId: otroStock.id, unitCost: 1 }] }), 403)
+  const costoDe = new Map(stockV.map((s) => [s.elementId, Math.round(s.price * 50) / 100]))
+  const chIn = chs.filter((c) => enR(c.createdAt))
+  const items = await db.purchaseItem.findMany({ where: { purchase: { chargeId: { in: chIn.map((c) => c.id) } } } })
+  const mats = await db.projectMaterial.findMany({ where: { id: { in: chIn.flatMap((c) => JSON.parse(c.materialIds || '[]')) } } })
+  let esperadoCmv = 0
+  for (const l of [...items.map((i) => ({ e: i.elementId, q: i.quantity })), ...mats.map((m) => ({ e: m.elementId, q: m.quantity }))]) if (l.e && costoDe.has(l.e)) esperadoCmv += l.q * costoDe.get(l.e)
+  const rv2 = await resumen(V, 'proveedor', '12m')
+  check(F, 'proveedor: costo de lo vendido = cantidades vendidas × costo cargado', near(rv2.reporte.resultados.mercaderia.conocido, Math.round(esperadoCmv * 100) / 100), `api ${rv2.reporte.resultados.mercaderia.conocido} base ${esperadoCmv}`)
+  const stockConCant = await db.providerStock.findMany({ where: { provider: { userId: V.id } }, select: { quantity: true, unitCost: true } })
+  const invEsperado = stockConCant.filter((s) => s.quantity > 0).reduce((a, s) => a + s.quantity * (s.unitCost || 0), 0)
+  check(F, 'proveedor: inventario al costo = stock × costo', near(rv2.reporte.balance.inventario, Math.round(invEsperado * 100) / 100), `api ${rv2.reporte.balance.inventario} base ${invEsperado}`)
+  st(F, 'proveedor: margen estimado fuera de rango → 400', await put(V, '/api/finanzas/config', { role: 'proveedor', costoEstimadoPct: 150 }), 400)
+  st(F, 'profesional no declara margen estimado', await put(P, '/api/finanzas/config', { role: 'profesional', costoEstimadoPct: 70 }), 400)
+
+  // ── carga, edición y baja (profesional), con deltas exactos sobre "este mes" ──
+  const b0 = await resumen(P, 'profesional', 'mes')
+  const alta = (body) => post(P, '/api/finanzas/movimientos', { role: 'profesional', date: hoyAR, ...body })
+  const g = await alta({ type: 'gasto', category: 'combustible', description: `${MARK} nafta`, amount: 25000, paymentMethod: 'efectivo' })
+  st(F, 'alta de un gasto', g, 201)
+  S.finGasto = g.data?.movimiento?.id
+  const b1 = await resumen(P, 'profesional', 'mes')
+  check(F, 'gasto: suma a gastos fijos', near(b1.reporte.resultados.gastos - b0.reporte.resultados.gastos, 25000), `${b0.reporte.resultados.gastos} → ${b1.reporte.resultados.gastos}`)
+  check(F, 'gasto: baja el resultado neto', near(b0.reporte.resultados.resultadoNeto - b1.reporte.resultados.resultadoNeto, 25000))
+  check(F, 'gasto pagado: sale de la caja', near(b1.reporte.caja.salidas - b0.reporte.caja.salidas, 25000))
+
+  st(F, 'ingreso por fuera "me lo deben"', await alta({ type: 'otro_ingreso', category: 'trabajos_fuera', description: `${MARK} arreglo vecino`, amount: 100000, status: 'pendiente' }), 201)
+  st(F, 'inversión con vida útil', await alta({ type: 'inversion', category: 'herramientas_electricas', description: `${MARK} termofusora`, amount: 360000, usefulLifeMonths: 36 }), 201)
+  st(F, 'retiro del dueño', await alta({ type: 'retiro', category: 'retiro_dueno', description: `${MARK} para la casa`, amount: 50000 }), 201)
+  st(F, 'préstamo recibido', await alta({ type: 'prestamo', category: 'prestamo_banco', description: `${MARK} crédito`, amount: 1000000 }), 201)
+  st(F, 'cuota con interés', await alta({ type: 'pago_prestamo', category: 'cuota_prestamo', description: `${MARK} cuota 1`, amount: 110000, interestAmount: 30000 }), 201)
+  const b2 = await resumen(P, 'profesional', 'mes')
+  const R1 = b1.reporte.resultados, R2 = b2.reporte.resultados
+  check(F, 'ingreso por fuera: suma a ventas (lo facturado)', near(R2.ventasFuera - R1.ventasFuera, 100000))
+  check(F, 'ingreso "me lo deben": no entra a la caja todavía', near(b2.reporte.caja.entradas - b1.reporte.caja.entradas, 1000000), `entradas +${b2.reporte.caja.entradas - b1.reporte.caja.entradas} (solo el préstamo)`)
+  check(F, 'ingreso "me lo deben": es cuenta por cobrar', near(b2.reporte.balance.cuentasPorCobrarFuera - b1.reporte.balance.cuentasPorCobrarFuera, 100000))
+  check(F, 'inversión: amortiza 360.000 / 36 = 10.000 este mes', near(R2.amortizaciones - R1.amortizaciones, 10000), `${R1.amortizaciones} → ${R2.amortizaciones}`)
+  check(F, 'inversión: bienes de uso = 360.000 − 10.000', near(b2.reporte.balance.bienesDeUso - b1.reporte.balance.bienesDeUso, 350000))
+  check(F, 'retiro: no cambia el resultado (no es gasto)', near(R2.resultadoNeto - R1.resultadoNeto, 100000 - 10000 - 30000), `Δ ${R2.resultadoNeto - R1.resultadoNeto}`)
+  check(F, 'retiro: se informa aparte', near(R2.retiros - R1.retiros, 50000))
+  check(F, 'cuota: solo el interés es gasto', near(R2.intereses - R1.intereses, 30000))
+  check(F, 'préstamo: deuda = 1.000.000 − 80.000 de capital', near(b2.reporte.balance.prestamos - b1.reporte.balance.prestamos, 920000))
+  check(F, 'caja: sale inversión + retiro + cuota', near(b2.reporte.caja.salidas - b1.reporte.caja.salidas, 360000 + 50000 + 110000))
+  check(F, 'balance cierra: activos − pasivos = patrimonio', near(b2.reporte.balance.activos - b2.reporte.balance.pasivos, b2.reporte.balance.patrimonio))
+
+  // recurrente: desde el 1.º de hace dos meses → 3 ocurrencias en "últimos 3 meses"; terminado el mes pasado → 2
+  const m3a = await resumen(P, 'profesional', '3m')
+  const rec = await post(P, '/api/finanzas/movimientos', { role: 'profesional', type: 'gasto', category: 'internet_celular', description: `${MARK} celular`, amount: 20000, date: `${addMes(mesAR, -2)}-01`, recurring: 'mensual' })
+  st(F, 'alta de un gasto mensual (recurrente)', rec, 201)
+  const m3b = await resumen(P, 'profesional', '3m')
+  check(F, 'recurrente: se cuenta una vez por mes (3 meses)', near(m3b.reporte.resultados.gastos - m3a.reporte.resultados.gastos, 60000), `Δ ${m3b.reporte.resultados.gastos - m3a.reporte.resultados.gastos}`)
+  const fin = await patch(P, `/api/finanzas/movimientos/${rec.data?.movimiento?.id}`, { recurringUntil: `${addMes(mesAR, -1)}-01` })
+  st(F, 'terminar el recurrente', fin, 200)
+  const m3c = await resumen(P, 'profesional', '3m')
+  check(F, 'recurrente terminado: deja de contarse', near(m3c.reporte.resultados.gastos - m3a.reporte.resultados.gastos, 40000), `Δ ${m3c.reporte.resultados.gastos - m3a.reporte.resultados.gastos}`)
+  check(F, 'recurrente: aparece una vez por mes en la lista', m3b.movimientos.filter((m) => m.entryId === rec.data?.movimiento?.id).length === 3)
+
+  // edición y baja lógica
+  const ed = await patch(P, `/api/finanzas/movimientos/${S.finGasto}`, { amount: 30000 })
+  check(F, 'editar el monto', ed.status === 200 && ed.data?.movimiento?.amount === 30000, brief(ed))
+  const b3 = await resumen(P, 'profesional', 'mes')
+  check(F, 'edición: el gasto sube 5.000', near(b3.reporte.resultados.gastos - b2.reporte.resultados.gastos, 5000))
+  st(F, 'editar con categoría de otro tipo → 400', await patch(P, `/api/finanzas/movimientos/${S.finGasto}`, { category: 'vehiculo' }), 400)
+
+  // validaciones
+  st(F, 'monto 0 → 400', await alta({ type: 'gasto', category: 'combustible', description: 'x', amount: 0 }), 400)
+  st(F, 'categoría que no es del tipo → 400', await alta({ type: 'gasto', category: 'vehiculo', description: 'x', amount: 10 }), 400)
+  st(F, 'categoría de otro rol (mercadería en profesional) → 400', await alta({ type: 'compra_mercaderia', category: 'mercaderia', description: 'x', amount: 10 }), 400)
+  st(F, 'fecha futura → 400', await alta({ type: 'gasto', category: 'combustible', description: 'x', amount: 10, date: '2099-01-01' }), 400)
+  st(F, 'interés mayor que la cuota → 400', await alta({ type: 'pago_prestamo', category: 'cuota_prestamo', description: 'x', amount: 10, interestAmount: 20 }), 400)
+  st(F, 'retiro "pendiente" → 400', await alta({ type: 'retiro', category: 'retiro_dueno', description: 'x', amount: 10, status: 'pendiente' }), 400)
+  st(F, 'comprobante que no subió el usuario → 400', await alta({ type: 'gasto', category: 'combustible', description: 'x', amount: 10, attachmentUrl: 'https://evil.example.com/a.jpg' }), 400)
+  const obraAjena = await db.project.findFirst({ where: { pro: { userId: { not: P.id } } }, select: { id: true } })
+  if (obraAjena) st(F, 'IDOR: asignar a una obra ajena → 400', await alta({ type: 'costo_directo', category: 'ayudantes', description: 'x', amount: 10, projectId: obraAjena.id }), 400)
+  const obraPropia = S.project1 || (await db.project.findFirst({ where: { pro: { userId: P.id } }, select: { id: true } }))?.id
+  if (obraPropia) {
+    const antes = (await resumen(P, 'profesional', 'mes')).reporte.obras.find((o) => o.id === obraPropia)
+    const co = await alta({ type: 'costo_directo', category: 'ayudantes', description: `${MARK} ayudante`, amount: 15000, projectId: obraPropia })
+    st(F, 'costo asignado a una obra propia', co, 201)
+    const ob = (await resumen(P, 'profesional', 'mes')).reporte.obras.find((o) => o.id === obraPropia)
+    // la obra puede tener otros costos (p. ej. reintegros de sobrantes que los bajan): se compara el antes y el después
+    if (antes && ob) check(F, 'rentabilidad por obra: el costo asignado suma 15.000 a esa obra', near(ob.costos - antes.costos, 15000), `${JSON.stringify(antes)} → ${JSON.stringify(ob)}`)
+  }
+
+  // IDOR sobre movimientos
+  st(F, 'IDOR: otro profesional no edita el movimiento', await patch(P2, `/api/finanzas/movimientos/${S.finGasto}`, { amount: 1 }), 404)
+  st(F, 'IDOR: otro profesional no lo borra', await del(P2, `/api/finanzas/movimientos/${S.finGasto}`), 404)
+  st(F, 'IDOR: el proveedor tampoco', await patch(V, `/api/finanzas/movimientos/${S.finGasto}`, { amount: 1 }), 404)
+  const listaP2 = await get(P2, '/api/finanzas/movimientos?role=profesional')
+  check(F, 'IDOR: la lista de otro no trae mis movimientos', listaP2.status === 200 && !(listaP2.data?.movimientos || []).some((m) => m.id === S.finGasto), brief(listaP2))
+  const resP2 = await resumen(P2, 'profesional', 'mes')
+  check(F, 'IDOR: el resumen de otro no suma mis gastos', !resP2.movimientos.some((m) => m.entryId === S.finGasto))
+
+  // config: saldo inicial y asignar compras
+  const b4 = await resumen(P, 'profesional', 'mes')
+  const cfg = await put(P, '/api/finanzas/config', { role: 'profesional', saldoInicial: 200000, fechaSaldoInicial: hoyAR })
+  st(F, 'cargar saldo inicial', cfg, 200)
+  const b5 = await resumen(P, 'profesional', 'mes')
+  check(F, 'saldo inicial al cierre de hoy: la caja de hoy es ese saldo', near(b5.reporte.caja.saldoFinal, 200000), `caja ${b5.reporte.caja.saldoFinal}`)
+  check(F, 'caja: inicio + entró − salió = final', near(b5.reporte.caja.saldoInicialPeriodo + b5.reporte.caja.entradas - b5.reporte.caja.salidas, b5.reporte.caja.saldoFinal))
+  check(F, 'sin saldo inicial la recomendación lo pedía; con saldo ya no', b4.reporte.recomendaciones.some((x) => x.id === 'saldo_inicial') && !b5.reporte.recomendaciones.some((x) => x.id === 'saldo_inicial'))
+  st(F, 'saldo inicial con fecha futura → 400', await put(P, '/api/finanzas/config', { role: 'profesional', saldoInicial: 1, fechaSaldoInicial: '2099-01-01' }), 400)
+  const chAjeno = await db.providerCharge.findFirst({ where: { clientId: { not: P.id } }, select: { id: true } })
+  if (chAjeno) st(F, 'IDOR: no asigna una compra ajena', await put(P, '/api/finanzas/config', { role: 'profesional', asignar: { chargeId: chAjeno.id, destino: 'personal' } }), 404)
+  if (comprasP[0] && obraAjena) st(F, 'IDOR: no asigna su compra a una obra ajena', await put(P, '/api/finanzas/config', { role: 'profesional', asignar: { chargeId: comprasP[0].id, destino: obraAjena.id } }), 403)
+  if (comprasP[0]) {
+    st(F, 'marcar una compra "no es del negocio"', await put(P, '/api/finanzas/config', { role: 'profesional', asignar: { chargeId: comprasP[0].id, destino: 'personal' } }), 200)
+    const rp2 = await resumen(P, 'profesional', '12m')
+    check(F, 'compra personal: deja de ser costo', near(rp.reporte.resultados.comprasHomia - rp2.reporte.resultados.comprasHomia, comprasP[0].amount))
+  }
+
+  // baja lógica
+  st(F, 'borrar un movimiento', await del(P, `/api/finanzas/movimientos/${S.finGasto}`), 200)
+  const b6 = await resumen(P, 'profesional', 'mes')
+  check(F, 'baja: deja de contarse', near(b5.reporte.resultados.gastos - b6.reporte.resultados.gastos, 30000))
+  const rowDel = await db.financeEntry.findUnique({ where: { id: S.finGasto } })
+  check(F, 'baja lógica: la fila queda con deletedAt', !!rowDel?.deletedAt)
+  st(F, 'borrado: ya no se puede editar', await patch(P, `/api/finanzas/movimientos/${S.finGasto}`, { amount: 1 }), 404)
+
+  // proveedor: compra de mercadería va al stock (caja sí, resultado no)
+  const pv0 = await resumen(V, 'proveedor', 'mes')
+  st(F, 'proveedor: compra de mercadería', await post(V, '/api/finanzas/movimientos', { role: 'proveedor', type: 'compra_mercaderia', category: 'mercaderia', description: `${MARK} cemento`, amount: 450000, date: hoyAR }), 201)
+  const pv1 = await resumen(V, 'proveedor', 'mes')
+  check(F, 'compra de mercadería: no baja el resultado', near(pv1.reporte.resultados.resultadoNeto, pv0.reporte.resultados.resultadoNeto))
+  check(F, 'compra de mercadería: baja la caja', near(pv1.reporte.caja.salidas - pv0.reporte.caja.salidas, 450000))
+  st(F, 'proveedor no asigna obras', await post(V, '/api/finanzas/movimientos', { role: 'proveedor', type: 'gasto', category: 'alquiler', description: 'x', amount: 1, date: hoyAR, projectId: obraPropia || 'x' }), 400)
+  check(F, 'proveedor: sugerencia de suscripción solo con plan de pago', (pv1.sugerenciaSuscripcion === null) === !['basic', 'pro'].includes((await db.providerProfile.findUnique({ where: { userId: V.id } })).subscription))
+
+  // CSV
+  const csv = await get(P, '/api/finanzas/export.csv?role=profesional&periodo=mes', { raw: true })
+  const txt = csv.buf ? csv.buf.toString('utf8') : ''
+  check(F, 'CSV: 200 y text/csv', csv.status === 200 && (csv.ct || '').includes('text/csv'), brief(csv))
+  check(F, 'CSV: con BOM y separador ";" (Excel en español)', !!csv.buf && csv.buf[0] === 0xef && csv.buf[1] === 0xbb && csv.buf[2] === 0xbf && txt.includes('Resultado neto;'))
+  const fmtAR = (n) => { const [e, d] = Math.abs(n).toFixed(2).split('.'); return `${n < 0 ? '-' : ''}${e.replace(/\B(?=(\d{3})+(?!\d))/g, '.')},${d}` }
+  check(F, 'CSV: montos en formato argentino y coinciden con el resumen', txt.includes(`Resultado neto;${fmtAR(b6.reporte.resultados.resultadoNeto)}`), txt.split('\r\n').find((l) => l.startsWith('Resultado neto')))
+  check(F, 'CSV: trae los movimientos cargados', txt.includes(`${MARK} arreglo vecino`))
+  st(F, 'CSV de otro rol → 403', await get(P, '/api/finanzas/export.csv?role=proveedor'), 403)
 }
 
 // ═══════════════ B (final). PRUEBA VENCIDA DEL PROVEEDOR ═══════════════
@@ -2508,7 +3069,525 @@ async function flowTrialVencido() {
   check(F, 'vencido: igual ve sus ventas', (await get(V, '/api/purchases?as=proveedor')).status === 200)
 }
 
+// ═════════════════════════ T. MÉTRICAS DE USO Y PANEL DEL ADMINISTRADOR (D27) ═════════════════════════
+// Recolección (/api/analytics/collect): lote válido, inválido, demasiado grande, tope 429, el usuario sale
+// de la cookie y nunca del cuerpo, vinculación anónimo → usuario al ingresar, eventos de servidor (login
+// ok/fallido, logout, PDF) sin datos tipeados; panel /api/admin/metricas: 401/404/200, cifras de negocio
+// que coinciden con la base, búsquedas sin resultado, CSV, fichas por usuario y por activo.
+// Todos los navegadores de prueba usan anonId con prefijo `e2e-` (la purga los borra).
+// Área /admin (D29): ingresa con ADMIN_EMAIL + ADMIN_PASSWORD del .env (el mismo que lee el server; nunca se imprimen).
+const T_ANON = (s) => `e2e-${EMAIL_PREFIX.replace(/[^a-z0-9]/gi, '')}${s}${TS}`.slice(0, 64)
+const tEv = (over = {}) => ({ type: 'click', name: 'Publicar trabajo', path: '/panel/cliente/publicar', props: { tag: 'button' }, at: Date.now(), ...over })
+const tLote = (anonId, events, extra = {}) => ({ anonId, sessionId: `${anonId}s`.slice(0, 64), sesion: { startedAt: Date.now() - 60_000, entryPath: '/', referrer: 'google.com', utm: { utm_source: 'e2e' }, device: 'compu · Chrome · Windows', screen: '1280x800' }, events, ...extra })
+const tSleep = (ms) => new Promise((r) => setTimeout(r, ms))
+/** Ingreso al área /admin (D29) con las credenciales del .env (nunca se imprimen). true si quedó la cookie. */
+async function loginAdmin(actor) {
+  if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD) return false
+  const r = await http(actor, 'POST', '/api/admin/login', { json: { email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD } })
+  return r.status === 200 && !!actor.adminCookie
+}
+async function flowT() {
+  const F = 'T'
+  const collect = (a, body, o = {}) => http(a, 'POST', '/api/analytics/collect', { json: body, ...o })
+
+  // ── recolección como visitante ──
+  const a1 = T_ANON('a')
+  const unico = `e2emet${TS}sinresultado`
+  const r1 = await collect(ANON, tLote(a1, [
+    tEv({ type: 'page_view', name: '/', path: '/' }),
+    tEv(),
+    tEv({ type: 'search', name: unico, path: '/materiales', props: { pantalla: 'materiales', resultados: 0 } }),
+    tEv({ type: 'heartbeat', name: 'latido', props: { ms: 30_000 } }),
+    tEv({ type: 'heartbeat', name: 'latido', props: { ms: 3_600_000 } }), // latido trucho: tope 35 s
+  ]))
+  st(F, 'collect: lote válido de visitante', r1, 204)
+  const evA1 = await db.analyticsEvent.findMany({ where: { anonId: a1 } })
+  check(F, 'collect: guarda 3 eventos (los latidos no son filas)', evA1.length === 3, `n=${evA1.length}`)
+  check(F, 'collect: visitante sin userId', evA1.every((e) => e.userId === null))
+  const sesA1 = await db.analyticsSession.findUnique({ where: { id: `${a1}s`.slice(0, 64) } })
+  check(F, 'collect: sesión con tiempo activo = 30 s + tope 35 s', sesA1?.activeMs === 65_000, JSON.stringify(sesA1))
+  check(F, 'collect: sesión cuenta 1 pantalla y 3 eventos', sesA1?.pageViews === 1 && sesA1?.events === 3)
+  const r1b = await collect(ANON, tLote(a1, [tEv({ type: 'heartbeat', name: 'latido', props: { ms: 20_000 } })]))
+  st(F, 'collect: lote solo con latido', r1b, 204)
+  const sesA1b = await db.analyticsSession.findUnique({ where: { id: `${a1}s`.slice(0, 64) } })
+  check(F, 'collect: el latido suma a la misma sesión', sesA1b?.activeMs === 85_000, `activeMs=${sesA1b?.activeMs}`)
+
+  // ── inválidos ──
+  st(F, 'collect: JSON roto', await http(ANON, 'POST', '/api/analytics/collect', { form: '{no es json', headers: { 'content-type': 'application/json' } }), 400)
+  st(F, 'collect: sin eventos', await collect(ANON, tLote(T_ANON('b'), [])), 400)
+  st(F, 'collect: más de 50 eventos', await collect(ANON, tLote(T_ANON('b'), Array.from({ length: 51 }, () => tEv()))), 400)
+  st(F, 'collect: tipo "server" no se acepta del navegador', await collect(ANON, tLote(T_ANON('b'), [tEv({ type: 'server' })])), 400)
+  st(F, 'collect: userId en el cuerpo → rechazado', await collect(ANON, tLote(T_ANON('b'), [tEv()], { userId: C.id })), 400)
+  st(F, 'collect: userId dentro de un evento → rechazado', await collect(ANON, tLote(T_ANON('b'), [tEv({ userId: C.id })])), 400)
+  st(F, 'collect: props con texto largo → rechazado', await collect(ANON, tLote(T_ANON('b'), [tEv({ props: { texto: 'x'.repeat(500) } })])), 400)
+  const grande = JSON.stringify(tLote(T_ANON('b'), [tEv({ name: 'x'.repeat(70) })])).replace('"events"', `"relleno":"${'y'.repeat(60_000)}","events"`)
+  st(F, 'collect: lote de más de 48 KB', await http(ANON, 'POST', '/api/analytics/collect', { form: grande, headers: { 'content-type': 'application/json' } }), 413)
+  check(F, 'los lotes inválidos no guardan nada', (await db.analyticsEvent.count({ where: { anonId: T_ANON('b') } })) === 0)
+
+  // ── tope por navegador (30 lotes/min) → 429 silencioso ──
+  const aR = T_ANON('r')
+  const estados = []
+  for (let i = 0; i < 32; i++) estados.push((await collect(ANON, tLote(aR, [tEv()]))).status)
+  check(F, 'collect: tope por navegador → 429', estados.filter((s) => s === 204).length === 30 && estados.slice(30).every((s) => s === 429), estados.join(','))
+
+  // ── el usuario sale de la cookie ──
+  const aC = T_ANON('c')
+  st(F, 'collect: lote con sesión de cliente', await collect(C, tLote(aC, [tEv({ path: '/panel/cliente', role: 'cliente' })])), 204)
+  const evC = await db.analyticsEvent.findMany({ where: { anonId: aC } })
+  check(F, 'collect: el userId sale de la cookie', evC.length === 1 && evC[0].userId === C.id, JSON.stringify(evC.map((e) => e.userId)))
+
+  // ── vinculación anónimo → usuario al ingresar + eventos de servidor ──
+  const aL = T_ANON('l')
+  const TL = new Actor('tl', 'cliente')
+  TL.email = C.email
+  st(F, 'collect: navegación anónima antes de ingresar', await collect(ANON, tLote(aL, [tEv({ type: 'page_view', name: '/ingresar', path: '/ingresar' })])), 204)
+  const ck = { cookie: `homia_anon_id=${aL}.${`${aL}s`.slice(0, 64)}` }
+  st(F, 'login fallido (contraseña mal) con cookie de analítica', await post(TL, '/api/auth/login', { email: C.email, password: 'Incorrecta999' }, { headers: ck }), 401)
+  const aX = T_ANON('x')
+  const mailFalso = `${EMAIL_PREFIX}noexiste-${TS}${EMAIL_DOMAIN}`
+  st(F, 'login fallido (email que no existe)', await post(ANON, '/api/auth/login', { email: mailFalso, password: 'Incorrecta999' }, { headers: { cookie: `homia_anon_id=${aX}.${aX}s` } }), 401)
+  st(F, 'login ok con cookie de analítica', await post(TL, '/api/auth/login', { email: C.email, password: PASSWORD }, { headers: ck }), 200)
+  await tSleep(2500) // los eventos de servidor se escriben con after(), después de responder
+  const evL = await db.analyticsEvent.findMany({ where: { anonId: aL }, orderBy: { createdAt: 'asc' } })
+  const fall = evL.find((e) => e.name === 'login_fallido')
+  const okL = evL.find((e) => e.name === 'login_ok')
+  check(F, 'evento login_fallido registrado (existe=true)', fall?.type === 'server' && fall?.props?.existe === true, JSON.stringify(fall))
+  check(F, 'login_fallido sin email ni contraseña', !!fall && !JSON.stringify(fall).includes('Incorrecta999') && !JSON.stringify(fall).toLowerCase().includes(C.email.toLowerCase()))
+  check(F, 'login_fallido guarda solo la huella de la IP', typeof fall?.props?.ipHash === 'string' && !JSON.stringify(fall).includes(RUN_IP))
+  check(F, 'evento login_ok con el usuario', okL?.userId === C.id, JSON.stringify(okL))
+  check(F, 'vinculación: la navegación anónima previa quedó del usuario', evL.filter((e) => e.type !== 'server').every((e) => e.userId === C.id) && evL.length >= 3, JSON.stringify(evL.map((e) => [e.name, e.userId])))
+  const sesL = await db.analyticsSession.findUnique({ where: { id: `${aL}s`.slice(0, 64) } })
+  check(F, 'vinculación: la sesión anónima quedó del usuario', sesL?.userId === C.id, JSON.stringify(sesL))
+  const evX = await db.analyticsEvent.findFirst({ where: { anonId: aX } })
+  check(F, 'login_fallido con email inexistente: existe=false, sin el email', evX?.props?.existe === false && !JSON.stringify(evX).includes(mailFalso), JSON.stringify(evX))
+  TL.cookie = `${TL.cookie}; homia_anon_id=${aL}.${`${aL}s`.slice(0, 64)}`
+  if (S.inv1) {
+    const pdf = await http(C, 'GET', `/api/invoices/${S.inv1}/pdf`, { raw: true, headers: { cookie: `${C.cookie}; homia_anon_id=${aC}.${aC}s` } })
+    st(F, 'PDF de factura', pdf, 200)
+  }
+  st(F, 'logout', await post(TL, '/api/auth/logout', {}), 200)
+  await tSleep(2500)
+  check(F, 'evento logout registrado', (await db.analyticsEvent.count({ where: { anonId: aL, name: 'logout', userId: C.id } })) === 1)
+  if (S.inv1) check(F, 'evento factura_pdf con el activo', (await db.analyticsEvent.count({ where: { name: 'factura_pdf', entityType: 'invoice', entityId: S.inv1, userId: C.id } })) >= 1)
+
+  // ── panel del administrador ──
+  // D29: el admin entra a /admin con ADMIN_EMAIL + ADMIN_PASSWORD (del .env), sin cuenta de usuario.
+  // Las credenciales se leen de process.env y NUNCA se imprimen.
+  for (const [u, nombre] of [['/api/admin/metricas', 'métricas'], [`/api/admin/metricas/usuario?id=${C.id}`, 'ficha de usuario'], ['/api/admin/metricas/activo?tipo=project&id=x123', 'ficha de activo'], ['/api/admin/feedback', 'bandeja de sugerencias']]) {
+    st(F, `${nombre} sin sesión de admin → 404`, await get(ANON, u), 404)
+    st(F, `${nombre} con sesión de usuario común → 404`, await get(C, u), 404)
+  }
+  st(F, 'PATCH de sugerencias sin sesión de admin → 404', await patch(C, '/api/admin/feedback/x123', { status: 'resuelta' }), 404)
+  const est0 = await get(ANON, '/api/admin/login')
+  check(F, 'GET /api/admin/login sin cookie → admin=false', est0.status === 200 && est0.data?.admin === false, brief(est0))
+  const credOk = !!(process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD)
+  if (!check(F, 'ADMIN_EMAIL y ADMIN_PASSWORD cargadas en el .env', credOk, 'faltan en el .env')) return
+  const tMal = new Date()
+  const malo = new Actor('adminmal', null)
+  malo.ip = `10.248.${(TS >> 8) & 255}.${TS & 255}`
+  const rMal = await post(malo, '/api/admin/login', { email: process.env.ADMIN_EMAIL, password: `${PASSWORD}-no-es` })
+  st(F, 'ingreso admin con contraseña incorrecta', rMal, 401)
+  check(F, 'mensaje genérico (no dice qué falló)', rMal.data?.error === 'Email o contraseña incorrectos', brief(rMal))
+  check(F, 'sin cookie de admin al fallar', !malo.adminCookie)
+  st(F, 'ingreso admin con email incorrecto', await post(malo, '/api/admin/login', { email: `${EMAIL_PREFIX}noadmin${EMAIL_DOMAIN}`, password: process.env.ADMIN_PASSWORD }), 401)
+  st(F, 'ingreso admin vacío (zod)', await post(malo, '/api/admin/login', {}), 400)
+  for (let i = 0; i < 3; i++) await post(malo, '/api/admin/login', { email: 'x@y.z', password: 'nop' })
+  const r429 = await post(malo, '/api/admin/login', { email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD })
+  st(F, 'ingreso admin: 5 fallos por IP → 429 (aunque después acierte)', r429, 429)
+  check(F, 'el 429 no abre sesión', !malo.adminCookie)
+  const TA = new Actor('tadmin', null)
+  TA.ip = `10.247.${(TS >> 8) & 255}.${TS & 255}`
+  check(F, 'ingreso admin correcto', await loginAdmin(TA))
+  const sc = TA.adminSetCookie || ''
+  check(F, 'cookie homia_admin httpOnly, SameSite=Strict, path=/ y 12 h', /HttpOnly/i.test(sc) && /SameSite=Strict/i.test(sc) && /Path=\//i.test(sc) && /Max-Age=43200/i.test(sc), sc.replace(/homia_admin=[^;]+/, 'homia_admin=…'))
+  const est1 = await get(TA, '/api/admin/login')
+  check(F, 'GET /api/admin/login con cookie → admin=true', est1.data?.admin === true, brief(est1))
+  // la cookie de sesión de un usuario puesta como cookie de admin no sirve
+  const falsa = new Actor('adminfalsa', null)
+  falsa.adminCookie = `homia_admin=${(C.cookie.match(/homy_session=([^;]+)/) || [])[1] || 'x'}`
+  st(F, 'el JWT de un usuario no sirve como sesión de admin', await get(falsa, '/api/admin/metricas'), 404)
+  st(F, 'bandeja de sugerencias con sesión de admin', await get(TA, '/api/admin/feedback'), 200)
+  await tSleep(2500)
+  const evAdm = await db.analyticsEvent.findMany({ where: { name: { in: ['admin_login_ok', 'admin_login_fallido'] }, createdAt: { gte: tMal } } })
+  check(F, 'eventos admin_login_ok y admin_login_fallido registrados', evAdm.some((e) => e.name === 'admin_login_ok') && evAdm.some((e) => e.name === 'admin_login_fallido'), `n=${evAdm.length}`)
+  check(F, 'los eventos de admin no guardan email ni contraseña', !evAdm.some((e) => JSON.stringify(e).includes(process.env.ADMIN_PASSWORD) || JSON.stringify(e).toLowerCase().includes(process.env.ADMIN_EMAIL.trim().toLowerCase()) || JSON.stringify(e).includes('-no-es')))
+  // salir y volver a entrar
+  st(F, 'salir de administración', await post(TA, '/api/admin/logout', {}), 200)
+  check(F, 'al salir se borra la cookie de admin', !TA.adminCookie)
+  st(F, 'después de salir, métricas → 404', await get(TA, '/api/admin/metricas'), 404)
+  check(F, 'volver a entrar', await loginAdmin(TA))
+  const us = await get(TA, '/api/admin/metricas?seccion=usuarios&periodo=hoy&prueba=incluir')
+  st(F, 'métricas con sesión de admin', us, 200)
+  const meC = await get(C, '/api/auth/me')
+  check(F, '/me no expone nada de administración', !/isAdmin|ADMIN_EMAIL|admin/i.test(JSON.stringify(meC.data?.user ? Object.keys(meC.data.user) : [])), brief(meC))
+  const val = (r, k) => r.data?.resumen?.find((x) => x.clave === k)?.valor
+  const totalDb = await db.user.count({ where: { deletedAt: null } })
+  check(F, 'usuarios: total = base (incluyendo prueba)', Math.abs(val(us, 'total') - totalDb) <= 1, `panel=${val(us, 'total')} base=${totalDb}`)
+  const us2 = await get(TA, '/api/admin/metricas?seccion=usuarios&periodo=hoy')
+  const totalReal = await db.user.count({ where: { deletedAt: null, NOT: { email: { endsWith: '@homia.test' } } } })
+  check(F, 'usuarios: excluir prueba saca las @homia.test', val(us2, 'total') === totalReal, `panel=${val(us2, 'total')} base=${totalReal}`)
+  check(F, 'usuarios: cuenta el login de hoy', val(us, 'logins') >= 1 && val(us, 'usuarios_login') >= 1)
+
+  for (const sec of ['uso', 'embudos', 'retencion', 'negocio']) {
+    const t0 = Date.now()
+    const r = await get(TA, `/api/admin/metricas?seccion=${sec}&periodo=30&prueba=incluir`)
+    st(F, `sección ${sec}`, r, 200)
+    check(F, `sección ${sec} en menos de 5 s`, Date.now() - t0 < 5000, `${Date.now() - t0} ms (servidor ${r.data?.ms} ms)`)
+  }
+  const uso = await get(TA, '/api/admin/metricas?seccion=uso&periodo=hoy&prueba=incluir')
+  check(F, 'uso: la búsqueda sin resultado aparece como oportunidad', (uso.data?.tablas?.sin_resultado?.filas || []).some((f) => f[0] === unico), JSON.stringify(uso.data?.tablas?.sin_resultado?.filas?.slice(0, 3)))
+  const usoSin = await get(TA, '/api/admin/metricas?seccion=uso&periodo=hoy')
+  check(F, 'uso: excluir prueba saca los navegadores e2e-', !(usoSin.data?.tablas?.sin_resultado?.filas || []).some((f) => f[0] === unico))
+  const csv = await http(TA, 'GET', '/api/admin/metricas?seccion=uso&periodo=hoy&prueba=incluir&csv=sin_resultado')
+  check(F, 'CSV: text/csv con el término', csv.status === 200 && /text\/csv/.test(csv.ct) && String(csv.data).includes(unico), `${csv.status} ${csv.ct}`)
+  st(F, 'CSV de una tabla inexistente', await get(TA, '/api/admin/metricas?seccion=uso&csv=noexiste'), 404)
+  st(F, 'sección inválida', await get(TA, '/api/admin/metricas?seccion=hack'), 400)
+
+  // negocio: las cifras coinciden con la base (mismo período que devolvió el panel)
+  const ng = await get(TA, '/api/admin/metricas?seccion=negocio&periodo=hoy&prueba=incluir')
+  const d = new Date(ng.data?.periodo?.desde), h = new Date(ng.data?.periodo?.hasta)
+  const rango = { gte: d, lt: h }
+  const sum = (arr, k) => Math.round(arr.reduce((a, x) => a + (x[k] || 0), 0) * 100) / 100
+  const [proyDb, invPag, chPag, purSin, resDb, msgDb] = await Promise.all([
+    db.project.count({ where: { createdAt: rango } }),
+    db.invoice.findMany({ where: { status: 'pagada', paidAt: rango }, select: { total: true, serviceFee: true, paymentMethod: true } }),
+    db.providerCharge.findMany({ where: { status: 'pagada', paidAt: rango }, select: { amount: true, serviceFee: true, method: true } }),
+    db.purchase.findMany({ where: { chargeId: null, status: { in: ['pagado', 'entregado'] }, updatedAt: rango }, select: { total: true, serviceFee: true, paymentMethod: true } }),
+    db.review.count({ where: { createdAt: rango } }),
+    db.message.count({ where: { createdAt: rango } }),
+  ])
+  const cargoDb = Math.round((sum(invPag.filter((i) => i.paymentMethod === 'mercadopago'), 'serviceFee') + sum(chPag.filter((c) => c.method === 'mercadopago'), 'serviceFee') + sum(purSin.filter((p) => p.paymentMethod === 'mercadopago'), 'serviceFee')) * 100) / 100
+  check(F, 'negocio: proyectos = base', val(ng, 'proyectos') === proyDb, `panel=${val(ng, 'proyectos')} base=${proyDb}`)
+  check(F, 'negocio: cobrado en facturas = base', Math.abs(val(ng, 'cobrado_facturas') - sum(invPag, 'total')) < 0.01, `panel=${val(ng, 'cobrado_facturas')} base=${sum(invPag, 'total')}`)
+  check(F, 'negocio: GMV de materiales = base', Math.abs(val(ng, 'gmv') - (sum(chPag, 'amount') + sum(purSin, 'total'))) < 0.01, `panel=${val(ng, 'gmv')}`)
+  check(F, 'negocio: cargo 1% recaudado = base', Math.abs(val(ng, 'cargo') - cargoDb) < 0.01, `panel=${val(ng, 'cargo')} base=${cargoDb}`)
+  check(F, 'negocio: reseñas y mensajes = base', val(ng, 'resenas') === resDb && val(ng, 'mensajes') === msgDb, `reseñas ${val(ng, 'resenas')}/${resDb} mensajes ${val(ng, 'mensajes')}/${msgDb}`)
+  const rg = await get(TA, '/api/admin/metricas?seccion=usuarios&periodo=rango&desde=2026-09-01&hasta=2026-09-30&prueba=incluir')
+  st(F, 'período por rango', rg, 200)
+
+  // fichas
+  const bus = await get(TA, `/api/admin/metricas/usuario?q=${encodeURIComponent(C.email)}`)
+  check(F, 'ficha: buscar usuario por email', (bus.data?.usuarios || []).some((u) => u.id === C.id), brief(bus))
+  st(F, 'ficha: búsqueda muy corta', await get(TA, '/api/admin/metricas/usuario?q=a'), 400)
+  const fu = await get(TA, `/api/admin/metricas/usuario?id=${C.id}`)
+  st(F, 'ficha de usuario', fu, 200)
+  check(F, 'ficha: línea con el login y hechos de negocio', (fu.data?.linea || []).some((l) => l.detalle === 'login_ok') && (fu.data?.linea || []).some((l) => l.fuente === 'negocio'))
+  check(F, 'ficha: sesiones con tiempo de uso', (fu.data?.sesiones || []).length >= 1)
+  check(F, 'ficha: nunca el texto de los mensajes', !(fu.data?.linea || []).some((l) => l.tipo === 'mensaje enviado' && l.detalle !== 'conversación'))
+  const fcsv = await http(TA, 'GET', `/api/admin/metricas/usuario?id=${C.id}&csv=linea`)
+  check(F, 'ficha: CSV de la línea de tiempo', fcsv.status === 200 && /text\/csv/.test(fcsv.ct))
+  st(F, 'ficha de usuario inexistente', await get(TA, '/api/admin/metricas/usuario?id=noexiste123'), 404)
+  if (S.project1) {
+    const fa = await get(TA, `/api/admin/metricas/activo?tipo=project&id=${S.project1}`)
+    st(F, 'ficha de activo (proyecto)', fa, 200)
+    check(F, 'ficha de activo: quién hizo qué', (fa.data?.linea || []).length >= 1 && /Proyecto/.test(fa.data?.titulo || ''), brief(fa))
+  }
+  st(F, 'ficha de activo con tipo inválido', await get(TA, '/api/admin/metricas/activo?tipo=hack&id=x'), 400)
+}
+
 // ═════════════════════════════ PURGA ═════════════════════════════
+// ═════════════════════════════ S. SUGERENCIAS (D25) ═════════════════════════════
+// Los tres roles mandan sugerencias (con y sin fotos al bucket PRIVADO feedback-evidencias),
+// validaciones, 401, IDOR, tope diario (429) y la bandeja del administrador.
+// El administrador entra a /admin con ADMIN_EMAIL + ADMIN_PASSWORD del .env (D29, sin cuenta de
+// usuario). Para ver el mail al equipo sin ensuciar la casilla real, el server corre con
+// FEEDBACK_EMAIL=<E2E_FEEDBACK_EMAIL> (@homia.test) + --mail-sink.
+const S_TEAM_EMAIL = process.env.E2E_FEEDBACK_EMAIL || `${EMAIL_PREFIX}equipo${EMAIL_DOMAIN}`
+const SA = new Actor('admin', null)
+async function flowS() {
+  const F = 'S'
+  const t0 = Date.now()
+  const sb = (process.env.SUPABASE_PROJECT_URL || '').replace(/\/+$/, '')
+  const base = { type: 'sugerencia', area: 'directorio', title: `${MARK} Filtro por barrio`, description: `${MARK} Estaría bueno poder filtrar el directorio por barrio.` }
+
+  // 401 sin sesión
+  st(F, 'GET /api/feedback sin sesión', await get(ANON, '/api/feedback'), 401)
+  st(F, 'POST /api/feedback sin sesión', await post(ANON, '/api/feedback', { ...base, role: 'cliente' }), 401)
+  st(F, 'GET /api/feedback/[id] sin sesión', await get(ANON, '/api/feedback/abc123'), 401)
+  // D29: las APIs de administración sin la sesión de /admin responden 404 (no se revela que existen)
+  st(F, 'GET /api/admin/feedback sin sesión de admin', await get(ANON, '/api/admin/feedback'), 404)
+  st(F, 'PATCH /api/admin/feedback/[id] sin sesión de admin', await patch(ANON, '/api/admin/feedback/abc123', { status: 'resuelta' }), 404)
+
+  // fotos al bucket privado
+  const up1 = await upload(C, 'sugerencias', 11)
+  const png = await sharp({ create: { width: 40, height: 30, channels: 3, background: { r: 9, g: 99, b: 199 } } }).png().toBuffer()
+  const up2 = await upload(C, 'sugerencias', 12, { buffer: png, type: 'image/png', name: 'e2e.png' })
+  st(F, 'subida de evidencia (jpg)', up1, 201)
+  st(F, 'subida de evidencia (png)', up2, 201)
+  const pref = `feedback-evidencias/${C.id}/sugerencias/`
+  check(F, 'la evidencia devuelve un path privado propio (no URL pública)', up1.data?.private === true && up1.data?.url?.startsWith(pref) && !/^https?:/.test(up1.data.url), brief(up1))
+  const objPath = up1.data?.url?.slice('feedback-evidencias/'.length)
+  if (sb && objPath) {
+    const pub = await fetch(`${sb}/storage/v1/object/public/feedback-evidencias/${objPath}`)
+    check(F, 'la foto NO es accesible por URL pública', pub.status !== 200, `HTTP ${pub.status}`)
+    const sinFirma = await fetch(`${sb}/storage/v1/object/feedback-evidencias/${objPath}`)
+    check(F, 'la foto NO es accesible sin firma ni credenciales', sinFirma.status !== 200, `HTTP ${sinFirma.status}`)
+  }
+  const bad = await upload(C, 'sugerencias', 1, { buffer: Buffer.from('no soy una imagen'), type: 'image/jpeg', name: 'x.jpg' })
+  st(F, 'evidencia que no es imagen (magic bytes)', bad, 400)
+
+  // cliente: con fotos
+  const c1 = await post(C, '/api/feedback', { ...base, role: 'cliente', photos: [up1.data?.url, up2.data?.url] })
+  st(F, 'cliente manda sugerencia con 2 fotos', c1, 201)
+  S.fbC = c1.data?.item?.id
+  const rowC = S.fbC ? await db.feedback.findUnique({ where: { id: S.fbC } }) : null
+  check(F, 'DB: fila del cliente con 2 paths privados, estado recibida, contacto sí', rowC?.userId === C.id && JSON.parse(rowC.photos).length === 2 && rowC.status === 'recibida' && rowC.contactOk === true && rowC.context === null, JSON.stringify(rowC))
+  const firmada = c1.data?.item?.photos?.[0]?.url
+  check(F, 'el autor recibe la foto con URL firmada', typeof firmada === 'string' && firmada.includes('/object/sign/feedback-evidencias/'), brief(c1))
+  if (firmada) {
+    const img = await fetch(firmada)
+    check(F, 'la URL firmada abre la imagen', img.status === 200 && (img.headers.get('content-type') || '').startsWith('image/'), `HTTP ${img.status} ${img.headers.get('content-type')}`)
+  }
+  check(F, 'la respuesta no expone paths internos', !JSON.stringify(c1.data).includes(`"${up1.data?.url}"`), brief(c1))
+
+  // profesional: problema técnico sin fotos, con contexto
+  const ctx = { pantalla: '#/panel/profesional/calendario', dispositivo: 'Celular · pantalla 390×844', fecha: '25/9/26 10:00', zonaHoraria: 'America/Argentina/Buenos_Aires' }
+  const p1 = await post(P, '/api/feedback', { role: 'profesional', type: 'problema', area: 'calendario', title: `${MARK} No carga el calendario`, description: `${MARK} Toco Calendario y queda la pantalla en blanco.`, context: ctx, contactOk: false }, { headers: { 'user-agent': 'E2E-UA/1.0 (sugerencias)' } })
+  st(F, 'profesional manda problema técnico sin fotos', p1, 201)
+  S.fbP = p1.data?.item?.id
+  const rowP = S.fbP ? await db.feedback.findUnique({ where: { id: S.fbP } }) : null
+  const ctxP = rowP?.context ? JSON.parse(rowP.context) : {}
+  check(F, 'problema técnico guarda el contexto y el navegador del encabezado real', ctxP.pantalla === ctx.pantalla && ctxP.navegador === 'E2E-UA/1.0 (sugerencias)' && rowP.contactOk === false, JSON.stringify(ctxP))
+  const s2 = await post(C, '/api/feedback', { ...base, role: 'cliente', type: 'queja', title: `${MARK} Queja`, context: ctx })
+  st(F, 'cliente manda queja', s2, 201)
+  const rowQ = s2.data?.item?.id ? await db.feedback.findUnique({ where: { id: s2.data.item.id } }) : null
+  check(F, 'el contexto técnico NO se guarda si no es "problema técnico"', rowQ?.context === null, JSON.stringify(rowQ?.context))
+
+  // proveedor
+  const v1 = await post(V, '/api/feedback', { role: 'proveedor', type: 'oportunidad', area: 'stock', title: `${MARK} Carga masiva de stock`, description: `${MARK} Me serviría subir el stock desde una planilla.` })
+  st(F, 'proveedor manda oportunidad', v1, 201)
+  S.fbV = v1.data?.item?.id
+
+  // validaciones
+  st(F, 'título corto', await post(C, '/api/feedback', { ...base, role: 'cliente', title: 'ab' }), 400)
+  st(F, 'sin descripción', await post(C, '/api/feedback', { ...base, role: 'cliente', description: '' }), 400)
+  st(F, 'tipo inválido', await post(C, '/api/feedback', { ...base, role: 'cliente', type: 'spam' }), 400)
+  st(F, 'sección que no es del rol (cliente → Stock)', await post(C, '/api/feedback', { ...base, role: 'cliente', area: 'stock' }), 400)
+  st(F, 'más de 4 fotos', await post(C, '/api/feedback', { ...base, role: 'cliente', photos: [1, 2, 3, 4, 5].map((n) => `${pref}a${n}b2c3d4e5f6a7b8.jpg`) }), 400)
+  st(F, 'foto de OTRO usuario (IDOR)', await post(P2, '/api/feedback', { ...base, role: 'profesional', area: 'directorio', photos: [up1.data?.url] }), 400)
+  st(F, 'URL pública en vez de path privado', await post(C, '/api/feedback', { ...base, role: 'cliente', photos: ['https://evil.example.com/a.jpg'] }), 400)
+  st(F, 'panel que no es suyo (cliente escribe como proveedor)', await post(C, '/api/feedback', { ...base, role: 'proveedor', area: 'stock' }), 403)
+
+  // mis envíos e IDOR
+  const misC = await get(C, '/api/feedback')
+  st(F, 'GET mis envíos (cliente)', misC, 200)
+  check(F, 'mis envíos: solo los propios, sin bandera de admin', misC.data?.items?.length === 2 && misC.data.items.every((i) => [S.fbC, s2.data?.item?.id].includes(i.id)) && misC.data.isAdmin === false, brief(misC))
+  st(F, 'el autor ve su envío', await get(C, `/api/feedback/${S.fbC}`), 200)
+  const idor = await get(P2, `/api/feedback/${S.fbC}`)
+  st(F, 'otro usuario NO ve el envío (404)', idor, 404)
+  check(F, 'IDOR: la respuesta no filtra fotos', !JSON.stringify(idor.data).includes('feedback-evidencias'), brief(idor))
+  const misP2 = await get(P2, '/api/feedback')
+  check(F, 'otro usuario no ve envíos ajenos en su lista', misP2.status === 200 && misP2.data.items.length === 0, brief(misP2))
+
+  // bandeja: no admin → 404
+  st(F, 'bandeja para un no-admin', await get(C, '/api/admin/feedback'), 404)
+  st(F, 'PATCH de un no-admin', await patch(C, `/api/admin/feedback/${S.fbC}`, { status: 'resuelta' }), 404)
+  check(F, 'el PATCH de un no-admin no cambió nada', (await db.feedback.findUnique({ where: { id: S.fbC } }))?.status === 'recibida')
+
+  // D29: el administrador entra a /admin con ADMIN_EMAIL + ADMIN_PASSWORD (del .env), sin cuenta
+  if (!check(F, 'ingreso de administración (ADMIN_EMAIL/ADMIN_PASSWORD en el .env)', await loginAdmin(SA), 'faltan ADMIN_EMAIL/ADMIN_PASSWORD en el .env o el server no las tiene')) return
+  const bandeja = await get(SA, '/api/admin/feedback')
+  st(F, 'bandeja del admin', bandeja, 200)
+  const enBandeja = (bandeja.data?.items || []).find((i) => i.id === S.fbC)
+  check(F, 'bandeja: trae el envío con autor, email (acepta contacto) y fotos firmadas', enBandeja?.author?.email === C.email && enBandeja.photos.length === 2 && enBandeja.photos.every((p) => p.url?.includes('/object/sign/')), JSON.stringify(enBandeja)?.slice(0, 300))
+  const conP = (bandeja.data?.items || []).find((i) => i.id === S.fbP)
+  check(F, 'bandeja: sin email si NO acepta contacto', !!conP && conP.author.email === null && !!conP.author.name, JSON.stringify(conP?.author))
+  const fTipo = await get(SA, '/api/admin/feedback?type=problema')
+  check(F, 'filtro por tipo', fTipo.data?.items?.some((i) => i.id === S.fbP) && fTipo.data.items.every((i) => i.type === 'problema'), brief(fTipo))
+  const fRol = await get(SA, '/api/admin/feedback?role=proveedor')
+  check(F, 'filtro por rol', fRol.data?.items?.some((i) => i.id === S.fbV) && fRol.data.items.every((i) => i.role === 'proveedor'), brief(fRol))
+  const fArea = await get(SA, '/api/admin/feedback?area=calendario')
+  check(F, 'filtro por sección', fArea.data?.items?.some((i) => i.id === S.fbP) && fArea.data.items.every((i) => i.area === 'calendario'), brief(fArea))
+  const fQ = await get(SA, `/api/admin/feedback?q=${encodeURIComponent('planilla')}`)
+  check(F, 'búsqueda difusa', fQ.data?.items?.some((i) => i.id === S.fbV) && !fQ.data.items.some((i) => i.id === S.fbP), brief(fQ))
+  st(F, 'el admin abre un envío ajeno', await get(SA, `/api/feedback/${S.fbC}`), 200)
+
+  // cambio de estado → notificación; respuesta → notificación + mail
+  st(F, 'PATCH estado inválido', await patch(SA, `/api/admin/feedback/${S.fbC}`, { status: 'borrada' }), 400)
+  st(F, 'PATCH vacío', await patch(SA, `/api/admin/feedback/${S.fbC}`, {}), 400)
+  st(F, 'PATCH de un envío inexistente', await patch(SA, '/api/admin/feedback/noexiste123', { status: 'resuelta' }), 404)
+  const desde = Date.now()
+  st(F, 'admin cambia el estado', await patch(SA, `/api/admin/feedback/${S.fbC}`, { status: 'en_revision' }), 200)
+  const nEstado = await db.notification.findFirst({ where: { userId: C.id, type: 'sugerencia_estado' }, orderBy: { createdAt: 'desc' } })
+  check(F, 'notificación al autor por el cambio de estado (link válido)', !!nEstado && nEstado.title.includes('En revisión') && !linkProblem(nEstado.link, ['cliente']) && nEstado.link.includes(S.fbC), JSON.stringify(nEstado))
+  const resp = `${MARK} ¡Gracias! Lo sumamos a los planes.`
+  st(F, 'admin responde y planifica', await patch(SA, `/api/admin/feedback/${S.fbC}`, { status: 'planificada', adminResponse: resp }), 200)
+  const nResp = await db.notification.findFirst({ where: { userId: C.id, type: 'sugerencia_respuesta' }, orderBy: { createdAt: 'desc' } })
+  check(F, 'notificación al autor con la respuesta', !!nResp && nResp.body.includes('Planificada') && nResp.body.includes('Lo sumamos'), JSON.stringify(nResp))
+  const rowR = await db.feedback.findUnique({ where: { id: S.fbC } })
+  check(F, 'DB: estado planificada, respuesta y fecha', rowR.status === 'planificada' && rowR.adminResponse === resp && !!rowR.respondedAt, JSON.stringify(rowR))
+  const antesN = await db.notification.count({ where: { userId: C.id } })
+  const e3 = await patch(SA, `/api/admin/feedback/${S.fbC}`, { status: 'planificada', adminResponse: resp })
+  check(F, 'guardar sin cambios no vuelve a avisar', e3.status === 200 && e3.data?.changed === false && (await db.notification.count({ where: { userId: C.id } })) === antesN, brief(e3))
+  const misC2 = await get(C, '/api/feedback')
+  const visto = misC2.data?.items?.find((i) => i.id === S.fbC)
+  check(F, 'el autor ve el estado y la respuesta en Mis envíos', visto?.statusLabel === 'Planificada' && visto?.adminResponse === resp, JSON.stringify(visto)?.slice(0, 300))
+
+  if (MAIL_SINK_PORT) {
+    const mEq = await waitMail(S_TEAM_EMAIL, t0, { ms: 10000 })
+    check(F, 'mail al equipo por cada envío nuevo (con link a la bandeja)', !!mEq && /sugerencia|queja|problema|oportunidad/i.test(mEq.body.subject) && mEq.body.html.includes('/admin/sugerencias'), mEq ? mEq.body.subject : 'no llegó')
+    check(F, 'el mail al equipo no adjunta las fotos (solo el logo)', mailsTo(S_TEAM_EMAIL).every((m) => (m.body.attachments || []).length <= 1))
+    const mAutor = await waitMail(C.email, desde, { ms: 10000, subject: 'Te respondimos tu sugerencia' })
+    check(F, 'mail al autor con la respuesta', !!mAutor && mAutor.body.html.includes('Ver la respuesta'), mAutor ? mAutor.body.subject : 'no llegó')
+  }
+
+  // tope diario: 10 por día por usuario → 429
+  let hechos = await db.feedback.count({ where: { userId: V.id } })
+  let ultimo = null
+  while (hechos < 10) {
+    ultimo = await post(V, '/api/feedback', { role: 'proveedor', type: 'otro', area: 'otra', title: `${MARK} Tope ${hechos + 1}`, description: `${MARK} Envío para probar el tope diario.` })
+    if (ultimo.status !== 201) break
+    hechos++
+  }
+  check(F, 'se pueden mandar 10 en el día', hechos === 10, ultimo ? brief(ultimo) : '')
+  const tope = await post(V, '/api/feedback', { role: 'proveedor', type: 'otro', area: 'otra', title: `${MARK} Tope 11`, description: `${MARK} Este tiene que rebotar.` })
+  st(F, 'el envío 11 del día', tope, 429)
+  check(F, '429 con mensaje claro', /máximo de 10 envíos por día/.test(tope.data?.error || ''), brief(tope))
+  check(F, 'el 429 no creó nada', (await db.feedback.count({ where: { userId: V.id } })) === 10)
+  const misV = await get(V, '/api/feedback')
+  check(F, 'Mis envíos avisa que no quedan envíos hoy', misV.data?.quedanHoy === 0, brief(misV))
+}
+
+// ═════════════════════════════ U. INGRESOS DE HOMIA (D30) ═════════════════════════════
+// Webhook de cobros recurrentes (subscription_authorized_payment) contra un DOBLE de la API de
+// Mercado Pago: el server tiene que correr con MP_API_BASE_PRUEBAS=http://localhost:<puerto> (solo
+// fuera de producción) y la suite con --mp-double <puerto>. Sin doble, los checks del webhook se
+// saltean (la API de /admin/ingresos se prueba igual). Ids de pago con prefijo "e2e" (la purga los barre).
+const MP_DOUBLE_PORT = argVal('--mp-double')
+const mpDoble = { server: null, facturas: new Map(), pagos: new Map(), pres: new Map() }
+async function startMpDouble() {
+  if (!MP_DOUBLE_PORT || mpDoble.server) return !!mpDoble.server
+  const { createServer } = await import('node:http')
+  mpDoble.server = createServer((req, res) => {
+    const u = new URL(req.url, 'http://x')
+    const send = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)) }
+    let m
+    if ((m = u.pathname.match(/^\/authorized_payments\/([^/]+)$/)) && m[1] !== 'search') {
+      if (m[1] === 'e2ecaido') return send(500, { message: 'internal_error' })
+      const f = mpDoble.facturas.get(m[1])
+      return f ? send(200, f) : send(404, { message: 'not found' })
+    }
+    if ((m = u.pathname.match(/^\/v1\/payments\/([^/]+)$/))) {
+      const p = mpDoble.pagos.get(m[1])
+      return p ? send(200, p) : send(404, { message: 'not found' })
+    }
+    if ((m = u.pathname.match(/^\/preapproval\/([^/]+)$/)) && m[1] !== 'search') {
+      const p = mpDoble.pres.get(m[1])
+      return p ? send(200, p) : send(404, { message: 'not found' })
+    }
+    if (u.pathname.endsWith('/search')) return send(200, { paging: { total: 0, offset: 0, limit: 12 }, results: [] })
+    send(404, { message: 'not found' })
+  })
+  await new Promise((ok) => mpDoble.server.listen(Number(MP_DOUBLE_PORT), ok))
+  return true
+}
+/** Carga en el doble una factura + su pago (formas reales de MP, ver src/lib/__tests__/ingresos.test.ts). */
+function mpCobro({ ap, pay, provId, preId, status, detalle, fecha, monto = 50000 }) {
+  const iso = new Date(fecha).toISOString()
+  mpDoble.facturas.set(ap, {
+    id: ap, preapproval_id: preId, type: 'recurring', status: 'processed', date_created: iso, transaction_amount: monto, currency_id: 'ARS',
+    external_reference: `plan:provider:${provId}:basic`, retry_attempt: 1, debit_date: iso, payment: { id: pay, status, status_detail: detalle },
+  })
+  mpDoble.pagos.set(pay, {
+    id: pay, status, status_detail: detalle, external_reference: `plan:provider:${provId}:basic`, transaction_amount: monto, transaction_amount_refunded: 0,
+    currency_id: 'ARS', date_created: iso, date_approved: status === 'approved' ? iso : null,
+    fee_details: status === 'approved' ? [{ type: 'mercadopago_fee', amount: 2050, fee_payer: 'collector' }] : [],
+    transaction_details: { net_received_amount: status === 'approved' ? monto - 2050 : 0 },
+    point_of_interaction: { type: 'SUBSCRIPTIONS', transaction_data: { subscription_id: preId, billing_date: iso.slice(0, 10), subscription_sequence: { number: 1 } } },
+    card: { last_four_digits: '0000' }, payer: { email: 'no-se-guarda@example.com' },
+  })
+}
+const aviso = (id) => http(ANON, 'POST', `/api/payments/webhook?type=subscription_authorized_payment&data.id=${encodeURIComponent(id)}`, { json: { type: 'subscription_authorized_payment', action: 'created', data: { id } } })
+
+async function flowU() {
+  const F = 'U'
+  // ── sin sesión de admin: 404 (como si no existiera), también con sesión de usuario ──
+  st(F, 'ingresos sin sesión de admin', await get(ANON, '/api/admin/ingresos'), 404)
+  st(F, 'ficha sin sesión de admin', await get(ANON, `/api/admin/ingresos/proveedor?id=${V.provId}`), 404)
+  st(F, 'ingresos con sesión de usuario (no admin)', await get(C, '/api/admin/ingresos'), 404)
+  st(F, 'CSV sin sesión de admin', await get(ANON, '/api/admin/ingresos?csv=cobros'), 404)
+
+  const preId = `e2epre${TS}`
+  const ap1 = `e2eap${TS}1`, pay1 = `e2e${TS}1`
+  const ap2 = `e2eap${TS}2`, pay2 = `e2e${TS}2`
+  const ap3 = `e2eap${TS}3`, pay3 = `e2e${TS}3`
+  const hayDoble = await startMpDouble()
+  if (!hayDoble) {
+    console.log('  (sin --mp-double: se saltean los avisos del webhook)')
+  } else {
+    // el proveedor de la suite pasa a plan Básico con una suscripción (del doble)
+    await db.providerProfile.update({ where: { id: V.provId }, data: { subscription: 'basic', mpPreapprovalId: preId } })
+    const prox = new Date(Date.now() + 20 * 86_400_000).toISOString()
+    mpDoble.pres.set(preId, { id: preId, status: 'authorized', external_reference: `plan:provider:${V.provId}:basic`, next_payment_date: prox, last_modified: new Date().toISOString(), auto_recurring: { transaction_amount: 50000 } })
+    mpCobro({ ap: ap1, pay: pay1, provId: V.provId, preId, status: 'approved', detalle: 'accredited', fecha: Date.now() - 5 * 86_400_000 })
+    mpCobro({ ap: ap2, pay: pay2, provId: V.provId, preId, status: 'rejected', detalle: 'cc_rejected_insufficient_amount', fecha: Date.now() - 3600_000 })
+
+    st(F, 'aviso de cobro aprobado', await aviso(ap1), 200)
+    const fila = await db.subscriptionCharge.findUnique({ where: { mpPaymentId: pay1 } })
+    check(F, 'el cobro quedó guardado con los datos de MP', !!fila && fila.status === 'approved' && fila.amount === 50000 && fila.mpFee === 2050 && fila.netAmount === 47950 && fila.providerId === V.provId && fila.mpAuthorizedPaymentId === ap1 && fila.source === 'webhook', JSON.stringify(fila))
+    check(F, 'sin datos de tarjeta ni del pagador en raw', !!fila && !/last_four|no-se-guarda|payer|card/.test(JSON.stringify(fila.raw)), JSON.stringify(fila?.raw))
+    st(F, 'segundo aviso del mismo cobro', await aviso(ap1), 200)
+    check(F, 'idempotente: dos avisos → una fila', (await db.subscriptionCharge.count({ where: { mpPaymentId: pay1 } })) === 1)
+    st(F, 'aviso de cobro rechazado', await aviso(ap2), 200)
+    const rech = await db.subscriptionCharge.findUnique({ where: { mpPaymentId: pay2 } })
+    check(F, 'rechazo guardado con su motivo', rech?.status === 'rejected' && rech.statusDetail === 'cc_rejected_insufficient_amount' && rech.paidAt === null, JSON.stringify(rech))
+    st(F, 'MP no responde → 503 para que MP reintente', await aviso('e2ecaido'), 503)
+    st(F, 'factura inexistente → 200 ignorado', await aviso(`e2eap${TS}nada`), 200)
+    check(F, 'los avisos fallidos no guardaron nada', (await db.subscriptionCharge.count({ where: { providerId: V.provId } })) === 2)
+  }
+
+  // ── con sesión de admin ──
+  const AD = new Actor('adminU', null)
+  if (!(await loginAdmin(AD))) {
+    check(F, 'ingreso al área /admin con ADMIN_EMAIL/ADMIN_PASSWORD', false, 'faltan las variables o el login falló', 'config: ADMIN_EMAIL/ADMIN_PASSWORD')
+    if (mpDoble.server) mpDoble.server.close()
+    return
+  }
+  const conPrueba = await get(AD, '/api/admin/ingresos?periodo=30&prueba=incluir&gran=dia')
+  st(F, 'ingresos con sesión de admin', conPrueba, 200)
+  const d = conPrueba.data || {}
+  check(F, 'trae resumen, serie y tablas', !!d.resumen && Array.isArray(d.serie) && !!d.tablas?.cuentas && !!d.tablas?.movimiento && !!d.tablas?.mensual, Object.keys(d).join(','))
+  check(F, 'la serie cubre los 30 días sin huecos', d.serie?.length === 30, String(d.serie?.length))
+  if (hayDoble) {
+    const filaV = (d.tablas?.cuentas?.ids || []).indexOf(V.provId)
+    const cuentaV = filaV >= 0 ? d.tablas.cuentas.filas[filaV] : null
+    check(F, 'rechazo después del último cobro → "En deuda" (1 mes × $50.000)', cuentaV?.[1] === 'En deuda' && cuentaV?.[8] === 50000, JSON.stringify(cuentaV))
+    const ids = d.tablas?.cobros?.filas?.map((f) => f[8]) || []
+    check(F, 'la tabla de cobros tiene los dos intentos con su id de pago', ids.includes(pay1) && ids.includes(pay2), ids.join(','))
+    check(F, 'suscripciones del período incluyen el cobro aprobado', (d.resumen?.suscripciones ?? 0) >= 50000, String(d.resumen?.suscripciones))
+    check(F, 'MRR cuenta al proveedor con suscripción vigente', (d.resumen?.mrr?.basic ?? 0) >= 1 && d.resumen.mrr.mrr >= 50000, JSON.stringify(d.resumen?.mrr))
+    check(F, 'próximo cobro esperado según MP', (d.tablas?.proximos?.ids || []).includes(V.provId), JSON.stringify(d.tablas?.proximos?.filas))
+    check(F, 'comisión de MP informada, no estimada', (d.resumen?.comisionMp?.conDato ?? 0) >= 1 && d.resumen.comisionMp.suma >= 2050, JSON.stringify(d.resumen?.comisionMp))
+
+    // reintento aprobado → al día
+    mpCobro({ ap: ap3, pay: pay3, provId: V.provId, preId, status: 'approved', detalle: 'accredited', fecha: Date.now() - 60_000 })
+    st(F, 'aviso del reintento aprobado', await aviso(ap3), 200)
+    const d2 = (await get(AD, '/api/admin/ingresos?periodo=30&prueba=incluir&estadoCuenta=al_dia')).data || {}
+    check(F, 'rechazo seguido de aprobación → "Al día" (filtro por estado de cuenta)', (d2.tablas?.cuentas?.ids || []).includes(V.provId) && d2.tablas.cuentas.filas.every((f) => f[1] === 'Al día'), JSON.stringify(d2.tablas?.cuentas?.filas?.slice(0, 3)))
+    const fil = (await get(AD, '/api/admin/ingresos?periodo=30&prueba=incluir&estado=rejected')).data || {}
+    check(F, 'filtro por estado del cobro', (fil.tablas?.cobros?.filas || []).length >= 1 && fil.tablas.cobros.filas.every((f) => f[4] === 'rechazado'), JSON.stringify(fil.tablas?.cobros?.filas?.slice(0, 2)))
+
+    const ficha = await get(AD, `/api/admin/ingresos/proveedor?id=${V.provId}`)
+    st(F, 'ficha del proveedor', ficha, 200)
+    const tipos = (ficha.data?.linea || []).map((x) => x.tipo)
+    check(F, 'la ficha tiene alta, cobros aprobados y el rechazo, y está al día', tipos.includes('Alta') && tipos.filter((t) => t === 'Cobro aprobado').length === 2 && tipos.includes('Cobro rechazado') && ficha.data?.cuenta?.estado === 'al_dia' && ficha.data?.totalPagado === 100000, JSON.stringify({ tipos, cuenta: ficha.data?.cuenta?.estado, total: ficha.data?.totalPagado }))
+
+    // excluir prueba (por defecto): el proveedor @homia.test no aparece
+    const sinPrueba = (await get(AD, '/api/admin/ingresos?periodo=30')).data || {}
+    check(F, 'por defecto excluye las cuentas de prueba', !(sinPrueba.tablas?.cuentas?.ids || []).includes(V.provId) && !(sinPrueba.tablas?.cobros?.filas || []).some((f) => String(f[8]).startsWith('e2e')))
+
+    // CSV formato argentino
+    const csv = await get(AD, '/api/admin/ingresos?periodo=30&prueba=incluir&csv=cobros', { raw: true })
+    st(F, 'CSV de cobros', csv, 200)
+    // bytes crudos: response.text() se come el BOM
+    const txt = csv.buf ? csv.buf.toString('utf8') : ''
+    check(F, 'CSV: BOM, separador ";", fecha argentina y el id de pago', csv.buf?.[0] === 0xef && csv.buf?.[1] === 0xbb && csv.buf?.[2] === 0xbf && txt.includes('Fecha;Proveedor;Plan;Monto') && txt.includes(pay1) && /\d{2}\/\d{2}\/\d{4}/.test(txt) && (csv.headers.get('content-type') || '').includes('text/csv'), txt.slice(0, 200))
+  }
+  st(F, 'CSV de una tabla inexistente → 400', await get(AD, '/api/admin/ingresos?csv=nada'), 400)
+  st(F, 'ficha de un id inexistente → 404', await get(AD, '/api/admin/ingresos/proveedor?id=noexiste123456'), 404)
+  if (mpDoble.server) mpDoble.server.close()
+}
+
 async function purge({ quiet = false } = {}) {
   const log = (...m) => { if (!quiet) console.log(...m) }
   // + las cuentas E2E eliminadas en esta u otra corrida (solo ids anotados y con email eliminado-…@homia.invalid)
@@ -2587,11 +3666,23 @@ async function purge({ quiet = false } = {}) {
   await n('homyRuns', db.homyRun.deleteMany({ where: { OR: [{ userId: { in: uids } }, { sessionId: { in: homySessIds } }, { ipHash: { in: ipHashes } }] } }))
   await n('aiUsage', db.aiUsage.deleteMany({ where: { key: { in: [...uids.map((u) => `user:${u}`), ...ipHashes.map((h) => `ip:${h}`)] } } }))
   await n('homySessions', db.homySession.deleteMany({ where: { id: { in: homySessIds } } }))
+  await n('feedback', db.feedback.deleteMany({ where: { userId: { in: uids } } }))
+  // métricas de uso (D27): lo de los usuarios de la suite y todo navegador de prueba (anonId e2e-…)
+  await n('analyticsEvents', db.analyticsEvent.deleteMany({ where: { OR: [{ userId: { in: uids } }, { anonId: { startsWith: 'e2e-' } }] } }))
+  await n('analyticsSessions', db.analyticsSession.deleteMany({ where: { OR: [{ userId: { in: uids } }, { anonId: { startsWith: 'e2e-' } }] } }))
   await n('identityDocuments', db.identityDocument.deleteMany({ where: { userId: { in: uids } } }))
   await n('passwordResets', db.passwordReset.deleteMany({ where: { userId: { in: uids } } }))
+  // D26: códigos de verificación (los de registro no tienen usuario: se buscan por el email de prueba)
+  await n('verificationCodes', db.verificationCode.deleteMany({ where: { OR: [{ userId: { in: uids } }, { target: { startsWith: EMAIL_PREFIX, endsWith: EMAIL_DOMAIN } }] } }))
+  // Finanzas (D24): movimientos y configuración de los usuarios de la suite (también caen en cascada con el usuario)
+  await n('financeEntries', db.financeEntry.deleteMany({ where: { userId: { in: uids } } }))
+  await n('financeConfigs', db.financeConfig.deleteMany({ where: { userId: { in: uids } } }))
   await n('stock', db.providerStock.deleteMany({ where: { providerId: { in: provIds } } }))
   await n('pipelines', db.crmPipeline.deleteMany({ where: { ownerId: { in: uids } } }))
   await n('professionalProfiles', db.professionalProfile.deleteMany({ where: { id: { in: proIds } } }))
+  // Ingresos de HomIA (D30): cobros y movimientos de plan de los proveedores de la suite (sin FK) + los del doble de MP
+  await n('subscriptionCharges', db.subscriptionCharge.deleteMany({ where: { OR: [{ providerId: { in: provIds } }, { mpPaymentId: { startsWith: 'e2e' } }] } }))
+  await n('subscriptionEvents', db.subscriptionEvent.deleteMany({ where: { OR: [{ providerId: { in: provIds } }, { dedupeKey: { contains: ':e2e' } }] } }))
   await n('providerProfiles', db.providerProfile.deleteMany({ where: { id: { in: provIds } } }))
   await n('users', db.user.deleteMany({ where: { id: { in: uids } } }))
   // elementos de catálogo creados por la suite (solo si nada real los usa)
@@ -2620,7 +3711,7 @@ async function purge({ quiet = false } = {}) {
       }
       return acc
     }
-    for (const bucket of ['homia-uploads', 'dni-docs']) {
+    for (const bucket of ['homia-uploads', 'dni-docs', 'feedback-evidencias']) {
       for (const uid of uids) {
         const paths = await listAll(bucket, uid)
         if (paths.length) {
@@ -2650,15 +3741,25 @@ async function purge({ quiet = false } = {}) {
     charges: await db.providerCharge.count({ where: { id: { in: chIds } } }),
     invoices: await db.invoice.count({ where: { id: { in: invIds } } }),
     stock: await db.providerStock.count({ where: { providerId: { in: provIds } } }),
+    financeEntries: await db.financeEntry.count({ where: { userId: { in: uids } } }),
+    financeConfigs: await db.financeConfig.count({ where: { userId: { in: uids } } }),
+    // movimientos huérfanos (sin usuario): tiene que dar 0 siempre
+    financeOrphans: Number((await db.$queryRaw`SELECT count(*)::int AS n FROM "FinanceEntry" f LEFT JOIN "User" u ON u.id = f."userId" WHERE u.id IS NULL`)[0]?.n ?? 0),
     notificationsMarked: await db.notification.count({ where: { OR: [{ title: { contains: MARK } }, { body: { contains: MARK } }] } }),
     reviews: await db.review.count({ where: { OR: [{ authorId: { in: uids } }, { targetUserId: { in: uids } }] } }),
     returns: await db.leftoverReturn.count({ where: { OR: [{ requesterId: { in: uids } }, { providerId: { in: provIds } }, { professionalId: { in: proIds } }, { projectId: { in: projIds } }] } }),
     searchEvents: await db.searchEvent.count({ where: { userId: { in: uids } } }),
     passwordResets: await db.passwordReset.count({ where: { userId: { in: uids } } }),
+    verificationCodes: await db.verificationCode.count({ where: { OR: [{ userId: { in: uids } }, { target: { startsWith: EMAIL_PREFIX, endsWith: EMAIL_DOMAIN } }] } }),
+    feedback: await db.feedback.count({ where: { userId: { in: uids } } }),
+    analyticsEvents: await db.analyticsEvent.count({ where: { OR: [{ userId: { in: uids } }, { anonId: { startsWith: 'e2e-' } }] } }),
+    analyticsSessions: await db.analyticsSession.count({ where: { OR: [{ userId: { in: uids } }, { anonId: { startsWith: 'e2e-' } }] } }),
     homySessions: await db.homySession.count({ where: { OR: [{ userId: { in: uids } }, { visitorHash: { in: visitorHashes } }] } }),
     homyRuns: await db.homyRun.count({ where: { OR: [{ userId: { in: uids } }, { ipHash: { in: ipHashes } }] } }),
     e2eProfessionalsVisible: await db.professionalProfile.count({ where: { user: { displayName: { startsWith: MARK } } } }),
     catalogE2E: await db.catalogElement.count({ where: { name: { startsWith: 'E2E-Q ' } } }),
+    subscriptionCharges: await db.subscriptionCharge.count({ where: { OR: [{ providerId: { in: provIds } }, { mpPaymentId: { startsWith: 'e2e' } }] } }),
+    subscriptionEvents: await db.subscriptionEvent.count({ where: { OR: [{ providerId: { in: provIds } }, { dedupeKey: { contains: ':e2e' } }] } }),
     storage: storageLeft.length,
   }
   leftovers.deletedAccounts = deletedNoted.length ? await db.user.count({ where: { id: { in: deletedNoted } } }) : 0
@@ -2683,7 +3784,7 @@ async function main() {
   }
   // ya hay restos de otra corrida: se limpian antes (idempotente)
   await purge({ quiet: true })
-  const order = [['A', flowA], ['A', flowBaja], ['B', flowB], ['C', flowC], ['I', flowI], ['D', flowD], ['E', flowE], ['F', flowF], ['G', flowG], ['P', flowP], ['H', flowH], ['J', flowJ], ['K', flowK], ['L', flowL], ['M', flowM], ['N', flowN], ['O', flowO], ['Q', flowQ], ['B', flowTrialVencido]]
+  const order = [['A', flowA], ['A', flowBaja], ['B', flowB], ['C', flowC], ['I', flowI], ['D', flowD], ['E', flowE], ['F', flowF], ['G', flowG], ['P', flowP], ['H', flowH], ['J', flowJ], ['K', flowK], ['L', flowL], ['M', flowM], ['N', flowN], ['O', flowO], ['Q', flowQ], ['R', flowR], ['S', flowS], ['T', flowT], ['B', flowTrialVencido], ['U', flowU]]
   const t0 = Date.now()
   let purgeResult = null
   try {

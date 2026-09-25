@@ -62,6 +62,7 @@ const GUIDES: RoleGuide[] = [
       { what: 'Proponer materiales y comparar precios', where: 'Detalle del proyecto → Materiales (comparables entre proveedores)', href: '/panel/profesional/proyectos', hrefLabel: 'Proyectos' },
       { what: 'Emitir facturas y cobrar', where: 'Detalle del proyecto → Emitir factura (el cliente paga con Mercado Pago o efectivo — confirmás el cobro)', href: '/panel/profesional/proyectos', hrefLabel: 'Proyectos' },
       { what: 'Definir quién paga los materiales', where: 'Detalle del proyecto → tarjeta ¿Quién paga los materiales?', href: '/panel/profesional/proyectos', hrefLabel: 'Proyectos' },
+      { what: 'Ver tus finanzas (ganancia, caja, balance)', where: 'Panel → Finanzas: tus facturas se cargan solas; sumás gastos, costos, inversiones e ingresos por fuera. Pestaña Aprendé para entender cada número', href: '/panel/profesional/finanzas', hrefLabel: 'Finanzas' },
       { what: 'Devoluciones de sobrantes', where: 'Panel → Devoluciones: las de tus clientes por materiales que cobraste en tu factura (aceptás, recibís y reembolsás) y las que les pedís a tus proveedores desde el proyecto (Sobrantes → Pedir devolución a …)', href: '/panel/profesional/devoluciones', hrefLabel: 'Devoluciones' },
       { what: 'Mostrar tus obras (vitrina)', where: 'Panel → Mis obras → cargar fotos del trabajo terminado', href: '/panel/profesional/obras', hrefLabel: 'Mis obras' },
       { what: 'Gestionar tus clientes (CRM)', where: 'Panel → CRM clientes', href: '/panel/profesional/crm', hrefLabel: 'CRM' },
@@ -87,6 +88,7 @@ const GUIDES: RoleGuide[] = [
       { what: 'Vincularte con profesionales', where: 'Panel → Vinculaciones → creá el vínculo para que retiren materiales a cuenta de un proyecto', href: '/panel/proveedor/vinculaciones', hrefLabel: 'Vinculaciones' },
       { what: 'Conectar Mercado Pago', where: 'Panel → Cobros → botón "Conectá Mercado Pago" (así los pagos van directo a tu cuenta)', href: '/panel/proveedor/cobros', hrefLabel: 'Cobros' },
       { what: 'Mi plan (Básico o PRO)', where: 'Panel → Mi plan → 14 días gratis, después Básico $50.000/mes o PRO $100.000/mes', href: '/panel/proveedor/plan', hrefLabel: 'Mi plan' },
+      { what: 'Ver tus finanzas (ganancia, caja, balance, stock al costo)', where: 'Panel → Finanzas: tus ventas se cargan solas; cargás el costo de tus productos, gastos, compras de mercadería e ingresos de mostrador. Pestaña Aprendé para entender cada número', href: '/panel/proveedor/finanzas', hrefLabel: 'Finanzas' },
       { what: 'Gestionar devoluciones de sobrantes', where: 'Panel → Cobros → Devoluciones → aceptá los ítems, marcá recibido cuando los traigan y registrá el reembolso (si te lo pide un profesional, marcás cómo le devolviste la plata por fuera de HomIA)', href: '/panel/proveedor/cobros', hrefLabel: 'Cobros' },
       { what: 'Gestionar tratos (CRM)', where: 'Panel → CRM', href: '/panel/proveedor/crm', hrefLabel: 'CRM' },
       { what: 'Aparecer en el directorio', where: 'Tu perfil público se arma solo con tu stock y reseñas', href: '/panel/proveedor/directorio', hrefLabel: 'Directorio' },
@@ -148,6 +150,11 @@ const FAQ: { q: string; a: string; tema?: string }[] = [
     a: 'Los primeros 14 días son gratis. Después, el plan Básico cuesta $50.000/mes e incluye la app completa: stock, ventas, cobros por Mercado Pago y efectivo, CRM y vinculaciones. El plan PRO cuesta $100.000/mes y suma tu logo y marca en la home, la tarjeta "Recomendado" en marketplace y directorio, y analítica de demanda. Lo gestionás desde Panel → Mi plan.',
   },
   {
+    q: '¿Para qué sirve Finanzas y qué tengo que cargar?',
+    tema: 'finanzas',
+    a: 'Finanzas (en el panel del profesional y del proveedor, gratis en todos los planes) te muestra si tu negocio gana plata (Resultados), cuánta plata tenés (Caja), cuánto vale (Balance) y las métricas clave con recomendaciones. Lo que pasa por HomIA se carga solo y dice "Automático · viene de HomIA": tus facturas o ventas (facturado y cobrado por separado), las devoluciones de sobrantes, los materiales que compraste en la app y los subcontratos. Vos cargás el resto en Movimientos: trabajos o ventas por fuera de HomIA, costos de cada trabajo, gastos fijos (los mensuales se cargan una vez y se repiten solos), inversiones como herramientas o un vehículo (se reparten mes a mes: amortización), retiros, aportes y préstamos. Cada categoría explica qué es con ejemplos, y la pestaña Aprendé tiene la guía y el glosario. El cargo de servicio del 1% lo paga el cliente: no es ingreso ni gasto tuyo. HomIA no recibe las comisiones que te descuenta Mercado Pago: si querés verlas, cargalas como gasto. Podés exportar todo a Excel. No es asesoramiento impositivo: para impuestos consultá a un contador.',
+  },
+  {
     q: '¿Cómo funciona "Contratar" desde el directorio?',
     a: 'Elegís un profesional del directorio, tocás "Contratar" y un asistente de 4 pasos te guía: qué necesitás (con fotos), cuándo y dónde, presupuesto estimado y confirmación. Se crea el proyecto y el profesional recibe todo el brief al instante.',
   },
@@ -166,6 +173,11 @@ const FAQ: { q: string; a: string; tema?: string }[] = [
   {
     q: '¿HomIA me avisa por mail?',
     a: 'Sí, además del aviso en la campanita te mandamos un mail con lo importante: una compra o reserva nueva (proveedor), que te contrataron o te aceptaron un presupuesto (profesional), una oferta nueva, una factura o una reserva aprobada o lista para retirar (cliente), pagos acreditados por Mercado Pago y pedidos de devolución de sobrantes. Los mensajes del chat no llegan por mail. Podés apagar los avisos por mail desde Mi perfil.',
+  },
+  {
+    q: '¿Cómo dejo una sugerencia, una queja o aviso que algo no funciona?',
+    tema: 'sugerencias',
+    a: 'Desde tu panel, en Sugerencias (está en los tres roles, cerca de Ayuda): tocás «Nueva sugerencia», elegís el tipo (Sugerencia, Queja, Mejora, Oportunidad, Problema técnico u Otro), sobre qué parte de HomIA es, un título y la descripción. Podés sumar hasta 4 fotos o capturas desde la cámara o la galería: se guardan en un almacenamiento privado que solo ven vos y el equipo de HomIA. Si es un problema técnico, se adjunta solo la pantalla desde la que venías, tu navegador, tu dispositivo y la fecha, para encontrarlo más rápido. En «Mis envíos» ves el estado (Recibida, En revisión, Planificada, Resuelta o Descartada) y nuestra respuesta, que también te llega como notificación y por mail. Podés mandar hasta 10 por día.',
   },
   {
     q: '¿Cómo elimino mi cuenta?',

@@ -9,6 +9,7 @@ import { DeleteAccountCard } from '@/components/app/delete-account-card'
 import { toast } from 'sonner'
 import { MapPin, UserRound, Phone, Building2, Cake, Save, ShieldCheck, ArrowRight, RefreshCw } from 'lucide-react'
 import { AvisosMailCard } from '@/components/screens/panel/avisos-mail-card'
+import { VerificacionContactoCard } from '@/components/app/verificacion-contacto-card'
 
 export default function ClientProfile() {
   const { user, refresh } = useSession()
@@ -124,6 +125,9 @@ export default function ClientProfile() {
           </span>
           <ArrowRight className="size-5 shrink-0 text-slate-300 transition-transform duration-300 group-hover:translate-x-1 group-hover:text-[#1D63B8]" aria-hidden />
         </button>
+
+        {/* D26: email y celular verificados o no, y verificarlos con un código */}
+        <VerificacionContactoCard />
 
         {/* identidad + datos */}
         <section className="homy-glass rounded-3xl p-6 sm:p-7">

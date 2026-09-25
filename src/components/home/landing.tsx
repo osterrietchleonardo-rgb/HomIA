@@ -9,6 +9,7 @@ import { CtaFinal } from "@/components/home/cta-final";
 import { SiteFooter } from "@/components/home/site-footer";
 import { HomyWidget } from "@/components/home/homy-widget";
 import { SpaRedirect } from "@/components/home/spa-redirect";
+import AnalyticsTracker from "@/components/app/analytics-tracker";
 
 /**
  * Landing pública de HomIA.
@@ -33,6 +34,8 @@ export function Landing() {
       </main>
       <SiteFooter />
       <HomyWidget />
+      {/* métricas de uso propias (D27): la home no monta la SPA */}
+      <AnalyticsTracker />
     </div>
   );
 }

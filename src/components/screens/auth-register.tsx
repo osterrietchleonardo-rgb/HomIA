@@ -1,18 +1,34 @@
 'use client'
-// Registro multi-paso HomIA — adapta el flujo por rol (cliente / profesional / proveedor)
-// Paso 1: rol · Paso 2: datos personales + cómo nos encontraron · Paso 3: KYC por rol
-import { useMemo, useState } from 'react'
+// Registro HomIA en 4 pasos (D26, 25/09/2026) — igual para cliente, profesional y proveedor:
+//   1 · Perfil: cómo va a usar HomIA.
+//   2 · Tus datos: nombre, apellido, email, celular (dos veces), contraseña y ciudad. Todo se
+//       estandariza mientras escribe (src/lib/registro.ts, la misma regla que el servidor): email en
+//       minúsculas con sugerencia si el dominio parece mal escrito, celular a +54 9 … a la vista.
+//   3 · Confirmar email: código de 6 números por mail (y por SMS/WhatsApp si HomIA tiene proveedor).
+//   4 · Tu cuenta: lo del rol (rubros y zona / comercio, tipo y dirección), DNI opcional y términos.
+// La cuenta se crea recién al final y con el email ya confirmado: nunca quedan cuentas a medias.
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { navigate, useRoute } from '@/lib/router'
 import { useSession, useLocation, syncLocationToServer } from '@/lib/store'
 import { AuthShell } from '@/components/app/auth-shell'
 import { toast } from 'sonner'
 import {
-  ArrowRight, BadgeCheck, Building2, Check, ChevronLeft, CircleCheck, HardHat,
-  House, Loader2, MapPin, ShieldCheck, Sparkles, Store, Upload, UserRound,
+  ArrowRight, BadgeCheck, Building2, Check, ChevronDown, ChevronLeft, CircleAlert, CircleCheck, Eye, EyeOff, HardHat,
+  House, Loader2, Mail, MapPin, RotateCw, ShieldCheck, Smartphone, Sparkles, Store, Upload, UserRound,
 } from 'lucide-react'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp'
+import {
+  normalizarEmail, normalizarCelular, normalizarNombre, problemaNombre, normalizarCuit, normalizarDniOCuil, CODIGO,
+} from '@/lib/registro'
+import { problemaDeContrasena } from '@/lib/password-policy'
+import { PROVIDER_KINDS } from '@/lib/search-match'
+import { subirImagen } from '@/lib/upload-image'
 
 type Role = 'cliente' | 'profesional' | 'proveedor'
+type Step = 1 | 2 | 3 | 4
+type Errores = Record<string, string>
+type Disponible = { email: boolean; celular: boolean; nombreCanalCelular: string | null }
 
 const HOW_FOUND = [
   { value: 'google', label: 'Google / buscador' },
@@ -29,6 +45,7 @@ const CATEGORY_OPTIONS = [
   { slug: 'herreria', name: 'Herrería' }, { slug: 'limpieza', name: 'Limpieza' },
   { slug: 'jardineria', name: 'Jardinería' }, { slug: 'climatizacion', name: 'Climatización' },
   { slug: 'techos', name: 'Techos' }, { slug: 'cerramientos', name: 'Cerramientos' },
+  { slug: 'electrodomesticos', name: 'Electrodomésticos' }, { slug: 'plagas', name: 'Control de plagas' },
 ]
 
 const ROLE_OPTIONS: { r: Role; icon: typeof House; title: string; desc: string; tone: string }[] = [
@@ -37,23 +54,26 @@ const ROLE_OPTIONS: { r: Role; icon: typeof House; title: string; desc: string; 
   { r: 'proveedor', icon: Store, title: 'Soy proveedor', desc: 'Vendo materiales y gestiono mi stock y clientes', tone: 'homy-chip-ai' },
 ]
 
-const STEP_LABELS = ['Perfil', 'Tus datos', 'Verificación']
+const STEP_LABELS = ['Perfil', 'Tus datos', 'Confirmar email', 'Tu cuenta']
+
+// campos de cada paso (para volver al paso correcto si el servidor marca un error)
+const CAMPOS_PASO2 = ['firstName', 'lastName', 'email', 'phone', 'phoneConfirm', 'password', 'city']
 
 // Stepper premium: pill con check para pasos completos, activo con gradiente,
 // conector que se enciende a medida que avanza el wizard.
-function StepDots({ step }: { step: 1 | 2 | 3 }) {
+function StepDots({ step }: { step: Step }) {
   return (
     <nav aria-label="Progreso del registro" className="mb-7">
       <ol className="flex items-center">
         {STEP_LABELS.map((label, i) => {
-          const n = (i + 1) as 1 | 2 | 3
+          const n = (i + 1) as Step
           const done = step > n
           const active = step === n
           return (
             <li key={label} className={`flex items-center ${n < STEP_LABELS.length ? 'flex-1' : ''}`}>
               <span
                 aria-current={active ? 'step' : undefined}
-                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full py-1.5 pl-1.5 pr-2.5 text-[12.5px] font-extrabold transition-all duration-300 sm:gap-2 sm:pl-2 sm:pr-4 ${
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full py-1.5 pl-1.5 pr-2.5 text-[12.5px] font-extrabold transition-all duration-300 lg:gap-2 lg:pl-2 lg:pr-4 ${
                   done
                     ? 'homy-glass-soft text-[#1D63B8]'
                     : active
@@ -68,12 +88,13 @@ function StepDots({ step }: { step: 1 | 2 | 3 }) {
                 >
                   {done ? <Check className="size-3.5" aria-hidden /> : n}
                 </span>
-                <span className="hidden uppercase tracking-wide sm:inline">{label}</span>
+                {/* solo el paso actual lleva nombre (con 4 pasos no entran todos sin pisarse) */}
+                {active && <span className="hidden whitespace-nowrap uppercase tracking-wide sm:inline">{label}</span>}
               </span>
-              {n < 3 && (
+              {n < STEP_LABELS.length && (
                 <span
                   aria-hidden
-                  className={`mx-2 h-0.5 flex-1 rounded-full transition-colors duration-500 sm:mx-3 ${
+                  className={`mx-1.5 h-0.5 flex-1 rounded-full transition-colors duration-500 lg:mx-2 ${
                     step > n ? 'bg-gradient-to-r from-[#1D63B8] to-[#00C4FF]' : 'bg-navy/10'
                   }`}
                 />
@@ -83,10 +104,16 @@ function StepDots({ step }: { step: 1 | 2 | 3 }) {
         })}
       </ol>
       <p className="mt-2.5 text-center text-[11px] font-extrabold uppercase tracking-[0.2em] text-slate-400 sm:hidden">
-        Paso {step} de 3 · {STEP_LABELS[step - 1]}
+        Paso {step} de 4 · {STEP_LABELS[step - 1]}
       </p>
     </nav>
   )
+}
+
+function mmss(seg: number) {
+  const m = Math.floor(seg / 60)
+  const s = seg % 60
+  return `${m}:${String(s).padStart(2, '0')}`
 }
 
 export default function RegisterScreen() {
@@ -97,28 +124,41 @@ export default function RegisterScreen() {
   const initialRole = (['cliente', 'profesional', 'proveedor'] as const).includes(route.query.rol as Role)
     ? (route.query.rol as Role) : null
 
-  const [step, setStep] = useState<1 | 2 | 3>(initialRole ? 2 : 1)
+  const [step, setStep] = useState<Step>(initialRole ? 2 : 1)
   const [role, setRole] = useState<Role | null>(initialRole)
-  const [alsoPro, setAlsoPro] = useState(false) // profesional también puede contratar → rol cliente incluido
   const [busy, setBusy] = useState(false)
+  const [errores, setErrores] = useState<Errores>({})
+  const [disp, setDisp] = useState<Disponible>({ email: true, celular: false, nombreCanalCelular: null })
 
   // datos personales
-  const [displayName, setDisplayName] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [phone, setPhone] = useState('')
-  const [birthday, setBirthday] = useState('')
-  const [address, setAddress] = useState('')
+  const [phoneConfirm, setPhoneConfirm] = useState('')
+  const [password, setPassword] = useState('')
+  const [verPassword, setVerPassword] = useState(false)
   const [city, setCity] = useState('')
   const [howFoundUs, setHowFoundUs] = useState('')
   const [dniFront, setDniFront] = useState<string | null>(null)
   const [dniBack, setDniBack] = useState<string | null>(null)
 
+  // verificación
+  const [canal, setCanal] = useState<'email' | 'celular'>('email')
+  const [codigo, setCodigo] = useState('')
+  const [codigoError, setCodigoError] = useState<string | null>(null)
+  const [codigoMuerto, setCodigoMuerto] = useState(false) // vencido/agotado/usado: solo queda pedir otro
+  const [reenviarEn, setReenviarEn] = useState(0)
+  const [enviando, setEnviando] = useState(false)
+  const [comprobando, setComprobando] = useState(false)
+  const [emailToken, setEmailToken] = useState<{ para: string; token: string } | null>(null)
+  const [phoneToken, setPhoneToken] = useState<{ para: string; token: string } | null>(null)
+
   // profesional
   const [personType, setPersonType] = useState<'persona' | 'empresa'>('persona')
   const [professions, setProfessions] = useState<string[]>([])
   const [skills, setSkills] = useState('')
-  const [experienceYears, setExperienceYears] = useState('0')
+  const [experienceYears, setExperienceYears] = useState('')
   const [bio, setBio] = useState('')
   const [dniCuil, setDniCuil] = useState('')
   const [companyName, setCompanyName] = useState('')
@@ -129,6 +169,8 @@ export default function RegisterScreen() {
 
   // proveedor
   const [businessName, setBusinessName] = useState('')
+  const [kind, setKind] = useState('')
+  const [address, setAddress] = useState('')
   const [cuit, setCuit] = useState('')
   const [description, setDescription] = useState('')
 
@@ -136,46 +178,199 @@ export default function RegisterScreen() {
   const [acceptTerms, setAcceptTerms] = useState(false)
 
   const roleOpt = role ? ROLE_OPTIONS.find((o) => o.r === role) : null
-
   const roles = useMemo(() => {
-    const r = ['cliente']
+    const r: string[] = ['cliente']
     if (role === 'profesional') r.push('profesional')
     if (role === 'proveedor') r.push('proveedor')
     return r
   }, [role])
 
-  async function uploadFile(file: File, folder: string): Promise<string | null> {
-    const fd = new FormData()
-    fd.append('file', file)
-    fd.append('folder', folder)
-    const res = await fetch('/api/uploads', { method: 'POST', body: fd })
-    if (!res.ok) return null
-    const data = await res.json()
-    return data.url
+  // estandarización en vivo (la misma función que usa el servidor)
+  const emailN = useMemo(() => normalizarEmail(email), [email])
+  const celN = useMemo(() => normalizarCelular(phone), [phone])
+  const celRepN = useMemo(() => normalizarCelular(phoneConfirm), [phoneConfirm])
+  const celCoincide = celN.ok && celRepN.ok && celN.e164 === celRepN.e164
+  const emailListo = emailN.ok && emailToken?.para === emailN.email
+  const celularListo = !disp.celular || (celN.ok && phoneToken?.para === celN.e164)
+
+  // qué se puede verificar hoy (el celular solo con proveedor de SMS/WhatsApp configurado)
+  useEffect(() => {
+    let vivo = true
+    fetch('/api/auth/verificacion')
+      .then((r) => r.json())
+      .then((d) => { if (vivo && d?.disponible) setDisp(d.disponible) })
+      .catch(() => { /* se queda con lo de por defecto: email sí, celular no */ })
+    return () => { vivo = false }
+  }, [])
+
+  // cuenta regresiva del reenvío
+  useEffect(() => {
+    if (reenviarEn <= 0) return
+    const t = setTimeout(() => setReenviarEn((s) => Math.max(0, s - 1)), 1000)
+    return () => clearTimeout(t)
+  }, [reenviarEn])
+
+  const topRef = useRef<HTMLDivElement | null>(null)
+  function irA(s: Step) {
+    setStep(s)
+    requestAnimationFrame(() => topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
+
+  function setError(campo: string, msg: string | null) {
+    setErrores((e) => {
+      const n = { ...e }
+      if (msg) n[campo] = msg
+      else delete n[campo]
+      return n
+    })
+  }
+
+  function enfocarPrimerError(errs: Errores) {
+    const primero = Object.keys(errs)[0]
+    if (!primero) return
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`reg-${primero}`)
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); (el as HTMLElement).focus?.() }
+    })
+  }
+
+  function validarPaso2(): Errores {
+    const e: Errores = {}
+    const pn = problemaNombre(firstName, 'nombre')
+    if (pn) e.firstName = pn
+    const pa = problemaNombre(lastName, 'apellido')
+    if (pa) e.lastName = pa
+    if (!emailN.ok) e.email = emailN.error
+    if (!celN.ok) e.phone = celN.error
+    else if (!phoneConfirm.trim()) e.phoneConfirm = 'Repetí tu celular para confirmarlo'
+    else if (!celCoincide) e.phoneConfirm = 'Los dos celulares no coinciden: revisalos'
+    const pw = problemaDeContrasena(password)
+    if (pw) e.password = pw
+    if (city.trim().length < 2) e.city = 'Escribí tu ciudad o localidad'
+    return e
+  }
+
+  function validarPaso4(): Errores {
+    const e: Errores = {}
+    if (role === 'profesional') {
+      if (professions.length === 0) e.professions = 'Elegí al menos un rubro en el que trabajás'
+      if (dniCuil.trim()) { const r = normalizarDniOCuil(dniCuil); if (!r.ok) e.dniCuil = r.error }
+      if (personType === 'empresa' && companyCuit.trim()) { const r = normalizarCuit(companyCuit); if (!r.ok) e.companyCuit = r.error }
+    }
+    if (role === 'proveedor') {
+      if (businessName.trim().length < 2) e.businessName = 'Escribí el nombre de tu comercio'
+      if (!kind) e.kind = 'Elegí qué tipo de comercio es'
+      if (address.trim().length < 5 || !/\d/.test(address)) e.address = 'Escribí la dirección del local (calle y número)'
+      if (cuit.trim()) { const r = normalizarCuit(cuit); if (!r.ok) e.cuit = r.error }
+    }
+    if (!acceptTerms) e.acceptTerms = 'Para crear tu cuenta tenés que aceptar los Términos y Condiciones y la Política de Privacidad'
+    return e
+  }
+
+  /** Pide un código. Devuelve true si salió. */
+  async function enviarCodigo(c: 'email' | 'celular'): Promise<boolean> {
+    const destino = c === 'email' ? (emailN.ok ? emailN.email : email) : (celN.ok ? celN.e164 : phone)
+    setEnviando(true)
+    setCodigoError(null)
+    try {
+      const res = await fetch('/api/auth/verificacion/enviar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canal: c, proposito: 'registro', destino }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        setCanal(c)
+        setCodigo('')
+        setCodigoMuerto(false)
+        setReenviarEn(data.reenviarEnSeg || CODIGO.reenvioSeg)
+        return true
+      }
+      if (res.status === 429 && data.esperarSeg) {
+        // ya hay un código en camino: se puede usar ese mientras corre la espera
+        setCanal(c)
+        setReenviarEn(Math.min(3600, data.esperarSeg))
+        setCodigoError(data.error)
+        return data.motivo === 'espera'
+      }
+      const msg = data.error || 'No pudimos mandar el código. Probá de nuevo.'
+      if (step === 2) {
+        setError(c === 'email' ? 'email' : 'phone', msg)
+        enfocarPrimerError({ [c === 'email' ? 'email' : 'phone']: msg })
+      } else setCodigoError(msg)
+      return false
+    } catch {
+      const msg = 'No hay conexión. Revisá internet y probá de nuevo.'
+      if (step === 2) toast.error(msg)
+      else setCodigoError(msg)
+      return false
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  async function continuarPaso2() {
+    const e = validarPaso2()
+    setErrores(e)
+    if (Object.keys(e).length) { enfocarPrimerError(e); return }
+    setFirstName(normalizarNombre(firstName))
+    setLastName(normalizarNombre(lastName))
+    if (!emailListo) {
+      if (await enviarCodigo('email')) irA(3)
+      return
+    }
+    if (!celularListo) {
+      if (await enviarCodigo('celular')) irA(3)
+      return
+    }
+    irA(4)
+  }
+
+  async function comprobar(valor = codigo) {
+    if (!/^\d{6}$/.test(valor) || comprobando) return
+    const destino = canal === 'email' ? (emailN.ok ? emailN.email : '') : (celN.ok ? celN.e164 : '')
+    setComprobando(true)
+    setCodigoError(null)
+    try {
+      const res = await fetch('/api/auth/verificacion/comprobar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canal, proposito: 'registro', destino, codigo: valor }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.comprobante) {
+        if (canal === 'email') {
+          setEmailToken({ para: destino, token: data.comprobante })
+          toast.success('¡Email confirmado!')
+          if (disp.celular && !(celN.ok && phoneToken?.para === celN.e164)) {
+            await enviarCodigo('celular')
+            return
+          }
+        } else {
+          setPhoneToken({ para: destino, token: data.comprobante })
+          toast.success('¡Celular confirmado!')
+        }
+        irA(4)
+        return
+      }
+      setCodigo('')
+      setCodigoError(data.error || 'No pudimos comprobar el código. Probá de nuevo.')
+      if (['vencido', 'agotado', 'usado', 'sin_codigo'].includes(data.motivo)) setCodigoMuerto(true)
+    } catch {
+      setCodigoError('No hay conexión. Revisá internet y probá de nuevo.')
+    } finally {
+      setComprobando(false)
+    }
   }
 
   async function submit() {
     if (!role) return
-    if (!displayName || !email || !password) {
-      toast.error('Completá nombre, email y contraseña')
-      return
-    }
-    if (password.length < 8 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
-      toast.error('La contraseña necesita al menos 8 caracteres, con letras y números')
-      return
-    }
-    if (role === 'profesional' && professions.length === 0) {
-      toast.error('Elegí al menos una profesión')
-      return
-    }
-    if (role === 'proveedor' && !businessName) {
-      toast.error('El nombre del negocio es obligatorio')
-      return
-    }
-    if (!acceptTerms) {
-      toast.error('Para crear tu cuenta tenés que aceptar los Términos y Condiciones y la Política de Privacidad')
-      return
-    }
+    const e2 = validarPaso2()
+    if (Object.keys(e2).length) { setErrores(e2); irA(2); enfocarPrimerError(e2); return }
+    const e4 = validarPaso4()
+    setErrores(e4)
+    if (Object.keys(e4).length) { enfocarPrimerError(e4); return }
+    if (!emailListo) { toast.error('Primero confirmá tu email con el código'); irA(2); return }
     setBusy(true)
     try {
       // el DNI se sube DESPUÉS de crear la cuenta (la subida exige sesión)
@@ -184,48 +379,70 @@ export default function RegisterScreen() {
       const dniFrontFile = inputFront?.files?.[0] || null
       const dniBackFile = inputBack?.files?.[0] || null
 
-      const rolesPayload = [...roles]
-      // un profesional también puede contratar a otros: rol cliente incluido
-      if (role === 'profesional' && alsoPro && !rolesPayload.includes('cliente')) {
-        // 'cliente' ya está
-      }
-
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email, password, displayName,
-          roles: rolesPayload,
-          howFoundUs, phone, birthday, address, city,
-          lat: location.lat || undefined, lng: location.lng || undefined,
-          personType, professions, skills: skills.split(',').map((s) => s.trim()).filter(Boolean),
-          experienceYears: parseInt(experienceYears) || 0, bio, dniCuil,
-          companyName, companyCuit, companyWebsite, employeesCount: employeesCount ? parseInt(employeesCount) : undefined,
-          serviceRadiusKm: parseFloat(serviceRadiusKm) || 15,
-          businessName, cuit, description,
+          roles,
+          firstName, lastName, email,
+          emailToken: emailToken?.token,
+          phone, phoneConfirm,
+          phoneToken: phoneToken?.token,
+          password, city,
+          howFoundUs: howFoundUs || undefined,
+          lat: location.shared && location.lat ? location.lat : undefined,
+          lng: location.shared && location.lng ? location.lng : undefined,
           acceptTerms,
+          ...(role === 'profesional' ? {
+            personType, professions,
+            skills: skills.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 40),
+            experienceYears: experienceYears ? Math.max(0, Math.min(80, parseInt(experienceYears) || 0)) : undefined,
+            bio: bio || undefined, dniCuil: dniCuil || undefined,
+            companyName: personType === 'empresa' ? companyName || undefined : undefined,
+            companyCuit: personType === 'empresa' ? companyCuit || undefined : undefined,
+            companyWebsite: personType === 'empresa' ? companyWebsite || undefined : undefined,
+            employeesCount: personType === 'empresa' && employeesCount ? parseInt(employeesCount) || undefined : undefined,
+            serviceRadiusKm: parseFloat(serviceRadiusKm) || 15,
+          } : {}),
+          ...(role === 'proveedor' ? {
+            businessName, kind, address, cuit: cuit || undefined, description: description || undefined,
+          } : {}),
         }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
+        const campos: Errores = data.campos || {}
+        if (data.needsEmailCode || data.needsPhoneCode) {
+          if (data.needsEmailCode) setEmailToken(null)
+          if (data.needsPhoneCode) setPhoneToken(null)
+          setErrores(campos)
+          toast.error('La confirmación venció: te pedimos el código de nuevo')
+          irA(2)
+          return
+        }
+        setErrores(campos)
+        if (Object.keys(campos).some((k) => CAMPOS_PASO2.includes(k))) irA(2)
+        enfocarPrimerError(campos)
         toast.error(data.error || 'No pudimos crear tu cuenta')
         return
       }
-      // DNI (opcional): ya con sesión, subir las 2 fotos al bucket privado y
-      // mandarlas a la verificación con IA. Si algo falla, se sigue igual.
+      // DNI (opcional): ya con sesión, subir las 2 fotos al bucket privado y mandarlas a la
+      // verificación con IA. Si algo falla, se dice qué pasó y se sigue (se puede hacer después).
       if (dniFrontFile && dniBackFile) {
-        try {
-          const frontUrl = await uploadFile(dniFrontFile, 'dni')
-          const backUrl = await uploadFile(dniBackFile, 'dni')
-          if (!frontUrl || !backUrl) throw new Error('upload')
+        const front = await subirImagen(dniFrontFile, 'dni')
+        const back = front.ok ? await subirImagen(dniBackFile, 'dni') : null
+        if (!front.ok) toast.error(`DNI (frente): ${front.error} Podés verificarlo después desde tu perfil.`)
+        else if (back && !back.ok) toast.error(`DNI (dorso): ${back.error} Podés verificarlo después desde tu perfil.`)
+        else if (back && back.ok) {
           const ver = await fetch('/api/verification/dni', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ frontUrl, backUrl }),
-          })
-          if (!ver.ok) throw new Error('verification')
-        } catch {
-          toast('Podés verificar tu DNI después desde tu perfil')
+            body: JSON.stringify({ frontUrl: front.url, backUrl: back.url }),
+          }).catch(() => null)
+          if (!ver || !ver.ok) {
+            const d = ver ? await ver.json().catch(() => ({})) : {}
+            toast.error(`${d.error || 'No pudimos mandar tu DNI a verificar.'} Podés hacerlo después desde tu perfil.`)
+          }
         }
       } else if (dniFrontFile || dniBackFile) {
         toast('Faltó una de las dos fotos del DNI: podés verificarlo después desde tu perfil')
@@ -240,15 +457,19 @@ export default function RegisterScreen() {
         navigate(volver, { replace: true })
         return
       }
-      navigate(`/panel/${rolesPayload.includes('proveedor') ? 'proveedor' : rolesPayload.includes('profesional') ? 'profesional' : 'cliente'}`, { replace: true })
+      navigate(`/panel/${role === 'proveedor' ? 'proveedor' : role === 'profesional' ? 'profesional' : 'cliente'}`, { replace: true })
+    } catch {
+      toast.error('No hay conexión. Revisá internet y probá de nuevo.')
     } finally {
       setBusy(false)
     }
   }
 
+  const destinoCodigo = canal === 'email' ? (emailN.ok ? emailN.email : email) : (celN.ok ? celN.mostrar : phone)
+
   return (
     <AuthShell
-      homyState={busy ? 'thinking' : 'happy'}
+      homyState={busy || comprobando ? 'thinking' : 'happy'}
       headline={
         <>
           Una cuenta, <span className="homy-gradient-text">todo tu ecosistema</span> del hogar.
@@ -256,14 +477,15 @@ export default function RegisterScreen() {
       }
       sub="Clientes, profesionales y proveedores en una sola red: trabajos, materiales, pagos y reputación 360°."
     >
+      <div ref={topRef} className="scroll-mt-4" />
       <StepDots step={step} />
 
       {step === 1 && (
         <section className="homy-glass-strong homy-stagger rounded-[28px] p-6 sm:p-8">
           <header className="text-center">
-            <span className="homy-eyebrow">Registro · Paso 1 de 3</span>
+            <span className="homy-eyebrow">Registro · Paso 1 de 4</span>
             <h1 className="mt-2 text-[1.9rem] font-extrabold leading-[1.15] tracking-tight text-navy">¿Cómo vas a usar HomIA?</h1>
-            <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate-500">Elegí tu perfil principal (después podés sumar otros).</p>
+            <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate-500">Elegí tu perfil principal.</p>
           </header>
           <div className="mt-7 grid gap-3.5">
             {ROLE_OPTIONS.map((opt) => {
@@ -271,7 +493,7 @@ export default function RegisterScreen() {
               return (
                 <button
                   key={opt.r}
-                  onClick={() => { setRole(opt.r); setStep(2) }}
+                  onClick={() => { setRole(opt.r); irA(2) }}
                   aria-label={`Elegir perfil: ${opt.title}`}
                   className={`group relative flex items-center gap-4 rounded-2xl border-2 bg-white/60 p-4 text-left transition-all duration-300 hover:-translate-y-0.5 ${
                     selected
@@ -303,7 +525,7 @@ export default function RegisterScreen() {
             })}
           </div>
           <p className="mt-6 text-center text-xs leading-relaxed text-slate-400">
-            Podés combinar perfiles con la misma cuenta (ej.: profesional que además contrata otros profesionales).
+            Con cualquier perfil también podés contratar y comprar materiales con la misma cuenta.
           </p>
         </section>
       )}
@@ -311,14 +533,14 @@ export default function RegisterScreen() {
       {step === 2 && role && (
         <section className="homy-glass-strong homy-stagger rounded-[28px] p-6 sm:p-8">
           <button
-            onClick={() => setStep(1)}
+            onClick={() => irA(1)}
             className="-ml-2 mb-4 inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-bold text-slate-500 transition-colors duration-300 hover:bg-navy/5 hover:text-[#1D63B8]"
           >
             <ChevronLeft className="size-4" aria-hidden /> Cambiar perfil
           </button>
           <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
             <div>
-              <span className="homy-eyebrow">Registro · Paso 2 de 3</span>
+              <span className="homy-eyebrow">Registro · Paso 2 de 4</span>
               <h1 className="mt-1.5 text-[1.9rem] font-extrabold leading-[1.15] tracking-tight text-navy">Tus datos</h1>
             </div>
             {roleOpt && (
@@ -328,18 +550,88 @@ export default function RegisterScreen() {
               </span>
             )}
           </header>
+          <p className="mt-2 text-xs leading-relaxed text-slate-500">
+            Todos son obligatorios <span className="text-action" aria-hidden>*</span>: los usamos para que profesionales, proveedores y clientes sepan con quién tratan.
+          </p>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <Field label="Nombre y apellido (o negocio)" required value={displayName} onChange={setDisplayName} placeholder="Juan Pérez" />
-            <Field label="Email" required type="email" value={email} onChange={setEmail} placeholder="tu@email.com" />
-            <Field label="Contraseña" required type="password" value={password} onChange={setPassword} placeholder="Mínimo 8 caracteres, con letras y números" />
-            <Field label="Celular" value={phone} onChange={setPhone} placeholder="+54 9 11 …" />
-            <Field label="Fecha de nacimiento" type="date" value={birthday} onChange={setBirthday} />
-            <Field label="Dirección" value={address} onChange={setAddress} placeholder="Calle y número" />
-            <Field label="Ciudad / localidad" value={city} onChange={setCity} placeholder="Ej.: CABA" />
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <Field id="reg-firstName" label="Nombre" required value={firstName} autoComplete="given-name" placeholder="Juan"
+              error={errores.firstName}
+              onChange={(v) => { setFirstName(v); if (errores.firstName) setError('firstName', problemaNombre(v, 'nombre')) }}
+              onBlur={() => { if (firstName.trim()) { setFirstName(normalizarNombre(firstName)); setError('firstName', problemaNombre(firstName, 'nombre')) } }} />
+            <Field id="reg-lastName" label="Apellido" required value={lastName} autoComplete="family-name" placeholder="Pérez"
+              error={errores.lastName}
+              onChange={(v) => { setLastName(v); if (errores.lastName) setError('lastName', problemaNombre(v, 'apellido')) }}
+              onBlur={() => { if (lastName.trim()) { setLastName(normalizarNombre(lastName)); setError('lastName', problemaNombre(lastName, 'apellido')) } }} />
+
+            <div className="sm:col-span-2">
+              <Field id="reg-email" label="Email" required type="email" inputMode="email" autoComplete="email" value={email} placeholder="tu@email.com"
+                error={errores.email}
+                onChange={(v) => { setEmail(v); if (errores.email) setError('email', null) }}
+                onBlur={() => {
+                  if (!email.trim()) return
+                  const n = normalizarEmail(email)
+                  if (n.ok) { setEmail(n.email); setError('email', null) } else setError('email', n.error)
+                }} />
+              {emailN.ok && emailN.sugerencia && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-[#FFC700]/50 bg-[#FFC700]/10 px-3 py-2 text-[13px] text-slate-700" role="status">
+                  <CircleAlert className="size-4 shrink-0 text-[#8a6d00]" aria-hidden />
+                  <span className="min-w-0 break-all">¿Quisiste decir <b>{emailN.sugerencia}</b>?</span>
+                  <button type="button" onClick={() => { setEmail(emailN.sugerencia!); setError('email', null) }}
+                    className="ml-auto inline-flex min-h-9 items-center rounded-lg bg-white px-3 text-[13px] font-extrabold text-[#1D63B8] shadow-sm">
+                    Sí, usar ese
+                  </button>
+                </div>
+              )}
+              {emailListo && (
+                <p className="mt-1.5 inline-flex items-center gap-1 text-xs font-bold text-[#0e9f6e]"><CircleCheck className="size-3.5" aria-hidden /> Email confirmado</p>
+              )}
+            </div>
+
             <div>
+              <Field id="reg-phone" label="Celular" required type="tel" inputMode="tel" autoComplete="tel" value={phone} placeholder="11 2345-6789"
+                error={errores.phone}
+                onChange={(v) => { setPhone(v); if (errores.phone) setError('phone', null) }}
+                onBlur={() => { if (phone.trim()) { const n = normalizarCelular(phone); setError('phone', n.ok ? null : n.error) } }} />
+              {celN.ok ? (
+                <p className="mt-1.5 text-xs text-slate-500" aria-live="polite">
+                  Se va a guardar como <b className="whitespace-nowrap text-navy">{celN.mostrar}</b>
+                </p>
+              ) : !errores.phone && (
+                <p className="mt-1.5 text-xs text-slate-400">Con código de área, como lo escribas: 011 15…, 11…, +54 9…</p>
+              )}
+            </div>
+            <div>
+              <Field id="reg-phoneConfirm" label="Repetí el celular" required type="tel" inputMode="tel" autoComplete="off" value={phoneConfirm} placeholder="Escribilo de nuevo"
+                error={errores.phoneConfirm} noPaste
+                onChange={(v) => { setPhoneConfirm(v); if (errores.phoneConfirm) setError('phoneConfirm', null) }} />
+              {phoneConfirm.trim() && !errores.phoneConfirm && (
+                <p className={`mt-1.5 inline-flex items-center gap-1 text-xs font-bold ${celCoincide ? 'text-[#0e9f6e]' : 'text-slate-500'}`} aria-live="polite">
+                  {celCoincide ? <><CircleCheck className="size-3.5" aria-hidden /> Coinciden</> : 'Todavía no coinciden'}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <Field id="reg-password" label="Contraseña" required type={verPassword ? 'text' : 'password'} autoComplete="new-password" value={password}
+                placeholder="Mínimo 8, con letras y números"
+                error={errores.password}
+                onChange={(v) => { setPassword(v); if (errores.password) setError('password', problemaDeContrasena(v)) }}
+                onBlur={() => { if (password) setError('password', problemaDeContrasena(password)) }}
+                adornment={
+                  <button type="button" onClick={() => setVerPassword((x) => !x)} aria-label={verPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    className="grid size-10 place-items-center rounded-lg text-slate-400 hover:text-[#1D63B8]">
+                    {verPassword ? <EyeOff className="size-4.5" aria-hidden /> : <Eye className="size-4.5" aria-hidden />}
+                  </button>
+                } />
+            </div>
+            <Field id="reg-city" label="Ciudad o localidad" required value={city} autoComplete="address-level2" placeholder="Ej.: Palermo, CABA"
+              error={errores.city}
+              onChange={(v) => { setCity(v); if (errores.city) setError('city', null) }} />
+
+            <div className="sm:col-span-2">
               <label className="block text-sm font-semibold text-navy">
-                ¿Cómo nos encontraste?
+                ¿Cómo nos encontraste? <span className="font-normal text-slate-400">(opcional)</span>
                 <div className="mt-1.5">
                   <Select value={howFoundUs} onValueChange={setHowFoundUs}>
                     <SelectTrigger className="homy-glass-input w-full rounded-xl px-4 py-2.5 text-[15px] outline-none border-none">
@@ -360,7 +652,7 @@ export default function RegisterScreen() {
                 <MapPin className="size-5" aria-hidden />
               </span>
               <div className="min-w-0">
-                <p className="text-sm font-extrabold text-navy">Ubicación</p>
+                <p className="text-sm font-extrabold text-navy">Ubicación <span className="font-normal text-slate-400">(opcional)</span></p>
                 <p className="mt-0.5 text-xs leading-relaxed text-slate-500">Con tu ubicación vemos pines cercanos en el mapa y filtramos por distancia. Podés activarla después también.</p>
                 {!location.shared ? (
                   <button
@@ -379,32 +671,109 @@ export default function RegisterScreen() {
             </div>
           </div>
 
-          <button
-            onClick={() => setStep(3)}
-            disabled={!displayName || !email || !password}
-            className="homy-btn-dark mt-6 w-full py-3.5 text-[15px]"
-          >
-            Continuar
-            <ArrowRight className="size-4.5" aria-hidden />
+          <button onClick={continuarPaso2} disabled={enviando} className="homy-btn-dark mt-6 w-full py-3.5 text-[15px] disabled:opacity-60">
+            {enviando ? (<><Loader2 className="size-4.5 animate-spin motion-reduce:animate-none" aria-hidden /> Mandando el código…</>) : (
+              <>{emailListo ? 'Continuar' : 'Continuar y confirmar mi email'} <ArrowRight className="size-4.5" aria-hidden /></>
+            )}
           </button>
+          {!emailListo && (
+            <p className="mt-3 text-center text-xs leading-relaxed text-slate-400">Te vamos a mandar un código de 6 números a tu email para confirmar que es tuyo.</p>
+          )}
         </section>
       )}
 
       {step === 3 && role && (
         <section className="homy-glass-strong homy-stagger rounded-[28px] p-6 sm:p-8">
           <button
-            onClick={() => setStep(2)}
+            onClick={() => irA(2)}
             className="-ml-2 mb-4 inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-bold text-slate-500 transition-colors duration-300 hover:bg-navy/5 hover:text-[#1D63B8]"
           >
-            <ChevronLeft className="size-4" aria-hidden /> Volver
+            <ChevronLeft className="size-4" aria-hidden /> {canal === 'email' ? 'Cambiar email' : 'Cambiar celular'}
+          </button>
+          <header className="text-center">
+            <span className={`homy-icon-chip mx-auto size-14 !rounded-2xl ${canal === 'email' ? 'homy-chip-blue' : 'homy-chip-mint'}`}>
+              {canal === 'email' ? <Mail className="size-7" aria-hidden /> : <Smartphone className="size-7" aria-hidden />}
+            </span>
+            <span className="homy-eyebrow mt-4 block">Registro · Paso 3 de 4</span>
+            <h1 className="mt-1.5 text-[1.75rem] font-extrabold leading-[1.15] tracking-tight text-navy">
+              {canal === 'email' ? 'Confirmá tu email' : 'Confirmá tu celular'}
+            </h1>
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-slate-500">
+              Te mandamos un código de 6 números {canal === 'email' ? 'a' : `por ${disp.nombreCanalCelular || 'SMS'} al`}{' '}
+              <b className="break-all text-navy">{destinoCodigo}</b>.
+              {canal === 'email' && ' Si no lo ves, mirá en spam o promociones.'}
+            </p>
+          </header>
+
+          <div className="mt-6 flex justify-center">
+            <InputOTP
+              id="reg-codigo"
+              maxLength={CODIGO.digitos}
+              value={codigo}
+              onChange={(v) => { setCodigo(v.replace(/\D/g, '')); if (codigoError && !codigoMuerto) setCodigoError(null) }}
+              onComplete={(v: string) => comprobar(v)}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="^[0-9]*$"
+              disabled={comprobando || codigoMuerto}
+              aria-label="Código de 6 números"
+              aria-invalid={!!codigoError}
+              autoFocus
+            >
+              <InputOTPGroup>
+                {Array.from({ length: CODIGO.digitos }, (_, i) => (
+                  <InputOTPSlot key={i} index={i}
+                    className="h-12 w-11 bg-white/80 text-xl font-extrabold text-navy sm:h-14 sm:w-12" />
+                ))}
+              </InputOTPGroup>
+            </InputOTP>
+          </div>
+
+          {codigoError && (
+            <p role="alert" className="mx-auto mt-3 flex max-w-sm items-start justify-center gap-1.5 text-center text-sm font-semibold text-red-600">
+              <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden /> {codigoError}
+            </p>
+          )}
+
+          <button onClick={() => comprobar()} disabled={codigo.length !== CODIGO.digitos || comprobando || codigoMuerto}
+            className="homy-btn-primary mt-5 w-full py-3.5 text-[15px] disabled:cursor-not-allowed disabled:opacity-60">
+            {comprobando ? (<><Loader2 className="size-4.5 animate-spin motion-reduce:animate-none" aria-hidden /> Comprobando…</>) : 'Confirmar'}
+          </button>
+
+          <div className="mt-4 text-center">
+            {reenviarEn > 0 ? (
+              <p className="text-sm text-slate-500" aria-live="polite">
+                ¿No te llegó? Podés pedir otro en <b className="tabular-nums text-navy">{mmss(reenviarEn)}</b>
+              </p>
+            ) : (
+              <button type="button" onClick={() => enviarCodigo(canal)} disabled={enviando}
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-bold text-[#1D63B8] hover:bg-[#1D63B8]/5 disabled:opacity-60">
+                {enviando ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <RotateCw className="size-4" aria-hidden />}
+                Mandarme un código nuevo
+              </button>
+            )}
+          </div>
+          <p className="mt-3 text-center text-xs leading-relaxed text-slate-400">
+            El código vence en {CODIGO.venceMin} minutos. Tenés {CODIGO.maxIntentos} intentos por código.
+          </p>
+        </section>
+      )}
+
+      {step === 4 && role && (
+        <section className="homy-glass-strong homy-stagger rounded-[28px] p-6 sm:p-8">
+          <button
+            onClick={() => irA(2)}
+            className="-ml-2 mb-4 inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-bold text-slate-500 transition-colors duration-300 hover:bg-navy/5 hover:text-[#1D63B8]"
+          >
+            <ChevronLeft className="size-4" aria-hidden /> Volver a tus datos
           </button>
           <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
             <div>
-              <span className="homy-eyebrow">Registro · Paso 3 de 3</span>
+              <span className="homy-eyebrow">Registro · Paso 4 de 4</span>
               <h1 className="mt-1.5 text-[1.9rem] font-extrabold leading-[1.15] tracking-tight text-navy">
-                {role === 'cliente' && 'Últimos detalles'}
-                {role === 'profesional' && 'Tu perfil profesional'}
-                {role === 'proveedor' && 'Tu negocio'}
+                {role === 'cliente' && 'Último paso'}
+                {role === 'profesional' && 'Tu trabajo'}
+                {role === 'proveedor' && 'Tu comercio'}
               </h1>
             </div>
             {roleOpt && (
@@ -415,54 +784,32 @@ export default function RegisterScreen() {
             )}
           </header>
 
-          {/* DNI (todos los roles) */}
-          <section className="mt-6">
-            <div className="flex items-start gap-3">
-              <span className="homy-icon-chip homy-chip-blue size-10 shrink-0 !rounded-xl">
-                <BadgeCheck className="size-5" aria-hidden />
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-extrabold text-navy">Documento de identidad (DNI)</p>
-                <p className="mt-0.5 flex items-start gap-1 text-xs leading-relaxed text-slate-500">
-                  <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-[#1D63B8]" aria-hidden />
-                  Frente y reverso — queda privado, solo lo ve HomIA para verificar tu cuenta.
-                </p>
-              </div>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <UploadBox id="dni-front" label="Frente" uploaded={dniFront} onPick={(f) => setDniFront(f ? f.name : null)} />
-              <UploadBox id="dni-back" label="Reverso" uploaded={dniBack} onPick={(f) => setDniBack(f ? f.name : null)} />
-            </div>
-          </section>
+          {/* lo verificado, a la vista */}
+          <ul className="mt-4 grid gap-1.5 text-[13px]">
+            <li className="flex items-center gap-2 text-slate-600">
+              <CircleCheck className="size-4 shrink-0 text-[#0e9f6e]" aria-hidden />
+              <span className="min-w-0 break-all">Email confirmado: <b className="text-navy">{emailN.ok ? emailN.email : email}</b></span>
+            </li>
+            <li className="flex items-start gap-2 text-slate-600">
+              {disp.celular && phoneToken ? (
+                <><CircleCheck className="mt-0.5 size-4 shrink-0 text-[#0e9f6e]" aria-hidden /><span>Celular confirmado: <b className="whitespace-nowrap text-navy">{celN.ok ? celN.mostrar : phone}</b></span></>
+              ) : (
+                <><Smartphone className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden /><span>Celular <b className="whitespace-nowrap text-navy">{celN.ok ? celN.mostrar : phone}</b>: queda <b>sin verificar</b> por ahora (todavía no mandamos SMS; lo confirmaste escribiéndolo dos veces).</span></>
+              )}
+            </li>
+          </ul>
 
           {role === 'profesional' && (
             <div className="mt-6 grid gap-4">
-              <div className="homy-glass-soft grid grid-cols-2 gap-1.5 rounded-2xl p-1.5">
-                {([
-                  { t: 'persona' as const, icon: UserRound, label: 'Persona única' },
-                  { t: 'empresa' as const, icon: Building2, label: 'Empresa' },
-                ]).map((o) => (
-                  <button
-                    key={o.t} type="button" onClick={() => setPersonType(o.t)} aria-pressed={personType === o.t}
-                    className={`flex min-h-11 items-center justify-center gap-2 rounded-xl text-sm font-bold transition-all duration-300 ${
-                      personType === o.t
-                        ? 'bg-white text-navy shadow-[0_6px_16px_-8px_rgba(10,37,64,0.4)]'
-                        : 'text-slate-500 hover:text-navy'
-                    }`}
-                  >
-                    <o.icon className="size-4.5" aria-hidden /> {o.label}
-                  </button>
-                ))}
-              </div>
               <div>
-                <p className="text-sm font-semibold text-navy">Profesiones / rubros <span className="text-action" aria-hidden>*</span></p>
+                <p id="reg-professions" tabIndex={-1} className="text-sm font-semibold text-navy outline-none">Rubros en los que trabajás <span className="text-action" aria-hidden>*</span></p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {CATEGORY_OPTIONS.map((c) => {
                     const on = professions.includes(c.slug)
                     return (
                       <button
                         key={c.slug} type="button" aria-pressed={on}
-                        onClick={() => setProfessions((p) => p.includes(c.slug) ? p.filter((x) => x !== c.slug) : [...p, c.slug])}
+                        onClick={() => { setProfessions((p) => p.includes(c.slug) ? p.filter((x) => x !== c.slug) : [...p, c.slug]); setError('professions', null) }}
                         className={`inline-flex min-h-11 items-center rounded-full border px-3.5 text-[13px] font-bold transition-all duration-300 active:scale-[0.97] ${
                           on
                             ? 'border-transparent bg-gradient-to-r from-[#1D63B8] to-[#2b8fe0] text-white shadow-[0_8px_18px_-8px_rgba(29,99,184,0.7)]'
@@ -474,44 +821,68 @@ export default function RegisterScreen() {
                     )
                   })}
                 </div>
+                {errores.professions && <FieldError msg={errores.professions} />}
               </div>
-              <Field label="Habilidades (separadas por coma)" value={skills} onChange={setSkills} placeholder="instalación de termos, destapaciones, plomería general" />
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Años de experiencia" type="number" value={experienceYears} onChange={setExperienceYears} />
-                <Field label={personType === 'empresa' ? 'CUIT empresa' : 'DNI o CUIL'} value={personType === 'empresa' ? companyCuit : dniCuil} onChange={personType === 'empresa' ? setCompanyCuit : setDniCuil} />
-              </div>
-              {personType === 'empresa' && (
-                <div className="homy-glass-soft grid gap-4 rounded-2xl p-4 sm:grid-cols-2">
-                  <Field label="Razón social" value={companyName} onChange={setCompanyName} />
-                  <Field label="Sitio web / Instagram" value={companyWebsite} onChange={setCompanyWebsite} />
-                  <Field label="Cantidad de empleados" type="number" value={employeesCount} onChange={setEmployeesCount} />
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-semibold text-navy">
-                  Sobre vos / tu trabajo
-                  <textarea
-                    value={bio} onChange={(e) => setBio(e.target.value)} rows={3}
-                    placeholder="Contá tu experiencia, trabajos realizados, certificaciones…"
-                    className="homy-glass-input mt-1.5 w-full resize-none rounded-xl px-4 py-2.5 text-[15px] outline-none"
-                  />
+              <div className="homy-glass-soft rounded-2xl p-4">
+                <label htmlFor="service-radius" className="text-sm font-semibold text-navy">
+                  Zona de trabajo <span className="text-action" aria-hidden>*</span>
                 </label>
-              </div>
-              <div>
-                <label htmlFor="service-radius" className="text-sm font-semibold text-navy">Radio de servicio: {serviceRadiusKm} km</label>
+                <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+                  Trabajás en <b className="text-navy">{city.trim() || 'tu ciudad'}</b> y hasta <b className="text-navy">{serviceRadiusKm} km</b> a la redonda.
+                </p>
                 <input
                   id="service-radius"
                   type="range" min="1" max="100" value={serviceRadiusKm}
                   onChange={(e) => setServiceRadiusKm(e.target.value)}
                   className="homy-range mt-2.5 w-full"
                   style={{ ['--range-progress' as string]: `${(parseInt(serviceRadiusKm) / 100) * 100}%` }}
-                  aria-label="Radio de servicio en kilómetros"
+                  aria-label="Radio de trabajo en kilómetros"
                 />
               </div>
-              <label className="homy-glass-soft flex cursor-pointer items-start gap-3 rounded-2xl p-4 text-sm leading-relaxed text-slate-600">
-                <input type="checkbox" checked={alsoPro} onChange={(e) => setAlsoPro(e.target.checked)} className="mt-0.5 size-4.5 shrink-0 accent-[#1D63B8]" />
-                <span>También quiero <b>contratar otros profesionales</b> (subcontratar, equipos, cuentas de retiro compartidas).</span>
-              </label>
+              <details className="homy-glass-soft group rounded-2xl p-4">
+                <Resumen titulo="Más datos de tu trabajo" />
+
+                <div className="mt-3 grid gap-4">
+                  <div className="grid grid-cols-2 gap-1.5 rounded-2xl bg-white/50 p-1.5">
+                    {([
+                      { t: 'persona' as const, icon: UserRound, label: 'Persona' },
+                      { t: 'empresa' as const, icon: Building2, label: 'Empresa' },
+                    ]).map((o) => (
+                      <button
+                        key={o.t} type="button" onClick={() => setPersonType(o.t)} aria-pressed={personType === o.t}
+                        className={`flex min-h-11 items-center justify-center gap-2 rounded-xl text-sm font-bold transition-all duration-300 ${
+                          personType === o.t ? 'bg-white text-navy shadow-[0_6px_16px_-8px_rgba(10,37,64,0.4)]' : 'text-slate-500 hover:text-navy'
+                        }`}
+                      >
+                        <o.icon className="size-4.5" aria-hidden /> {o.label}
+                      </button>
+                    ))}
+                  </div>
+                  <Field id="reg-dniCuil" label="DNI o CUIL" inputMode="numeric" value={dniCuil} placeholder="30123456 o 20-30123456-7" error={errores.dniCuil}
+                    onChange={(v) => { setDniCuil(v); if (errores.dniCuil) setError('dniCuil', null) }}
+                    onBlur={() => { if (dniCuil.trim()) { const r = normalizarDniOCuil(dniCuil); if (r.ok) setDniCuil(r.valor); setError('dniCuil', r.ok ? null : r.error) } }} />
+                  {personType === 'empresa' && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field id="reg-companyName" label="Razón social" value={companyName} onChange={setCompanyName} autoComplete="organization" />
+                      <Field id="reg-companyCuit" label="CUIT de la empresa" inputMode="numeric" value={companyCuit} placeholder="30-12345678-9" error={errores.companyCuit}
+                        onChange={(v) => { setCompanyCuit(v); if (errores.companyCuit) setError('companyCuit', null) }}
+                        onBlur={() => { if (companyCuit.trim()) { const r = normalizarCuit(companyCuit); if (r.ok) setCompanyCuit(r.cuit); setError('companyCuit', r.ok ? null : r.error) } }} />
+                      <Field id="reg-companyWebsite" label="Sitio web / Instagram" value={companyWebsite} onChange={setCompanyWebsite} />
+                      <Field id="reg-employeesCount" label="Cantidad de empleados" type="number" inputMode="numeric" value={employeesCount} onChange={setEmployeesCount} />
+                    </div>
+                  )}
+                  <Field id="reg-skills" label="Habilidades (separadas por coma)" value={skills} onChange={setSkills} placeholder="instalación de termos, destapaciones" />
+                  <Field id="reg-experienceYears" label="Años de experiencia" type="number" inputMode="numeric" value={experienceYears} onChange={setExperienceYears} />
+                  <label className="block text-sm font-semibold text-navy">
+                    Sobre vos / tu trabajo
+                    <textarea
+                      value={bio} onChange={(e) => setBio(e.target.value)} rows={3} maxLength={1500}
+                      placeholder="Contá tu experiencia, trabajos realizados, certificaciones…"
+                      className="homy-glass-input mt-1.5 w-full resize-none rounded-xl px-4 py-2.5 text-[15px] outline-none"
+                    />
+                  </label>
+                </div>
+              </details>
             </div>
           )}
 
@@ -525,18 +896,46 @@ export default function RegisterScreen() {
                   <b className="text-[#0A2540]">14 días gratis para probar.</b> Después: Básico <b>$50.000/mes</b> o PRO <b>$100.000/mes</b>. Cancelás cuando quieras.
                 </p>
               </div>
-              <Field label="Nombre del local o negocio *" value={businessName} onChange={setBusinessName} placeholder="Ferretería El Tornillo" />
-              <Field label="CUIT" value={cuit} onChange={setCuit} placeholder="30-12345678-9" />
+              <Field id="reg-businessName" label="Nombre del comercio" required value={businessName} placeholder="Ferretería El Tornillo" autoComplete="organization"
+                error={errores.businessName}
+                onChange={(v) => { setBusinessName(v); if (errores.businessName) setError('businessName', null) }} />
               <div>
-                <label className="block text-sm font-semibold text-navy">
-                  Sobre el negocio
-                  <textarea
-                    value={description} onChange={(e) => setDescription(e.target.value)} rows={3}
-                    placeholder="Qué vendés, horarios, si hacés entregas…"
-                    className="homy-glass-input mt-1.5 w-full resize-none rounded-xl px-4 py-2.5 text-[15px] outline-none"
-                  />
+                <label htmlFor="reg-kind" className="block text-sm font-semibold text-navy">
+                  Tipo de comercio <span className="text-action" aria-hidden>*</span>
                 </label>
+                <div className="mt-1.5">
+                  <Select value={kind} onValueChange={(v) => { setKind(v); setError('kind', null) }}>
+                    <SelectTrigger id="reg-kind" aria-invalid={!!errores.kind}
+                      className={`homy-glass-input w-full rounded-xl px-4 py-2.5 text-[15px] outline-none border-none ${errores.kind ? '!border-red-400 ring-2 ring-red-400/40' : ''}`}>
+                      <SelectValue placeholder="Elegí: corralón, ferretería…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(PROVIDER_KINDS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {errores.kind && <FieldError msg={errores.kind} />}
               </div>
+              <Field id="reg-address" label="Dirección del local" required value={address} placeholder="Av. Rivadavia 1234" autoComplete="street-address"
+                error={errores.address}
+                hint={`En ${city.trim() || 'tu ciudad'}. Es donde los clientes retiran lo que compran.`}
+                onChange={(v) => { setAddress(v); if (errores.address) setError('address', null) }} />
+              <details className="homy-glass-soft group rounded-2xl p-4" open={!!errores.cuit}>
+                <Resumen titulo="CUIT y descripción del comercio" />
+                <div className="mt-3 grid gap-4">
+                  <Field id="reg-cuit" label="CUIT" inputMode="numeric" value={cuit} placeholder="30-12345678-9" error={errores.cuit}
+                    onChange={(v) => { setCuit(v); if (errores.cuit) setError('cuit', null) }}
+                    onBlur={() => { if (cuit.trim()) { const r = normalizarCuit(cuit); if (r.ok) setCuit(r.cuit); setError('cuit', r.ok ? null : r.error) } }} />
+                  <label className="block text-sm font-semibold text-navy">
+                    Sobre el comercio
+                    <textarea
+                      value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={1500}
+                      placeholder="Qué vendés, horarios, si hacés entregas…"
+                      className="homy-glass-input mt-1.5 w-full resize-none rounded-xl px-4 py-2.5 text-[15px] outline-none"
+                    />
+                  </label>
+                </div>
+              </details>
             </div>
           )}
 
@@ -546,17 +945,38 @@ export default function RegisterScreen() {
                 <Sparkles className="size-5" aria-hidden />
               </span>
               <p className="text-sm leading-relaxed text-slate-600">
-                ¡Listo! Con tu cuenta vas a poder buscar profesionales en el mapa, publicar trabajos, recibir presupuestos, aprobar materiales y pagar con Mercado Pago.
+                ¡Listo! Con tu cuenta vas a poder buscar profesionales en el mapa, publicar trabajos, recibir presupuestos, comprar materiales y pagar con Mercado Pago o en efectivo.
               </p>
             </div>
           )}
 
+          {/* DNI (todos los roles, opcional) */}
+          <details className="homy-glass-soft group mt-5 rounded-2xl p-4">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden">
+              <span className="homy-icon-chip homy-chip-blue size-10 shrink-0 !rounded-xl">
+                <BadgeCheck className="size-5" aria-hidden />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-extrabold text-navy">Verificá tu identidad con tu DNI <span className="font-semibold text-slate-400">(opcional)</span></span>
+                <span className="mt-0.5 flex items-start gap-1 text-xs leading-relaxed text-slate-500">
+                  <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-[#1D63B8]" aria-hidden />
+                  Frente y dorso. Queda privado. También podés hacerlo después desde tu perfil.
+                </span>
+              </span>
+              <ChevronDown className="ml-auto size-5 shrink-0 text-slate-400 transition-transform duration-300 group-open:rotate-180" aria-hidden />
+            </summary>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <UploadBox id="dni-front" label="Frente" uploaded={dniFront} onPick={(f) => setDniFront(f ? f.name : null)} />
+              <UploadBox id="dni-back" label="Dorso" uploaded={dniBack} onPick={(f) => setDniBack(f ? f.name : null)} />
+            </div>
+          </details>
+
           {/* D19: aceptación obligatoria. Los links abren en otra pestaña para no perder lo cargado. */}
-          <label className="homy-glass-soft mt-6 flex cursor-pointer items-start gap-3 rounded-2xl p-4 text-sm leading-relaxed text-slate-600">
+          <label id="reg-acceptTerms" tabIndex={-1} className={`homy-glass-soft mt-5 flex cursor-pointer items-start gap-3 rounded-2xl p-4 text-sm leading-relaxed text-slate-600 outline-none ${errores.acceptTerms ? 'ring-2 ring-red-400/70' : ''}`}>
             <input
               type="checkbox"
               checked={acceptTerms}
-              onChange={(e) => setAcceptTerms(e.target.checked)}
+              onChange={(e) => { setAcceptTerms(e.target.checked); if (e.target.checked) setError('acceptTerms', null) }}
               aria-describedby="terminos-ayuda"
               className="mt-0.5 size-5 shrink-0 accent-[#1D63B8]"
             />
@@ -582,7 +1002,6 @@ export default function RegisterScreen() {
               'Crear mi cuenta'
             )}
           </button>
-          <p className="mt-3.5 text-center text-xs leading-relaxed text-slate-400">Tus documentos quedan privados.</p>
         </section>
       )}
 
@@ -594,27 +1013,64 @@ export default function RegisterScreen() {
   )
 }
 
+/** Encabezado de un bloque plegable opcional: título, "Opcional…" y flecha que gira al abrir. */
+function Resumen({ titulo }: { titulo: string }) {
+  return (
+    <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden">
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-extrabold text-navy">{titulo}</span>
+        <span className="block text-xs font-semibold text-slate-400">Opcional: podés completarlo después</span>
+      </span>
+      <ChevronDown className="size-5 shrink-0 text-slate-400 transition-transform duration-300 group-open:rotate-180" aria-hidden />
+    </summary>
+  )
+}
+
+function FieldError({ msg, id }: { msg: string; id?: string }) {
+  return (
+    <p id={id} role="alert" className="mt-1.5 flex items-start gap-1 text-xs font-semibold text-red-600">
+      <CircleAlert className="mt-px size-3.5 shrink-0" aria-hidden /> {msg}
+    </p>
+  )
+}
+
 function Field({
-  label, value, onChange, type = 'text', placeholder, required, min, max,
+  id, label, value, onChange, onBlur, type = 'text', placeholder, required, error, hint, inputMode, autoComplete, noPaste, adornment,
 }: {
+  id: string
   label: string
   value: string
   onChange: (v: string) => void
+  onBlur?: () => void
   type?: string
   placeholder?: string
   required?: boolean
-  min?: string
-  max?: string
+  error?: string
+  hint?: string
+  inputMode?: 'text' | 'email' | 'tel' | 'numeric'
+  autoComplete?: string
+  /** doble tipeo del celular: no se puede pegar (igual que PRISMA) */
+  noPaste?: boolean
+  adornment?: React.ReactNode
 }) {
+  const bloquear = (e: React.SyntheticEvent) => e.preventDefault()
   return (
-    <label className="block text-sm font-semibold text-navy">
-      {label} {required && <span className="text-action" aria-hidden>*</span>}
-      <input
-        type={type} value={value} onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder} min={min} max={max} required={required}
-        className="homy-glass-input mt-1.5 w-full rounded-xl px-4 py-2.5 text-[15px] outline-none"
-      />
-    </label>
+    <div>
+      <label htmlFor={id} className="block text-sm font-semibold text-navy">
+        {label} {required && <span className="text-action" aria-hidden>*</span>}
+      </label>
+      <div className="relative mt-1.5">
+        <input
+          id={id} type={type} value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
+          placeholder={placeholder} required={required} inputMode={inputMode} autoComplete={autoComplete}
+          aria-invalid={!!error} aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
+          onPaste={noPaste ? bloquear : undefined} onDrop={noPaste ? bloquear : undefined}
+          className={`homy-glass-input w-full rounded-xl px-4 py-2.5 text-[15px] outline-none ${adornment ? 'pr-12' : ''} ${error ? '!border-red-400 ring-2 ring-red-400/40' : ''}`}
+        />
+        {adornment && <div className="absolute inset-y-0 right-1 flex items-center">{adornment}</div>}
+      </div>
+      {error ? <FieldError id={`${id}-error`} msg={error} /> : hint ? <p id={`${id}-hint`} className="mt-1.5 text-xs text-slate-400">{hint}</p> : null}
+    </div>
   )
 }
 
@@ -629,8 +1085,8 @@ function UploadBox({ id, label, uploaded, onPick }: { id: string; label: string;
         {uploaded ? <CircleCheck className="size-4.5" aria-hidden /> : <Upload className="size-4.5" aria-hidden />}
       </span>
       <span className="mt-1.5 text-sm font-extrabold text-navy">DNI {label}</span>
-      <span className={`mt-0.5 text-xs font-semibold ${uploaded ? 'text-[#0e9f6e]' : 'text-slate-400'}`}>
-        {uploaded ? 'Listo' : name ? name : 'JPG, PNG o WEBP'}
+      <span className={`mt-0.5 max-w-full truncate text-xs font-semibold ${uploaded ? 'text-[#0e9f6e]' : 'text-slate-400'}`}>
+        {uploaded ? 'Listo' : name ? name : 'Foto o captura'}
       </span>
       <input
         id={id} type="file" accept="image/*" className="hidden"

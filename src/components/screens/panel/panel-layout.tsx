@@ -14,6 +14,7 @@ import {
   LayoutDashboard, Briefcase, FolderKanban, FileText, User, Bell, LogOut,
   Search, Boxes, Users, Link2, HardHat, ClipboardList, Home, Sparkles,
   Compass, MessageCircle, ShieldCheck, LifeBuoy, HandCoins, Package, Crown, MoreHorizontal, ShoppingBag, Undo2, CalendarDays,
+  MessageSquarePlus, PiggyBank,
 } from 'lucide-react'
 
 /** `short`: etiqueta para la barra inferior móvil (≥11px, sin truncar) */
@@ -52,6 +53,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/panel/cliente/mensajes', label: 'Mensajes', icon: MessageCircle },
     { to: '/panel/cliente/verificacion', label: 'Verificación', icon: ShieldCheck },
     { to: '/panel/cliente/perfil', label: 'Mi perfil', icon: User },
+    { to: '/panel/cliente/sugerencias', label: 'Sugerencias', icon: MessageSquarePlus },
     { to: '/ayuda', label: 'Ayuda', icon: LifeBuoy },
   ],
   profesional: [
@@ -63,6 +65,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/panel/profesional/proyectos', label: 'Proyectos', icon: FolderKanban },
     { to: '/panel/profesional/calendario', label: 'Calendario', icon: CalendarDays },
     { to: '/panel/profesional/cobros', label: 'Cobros', icon: HandCoins },
+    { to: '/panel/profesional/finanzas', label: 'Finanzas', icon: PiggyBank },
     { to: '/panel/profesional/devoluciones', label: 'Devoluciones', icon: Undo2 },
     { to: '/panel/profesional/crm', label: 'CRM clientes', icon: Users },
     { to: '/panel/profesional/obras', label: 'Mis obras', icon: HardHat },
@@ -71,12 +74,14 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/panel/profesional/mensajes', label: 'Mensajes', icon: MessageCircle },
     { to: '/panel/profesional/verificacion', label: 'Verificación', icon: ShieldCheck },
     { to: '/panel/profesional/perfil', label: 'Mi perfil', icon: User },
+    { to: '/panel/profesional/sugerencias', label: 'Sugerencias', icon: MessageSquarePlus },
     { to: '/ayuda', label: 'Ayuda', icon: LifeBuoy },
   ],
   proveedor: [
     { to: '/panel/proveedor', label: 'Inicio', icon: LayoutDashboard },
     { to: '/panel/proveedor/stock', label: 'Stock', icon: Boxes },
     { to: '/panel/proveedor/cobros', label: 'Cobros', icon: HandCoins },
+    { to: '/panel/proveedor/finanzas', label: 'Finanzas', icon: PiggyBank },
     { to: '/panel/proveedor/plan', label: 'Mi plan', icon: Crown },
     { to: '/panel/proveedor/crm', label: 'CRM', icon: Users },
     { to: '/panel/proveedor/vinculaciones', label: 'Vinculaciones', icon: Link2 },
@@ -84,6 +89,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: '/panel/proveedor/mensajes', label: 'Mensajes', icon: MessageCircle },
     { to: '/panel/proveedor/verificacion', label: 'Verificación', icon: ShieldCheck },
     { to: '/panel/proveedor/perfil', label: 'Mi perfil', icon: User },
+    { to: '/panel/proveedor/sugerencias', label: 'Sugerencias', icon: MessageSquarePlus },
     { to: '/ayuda', label: 'Ayuda', icon: LifeBuoy },
   ],
 }

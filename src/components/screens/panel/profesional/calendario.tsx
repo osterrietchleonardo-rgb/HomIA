@@ -1,26 +1,38 @@
 'use client'
-// Calendario del profesional (D21): sus trabajos por fecha (acordados en sólido, propuestos
-// punteados), días libres vs. ocupados del mes, próximos trabajos y proyectos con presupuesto
-// aprobado que todavía no tienen fechas. Las fechas se acuerdan en el detalle de cada proyecto.
+// Calendario del profesional (D21 + horarios D23): sus trabajos por fecha y horario (acordados en
+// sólido, propuestos punteados), el estado de cada día según SU jornada (libre / con lugar /
+// completo), la agenda del día como línea de tiempo con los huecos libres, próximos trabajos y
+// proyectos con presupuesto aprobado que todavía no tienen fechas. Las fechas se acuerdan en el
+// detalle de cada proyecto; la jornada se cambia acá ("Mi jornada").
 import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import { navigate } from '@/lib/router'
 import { Loading } from '@/components/app/ui-bits'
 import MonthGrid, { MonthNav, gridBounds } from '@/components/app/month-grid'
-import { addDays, dayInRanges, diffDays, longDay, todayKey, type BusyRange, type DayKey } from '@/lib/schedule'
 import {
-  CalendarDays, CalendarCheck2, CalendarClock, CalendarPlus, ArrowRight, RefreshCcw, BellRing, Sun,
+  JORNADA_DEFAULT, addDays, dayIntervals, dayStatus, diffDays, freeSlots, fromMinutes, longDay, slotLabel, slotMinutes,
+  slotText, timeOptions, toMinutes, todayKey, validateSlot,
+  type BusyRange, type DayEstado, type DayKey, type Jornada, type TimeKey,
+} from '@/lib/schedule'
+import {
+  CalendarDays, CalendarCheck2, CalendarPlus, ArrowRight, RefreshCcw, BellRing, Sun, Clock, Loader2, CalendarRange,
 } from 'lucide-react'
 
 type CalProject = {
   id: string; title: string; stage: string; status: string; clientName: string
-  schedule: { status: 'propuesta' | 'acordada' | null; proposedBy: 'profesional' | 'cliente' | null; startDate: string | null; endDate: string | null; prevStartDate: string | null; prevEndDate: string | null }
+  schedule: {
+    status: 'propuesta' | 'acordada' | null; proposedBy: 'profesional' | 'cliente' | null
+    startDate: string | null; endDate: string | null; dailyStart: string | null; dailyEnd: string | null
+    prevStartDate: string | null; prevEndDate: string | null
+  }
   ranges: BusyRange[]
 }
 type SinFecha = { id: string; title: string; stage: string; clientName: string; rechazadaPor: string | null; motivo: string | null }
-type CalData = { from: string; to: string; today: string; projects: CalProject[]; sinFecha: SinFecha[]; pendientes: number }
+type CalData = { from: string; to: string; today: string; jornada: Jornada; jornadaPorDefecto: boolean; projects: CalProject[]; sinFecha: SinFecha[]; pendientes: number }
 
 const STAGE_LABEL: Record<string, string> = { presupuesto: 'Presupuesto', materiales: 'Materiales', ejecucion: 'Ejecución', revision: 'Revisión', finalizado: 'Finalizado' }
 const NET_ERROR = 'No pudimos conectar con HomIA. Revisá tu conexión y probá de nuevo.'
+const HORAS = timeOptions()
 
 async function fetchCal(from: string, to: string): Promise<CalData> {
   const res = await fetch(`/api/professional/calendar?from=${from}&to=${to}`)
@@ -29,16 +41,25 @@ async function fetchCal(from: string, to: string): Promise<CalData> {
   return d as CalData
 }
 
-/** Marcas de un día: una por proyecto (el rango "ocupado" manda sobre "por confirmar"). */
-function marksOf(projects: CalProject[], day: DayKey) {
-  const out: { p: CalProject; estado: 'ocupado' | 'por_confirmar' | 'finalizado' }[] = []
+type Estado = 'ocupado' | 'por_confirmar' | 'finalizado'
+type Mark = { p: CalProject; estado: Estado; ds: TimeKey | null; de: TimeKey | null }
+
+/** Marcas de un día: una por proyecto (el rango "ocupado" manda sobre "por confirmar"), ordenadas por hora. */
+function marksOf(projects: CalProject[], day: DayKey): Mark[] {
+  const out: Mark[] = []
   for (const p of projects) {
     const hit = p.ranges.filter((r) => r.start <= day && day <= r.end)
     if (!hit.length) continue
-    const estado = p.status !== 'activo' ? 'finalizado' : hit.some((r) => r.estado === 'ocupado') ? 'ocupado' : 'por_confirmar'
-    out.push({ p, estado })
+    const r = hit.find((x) => x.estado === 'ocupado') || hit[0]
+    const estado: Estado = p.status !== 'activo' ? 'finalizado' : r.estado
+    out.push({ p, estado, ds: r.dailyStart || null, de: r.dailyEnd || null })
   }
-  return out
+  return out.sort((a, b) => slotMinutes(a.ds, a.de)[0] - slotMinutes(b.ds, b.de)[0] || (a.p.title < b.p.title ? -1 : 1))
+}
+
+/** Rangos de los proyectos ACTIVOS (los finalizados no ocupan). */
+function activeRanges(projects: CalProject[]): BusyRange[] {
+  return projects.filter((p) => p.status === 'activo').flatMap((p) => p.ranges)
 }
 
 const MARK_CLS = {
@@ -51,6 +72,12 @@ const DOT_CLS = {
   por_confirmar: 'border border-dashed border-amber-500 bg-amber-100',
   finalizado: 'bg-slate-300',
 } as const
+const DAY_LABEL: Record<DayEstado, string> = { libre: 'Libre', con_lugar: 'Con lugar', completo: 'Completo' }
+const DAY_CHIP: Record<DayEstado, string> = {
+  libre: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+  con_lugar: 'bg-sky-50 text-sky-800 ring-1 ring-sky-200',
+  completo: 'bg-[#0A2540] text-white',
+}
 
 export default function ProCalendar() {
   const today = todayKey()
@@ -59,6 +86,7 @@ export default function ProCalendar() {
   const [upcoming, setUpcoming] = useState<CalData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<DayKey | null>(null)
+  const [jornadaLocal, setJornadaLocal] = useState<{ j: Jornada; def: boolean } | null>(null)
 
   const bounds = useMemo(() => gridBounds(month), [month])
 
@@ -76,31 +104,34 @@ export default function ProCalendar() {
     fetchCal(today, addDays(today, 180)).then(setUpcoming).catch(() => setUpcoming(null))
   }, [today])
 
-  // resumen del mes: días ocupados (acordados), por confirmar y libres
+  const jornada: Jornada = jornadaLocal?.j || data?.jornada || upcoming?.jornada || JORNADA_DEFAULT
+  const jornadaDef = jornadaLocal ? jornadaLocal.def : (data || upcoming)?.jornadaPorDefecto ?? true
+  const ranges = useMemo(() => (data ? activeRanges(data.projects) : []), [data])
+
+  // resumen del mes según la jornada: días completos, con lugar y libres
   const resumen = useMemo(() => {
     if (!data) return null
-    const activos = data.projects.filter((p) => p.status === 'activo')
-    const ocup = activos.flatMap((p) => p.ranges.filter((r) => r.estado === 'ocupado'))
-    const prop = activos.flatMap((p) => p.ranges.filter((r) => r.estado === 'por_confirmar'))
-    let o = 0, c = 0, total = 0
+    let completos = 0, conLugar = 0, total = 0
     for (let d = bounds.monthStart; d <= bounds.monthEnd; d = addDays(d, 1)) {
       total++
-      if (dayInRanges(d, ocup)) o++
-      else if (dayInRanges(d, prop)) c++
+      const e = dayStatus(d, ranges, jornada)
+      if (e === 'completo') completos++
+      else if (e === 'con_lugar') conLugar++
     }
-    return { ocupados: o, porConfirmar: c, libres: total - o - c }
-  }, [data, bounds])
+    return { completos, conLugar, libres: total - completos - conLugar }
+  }, [data, bounds, ranges, jornada])
 
   const proximos = useMemo(() => {
     if (!upcoming) return []
     return upcoming.projects
       .filter((p) => p.status === 'activo' && p.schedule.startDate && p.schedule.endDate && p.schedule.endDate >= today)
-      .sort((a, b) => (a.schedule.startDate! < b.schedule.startDate! ? -1 : 1))
+      .sort((a, b) => (a.schedule.startDate! < b.schedule.startDate! ? -1 : a.schedule.startDate! > b.schedule.startDate! ? 1 : slotMinutes(a.schedule.dailyStart, a.schedule.dailyEnd)[0] - slotMinutes(b.schedule.dailyStart, b.schedule.dailyEnd)[0]))
   }, [upcoming, today])
 
   const sinFecha = (upcoming || data)?.sinFecha || []
   const pendientes = (upcoming || data)?.pendientes || 0
   const dayMarks = selected && data ? marksOf(data.projects, selected) : []
+  const selEstado = selected && data ? dayStatus(selected, ranges, jornada) : null
 
   return (
     <div className="homy-page pb-44 lg:pb-10">
@@ -108,7 +139,7 @@ export default function ProCalendar() {
         <div className="min-w-0">
           <span className="homy-eyebrow">Agenda</span>
           <h1 className="homy-page-title mt-1.5">Calendario</h1>
-          <p className="homy-page-sub">Tus trabajos por fecha: lo acordado con cada cliente, lo que está por confirmar y lo que falta agendar.</p>
+          <p className="homy-page-sub">Tus trabajos por fecha y horario: lo acordado con cada cliente, lo que está por confirmar, las horas libres y lo que falta agendar.</p>
         </div>
       </header>
 
@@ -122,10 +153,12 @@ export default function ProCalendar() {
           </div>
         )}
 
+        <MiJornada jornada={jornada} porDefecto={jornadaDef} onSaved={(j, def) => setJornadaLocal({ j, def })} />
+
         {/* resumen del mes */}
         <section aria-label="Resumen del mes" className="grid grid-cols-3 gap-2.5 sm:gap-3">
-          <Kpi icon={<CalendarCheck2 />} tone="text-[#1D63B8]" label="Ocupados" value={resumen?.ocupados} hint="días acordados" />
-          <Kpi icon={<CalendarClock />} tone="text-amber-600" label="Propuestos" value={resumen?.porConfirmar} hint="días por confirmar" />
+          <Kpi icon={<CalendarCheck2 />} tone="text-[#0A2540]" label="Completos" value={resumen?.completos} hint="sin horas libres" />
+          <Kpi icon={<CalendarRange />} tone="text-sky-700" label="Con lugar" value={resumen?.conLugar} hint="quedan horas" />
           <Kpi icon={<Sun />} tone="text-emerald-600" label="Libres" value={resumen?.libres} hint="días del mes" />
         </section>
 
@@ -145,29 +178,47 @@ export default function ProCalendar() {
               today={today}
               dayLabel={(d) => {
                 const m = marksOf(data.projects, d)
-                return m.length ? `${m.length} trabajo${m.length === 1 ? '' : 's'}` : null
+                if (!m.length) return null
+                const e = dayStatus(d, ranges, jornada)
+                return `${m.length} trabajo${m.length === 1 ? '' : 's'}${e === 'libre' ? '' : `, ${DAY_LABEL[e].toLowerCase()}`}`
               }}
-              cellClassName={(d) => `min-h-[54px] sm:min-h-[92px] ${selected === d ? 'ring-2 ring-[#1D63B8]' : ''} ${marksOf(data.projects, d).length ? 'bg-white/70' : 'bg-white/30'}`}
+              cellClassName={(d) => `min-h-[58px] sm:min-h-[116px] ${selected === d ? 'ring-2 ring-[#1D63B8]' : ''} ${marksOf(data.projects, d).length ? 'bg-white/70' : 'bg-white/30'}`}
               renderDay={(d) => {
                 const m = marksOf(data.projects, d)
+                const e = m.length ? dayStatus(d, ranges, jornada) : 'libre'
+                const soloPropuesto = m.length > 0 && m.every((x) => x.estado === 'por_confirmar')
                 return (
                   <button
                     type="button"
                     onClick={() => setSelected(selected === d ? null : d)}
-                    aria-label={`Ver los trabajos del ${longDay(d)}`}
+                    aria-label={`Ver la agenda del ${longDay(d)}`}
                     className="homy-focus absolute inset-0 rounded-lg"
+                    data-testid={`cal-day-${d}`}
                   >
-                    {/* móvil: puntos */}
-                    <span className="absolute inset-x-0 bottom-1.5 flex justify-center gap-0.5 sm:hidden" aria-hidden>
-                      {m.slice(0, 3).map((x) => <i key={x.p.id} className={`block size-1.5 rounded-full ${DOT_CLS[x.estado]}`} />)}
-                      {m.length > 3 && <i className="block text-[9px] font-extrabold not-italic leading-none text-slate-500">+</i>}
-                    </span>
-                    {/* escritorio: barras con título */}
+                    {/* móvil: cantidad de trabajos, con el color del estado del día */}
+                    {m.length > 0 && (
+                      <span
+                        className={`absolute inset-x-1 bottom-1 block truncate rounded px-0.5 text-center text-[10px] font-extrabold leading-4 sm:hidden ${
+                          e === 'completo' ? 'bg-[#0A2540] text-white' : soloPropuesto ? 'border border-dashed border-amber-500 bg-amber-50 text-amber-800' : 'bg-sky-100 text-sky-800'
+                        }`}
+                        aria-hidden
+                      >
+                        {m.length}{e === 'completo' ? ' ●' : ''}
+                      </span>
+                    )}
+                    {/* escritorio: estado del día + barras con la hora de inicio y el título */}
+                    {m.length > 0 && (
+                      <span className={`absolute bottom-1 left-1.5 hidden rounded px-1 text-[9.5px] font-extrabold uppercase tracking-wide sm:block ${e === 'completo' ? 'text-[#0A2540]' : 'text-sky-700'}`} aria-hidden>
+                        {e === 'completo' ? 'Completo' : 'Con lugar'}
+                      </span>
+                    )}
                     <span className="absolute inset-x-1 top-8 hidden flex-col gap-0.5 sm:flex" aria-hidden>
-                      {m.slice(0, 2).map((x) => (
-                        <span key={x.p.id} className={`block truncate rounded px-1.5 py-0.5 text-left text-[10.5px] font-bold leading-tight ${MARK_CLS[x.estado]}`}>{x.p.title}</span>
+                      {m.slice(0, 3).map((x) => (
+                        <span key={x.p.id} className={`block truncate rounded px-1.5 py-0.5 text-left text-[10.5px] font-bold leading-tight ${MARK_CLS[x.estado]}`}>
+                          {x.ds ? <span className="tabular-nums">{x.ds} </span> : null}{x.p.title}
+                        </span>
                       ))}
-                      {m.length > 2 && <span className="block text-left text-[10px] font-bold text-slate-500">+{m.length - 2} más</span>}
+                      {m.length > 3 && <span className="block text-left text-[10px] font-bold text-slate-500">+{m.length - 3} más</span>}
                     </span>
                   </button>
                 )
@@ -179,18 +230,28 @@ export default function ProCalendar() {
             <span className="inline-flex items-center gap-1.5"><i className={`block h-2.5 w-4 rounded ${DOT_CLS.ocupado}`} aria-hidden /> Acordado</span>
             <span className="inline-flex items-center gap-1.5"><i className={`block h-2.5 w-4 rounded ${DOT_CLS.por_confirmar}`} aria-hidden /> Por confirmar</span>
             <span className="inline-flex items-center gap-1.5"><i className={`block h-2.5 w-4 rounded ${DOT_CLS.finalizado}`} aria-hidden /> Finalizado</span>
+            <span className="inline-flex items-center gap-1.5"><i className="block h-2.5 w-4 rounded bg-[#0A2540]" aria-hidden /> Día completo</span>
+            <span className="inline-flex items-center gap-1.5"><i className="block h-2.5 w-4 rounded bg-sky-100 ring-1 ring-sky-200" aria-hidden /> Con lugar</span>
             <span className="inline-flex items-center gap-1.5"><i className="block size-2.5 rounded-full bg-[#FF5A1F]" aria-hidden /> Hoy</span>
           </div>
-          {/* trabajos del día elegido */}
-          {selected && (
-            <div className="mt-4 border-t border-[#0A2540]/8 pt-3" aria-live="polite">
-              <p className="mb-2 text-sm font-extrabold capitalize text-[#0A2540]">{longDay(selected)}</p>
+          <p className="mt-1.5 text-[11.5px] text-slate-500">El número de cada día es la cantidad de trabajos. “Completo” = no te quedan horas libres en tu jornada ({jornada.desde} a {jornada.hasta}).</p>
+
+          {/* agenda del día elegido */}
+          {selected && data && (
+            <div className="mt-4 border-t border-[#0A2540]/8 pt-3" aria-live="polite" data-testid="cal-day-panel">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-extrabold capitalize text-[#0A2540]">{longDay(selected)}</p>
+                {selEstado && <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${DAY_CHIP[selEstado]}`}>{DAY_LABEL[selEstado]}</span>}
+              </div>
               {dayMarks.length === 0 ? (
                 <p className="text-sm text-slate-500">Día libre: no tenés trabajos agendados.</p>
               ) : (
-                <ul className="grid gap-2">
-                  {dayMarks.map((x) => <ProjectRow key={x.p.id} p={x.p} estado={x.estado} today={today} />)}
-                </ul>
+                <>
+                  <ul className="grid gap-2">
+                    {dayMarks.map((x) => <ProjectRow key={x.p.id} p={x.p} estado={x.estado} today={today} franja={slotLabel(x.ds, x.de)} />)}
+                  </ul>
+                  <DayAgenda day={selected} projects={data.projects} jornada={jornada} />
+                </>
               )}
             </div>
           )}
@@ -252,6 +313,161 @@ export default function ProCalendar() {
   )
 }
 
+/** "Mi jornada: 06:00 a 18:00 · Cambiar" — decide cuándo un día está completo. */
+function MiJornada({ jornada, porDefecto, onSaved }: { jornada: Jornada; porDefecto: boolean; onSaved: (j: Jornada, def: boolean) => void }) {
+  const [edit, setEdit] = useState(false)
+  const [desde, setDesde] = useState(jornada.desde)
+  const [hasta, setHasta] = useState(jornada.hasta)
+  const [busy, setBusy] = useState(false)
+  const err = validateSlot(desde, hasta)
+
+  async function save(body: { workdayStart: string | null; workdayEnd: string | null }) {
+    setBusy(true)
+    try {
+      const res = await fetch('/api/professional/calendar', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const d = await res.json().catch(() => ({})) as { error?: string; jornada?: Jornada; jornadaPorDefecto?: boolean }
+      if (!res.ok || !d.jornada) { toast.error(d.error || 'No se pudo guardar tu jornada'); return }
+      onSaved(d.jornada, !!d.jornadaPorDefecto)
+      toast.success(`Tu jornada quedó de ${d.jornada.desde} a ${d.jornada.hasta}`)
+      setEdit(false)
+    } catch {
+      toast.error(NET_ERROR)
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <section className="homy-glass-soft rounded-2xl p-3.5 sm:p-4" aria-label="Mi jornada" data-testid="mi-jornada">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="flex min-w-0 items-center gap-2 text-sm text-[#0A2540]">
+          <Clock className="size-4 shrink-0 text-[#1D63B8]" aria-hidden />
+          <span><b>Mi jornada:</b> <span className="tabular-nums">{jornada.desde} a {jornada.hasta}</span>{porDefecto ? <span className="text-slate-500"> (la de referencia)</span> : null}</span>
+        </p>
+        {!edit && (
+          <button type="button" onClick={() => { setDesde(jornada.desde); setHasta(jornada.hasta); setEdit(true) }} className="homy-focus min-h-[44px] rounded-xl px-3 text-sm font-bold text-[#1D63B8] hover:underline" data-testid="jornada-cambiar">
+            Cambiar
+          </button>
+        )}
+      </div>
+      <p className="mt-1 text-xs leading-relaxed text-slate-500">Sirve para marcar cada día como completo o con lugar, en tu calendario y en tu perfil. Tus trabajos pueden estar en cualquier horario.</p>
+      {edit && (
+        <div className="mt-3 grid gap-2">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block min-w-0">
+              <span className="text-[11px] font-bold text-slate-500">Desde</span>
+              <select value={desde} onChange={(e) => setDesde(e.target.value)} className="homy-glass-input mt-1 min-h-[44px] w-full rounded-xl px-3 text-sm tabular-nums" data-testid="jornada-desde">
+                {HORAS.map((h) => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </label>
+            <label className="block min-w-0">
+              <span className="text-[11px] font-bold text-slate-500">Hasta</span>
+              <select value={hasta} onChange={(e) => setHasta(e.target.value)} className="homy-glass-input mt-1 min-h-[44px] w-full rounded-xl px-3 text-sm tabular-nums" data-testid="jornada-hasta">
+                {HORAS.map((h) => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </label>
+          </div>
+          {err && <p className="text-xs font-bold text-red-500" role="alert">{err}</p>}
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={!!err || busy} onClick={() => save({ workdayStart: desde, workdayEnd: hasta })} className="homy-btn-primary homy-focus min-h-[44px] px-4 text-sm disabled:opacity-50" data-testid="jornada-guardar">
+              {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null} Guardar
+            </button>
+            {!porDefecto && (
+              <button type="button" disabled={busy} onClick={() => save({ workdayStart: null, workdayEnd: null })} className="homy-glass homy-focus min-h-[44px] rounded-xl px-4 text-sm font-bold text-slate-600 disabled:opacity-50">
+                Volver a {JORNADA_DEFAULT.desde}–{JORNADA_DEFAULT.hasta}
+              </button>
+            )}
+            <button type="button" onClick={() => setEdit(false)} className="homy-btn-ghost homy-focus min-h-[44px] px-4 text-sm">Cancelar</button>
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
+const PX_HORA = 44
+
+/**
+ * Agenda del día: línea de tiempo vertical con la jornada (se extiende si un trabajo cae afuera),
+ * un bloque por trabajo en su horario (acordado sólido, propuesto punteado; los que se cruzan van
+ * uno al lado del otro) y los huecos libres en verde.
+ */
+function DayAgenda({ day, projects, jornada }: { day: DayKey; projects: CalProject[]; jornada: Jornada }) {
+  // bloques: todos los rangos que tocan el día (en una reprogramación, el acordado y el propuesto)
+  const blocks = projects.flatMap((p) => p.ranges
+    .filter((r) => r.start <= day && day <= r.end)
+    .map((r) => {
+      const full = !r.dailyStart || !r.dailyEnd
+      const [a, b] = slotMinutes(r.dailyStart, r.dailyEnd)
+      return { p, estado: (p.status !== 'activo' ? 'finalizado' : r.estado) as Estado, full, a, b, ds: r.dailyStart || null, de: r.dailyEnd || null }
+    }))
+  const franjas = blocks.filter((x) => !x.full)
+  // rango visible: la jornada, extendida a horas enteras si un trabajo cae fuera
+  const lo = Math.floor(Math.min(toMinutes(jornada.desde), ...franjas.map((x) => x.a)) / 60) * 60
+  const hi = Math.ceil(Math.max(toMinutes(jornada.hasta), ...franjas.map((x) => x.b)) / 60) * 60
+  const clip = (m: number) => Math.min(hi, Math.max(lo, m))
+  const items = blocks.map((x) => ({ ...x, a: x.full ? lo : clip(x.a), b: x.full ? hi : clip(x.b) })).sort((x, y) => x.a - y.a || y.b - x.b)
+  // carriles: los que se cruzan van uno al lado del otro
+  const laneEnd: number[] = []
+  const placed = items.map((x) => {
+    let lane = laneEnd.findIndex((e) => e <= x.a)
+    if (lane === -1) { lane = laneEnd.length; laneEnd.push(x.b) } else laneEnd[lane] = x.b
+    return { ...x, lane }
+  })
+  const lanes = Math.max(1, laneEnd.length)
+  const activos = activeRanges(projects).filter((r) => r.start <= day && day <= r.end)
+  const libres = freeSlots(dayIntervals(day, activos), fromMinutes(lo), fromMinutes(hi))
+  const top = (m: number) => ((m - lo) / 60) * PX_HORA
+  const horas: number[] = []
+  for (let m = lo; m <= hi; m += 60) horas.push(m)
+
+  return (
+    <div className="mt-4" data-testid="cal-agenda">
+      <p className="mb-2 text-xs font-extrabold uppercase tracking-[0.1em] text-slate-500">Agenda del día</p>
+      <div className="relative flex" style={{ height: top(hi) + 8 }}>
+        {/* horas */}
+        <div className="relative w-11 shrink-0" aria-hidden>
+          {horas.map((m) => (
+            <span key={m} className="absolute -translate-y-1/2 text-[10.5px] font-bold tabular-nums text-slate-400" style={{ top: top(m) }}>{fromMinutes(m)}</span>
+          ))}
+        </div>
+        <div className="relative min-w-0 flex-1 border-l border-[#0A2540]/10">
+          {horas.map((m) => <div key={m} className="absolute inset-x-0 border-t border-dashed border-[#0A2540]/8" style={{ top: top(m) }} aria-hidden />)}
+          {/* jornada */}
+          <div className="absolute inset-x-0 bg-[#1D63B8]/[0.03]" style={{ top: top(toMinutes(jornada.desde)), height: top(toMinutes(jornada.hasta)) - top(toMinutes(jornada.desde)) }} aria-hidden />
+          {/* huecos libres */}
+          {libres.map((l) => {
+            const h = top(toMinutes(l.hasta)) - top(toMinutes(l.desde))
+            return (
+              <div key={l.desde} className="absolute inset-x-1 flex items-center overflow-hidden rounded-lg border border-dashed border-emerald-300 bg-emerald-50/70 px-2" style={{ top: top(toMinutes(l.desde)) + 1, height: Math.max(h - 2, 4) }} data-testid="cal-libre">
+                {h >= 18 && <span className="truncate text-[11px] font-bold text-emerald-700">Libre · {l.desde}–{l.hasta}</span>}
+              </div>
+            )
+          })}
+          {/* trabajos */}
+          {placed.map((x, i) => {
+            const h = top(x.b) - top(x.a)
+            const w = 100 / lanes
+            return (
+              <button
+                key={`${x.p.id}-${i}`}
+                type="button"
+                onClick={() => navigate(`/panel/profesional/proyectos/${x.p.id}`)}
+                className={`homy-focus absolute overflow-hidden rounded-lg px-2 py-1 text-left shadow-sm ${MARK_CLS[x.estado]}`}
+                style={{ top: top(x.a) + 1, height: Math.max(h - 2, 14), left: `calc(${x.lane * w}% + 4px)`, width: `calc(${w}% - 8px)` }}
+                data-testid="cal-bloque"
+                aria-label={`${x.p.title}: ${x.full ? 'todo el día' : `de ${x.ds} a ${x.de}`}${x.estado === 'por_confirmar' ? ', por confirmar' : ''}`}
+              >
+                <span className="block truncate text-[11px] font-extrabold leading-tight tabular-nums">{x.full ? 'Todo el día' : `${x.ds}–${x.de}`}</span>
+                {h >= 34 && <span className="block truncate text-[11.5px] font-bold leading-tight">{x.p.title}</span>}
+                {h >= 50 && <span className="block truncate text-[10.5px] leading-tight opacity-80">{x.p.clientName}{x.estado === 'por_confirmar' ? ' · por confirmar' : ''}</span>}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Kpi({ icon, tone, label, value, hint }: { icon: React.ReactNode; tone: string; label: string; value: number | undefined; hint: string }) {
   return (
     <div className="homy-glass min-w-0 rounded-2xl p-3 sm:p-4">
@@ -264,13 +480,14 @@ function Kpi({ icon, tone, label, value, hint }: { icon: React.ReactNode; tone: 
   )
 }
 
-function ProjectRow({ p, estado, today }: { p: CalProject; estado: 'ocupado' | 'por_confirmar' | 'finalizado'; today: DayKey }) {
+function ProjectRow({ p, estado, today, franja }: { p: CalProject; estado: Estado; today: DayKey; franja?: string }) {
   const s = p.schedule
   const start = s.startDate!
   const end = s.endDate!
   const enCurso = start <= today && today <= end
   const falta = diffDays(today, start)
   const teToca = s.status === 'propuesta' && s.proposedBy === 'cliente'
+  const horario = franja ?? slotText(s.dailyStart, s.dailyEnd, start !== end)
   return (
     <li>
       <button
@@ -279,8 +496,10 @@ function ProjectRow({ p, estado, today }: { p: CalProject; estado: 'ocupado' | '
       >
         <span className={`w-1.5 self-stretch rounded-full ${DOT_CLS[estado]}`} aria-hidden />
         <span className="min-w-0 flex-1">
+          {franja !== undefined && <span className="block text-xs font-extrabold tabular-nums text-[#1D63B8]">{franja}</span>}
           <span className="block break-words text-sm font-extrabold text-[#0A2540]">{p.title}</span>
           <span className="block text-xs capitalize text-slate-500">{start === end ? longDay(start) : `${longDay(start)} → ${longDay(end)}`}</span>
+          {franja === undefined && <span className="block text-xs text-slate-500"><span className="inline-block first-letter:uppercase">{horario}</span></span>}
           <span className="block text-xs text-slate-500">
             {p.clientName} · {estado === 'por_confirmar' ? (teToca ? 'Te toca responder' : 'Esperando al cliente') : estado === 'finalizado' ? 'Finalizado' : enCurso ? 'En curso' : falta > 0 ? `Arranca en ${falta} día${falta === 1 ? '' : 's'}` : 'Acordado'}
             {s.prevStartDate ? ' · reprogramación en revisión' : ''}

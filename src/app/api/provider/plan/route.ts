@@ -5,6 +5,7 @@ import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
 import { createProviderPlanPreapproval, mpSubConfigured } from '@/lib/mercadopago'
 import { planState, PLAN_PRICE_ARS, PLAN_FEATURES, TRIAL_DAYS } from '@/lib/plans'
+import { registrarEvento } from '@/lib/analytics/server'
 
 // ── Plan del proveedor — el único rol con suscripción de pago ──
 // trial: 14 días gratis desde el alta · basic $50.000/mes · pro $100.000/mes
@@ -71,5 +72,7 @@ export async function POST(req: NextRequest) {
   // se autorice (lo actualiza el webhook). El webhook identifica al proveedor y al
   // plan por external_reference, así que no hace falta guardar la pendiente.
 
+  // métricas (D27): pedido de cambio de plan (la activación la registra el webhook)
+  registrarEvento(req, { name: 'plan_solicitado', userId: user.id, path: '/panel/proveedor/plan', props: { desde: prov.subscription, hacia: plan } })
   return ok({ initPoint: pre.initPoint, init_point: pre.initPoint, preapprovalId: pre.id, plan, priceArs: PLAN_PRICE_ARS[plan] }, 201)
 }

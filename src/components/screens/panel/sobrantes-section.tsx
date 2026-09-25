@@ -24,6 +24,7 @@ import {
 import {
   Undo2, Camera, X, Loader2, CircleCheck, Hourglass, Ban, PackageCheck, Banknote, CircleAlert, Send, Trash2, ClipboardCopy, ArrowRight,
 } from 'lucide-react'
+import { subirImagen } from '@/lib/upload-image'
 
 export type ReturnTipo = 'cliente' | 'profesional_a_proveedor'
 export type EligibleItem = {
@@ -184,15 +185,9 @@ export function ReturnRequestDialog({ open, onClose, eligible, notEligible, proj
   async function uploadPhoto(key: string, file: File) {
     updateDraft(key, { uploading: true })
     try {
-      const fd = new FormData()
-      fd.append('file', file)
-      fd.append('folder', 'sobrantes')
-      const res = await fetch('/api/uploads', { method: 'POST', body: fd })
-      const d = await readJson(res)
-      if (!res.ok || !d.url) { toast.error(d.error || 'No se pudo subir la foto'); return }
-      updateDraft(key, { photoUrl: d.url as string })
-    } catch {
-      toast.error('No pudimos conectar. Reintentá')
+      const r = await subirImagen(file, 'sobrantes')
+      if (!r.ok) { toast.error(r.error); return }
+      updateDraft(key, { photoUrl: r.url })
     } finally {
       updateDraft(key, { uploading: false })
     }

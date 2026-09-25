@@ -1,25 +1,37 @@
 'use client'
-// Tarjeta "Fechas del trabajo" del detalle de proyecto (D21), para el profesional y el cliente.
-// El profesional propone inicio + fin estimado; la otra parte acepta, rechaza o propone otra;
-// lo acordado se puede reprogramar (sigue vigente hasta que el otro decida).
+// Tarjeta "Fechas del trabajo" del detalle de proyecto (D21 + horario D23), para el profesional y el cliente.
+// El profesional propone inicio + fin estimado y el horario de cada día (o todo el día); la otra
+// parte acepta, rechaza o propone otra; lo acordado se puede reprogramar (sigue vigente hasta que
+// el otro decida). Si el horario choca con otro trabajo ACORDADO del profesional, la API responde
+// 409 y se muestra acá mismo (en el diálogo o en la tarjeta).
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { CalendarDays, CalendarCheck2, CalendarClock, CalendarX2, Check, Loader2, Pencil, TriangleAlert, X, Info } from 'lucide-react'
+import { CalendarDays, CalendarCheck2, CalendarClock, CalendarX2, Check, Clock, Loader2, Pencil, TriangleAlert, X, Info } from 'lucide-react'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { diffDays, longDay, rangesOverlap, todayKey, type DayKey } from '@/lib/schedule'
+import {
+  JORNADA_DEFAULT, diffDays, longDay, schedulesCollide, scheduleText, slotText, timeOptions, todayKey, validateSlot,
+  type DayKey, type Jornada, type TimeKey,
+} from '@/lib/schedule'
 
 export type ScheduleInfo = {
   status: 'propuesta' | 'acordada' | null
   proposedBy: 'profesional' | 'cliente' | null
   startDate: DayKey | null
   endDate: DayKey | null
+  /** franja de cada día ("HH:MM"); null = todo el día */
+  dailyStart?: TimeKey | null
+  dailyEnd?: TimeKey | null
   prevStartDate: DayKey | null
   prevEndDate: DayKey | null
+  prevDailyStart?: TimeKey | null
+  prevDailyEnd?: TimeKey | null
   note: string | null
   updatedAt: string | null
 }
+
+type SendResult = { ok: boolean; error?: string; choque?: boolean }
 
 type Role = 'profesional' | 'cliente'
 const NET_ERROR = 'No pudimos conectar con HomIA. Revisá tu conexión y probá de nuevo.'
@@ -30,7 +42,7 @@ function rangeText(a: DayKey, b: DayKey) {
 }
 
 export default function ScheduleCard({
-  projectId, role, otherName, schedule, blocked, onChanged,
+  projectId, role, otherName, schedule, blocked, workday, onChanged,
 }: {
   projectId: string
   role: Role
@@ -39,6 +51,8 @@ export default function ScheduleCard({
   schedule: ScheduleInfo | null | undefined
   /** motivo por el que todavía no se pueden acordar fechas (null = se puede) */
   blocked: string | null | undefined
+  /** jornada del profesional: el diálogo la sugiere como horario */
+  workday?: Jornada | null
   onChanged: () => void
 }) {
   const s: ScheduleInfo = schedule || { status: null, proposedBy: null, startDate: null, endDate: null, prevStartDate: null, prevEndDate: null, note: null, updatedAt: null }
@@ -46,6 +60,8 @@ export default function ScheduleCard({
   const [proposeOpen, setProposeOpen] = useState(false)
   const [rejectOpen, setRejectOpen] = useState(false)
   const [motivo, setMotivo] = useState('')
+  // choque al aceptar (409): queda visible en la tarjeta hasta la próxima acción
+  const [cardError, setCardError] = useState<string | null>(null)
 
   const other: Role = role === 'profesional' ? 'cliente' : 'profesional'
   const mine = s.status === 'propuesta' && s.proposedBy === role
@@ -53,26 +69,35 @@ export default function ScheduleCard({
   const reprogramando = s.status === 'propuesta' && !!s.prevStartDate && !!s.prevEndDate
   const canAct = !blocked
 
-  async function send(body: Record<string, unknown>, key: string, okMsg: string): Promise<boolean> {
+  /** `inline`: el error lo muestra quien llamó (el diálogo), sin toast. */
+  async function send(body: Record<string, unknown>, key: string, okMsg: string, inline = false): Promise<SendResult> {
     setBusy(key)
+    setCardError(null)
     try {
       const res = await fetch(`/api/projects/${projectId}/schedule`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       })
-      const d = await res.json().catch(() => ({})) as { error?: string; solapamiento?: { cantidad: number } | null }
-      if (!res.ok) { toast.error(d.error || 'No se pudieron actualizar las fechas'); return false }
+      const d = await res.json().catch(() => ({})) as { error?: string; choque?: boolean; solapamiento?: { cantidad: number } | null }
+      if (!res.ok) {
+        const error = d.error || 'No se pudieron actualizar las fechas'
+        if (!inline) {
+          toast.error(error)
+          if (d.choque) setCardError(error)
+        }
+        return { ok: false, error, choque: !!d.choque }
+      }
       toast.success(okMsg)
       const n = d.solapamiento?.cantidad || 0
       if (n > 0) {
         toast.warning(role === 'profesional'
-          ? `Ojo: se superpone con ${n} trabajo${n === 1 ? '' : 's'} tuyo${n === 1 ? '' : 's'} en ese período. Podés llevarlos en paralelo si te organizás.`
-          : `El profesional ya tiene ${n} trabajo${n === 1 ? '' : 's'} en parte de ese período. Si te preocupa, consultale por el chat.`)
+          ? `Ojo: ese horario se cruza con ${n === 1 ? 'otra propuesta tuya' : `${n} propuestas tuyas`} todavía sin confirmar. Si se acepta${n === 1 ? '' : 'n'} antes, esta no se va a poder aceptar.`
+          : 'El profesional tiene otra propuesta sin confirmar en ese horario. Si se confirma antes, van a tener que elegir otro.')
       }
       onChanged()
-      return true
+      return { ok: true }
     } catch {
-      toast.error(NET_ERROR)
-      return false
+      if (!inline) toast.error(NET_ERROR)
+      return { ok: false, error: NET_ERROR }
     } finally { setBusy(null) }
   }
 
@@ -98,16 +123,22 @@ export default function ScheduleCard({
 
       {/* fechas vigentes (acordadas) */}
       {s.status === 'acordada' && s.startDate && s.endDate && (
-        <DateBox label="Acordadas" start={s.startDate} end={s.endDate} solid />
+        <DateBox label="Acordadas" start={s.startDate} end={s.endDate} ds={s.dailyStart} de={s.dailyEnd} solid />
       )}
       {reprogramando && (
-        <DateBox label="Vigentes (acordadas)" start={s.prevStartDate!} end={s.prevEndDate!} solid />
+        <DateBox label="Vigentes (acordadas)" start={s.prevStartDate!} end={s.prevEndDate!} ds={s.prevDailyStart} de={s.prevDailyEnd} solid />
       )}
       {s.status === 'propuesta' && s.startDate && s.endDate && (
         <DateBox
           label={`${reprogramando ? 'Cambio propuesto' : 'Propuestas'} por ${who(s.proposedBy).toLowerCase()}`}
-          start={s.startDate} end={s.endDate}
+          start={s.startDate} end={s.endDate} ds={s.dailyStart} de={s.dailyEnd}
         />
+      )}
+      {cardError && (
+        <p className="mt-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-relaxed text-red-800" role="alert" data-testid="schedule-conflict">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-red-500" aria-hidden />
+          <span className="min-w-0 break-words">{cardError}</span>
+        </p>
       )}
       {s.status === 'propuesta' && s.note && (
         <p className="homy-glass-soft mt-3 rounded-xl px-4 py-3 text-sm leading-relaxed text-slate-600">
@@ -135,7 +166,7 @@ export default function ScheduleCard({
       {!blocked && s.status === null && (
         <p className="mt-3 text-sm leading-relaxed text-slate-500">
           {role === 'profesional'
-            ? `Proponé cuándo arrancás y cuándo estimás terminar. ${otherName} las acepta, las rechaza o te propone otras.`
+            ? `Proponé cuándo arrancás, cuándo estimás terminar y en qué horario (o todo el día). ${otherName} las acepta, las rechaza o te propone otras.`
             : `${otherName} todavía no propuso fechas. Te avisamos cuando lo haga: vas a poder aceptarlas, rechazarlas o proponer otras.`}
         </p>
       )}
@@ -196,13 +227,15 @@ export default function ScheduleCard({
         onOpenChange={setProposeOpen}
         role={role}
         projectId={projectId}
-        initial={s.status === 'propuesta' && s.startDate && s.endDate ? { start: s.startDate, end: s.endDate } : s.status === 'acordada' && s.startDate && s.endDate ? { start: s.startDate, end: s.endDate } : null}
+        initial={s.status && s.startDate && s.endDate ? { start: s.startDate, end: s.endDate, ds: s.dailyStart || null, de: s.dailyEnd || null } : null}
+        workday={workday || JORNADA_DEFAULT}
         title={s.status === 'acordada' ? 'Pedir reprogramar' : theirs ? 'Proponer otras fechas' : mine ? 'Cambiar tu propuesta' : 'Proponer fechas'}
         busy={busy === 'proponer'}
-        onSubmit={async (start, end, nota) => {
-          const okd = await send({ accion: 'proponer', startDate: start, endDate: end, nota: nota || undefined }, 'proponer',
-            s.status === 'acordada' ? `Le pediste a ${otherName} reprogramar` : `Fechas enviadas a ${otherName}`)
-          if (okd) setProposeOpen(false)
+        onSubmit={async (start, end, ds, de, nota) => {
+          const r = await send({ accion: 'proponer', startDate: start, endDate: end, dailyStart: ds, dailyEnd: de, nota: nota || undefined }, 'proponer',
+            s.status === 'acordada' ? `Le pediste a ${otherName} reprogramar` : `Fechas enviadas a ${otherName}`, true)
+          if (r.ok) setProposeOpen(false)
+          return r
         }}
       />}
 
@@ -223,7 +256,7 @@ export default function ScheduleCard({
           <DialogFooter className="gap-2">
             <button onClick={() => setRejectOpen(false)} className="homy-btn-ghost homy-focus min-h-[44px] px-5 text-sm">Volver</button>
             <button
-              onClick={async () => { const okd = await send({ accion: 'rechazar', motivo: motivo.trim() || undefined }, 'rechazar', reprogramando ? 'Siguen las fechas acordadas' : 'Rechazaste las fechas'); if (okd) setRejectOpen(false) }}
+              onClick={async () => { const r = await send({ accion: 'rechazar', motivo: motivo.trim() || undefined }, 'rechazar', reprogramando ? 'Siguen las fechas acordadas' : 'Rechazaste las fechas'); if (r.ok) setRejectOpen(false) }}
               disabled={busy !== null}
               className="homy-btn-dark homy-focus min-h-[44px] px-5 text-sm disabled:opacity-50"
             >
@@ -237,70 +270,97 @@ export default function ScheduleCard({
   )
 }
 
-function DateBox({ label, start, end, solid = false }: { label: string; start: DayKey; end: DayKey; solid?: boolean }) {
+function DateBox({ label, start, end, ds, de, solid = false }: { label: string; start: DayKey; end: DayKey; ds?: TimeKey | null; de?: TimeKey | null; solid?: boolean }) {
   const r = rangeText(start, end)
+  const horario = slotText(ds, de, start !== end)
   return (
-    <div className={`mt-3 rounded-2xl px-4 py-3 ${solid ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'border-2 border-dashed border-amber-300 bg-amber-50/60'}`}>
+    <div className={`mt-3 rounded-2xl px-4 py-3 ${solid ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'border-2 border-dashed border-amber-300 bg-amber-50/60'}`} data-testid="schedule-datebox">
       <p className={`text-[10.5px] font-extrabold uppercase tracking-[0.12em] ${solid ? 'text-emerald-700' : 'text-amber-700'}`}>{label}</p>
       <p className="mt-0.5 break-words text-base font-extrabold capitalize text-[#0A2540]">{r.texto}</p>
+      <p className="mt-0.5 flex items-start gap-1.5 text-sm font-bold text-[#0A2540]" data-testid="schedule-horario">
+        <Clock className="mt-0.5 size-3.5 shrink-0 text-slate-500" aria-hidden />
+        <span className="min-w-0 first-letter:uppercase">{horario}</span>
+      </p>
       <p className="text-xs font-semibold text-slate-500">{r.dias} · inicio y fin estimado</p>
     </div>
   )
 }
 
+type CalHit = { title: string; estado: string; start: DayKey; end: DayKey; dailyStart: TimeKey | null; dailyEnd: TimeKey | null }
+const HORAS = timeOptions()
+
 function ProposeDialog({
-  open, onOpenChange, role, projectId, initial, title, busy, onSubmit,
+  open, onOpenChange, role, projectId, initial, workday, title, busy, onSubmit,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   role: Role
   projectId: string
-  initial: { start: DayKey; end: DayKey } | null
+  initial: { start: DayKey; end: DayKey; ds: TimeKey | null; de: TimeKey | null } | null
+  workday: Jornada
   title: string
   busy: boolean
-  onSubmit: (start: DayKey, end: DayKey, nota: string) => void
+  onSubmit: (start: DayKey, end: DayKey, ds: TimeKey | null, de: TimeKey | null, nota: string) => Promise<SendResult>
 }) {
   const today = todayKey()
-  // el diálogo se monta al abrirse: arranca con la propuesta vigente (o hoy)
+  // el diálogo se monta al abrirse: arranca con la propuesta vigente (o hoy) y su horario (o la jornada)
   const st0 = initial && initial.start >= today ? initial.start : today
   const [start, setStart] = useState(st0)
   const [end, setEnd] = useState(initial && initial.end >= st0 ? initial.end : st0)
+  const [modo, setModo] = useState<'todo' | 'franja'>(initial?.ds && initial?.de ? 'franja' : 'todo')
+  const [desde, setDesde] = useState<TimeKey>(initial?.ds || workday.desde)
+  const [hasta, setHasta] = useState<TimeKey>(initial?.de || workday.hasta)
   const [nota, setNota] = useState('')
-  // superposición calculada para un rango concreto ("inicio|fin"): si cambió el rango, no se muestra
-  const [overlapFor, setOverlapFor] = useState<{ key: string; hits: { title: string; estado: string }[] } | null>(null)
-  const overlaps = overlapFor && overlapFor.key === `${start}|${end}` ? overlapFor.hits : null
+  const [serverError, setServerError] = useState<{ key: string; msg: string } | null>(null)
+  const ds = modo === 'franja' ? desde : null
+  const de = modo === 'franja' ? hasta : null
+  const key = `${start}|${end}|${ds}|${de}`
+  // choque calculado para una combinación concreta de días y horario: si cambió, no se muestra
+  const [hitsFor, setHitsFor] = useState<{ key: string; hits: CalHit[] } | null>(null)
+  const hits = hitsFor && hitsFor.key === key ? hitsFor.hits : null
+  const bloquean = (hits || []).filter((h) => h.estado === 'ocupado')
+  const avisan = (hits || []).filter((h) => h.estado !== 'ocupado')
+  const srvErr = serverError && serverError.key === key ? serverError.msg : null
 
-  // aviso en vivo de superposición: solo el profesional (con su propio calendario)
+  // choque en vivo: solo el profesional (con su propio calendario). El servidor igual lo verifica al enviar.
   useEffect(() => {
     if (!open || role !== 'profesional' || !start || !end || end < start) return
     const ctrl = new AbortController()
     const t = setTimeout(() => {
       fetch(`/api/professional/calendar?from=${start}&to=${end}`, { signal: ctrl.signal })
         .then((r) => (r.ok ? r.json() : null))
-        .then((d: { projects?: { id: string; title: string; status: string; ranges: { start: string; end: string; estado: string }[] }[] } | null) => {
+        .then((d: { projects?: { id: string; title: string; status: string; ranges: { start: string; end: string; estado: string; dailyStart?: string | null; dailyEnd?: string | null }[] }[] } | null) => {
           if (!d?.projects) return
-          const hits = d.projects
-            .filter((p) => p.id !== projectId && p.status === 'activo')
-            .flatMap((p) => p.ranges.filter((r) => rangesOverlap(r.start, r.end, start, end)).slice(0, 1).map((r) => ({ title: p.title, estado: r.estado })))
-          setOverlapFor({ key: `${start}|${end}`, hits })
+          const cand = { start, end, dailyStart: ds, dailyEnd: de }
+          const found: CalHit[] = []
+          for (const p of d.projects) {
+            if (p.id === projectId || p.status !== 'activo') continue
+            const rs = p.ranges.filter((r) => schedulesCollide(cand, r))
+            const r = rs.find((x) => x.estado === 'ocupado') || rs[0]
+            if (r) found.push({ title: p.title, estado: r.estado, start: r.start, end: r.end, dailyStart: r.dailyStart || null, dailyEnd: r.dailyEnd || null })
+          }
+          setHitsFor({ key: `${start}|${end}|${ds}|${de}`, hits: found })
         })
-        .catch(() => { /* sin aviso si falla: el servidor igual avisa al enviar */ })
+        .catch(() => { /* sin aviso si falla: el servidor igual verifica al enviar */ })
     }, 250)
     return () => { clearTimeout(t); ctrl.abort() }
-  }, [open, role, start, end, projectId])
+  }, [open, role, start, end, ds, de, projectId])
 
   const error = !start || !end ? 'Elegí las dos fechas'
     : start < today ? 'El inicio no puede ser anterior a hoy'
     : end < start ? 'El fin estimado no puede ser anterior al inicio'
+    : modo === 'franja' ? validateSlot(desde, hasta)
     : null
+  const multi = start !== end
+  const esJornada = modo === 'franja' && desde === workday.desde && hasta === workday.hasta
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-[#0A2540]">{title}</DialogTitle>
           <DialogDescription>
-            {role === 'profesional' ? 'Cuándo arrancás y cuándo estimás terminar. El cliente las acepta, las rechaza o te propone otras.' : 'Proponé cuándo te queda bien. El profesional las acepta, las rechaza o te propone otras.'}
+            {role === 'profesional' ? 'Cuándo arrancás, cuándo estimás terminar y en qué horario. El cliente las acepta, las rechaza o te propone otras.' : 'Proponé cuándo te queda bien y en qué horario. El profesional las acepta, las rechaza o te propone otras.'}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -323,31 +383,104 @@ function ProposeDialog({
             />
           </label>
         </div>
+
+        {/* horario de cada día */}
+        <fieldset className="min-w-0">
+          <legend className="text-xs font-bold uppercase tracking-wide text-slate-500">Horario de trabajo{multi ? ' (cada día)' : ''}</legend>
+          <div className="mt-1.5 grid grid-cols-2 gap-2" role="radiogroup">
+            <button
+              type="button" role="radio" aria-checked={modo === 'todo'} onClick={() => setModo('todo')}
+              className={`homy-focus min-h-[44px] rounded-xl px-3 text-sm font-bold transition ${modo === 'todo' ? 'bg-[#0A2540] text-white' : 'homy-glass-soft text-slate-600'}`}
+              data-testid="schedule-mode-todo"
+            >
+              Todo el día
+            </button>
+            <button
+              type="button" role="radio" aria-checked={modo === 'franja'} onClick={() => setModo('franja')}
+              className={`homy-focus min-h-[44px] rounded-xl px-3 text-sm font-bold transition ${modo === 'franja' ? 'bg-[#0A2540] text-white' : 'homy-glass-soft text-slate-600'}`}
+              data-testid="schedule-mode-franja"
+            >
+              Elegir horario
+            </button>
+          </div>
+          {modo === 'franja' && (
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <label className="block min-w-0">
+                <span className="text-[11px] font-bold text-slate-500">Desde</span>
+                <select
+                  value={desde} onChange={(e) => setDesde(e.target.value)}
+                  className="homy-glass-input mt-1 min-h-[44px] w-full rounded-xl px-3 text-sm tabular-nums"
+                  data-testid="schedule-desde"
+                >
+                  {HORAS.map((h) => <option key={h} value={h}>{h}</option>)}
+                </select>
+              </label>
+              <label className="block min-w-0">
+                <span className="text-[11px] font-bold text-slate-500">Hasta</span>
+                <select
+                  value={hasta} onChange={(e) => setHasta(e.target.value)}
+                  className="homy-glass-input mt-1 min-h-[44px] w-full rounded-xl px-3 text-sm tabular-nums"
+                  data-testid="schedule-hasta"
+                >
+                  {HORAS.map((h) => <option key={h} value={h}>{h}</option>)}
+                </select>
+              </label>
+            </div>
+          )}
+          <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
+            <span>{role === 'profesional' ? 'Tu jornada' : 'Jornada habitual del profesional'}: {workday.desde} a {workday.hasta}.</span>
+            {!esJornada && (
+              <button type="button" onClick={() => { setModo('franja'); setDesde(workday.desde); setHasta(workday.hasta) }} className="homy-focus inline-flex min-h-[44px] items-center font-bold text-[#1D63B8] underline-offset-2 hover:underline">
+                Usar ese horario
+              </button>
+            )}
+          </p>
+        </fieldset>
+
         {!error && start && end && (
-          <p className="text-xs font-semibold text-slate-500">{rangeText(start, end).dias} de trabajo · {rangeText(start, end).texto}</p>
+          <p className="text-xs font-semibold text-slate-500" data-testid="schedule-resumen">{rangeText(start, end).dias} de trabajo · {scheduleText(start, end, ds, de)}</p>
         )}
         {error && <p className="text-xs font-bold text-red-500" role="alert">{error}</p>}
-        {overlaps && overlaps.length > 0 && (
+        {bloquean.length > 0 && (
+          <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-800" role="alert" data-testid="schedule-live-block">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-red-500" aria-hidden />
+            <span className="min-w-0 break-words">
+              Ese horario choca con {bloquean.length === 1 ? 'un trabajo ya acordado' : `${bloquean.length} trabajos ya acordados`}:{' '}
+              {bloquean.slice(0, 3).map((o) => `«${o.title}» (${scheduleText(o.start, o.end, o.dailyStart, o.dailyEnd)})`).join('; ')}{bloquean.length > 3 ? '…' : ''}.
+              Elegí otro día u horario.
+            </span>
+          </div>
+        )}
+        {bloquean.length === 0 && avisan.length > 0 && (
           <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-900" role="status">
             <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden />
-            <span>
-              Se superpone con {overlaps.length} trabajo{overlaps.length === 1 ? '' : 's'} ese período
-              ({overlaps.slice(0, 3).map((o) => `${o.title}${o.estado === 'por_confirmar' ? ' — por confirmar' : ''}`).join(', ')}{overlaps.length > 3 ? '…' : ''}).
-              No te bloquea: podés llevarlos en paralelo.
+            <span className="min-w-0 break-words">
+              Se cruza con {avisan.length === 1 ? 'una propuesta tuya' : `${avisan.length} propuestas tuyas`} sin confirmar
+              ({avisan.slice(0, 3).map((o) => `«${o.title}»`).join(', ')}{avisan.length > 3 ? '…' : ''}). No te bloquea, pero la que se acepte primero se queda con el horario.
             </span>
+          </div>
+        )}
+        {srvErr && (
+          <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-800" role="alert" data-testid="schedule-server-error">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-red-500" aria-hidden />
+            <span className="min-w-0 break-words">{srvErr}</span>
           </div>
         )}
         <textarea
           value={nota} onChange={(e) => setNota(e.target.value)} maxLength={500} rows={2}
-          placeholder="Nota opcional (ej.: arranco a las 8, necesito que haya alguien en casa)"
+          placeholder="Nota opcional (ej.: necesito que haya alguien en casa)"
           aria-label="Nota opcional"
           className="homy-glass-input w-full rounded-xl p-3 text-sm"
         />
         <DialogFooter className="gap-2">
           <button onClick={() => onOpenChange(false)} className="homy-btn-ghost homy-focus min-h-[44px] px-5 text-sm">Volver</button>
           <button
-            onClick={() => !error && onSubmit(start, end, nota.trim())}
-            disabled={!!error || busy}
+            onClick={async () => {
+              if (error || bloquean.length) return
+              const r = await onSubmit(start, end, ds, de, nota.trim())
+              if (!r.ok) setServerError({ key, msg: r.error || 'No se pudieron enviar las fechas' })
+            }}
+            disabled={!!error || bloquean.length > 0 || busy}
             className="homy-btn-primary homy-focus min-h-[44px] px-5 text-sm disabled:opacity-50"
             data-testid="schedule-submit"
           >

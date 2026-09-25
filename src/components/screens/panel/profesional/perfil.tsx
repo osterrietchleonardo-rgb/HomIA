@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { BadgeCheck, ShieldCheck, UserRound, BriefcaseBusiness, ArrowRight, HandCoins } from 'lucide-react'
 import { DeleteAccountCard } from '@/components/app/delete-account-card'
 import { AvisosMailCard } from '@/components/screens/panel/avisos-mail-card'
+import { VerificacionContactoCard } from '@/components/app/verificacion-contacto-card'
 
 const CATEGORIES = [
   { slug: 'plomeria', name: 'Plomería' },
@@ -22,6 +23,8 @@ const CATEGORIES = [
   { slug: 'climatizacion', name: 'Climatización' },
   { slug: 'techos', name: 'Techos' },
   { slug: 'cerramientos', name: 'Cerramientos' },
+  { slug: 'electrodomesticos', name: 'Electrodomésticos' },
+  { slug: 'plagas', name: 'Control de plagas' },
 ]
 
 export default function ProProfile() {
@@ -280,6 +283,9 @@ export default function ProProfile() {
               {busy ? 'Guardando…' : 'Guardar perfil'}
             </button>
           </section>
+
+          {/* D26: email y celular verificados o no, y verificarlos con un código */}
+          <VerificacionContactoCard />
 
           {/* verificación de identidad: el flujo completo (subida + IA) vive en /verificacion */}
           <section className="homy-glass rounded-3xl p-5 sm:p-6">

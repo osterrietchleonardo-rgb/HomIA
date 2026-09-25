@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { Prisma } from '@prisma/client'
 import { ok, fail, parseBody } from '@/lib/api'
 import { db } from '@/lib/db'
-import { scheduleBlockReason } from '@/lib/schedule'
+import { jornadaOf, scheduleBlockReason } from '@/lib/schedule'
 import { bidAcceptedFor, scheduleView } from '@/lib/schedule-server'
 
 // Orden de etapas: solo se avanza, nunca se retrocede.
@@ -95,6 +95,8 @@ export async function GET(
       createdAt: project.createdAt,
       schedule: scheduleView(project),
       scheduleBlocked,
+      // jornada del profesional (D23): el diálogo de fechas la sugiere como horario
+      proWorkday: jornadaOf(project.pro.workdayStart, project.pro.workdayEnd),
       job: project.job,
       // "Parte del proyecto <título>": solo si quien mira es el cliente de esta subcontratación
       // Y además el profesional a cargo del proyecto original. El subcontratado no lo ve.

@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 import { Search, Star, MapPin, HardHat, Package, ArrowRight, Users, Store, Heart, SlidersHorizontal, Compass, BriefcaseBusiness } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { trackBusqueda } from '@/lib/analytics/tracker'
 
 type ProCard = {
   kind: 'profesional'; id: string; userId: string; href: string; name: string
@@ -122,6 +123,8 @@ export default function DirectoryScreen({ embedded = false }: { embedded?: boole
         const d = await res.json()
         setCards(d.directory)
         setCategories(d.categories)
+        // métricas (D27): solo si hay término o filtros (el listado inicial no es una búsqueda)
+        trackBusqueda('directorio', query || '', Array.isArray(d.directory) ? d.directory.length : 0, { tipo: k, cat: c, orden: s === 'reviews' ? null : s, estrellas: mr === '0' ? null : mr, precio: b })
       }
     } finally { setLoading(false) }
   }

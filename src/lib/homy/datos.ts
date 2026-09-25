@@ -54,9 +54,10 @@ export type ProfesionalDato = {
   resenas: number
   obras: number
   experiencia: number
-  // calendario del profesional (D21): primer día sin trabajos acordados ni propuestos
-  // ("AAAA-MM-DD"; null = sin días libres en el próximo año) y si le queda algún día libre esta semana
-  proximaFechaLibre?: string | null
+  // calendario del profesional (D21 + franjas D23): primer día que NO está completo (le quedan horas
+  // libres dentro de SU jornada —por defecto 06–18—, contando acordado y propuesto; "AAAA-MM-DD"; null = sin días
+  // con lugar en el próximo año) y si le queda algún día con lugar esta semana
+  proximoDiaConLugar?: string | null
   disponibleEstaSemana?: boolean
 }
 
@@ -156,13 +157,13 @@ export const fuenteDatosPrisma: FuenteDatos = {
       take: 500,
     })
     // una sola consulta para la disponibilidad de todos (si falla, Homy sigue sin ese dato)
-    const libres = await nextFreeForPros(rows.map((p) => p.id)).catch((e) => {
+    const libres = await nextFreeForPros(rows).catch((e) => {
       console.error('[homy/datos] disponibilidad', e)
-      return new Map<string, { proximaFechaLibre: string | null; disponibleEstaSemana: boolean }>()
+      return new Map<string, { proximoDiaConLugar: string | null; disponibleEstaSemana: boolean }>()
     })
     return rows.map((p) => ({
       id: p.id,
-      proximaFechaLibre: libres.get(p.id)?.proximaFechaLibre,
+      proximoDiaConLugar: libres.get(p.id)?.proximoDiaConLugar,
       disponibleEstaSemana: libres.get(p.id)?.disponibleEstaSemana,
       nombre: p.companyName ? `${p.companyName} (${p.user.displayName})` : p.user.displayName,
       rubros: parseJson<string[]>(p.professions, []),

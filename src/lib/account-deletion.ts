@@ -9,7 +9,9 @@
 //      existiendo (obligaciones legales y fiscales, y para no romperles el historial) y
 //      muestran "Usuario eliminado".
 //   3. Se borran los documentos de DNI (filas y archivos del bucket privado), el carrito,
-//      los favoritos, las sesiones de Homy, las notificaciones y el CRM propio.
+//      los favoritos, las sesiones de Homy, las notificaciones, el CRM propio y las
+//      sugerencias con sus fotos de evidencia (bucket privado feedback-evidencias, D25) y los
+//      movimientos y la configuración de Finanzas (D24).
 //   4. La cuenta queda con `deletedAt`: getSessionUser la ignora, el login la rechaza y
 //      src/lib/visibility.ts la esconde de todo lo público.
 import 'server-only'
@@ -17,6 +19,7 @@ import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { db } from '@/lib/db'
 import { hashPassword } from '@/lib/auth'
+import { borrarFotosDeUsuario, refsDeFotos } from '@/lib/feedback-server'
 
 export const NOMBRE_ELIMINADO = 'Usuario eliminado'
 export const NEGOCIO_ELIMINADO = 'Proveedor eliminado'
@@ -180,6 +183,8 @@ export async function anonimizarCuenta(userId: string): Promise<void> {
   const provId = user.provider?.id
   // contraseña imposible de adivinar (nadie la conoce: la cuenta no vuelve a entrar)
   const passwordHash = await hashPassword(crypto.randomBytes(32).toString('base64url'))
+  // fotos de evidencia de sus sugerencias (privadas): se borran después de la transacción
+  const fotosSugerencias = refsDeFotos(await db.feedback.findMany({ where: { userId }, select: { photos: true } }))
   const ahora = new Date()
 
   await db.$transaction(async (tx) => {
@@ -190,10 +195,17 @@ export async function anonimizarCuenta(userId: string): Promise<void> {
     await tx.homySession.deleteMany({ where: { userId } })
     await tx.homyRun.updateMany({ where: { userId }, data: { userId: null } })
     await tx.searchEvent.updateMany({ where: { userId }, data: { userId: null } })
+    // métricas de uso (D27): su registro de uso se borra (los hechos de negocio quedan anonimizados)
+    await tx.analyticsEvent.deleteMany({ where: { userId } })
+    await tx.analyticsSession.deleteMany({ where: { userId } })
     await tx.aiUsage.deleteMany({ where: { key: `user:${userId}` } })
     await tx.notification.deleteMany({ where: { userId } })
     await tx.passwordReset.deleteMany({ where: { userId } })
     await tx.crmPipeline.deleteMany({ where: { ownerId: userId } })
+    // Finanzas (D24): movimientos y configuración son datos privados del usuario
+    await tx.financeEntry.deleteMany({ where: { userId } })
+    await tx.financeConfig.deleteMany({ where: { userId } })
+    await tx.feedback.deleteMany({ where: { userId } })
     // trabajos publicados: los abiertos se cancelan (salen de la bolsa); la dirección se borra
     await tx.jobPost.updateMany({ where: { userId, status: 'abierto' }, data: { status: 'cancelado' } })
     await tx.jobPost.updateMany({ where: { userId }, data: { address: null } })
@@ -228,6 +240,7 @@ export async function anonimizarCuenta(userId: string): Promise<void> {
       })
     }
 
+    await tx.verificationCode.deleteMany({ where: { userId } })
     await tx.user.update({
       where: { id: userId },
       data: {
@@ -236,6 +249,8 @@ export async function anonimizarCuenta(userId: string): Promise<void> {
         passwordHash,
         phone: null, avatarUrl: null, howFoundUs: null, birthday: null, address: null, city: null,
         lat: null, lng: null, locationShared: false,
+        // D26: celular normalizado y verificaciones (los códigos pendientes se borran abajo)
+        phoneE164: null, phoneVerifiedAt: null, emailVerifiedAt: null,
         verificationStatus: 'none', verifiedAt: null,
         emailNotifications: false,
         deletedAt: ahora,
@@ -244,4 +259,5 @@ export async function anonimizarCuenta(userId: string): Promise<void> {
   }, { timeout: 30_000, maxWait: 10_000 })
 
   await borrarFotosPublicas(userId, [user.avatarUrl, user.provider?.brandLogoUrl])
+  await borrarFotosDeUsuario(userId, fotosSugerencias)
 }

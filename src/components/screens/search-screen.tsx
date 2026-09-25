@@ -16,6 +16,7 @@ import { toast } from 'sonner'
 import { Search, SearchX, MapPin as MapPinIcon, Compass, Sparkles, X, Lock, Home, Hammer, BadgeCheck, Store, Star, ArrowUpRight, HardHat, Package, Briefcase, Loader2, ShoppingCart, Clock } from 'lucide-react'
 import { AccionesHomy, TarjetasHomy } from '@/components/homy/homy-tarjetas'
 import { rutaActual, useDuenioHomy, useHomy } from '@/components/homy/homy-store'
+import { trackBusqueda } from '@/lib/analytics/tracker'
 
 const MapView = dynamic(() => import('@/components/app/map-view'), { ssr: false, loading: () => <div className="h-[320px] sm:h-[420px] lg:h-[480px] rounded-2xl homy-skeleton" /> })
 
@@ -47,7 +48,8 @@ const CATEGORY_TABS = [
   { slug: 'aislacion', name: 'Aislación' }, { slug: 'iluminacion', name: 'Iluminación' },
   { slug: 'climatizacion', name: 'Clima' }, { slug: 'jardineria', name: 'Jardín' },
   { slug: 'limpieza', name: 'Limpieza' }, { slug: 'muebles', name: 'Muebles' },
-  { slug: 'seguridad', name: 'Seguridad' },
+  { slug: 'seguridad', name: 'Seguridad' }, { slug: 'electrodomesticos', name: 'Electro' },
+  { slug: 'plagas', name: 'Plagas' },
 ]
 
 export default function SearchScreen({ embedded = false }: { embedded?: boolean }) {
@@ -100,6 +102,8 @@ export default function SearchScreen({ embedded = false }: { embedded?: boolean 
         stockId: m.stockId ?? m.id ?? '',
         elementName: m.elementName ?? m.name ?? '',
       })))
+      // métricas (D27): término, filtros y cantidad de resultados (0 = oportunidad de catálogo)
+      trackBusqueda('buscar', q, (data.professionals?.length || 0) + (data.jobs?.length || 0) + (data.materials?.length || 0), { cat: category, modo: mode })
     } finally {
       setLoading(false)
     }

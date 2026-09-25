@@ -287,7 +287,7 @@ export function crearHerramientas(ctx: Contexto, datos: FuenteDatos, reg: Regist
       type: 'function',
       name: 'buscar_profesionales',
       description:
-        'Busca profesionales registrados en HomIA por rubro y zona. El orden ya viene calculado (verificado > reseñas > obras/experiencia > distancia): respetalo. Devuelve id, nombre, rubros, reseñas, obras, verificación, distancia, próxima fecha libre según su calendario y link al perfil. Sirve también para "¿quién está disponible esta semana?". Nunca devuelve teléfonos ni emails.',
+        'Busca profesionales registrados en HomIA por rubro y zona. El orden ya viene calculado (verificado > reseñas > obras/experiencia > distancia): respetalo. Devuelve id, nombre, rubros, reseñas, obras, verificación, distancia, próximo día con lugar según su calendario y link al perfil. Sirve también para "¿quién está disponible esta semana?". Nunca devuelve teléfonos ni emails.',
       strict: true,
       parameters: obj({
         rubro: { ...nulo('string'), description: 'plomeria, electricistas, gasistas, pintura, albanileria, carpinteria, climatizacion, techos… o null.' },
@@ -337,8 +337,8 @@ export function crearHerramientas(ctx: Contexto, datos: FuenteDatos, reg: Regist
         return {
           ref: `profesional:${p.id}`, nombre: p.nombre, rubros: p.rubros, ciudad: p.ciudad, verificado: p.verificado,
           rating: p.rating, resenas: p.resenas, obras: p.obras, anios_experiencia: p.experiencia, distancia_km: KM(d), link_perfil: href,
-          // calendario del profesional (D21): días sin trabajos acordados ni propuestos
-          proxima_fecha_libre: p.proximaFechaLibre ?? null, disponible_esta_semana: p.disponibleEstaSemana ?? null,
+          // calendario del profesional (D21 + franjas D23): primer día con horas libres en su jornada (por defecto 06–18)
+          proximo_dia_con_lugar: p.proximoDiaConLugar ?? null, disponible_esta_semana: p.disponibleEstaSemana ?? null,
         }
       })
       return {
@@ -346,7 +346,7 @@ export function crearHerramientas(ctx: Contexto, datos: FuenteDatos, reg: Regist
         salida: txt({
           estado: 'encontrado',
           ubicacion_usada: loc.origen,
-          nota: `${loc.lat == null ? 'Sin ubicación: no digas que están cerca. ' : loc.origen.startsWith('centro') ? `Distancias medidas desde el ${loc.origen}: decí "aproximadamente". ` : ''}Solo podés nombrar estos profesionales. Nunca prometas precio: eso lo acuerdan por chat o presupuesto. Disponibilidad: solo la de proxima_fecha_libre (AAAA-MM-DD, decila como DD/MM) y disponible_esta_semana, que salen del calendario del profesional; es orientativa (la fecha se acuerda en el proyecto) y si vienen null no digas nada de disponibilidad.${ctx.rol === 'visitante' ? ' Para contactarlos el usuario necesita cuenta (gratis).' : ''}`,
+          nota: `${loc.lat == null ? 'Sin ubicación: no digas que están cerca. ' : loc.origen.startsWith('centro') ? `Distancias medidas desde el ${loc.origen}: decí "aproximadamente". ` : ''}Solo podés nombrar estos profesionales. Nunca prometas precio: eso lo acuerdan por chat o presupuesto. Disponibilidad: solo la de proximo_dia_con_lugar (primer día en que le quedan horas libres dentro de su jornada de trabajo; AAAA-MM-DD, decila como DD/MM; no digas que ese día está libre entero) y disponible_esta_semana, que salen del calendario del profesional; es orientativa (el día y el horario se acuerdan en el proyecto) y si vienen null no digas nada de disponibilidad.${ctx.rol === 'visitante' ? ' Para contactarlos el usuario necesita cuenta (gratis).' : ''}`,
           profesionales: items,
         }),
         resumen: items.map((x) => `${x.nombre}${x.verificado ? '✓' : ''}`).join(', ').slice(0, 200),

@@ -43,6 +43,14 @@ model User {
   // termsVersion = LEGAL_VERSION de src/lib/legal-content.ts vigente al aceptar.
   termsAcceptedAt    DateTime?
   termsVersion       String?
+  // Registro con datos estandarizados y verificación (D26, migración 0035).
+  // emailVerifiedAt: cuándo probó con un código de 6 cifras que el email es suyo (las cuentas nuevas
+  //   nacen verificadas; las anteriores quedan en NULL = "sin verificar" hasta que lo hagan en el perfil).
+  // phoneE164: el celular normalizado (+549…); `phone` guarda cómo se muestra (+54 9 11 2345-6789).
+  // phoneVerifiedAt: cuándo confirmó el celular con un código por SMS/WhatsApp (NULL sin proveedor).
+  emailVerifiedAt    DateTime?
+  phoneE164          String?
+  phoneVerifiedAt    DateTime?
   // "Eliminar mi cuenta" (Ley 25.326, D19): la cuenta queda anonimizada y oculta de todo lo
   // público; getSessionUser la trata como inexistente y el login la rechaza.
   deletedAt          DateTime?
@@ -50,6 +58,7 @@ model User {
   updatedAt          DateTime  @updatedAt
 
   passwordResets    PasswordReset[]
+  verificationCodes VerificationCode[]
   documents         IdentityDocument[]
   professional      ProfessionalProfile?
   provider          ProviderProfile?
@@ -71,6 +80,9 @@ model User {
   leftoverReturns   LeftoverReturn[]
   cartItems         CartItem[]
   orders            Order[]              @relation("OrderClient")
+  feedbacks         Feedback[]
+  financeEntries    FinanceEntry[]
+  financeConfigs    FinanceConfig[]
 }
 
 model IdentityDocument {
@@ -120,6 +132,10 @@ model ProfessionalProfile {
   mpOauthRefreshToken String?
   mpOauthExpiresAt    DateTime?
   mpOauthStatus       String    @default("disconnected") // connected | disconnected
+  // Jornada de trabajo (D23, migración 0032): "HH:MM"; null = 06:00–18:00. Decide si un día está
+  // "completo" o "con lugar" en el calendario, la disponibilidad pública y Homy.
+  workdayStart        String?
+  workdayEnd          String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -208,6 +224,9 @@ model ProviderStock {
   status     String   @default("disponible") // disponible|por_agotar|agotado (derivado)
   brand      String?
   imageUrl   String?
+  // Finanzas (D24, migración 0033): costo de compra por unidad, lo carga el proveedor.
+  // null = sin dato (no se inventa: se usa el margen estimado declarado o se avisa).
+  unitCost   Float?
   updatedAt  DateTime @updatedAt
   createdAt  DateTime @default(now())
 
@@ -325,6 +344,13 @@ model Project {
   scheduleUpdatedAt    DateTime?
   prevStartDate        DateTime?
   prevEndDate          DateTime?
+  // Franja horaria diaria (D23, migración 0032): "HH:MM" hora argentina, de a 15 min, fin > inicio.
+  //   Cada día del rango el trabajo ocupa dailyStart–dailyEnd; null = día completo.
+  //   prevDailyStart/prevDailyEnd: franja acordada vigente durante una reprogramación.
+  dailyStart           String?
+  dailyEnd             String?
+  prevDailyStart       String?
+  prevDailyEnd         String?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
@@ -412,6 +438,11 @@ model Payment {
   // null = fila anterior al carrito: compras → vendedor; facturas y cobros → plataforma.
   collector      String?
   refundedAmount Float     @default(0) // suma de reembolsos MP (sobrantes)
+  // Ingresos de HomIA (D30, migración 0037), tal como los informa MP en el pago (null = sin dato):
+  // mpApplicationFee = `fee_details` tipo application_fee (lo que MP le acreditó a HomIA del cargo 1%);
+  // mpApprovedAt = `date_approved`.
+  mpApplicationFee Float?
+  mpApprovedAt     DateTime?
   status         String // approved|acordado|confirmado|rejected, etc.
   amount         Float
   confirmedAt    DateTime? // efectivo: cuándo el profesional confirmó que cobró
@@ -712,6 +743,56 @@ model Notification {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+// Sugerencias de los usuarios (D25, migración 0034). Las manda cualquier rol desde su panel
+// (/panel/<rol>/sugerencias) y las responde un administrador (ADMIN_EMAILS) desde
+// /panel/admin/sugerencias. Reglas puras en src/lib/feedback.ts.
+model Feedback {
+  id            String    @id @default(cuid())
+  userId        String
+  role          String // cliente|profesional|proveedor (panel desde el que escribió)
+  type          String // sugerencia|queja|mejora|oportunidad|problema|otro
+  area          String // busqueda|directorio|…|otra (src/lib/feedback.ts AREAS)
+  title         String
+  description   String
+  photos        String    @default("[]") // JSON: paths privados "feedback-evidencias/<userId>/sugerencias/<archivo>"
+  context       String? // JSON (solo "problema"): pantalla, navegador, dispositivo, fecha, zona horaria
+  contactOk     Boolean   @default(true)
+  status        String    @default("recibida") // recibida|en_revision|planificada|resuelta|descartada
+  adminResponse String?
+  respondedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status, createdAt])
+}
+
+// Códigos de verificación de email y celular (D26, migración 0035). 6 cifras, vencen a los 10 min,
+// hasta 5 intentos, un solo uso. Se guarda el HMAC-SHA256 del código (clave AUTH_SECRET), nunca el
+// código. proposito "registro": todavía no hay cuenta (userId NULL, destino = email o celular que
+// se está registrando); "cuenta": verificar después desde el perfil (userId = el dueño).
+model VerificationCode {
+  id        String    @id @default(cuid())
+  userId    String?
+  channel   String // email | celular
+  purpose   String // registro | cuenta
+  target    String // email normalizado o celular E.164
+  codeHash  String
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  ip        String?
+  createdAt DateTime  @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([target, channel, purpose, createdAt])
+  @@index([ip, createdAt])
+  @@index([userId])
+}
+
 // Recuperar contraseña (migración 0028). El token real (32 bytes aleatorios, base64url)
 // viaja SOLO en el link del mail; acá se guarda su sha256. Vence en 1 hora y se usa una vez.
 model PasswordReset {
@@ -905,4 +986,163 @@ model LeftoverItem {
   element        CatalogElement @relation(fields: [elementId], references: [id])
 
   @@index([returnId])
+}
+
+// ── Finanzas del profesional y del proveedor (D24, migración 0033) ──
+// Movimientos que carga el usuario. Lo que pasa por HomIA (facturas, ventas, devoluciones,
+// compras) NO se guarda acá: se lee de sus tablas al calcular (src/lib/finanzas/datos.ts).
+// Un usuario con los dos roles tiene finanzas separadas por rol.
+model FinanceEntry {
+  id               String    @id @default(cuid())
+  userId           String
+  role             String // profesional | proveedor
+  // otro_ingreso | costo_directo | compra_mercaderia | gasto | inversion | retiro | aporte | prestamo | pago_prestamo
+  type             String
+  category         String // id de src/lib/finanzas/conceptos.ts
+  description      String
+  amount           Float // > 0, en pesos
+  interestAmount   Float? // pago_prestamo: parte de interés (el resto es capital)
+  date             DateTime
+  paymentMethod    String? // efectivo|transferencia|tarjeta|mercadopago|otro
+  recurring        String? // null | mensual (se proyecta cada mes al calcular, sin cron)
+  recurringUntil   DateTime? // fin del recurrente (inclusive)
+  projectId        String? // obra propia a la que se asigna el costo (rentabilidad por obra)
+  usefulLifeMonths Int? // inversion: vida útil en meses (amortización lineal)
+  status           String    @default("pagado") // pagado | pendiente (a pagar / a cobrar)
+  attachmentUrl    String? // foto del comprobante (bucket público homia-uploads)
+  deletedAt        DateTime? // baja lógica
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, role, date])
+}
+
+// Configuración de Finanzas por usuario y rol.
+model FinanceConfig {
+  id               String    @id @default(cuid())
+  userId           String
+  role             String // profesional | proveedor
+  openingCash      Float? // saldo inicial de caja
+  openingDate      DateTime? // desde cuándo vale el saldo inicial
+  estimatedCostPct Float? // proveedor: "compro al X% del precio de venta" (estimación declarada)
+  onboardedAt      DateTime? // terminó (u omitió) el primer uso guiado
+  // JSON { "<providerChargeId>": "<projectId>" | "personal" }: compras de HomIA asignadas a una obra o marcadas no del negocio
+  tags             String    @default("{}")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+}
+
+// ─── Métricas de uso (D27, 25/09/2026) ───
+// Registro propio (first-party, sin herramientas de terceros) de CÓMO se usa HomIA: vistas de
+// pantalla, clics, envíos, diálogos, búsquedas, errores y eventos de servidor (login, logout,
+// registro, plan, PDF). Nunca guarda lo que se tipea en formularios, contraseñas ni el contenido
+// de los mensajes. Los hechos de negocio (proyectos, facturas, pagos, pedidos, reseñas…) NO se
+// duplican acá: las métricas de negocio se calculan desde sus propias tablas.
+// Sin FK a User (como HomyRun): la purga y la baja de cuenta los borran explícitamente.
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  userId     String? // de la cookie de sesión, nunca del cuerpo
+  anonId     String // id aleatorio del navegador (homia_anon_id); se vincula al usuario al ingresar
+  sessionId  String // AnalyticsSession.id
+  role       String? // rol activo (cliente|profesional|proveedor) según la pantalla
+  type       String // page_view|click|submit|dialog|search|error|server
+  name       String // etiqueta: ruta, botón, formulario, término buscado, evento de servidor
+  path       String // ruta normalizada sin ids (/panel/cliente/proyectos/:id)
+  entityType String? // project|order|purchase|invoice|charge|job|bid|stock|conversation|review|work|return|professional|provider
+  entityId   String?
+  props      Json? // detalle chico validado (sin datos personales)
+  device     String? // "celu · Chrome · Android"
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+  @@index([name, createdAt])
+  @@index([entityType, entityId])
+  @@index([sessionId])
+  @@index([anonId])
+  @@index([createdAt])
+}
+
+// Una sesión de uso: se corta tras 30 minutos sin actividad. `activeMs` suma solo el tiempo con
+// la pestaña visible y el usuario interactuando (latidos cada 30 s).
+model AnalyticsSession {
+  id         String   @id @default(cuid())
+  userId     String?
+  anonId     String
+  startedAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  activeMs   Int      @default(0)
+  pageViews  Int      @default(0)
+  events     Int      @default(0)
+  entryPath  String?
+  referrer   String? // solo el dominio de origen
+  utm        Json? // utm_* del primer ingreso
+  device     String?
+
+  @@index([userId, startedAt])
+  @@index([anonId])
+  @@index([startedAt])
+}
+
+// ─────────────────────────── INGRESOS DE HOMIA (D30, migración 0037) ───────────────────────────
+// Cada cobro mensual de la suscripción de un proveedor, tal como lo informa Mercado Pago (fuente de
+// verdad). Lo llenan el webhook (tópico subscription_authorized_payment y `payment` con
+// external_reference plan:provider:…), la reconciliación del cron diario y el backfill único.
+// Sin FK al proveedor a propósito: el registro contable sobrevive a la baja de la cuenta
+// (providerName guarda el nombre del comercio al momento del cobro).
+model SubscriptionCharge {
+  id                    String    @id @default(cuid())
+  providerId            String
+  userId                String?
+  providerName          String
+  plan                  String // basic|pro (de external_reference)
+  mpPreapprovalId       String
+  mpPaymentId           String    @unique // idempotencia
+  mpAuthorizedPaymentId String? // "factura" de la suscripción en MP
+  mpEnvironment         String    @default("live") // live|test: con qué token de la app Suscripciones apareció
+  status                String // approved|rejected|pending|in_process|refunded|cancelled|charged_back… tal cual MP
+  statusDetail          String?
+  amount                Float
+  currency              String    @default("ARS")
+  refundedAmount        Float     @default(0)
+  netAmount             Float? // transaction_details.net_received_amount (null = MP no lo informó)
+  mpFee                 Float? // suma de fee_details (comisión de MP; null = sin dato)
+  periodStart           DateTime? // billing_date / debit_date del período cobrado
+  attemptedAt           DateTime // date_created del pago (intento de cobro)
+  paidAt                DateTime? // date_approved
+  source                String // webhook|cron|backfill
+  raw                   Json? // mínimo, sin datos de tarjeta ni del pagador
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([providerId, attemptedAt])
+  @@index([status, paidAt])
+  @@index([mpPreapprovalId])
+}
+
+// Movimientos del plan de un proveedor (altas pagas, cambios de plan, bajas, reactivaciones) para
+// la trazabilidad de /admin/ingresos. Se registran desde el 25/09/2026 (webhook y cron); lo anterior
+// se reconstruye desde Mercado Pago (source = backfill). Idempotente por dedupeKey.
+model SubscriptionEvent {
+  id              String   @id @default(cuid())
+  providerId      String
+  providerName    String
+  type            String // activada|reactivada|cambio_plan|cancelada|pausada|impago|reemplazada
+  fromPlan        String?
+  toPlan          String?
+  mpPreapprovalId String?
+  motivo          String?
+  source          String // webhook|cron|backfill
+  dedupeKey       String   @unique
+  occurredAt      DateTime
+  createdAt       DateTime @default(now())
+
+  @@index([providerId, occurredAt])
+  @@index([type, occurredAt])
 }
