@@ -22,10 +22,17 @@ export const ROLE_VIDEO_LABEL: Record<VideoRole, string> = {
 // que la app no hace: pago "protegido"/"reservado"/escrow (HomIA no retiene plata: se paga al terminar,
 // directo al vendedor), que el profesional da la obra por terminada (la finaliza el cliente), plan PRO de
 // profesionales (legado) y que el cliente aprueba los pedidos de materiales del proveedor (D15).
-// Vuelven cuando se graben de nuevo (guiones en el doc "Videos de ayuda de HomIA"). Los v2 de
-// cli-bienvenida, cli-contratar, cli-carrito, gen-registro, pro-bienvenida, pro-presupuestos y prv-ventas
-// NO se publican todavía: usan capturas de una versión vieja ("agentes de IA", precios en US$, registro viejo).
+// 26/09/2026: volvieron regrabados (v3, verticales, con capturas de la app actual).
 export const VIDEOS: VideoItem[] = [
+  { id: 'cli-bienvenida', role: 'cliente', title: 'Bienvenido a HomIA', desc: 'Qué ganás, cómo elegir a quién llamar y pagar al terminar.', vertical: true },
+  { id: 'gen-registro', role: 'cliente', title: 'Crear tu cuenta', desc: 'Tus datos, el celular con su país y el código que llega al mail.', vertical: true },
+  { id: 'cli-contratar', role: 'cliente', title: 'Publicar y contratar', desc: 'De contar qué pasó a pagar cuando el trabajo está terminado.', vertical: true },
+  { id: 'cli-carrito', role: 'cliente', title: 'Comprar materiales', desc: 'Carrito con varios proveedores, compra o reserva y Mis pedidos.', vertical: true },
+  { id: 'pro-bienvenida', role: 'profesional', title: 'Tu cuenta profesional', desc: 'Perfil, obras, verificación del DNI y Mercado Pago. Gratis.', vertical: true },
+  { id: 'gen-registro', role: 'profesional', title: 'Crear tu cuenta', desc: 'Tus datos, tus rubros y el código que llega al mail.', vertical: true },
+  { id: 'pro-presupuestos', role: 'profesional', title: 'Presupuestos y trabajos', desc: 'De la bolsa de trabajos al trabajo terminado y cobrado.', vertical: true },
+  { id: 'prv-ventas', role: 'proveedor', title: 'Ventas, reservas y cobros', desc: 'Compras directas, reservas para aprobar, cobros y devoluciones.', vertical: true },
+  { id: 'gen-registro', role: 'proveedor', title: 'Crear tu cuenta', desc: 'Tus datos, tu comercio y el código que llega al mail.', vertical: true },
   {
     id: 'cli-materiales',
     role: 'cliente',

@@ -26,6 +26,10 @@
 
 ---
 
+## 2026-09-26 — Videos v3: publicados los 7 que faltaban (Leonardo)
+
+`Downloads/proyecto_videos.tar`: gen-registro, cli-bienvenida, cli-contratar, cli-carrito, pro-bienvenida, pro-presupuestos y prv-ventas regenerados con las capturas nuevas (sin textos viejos ni indicador "N"; revisado un cuadro de cada uno). Videoteca completa: 16 videos, todos vigentes.
+
 ## 2026-09-25 — XSS en el tooltip del mapa (hallazgo al revisar)
 
 `src/components/app/map-view.tsx` armaba el tooltip de cada pin con HTML interpolado (`<b>${pin.label}</b>`), y `label` puede ser el título de un trabajo que escribe un usuario: vía de XSS en `/buscar`. Ahora se arma con nodos y `textContent`. No quedan otros `bindTooltip`/`bindPopup`/`innerHTML` con datos de usuarios (el único `dangerouslySetInnerHTML` es el CSS estático de `ui/chart.tsx`).
