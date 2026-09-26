@@ -138,7 +138,20 @@ export default function MapView({
         el.onclick = () => onSelectRef.current?.(pin)
         const icon = L.divIcon({ html: el, className: 'homy-pin', iconSize: [10, 10] })
         const marker = L.marker([pin.lat, pin.lng], { icon }).addTo(layer)
-        marker.bindTooltip(`<b>${pin.label}</b>${pin.sub ? `<br/><span style="color:#64748b">${pin.sub}</span>` : ''}`, {
+        // el título lo escribe un usuario (p. ej. un trabajo publicado): se arma con nodos y textContent,
+        // nunca con HTML interpolado (antes era una vía de XSS)
+        const tip = document.createElement('div')
+        const tipTitulo = document.createElement('b')
+        tipTitulo.textContent = pin.label
+        tip.appendChild(tipTitulo)
+        if (pin.sub) {
+          const tipSub = document.createElement('span')
+          tipSub.style.color = '#64748b'
+          tipSub.textContent = pin.sub
+          tip.appendChild(document.createElement('br'))
+          tip.appendChild(tipSub)
+        }
+        marker.bindTooltip(tip, {
           direction: 'top',
           offset: [0, -8],
         })

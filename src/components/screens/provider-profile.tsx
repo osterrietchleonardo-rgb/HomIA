@@ -117,7 +117,8 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
   const parsedReviews = data.reviews.map((r) => ({ ...r, photoList: safePhotos(r.photos) }))
   // búsqueda difusa (acentos, plurales) sobre nombre + marca + categoría
   const filtered = data.stock.filter((s) => !q.trim() || matchTerms(q, `${s.name} ${s.brand || ''} ${s.category}`))
-  const categories = [...new Set(data.stock.map((s) => s.categorySlug))]
+  // rubros del stock con su nombre (nunca el slug)
+  const categories = [...new Map(data.stock.map((s) => [s.categorySlug, s.category])).entries()]
   // compran clientes y profesionales (el proveedor puro no tiene carrito)
   const canBuy = user.roles.includes('cliente') || user.roles.includes('profesional')
 
@@ -252,7 +253,7 @@ export default function ProviderProfileScreen({ id }: { id: string }) {
           </div>
           {categories.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-4">
-              {categories.map((c) => <span key={c} className="homy-pill capitalize">{c}</span>)}
+              {categories.map(([slug, nombre]) => <span key={slug} className="homy-pill">{nombre}</span>)}
             </div>
           )}
           {filtered.length === 0 ? (

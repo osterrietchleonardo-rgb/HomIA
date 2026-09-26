@@ -14,6 +14,7 @@ import {
 import { Homy, HomIAWordmark } from "@/components/homy/homy-character";
 import { cn } from "@/lib/utils";
 import { useSession } from "@/lib/store";
+import { rolActivo } from "@/lib/panel-rol";
 import { navigate, irASeccionHome } from "@/lib/router";
 import { LayoutDashboard } from "lucide-react";
 import CartButton from "@/components/cart/cart-button";
@@ -58,7 +59,8 @@ export function SiteHeader() {
   const { user, loading } = useSession();
 
   const goPanel = () => {
-    const role = user?.roles?.[0] || "cliente";
+    // el último perfil con el que trabajó (no siempre "cliente")
+    const role = rolActivo([], user?.roles);
     navigate(`/panel/${role}`);
   };
 

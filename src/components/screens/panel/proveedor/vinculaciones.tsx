@@ -7,18 +7,16 @@ import { toast } from 'sonner'
 import { Switch } from '@/components/ui/switch'
 import { Link2, Store, UserRound, Info, Mail, NotebookPen, RefreshCw } from 'lucide-react'
 import { apiFetch } from '@/lib/api-client'
+import { useRubroNombre } from '@/lib/categories'
 
 type ProfLink = {
   id: string; accountLabel: string; notes: string | null; active: boolean; createdAt: string
   professional: { displayName: string; avatarUrl: string | null; personType: string; companyName: string | null; professions: string[] }
 }
 
-function prettyWords(s: string): string {
-  return s.replace(/_/g, ' ').split(' ').filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-}
-
 export default function ProviderLinks() {
   const [links, setLinks] = useState<ProfLink[]>([])
+  const rubroNombre = useRubroNombre()
   const [loading, setLoading] = useState(true)
 
   // formulario de vinculación
@@ -136,9 +134,9 @@ export default function ProviderLinks() {
                   <UAvatar name={l.professional.companyName || l.professional.displayName} url={l.professional.avatarUrl} size={48} />
                   <div className="min-w-0">
                     <p className="font-extrabold text-[#0A2540] leading-snug">{l.professional.companyName || l.professional.displayName}</p>
-                    <p className="text-xs text-slate-500 capitalize mt-0.5">
-                      {l.professional.personType || 'profesional'}
-                      {l.professional.professions.length > 0 && ` · ${l.professional.professions.map(prettyWords).join(', ')}`}
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      <span className="capitalize">{l.professional.personType || 'profesional'}</span>
+                      {l.professional.professions.length > 0 && ` · ${l.professional.professions.map(rubroNombre).join(', ')}`}
                     </p>
                     <p className="inline-flex items-center gap-1.5 text-sm font-bold text-[#1D63B8] mt-2">
                       <Store className="size-4 shrink-0" aria-hidden /> Cuenta de retiro: {l.accountLabel}

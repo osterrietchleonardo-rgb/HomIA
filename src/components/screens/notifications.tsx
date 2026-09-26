@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { navigate } from '@/lib/router'
 import { useSession } from '@/lib/store'
+import { rolActivo } from '@/lib/panel-rol'
 import { Loading } from '@/components/app/ui-bits'
 import { timeAgo } from '@/lib/format'
 import { apiFetch, NETWORK_ERROR } from '@/lib/api-client'
@@ -88,7 +89,7 @@ export default function NotificationsScreen() {
     <div>
       <div className="max-w-2xl mx-auto">
         <div className="mb-4 -ml-2">
-          <button onClick={() => navigate(`/panel/${user?.roles?.[0] || 'cliente'}`)} className="homy-focus inline-flex items-center gap-1.5 rounded-full min-h-[44px] px-3 text-sm font-semibold text-slate-500 hover:text-[#1D63B8] transition-colors">
+          <button onClick={() => navigate(`/panel/${rolActivo([], user?.roles)}`)} className="homy-focus inline-flex items-center gap-1.5 rounded-full min-h-[44px] px-3 text-sm font-semibold text-slate-500 hover:text-[#1D63B8] transition-colors">
             <ChevronLeft className="size-4" aria-hidden /> Volver al panel
           </button>
         </div>

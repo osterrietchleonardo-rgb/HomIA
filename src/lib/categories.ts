@@ -30,6 +30,16 @@ export function categoryName(cats: Category[], slug: string | null | undefined):
   return cats.find((c) => c.slug === slug)?.name || CATEGORIES_FALLBACK.find((c) => c.slug === slug)?.name || slug
 }
 
+/**
+ * Hook: traduce el slug de un rubro ("plomeria") a su nombre ("Sanitarios · Plomería").
+ * Toda pantalla que MUESTRA un rubro pasa por acá: nunca se muestra el slug. Para varios
+ * rubros juntos usar `.join(', ')` (los nombres ya llevan " · ").
+ */
+export function useRubroNombre(): (slug: string | null | undefined) => string {
+  const { categories } = useCategories()
+  return (slug) => categoryName(categories, slug)
+}
+
 // caché por sesión de pestaña: una sola request aunque haya varias pantallas
 let cache: Category[] | null = null
 let inflight: Promise<Category[]> | null = null

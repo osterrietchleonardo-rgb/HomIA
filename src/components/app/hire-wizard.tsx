@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { navigate } from '@/lib/router'
 import { formatARS } from '@/lib/format'
+import { useRubroNombre } from '@/lib/categories'
 import { UAvatar, VerifyBadge } from '@/components/app/ui-bits'
 import { toast } from 'sonner'
 import {
@@ -85,6 +86,7 @@ export default function HireWizard({
   const [budgetMax, setBudgetMax] = useState('')
   const [note, setNote] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const rubroNombre = useRubroNombre()
 
   // "¿Es para algo que ya publicaste?": trabajos abiertos del cliente y proyectos activos del profesional
   const [sources, setSources] = useState<{ jobs: SourceJob[]; projects: SourceProject[] } | null>(null)
@@ -252,8 +254,8 @@ export default function HireWizard({
                       <span className="min-w-0 truncate" title={proName}>{proName}</span>
                       {target.verificationStatus && <VerifyBadge status={target.verificationStatus} dark compact />}
                     </p>
-                    <p className="truncate text-xs font-semibold text-[#66DFFF] capitalize">
-                      {target.professions.slice(0, 3).join(' · ') || 'Profesional'}
+                    <p className="truncate text-xs font-semibold text-[#66DFFF]">
+                      {target.professions.slice(0, 3).map(rubroNombre).join(', ') || 'Profesional'}
                     </p>
                   </div>
                 </div>
@@ -360,8 +362,8 @@ export default function HireWizard({
                           <button
                             key={r} type="button" onClick={() => setRubro(r)}
                             aria-pressed={rubroSel === r}
-                            className={`homy-focus rounded-full px-3.5 py-2 text-xs font-bold capitalize transition ${rubroSel === r ? 'bg-[#1D63B8] text-white shadow-[0_4px_14px_rgba(29,99,184,0.35)]' : 'homy-glass-soft text-slate-500 hover:text-[#1D63B8]'}`}
-                          >{r}</button>
+                            className={`homy-focus rounded-full px-3.5 py-2 text-xs font-bold transition ${rubroSel === r ? 'bg-[#1D63B8] text-white shadow-[0_4px_14px_rgba(29,99,184,0.35)]' : 'homy-glass-soft text-slate-500 hover:text-[#1D63B8]'}`}
+                          >{rubroNombre(r)}</button>
                         ))}
                       </div>
                     </Field>

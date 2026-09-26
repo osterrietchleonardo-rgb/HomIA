@@ -5,6 +5,8 @@ import { navigate } from '@/lib/router'
 import { useSession } from '@/lib/store'
 import { Loading, EmptyState, UrgencyBadge, StatusBadge, UAvatar, UStars } from '@/components/app/ui-bits'
 import { formatARS, formatDate } from '@/lib/format'
+import { useRubroNombre } from '@/lib/categories'
+import { rolActivo } from '@/lib/panel-rol'
 import { toast } from 'sonner'
 import { ChevronLeft, Send, BadgeCheck, Search, FileText, Clock, HardHat, MapPin, Undo2 } from 'lucide-react'
 
@@ -35,6 +37,7 @@ type Bid = {
 
 export default function JobDetailScreen({ id }: { id: string }) {
   const { user, refresh } = useSession()
+  const rubroNombre = useRubroNombre()
   const [job, setJob] = useState<Job | null>(null)
   const [bids, setBids] = useState<Bid[]>([])
   const [isOwner, setIsOwner] = useState(false)
@@ -165,7 +168,7 @@ export default function JobDetailScreen({ id }: { id: string }) {
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <StatusBadge status={job.status} />
             <UrgencyBadge urgency={job.urgency} />
-            <span className="homy-pill text-[#0A2540] capitalize">{job.categorySlug}</span>
+            <span className="homy-pill text-[#0A2540]">{rubroNombre(job.categorySlug)}</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight leading-tight">{job.title}</h1>
           <p className="text-sm text-slate-300 mt-2.5 flex items-center gap-1.5 flex-wrap">
@@ -348,7 +351,7 @@ export default function JobDetailScreen({ id }: { id: string }) {
 function BackHome() {
   const { user } = useSession()
   return (
-    <button onClick={() => navigate(user ? `/panel/${user.roles[0] || 'cliente'}` : '/')} className="homy-btn-dark homy-focus px-6 py-3 min-h-[44px] text-sm">
+    <button onClick={() => navigate(user ? `/panel/${rolActivo([], user.roles)}` : '/')} className="homy-btn-dark homy-focus px-6 py-3 min-h-[44px] text-sm">
       {user ? 'Volver al panel' : 'Volver al inicio'}
     </button>
   )

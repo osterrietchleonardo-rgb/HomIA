@@ -10,6 +10,7 @@ import { Homy, HomIAWordmark } from '@/components/homy/homy-character'
 import { toast } from 'sonner'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import CartButton from '@/components/cart/cart-button'
+import { rolActivo, recordarRolPanel } from '@/lib/panel-rol'
 import {
   LayoutDashboard, Briefcase, FolderKanban, FileText, User, Bell, LogOut,
   Search, Boxes, Users, Link2, HardHat, ClipboardList, Home, Sparkles,
@@ -108,7 +109,9 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
   // estado del plan del proveedor (pill en la topbar: prueba con días restantes / plan vencido)
   const [providerPlan, setProviderPlan] = useState<{ plan: string; activo: boolean; trialDaysLeft: number | null } | null>(null)
 
-  const role = (route.segments[0] === 'panel' ? route.segments[1] : undefined) || user?.roles?.[0] || 'cliente'
+  // fuera de /panel/<rol> (trabajo, perfiles, buscar, notificaciones…) sigue el último perfil usado
+  const role = rolActivo(route.segments, user?.roles)
+  const enRutaDePanel = route.segments[0] === 'panel'
   const items = NAV[role] || NAV.cliente
   const currentPath = route.path
   const primaryPaths = MOBILE_PRIMARY[role] || MOBILE_PRIMARY.cliente
@@ -141,13 +144,15 @@ export default function PanelLayout({ route, children }: { route: RouteState; ch
     return () => { alive = false }
   }, [isProviderPanel, currentPath])
 
-  // si el rol no corresponde al usuario, corregir
+  // si el rol no corresponde al usuario, corregir; si corresponde, recordarlo como perfil activo
   useEffect(() => {
     if (!user) return
     if (!user.roles.includes(role)) {
       navigate(`/panel/${user.roles[0] || 'cliente'}`, { replace: true })
+    } else if (enRutaDePanel) {
+      recordarRolPanel(role)
     }
-  }, [user, role])
+  }, [user, role, enRutaDePanel])
 
   async function doLogout() {
     setMoreOpen(false)

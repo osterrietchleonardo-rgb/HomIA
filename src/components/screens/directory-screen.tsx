@@ -15,6 +15,7 @@ import { Search, Star, MapPin, HardHat, Package, ArrowRight, Users, Store, Heart
 import { motion } from 'framer-motion'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { trackBusqueda } from '@/lib/analytics/tracker'
+import { categoryName } from '@/lib/categories'
 
 type ProCard = {
   kind: 'profesional'; id: string; userId: string; href: string; name: string
@@ -76,8 +77,6 @@ const PRICE_BUCKETS = [
   { v: 'p2', label: '$20 mil – $60 mil', min: 20000, max: 60000 },
   { v: 'p3', label: 'Más de $60 mil', min: 60000, max: null },
 ] as const
-
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 export default function DirectoryScreen({ embedded = false }: { embedded?: boolean }) {
   const { user } = useSession()
@@ -192,16 +191,27 @@ export default function DirectoryScreen({ embedded = false }: { embedded?: boole
 
   return (
     <div className={embedded ? 'homy-page' : 'min-h-screen'}>
-      {/* banda de encabezado */}
-      <div className={embedded ? 'mb-6' : 'relative max-w-7xl mx-auto pt-8 pb-8 px-4 sm:px-6 lg:px-8'}>
-        <p className="homy-eyebrow">Directorio HomIA</p>
-        <h1 className={embedded ? 'homy-page-title mt-1' : 'mt-2 text-3xl sm:text-4xl font-extrabold tracking-tight text-navy leading-tight'}>
-          Toda la comunidad, en un solo lugar
-        </h1>
-        <p className={`max-w-2xl text-[15px] leading-relaxed text-slate-500 ${embedded ? 'mt-1.5' : 'mt-3'}`}>
-          Profesionales y proveedores de tu zona, ordenados por sus reseñas. Abrí una tarjeta para ver toda su experiencia y escribirle por mensaje directo.
-        </p>
-      </div>
+      {/* banda de encabezado — dentro del panel es la cabecera anclada del app-shell
+          (.homy-page-head: queda fija arriba y solo scrollea el contenido, como en las demás pantallas) */}
+      {embedded ? (
+        <header className="homy-page-head">
+          <div className="min-w-0">
+            <span className="homy-eyebrow">Directorio HomIA</span>
+            <h1 className="homy-page-title mt-1.5">Toda la comunidad, en un solo lugar</h1>
+            <p className="homy-page-sub">Profesionales y proveedores de tu zona, ordenados por sus reseñas.</p>
+          </div>
+        </header>
+      ) : (
+        <div className="relative max-w-7xl mx-auto pt-8 pb-8 px-4 sm:px-6 lg:px-8">
+          <p className="homy-eyebrow">Directorio HomIA</p>
+          <h1 className="mt-2 text-3xl sm:text-4xl font-extrabold tracking-tight text-navy leading-tight">
+            Toda la comunidad, en un solo lugar
+          </h1>
+          <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-slate-500">
+            Profesionales y proveedores de tu zona, ordenados por sus reseñas. Abrí una tarjeta para ver toda su experiencia y escribirle por mensaje directo.
+          </p>
+        </div>
+      )}
 
       {/* filtros + grid */}
       <div className={embedded ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16'}>
@@ -354,7 +364,9 @@ export default function DirectoryScreen({ embedded = false }: { embedded?: boole
                   {c.kind === 'profesional' && (
                     <button
                       onClick={(e) => tryHire(e, c)}
-                      className="homy-btn-primary homy-focus absolute bottom-3.5 right-4 z-20 inline-flex min-h-[38px] items-center gap-1.5 rounded-full px-4 text-xs shadow-[0_10px_24px_-10px_rgba(255,90,31,0.75)] transition-all duration-300 hover:scale-105"
+                      data-track="contratar desde el directorio"
+                      // !absolute: .homy-btn-primary (sin capa) trae position: relative y le ganaba al utilitario
+                      className="homy-btn-primary homy-focus !absolute bottom-3.5 right-4 z-20 inline-flex min-h-[38px] items-center gap-1.5 rounded-full px-4 text-xs shadow-[0_10px_24px_-10px_rgba(255,90,31,0.75)] transition-all duration-300 hover:scale-105"
                       aria-label={`Contratar a ${c.name}`}
                     >
                       <BriefcaseBusiness className="size-3.5" aria-hidden /> Contratar
@@ -391,7 +403,7 @@ export default function DirectoryScreen({ embedded = false }: { embedded?: boole
                     <div className="mt-3.5 flex flex-wrap gap-1.5">
                       {c.kind === 'profesional'
                         ? c.professions.slice(0, 3).map((p) => (
-                            <span key={p} className="homy-glass-soft rounded-full px-2.5 py-1 text-[11px] font-bold text-[#1D63B8]">{cap(p)}</span>
+                            <span key={p} className="homy-glass-soft rounded-full px-2.5 py-1 text-[11px] font-bold text-[#1D63B8]">{categoryName(categories, p)}</span>
                           ))
                         : (
                           <>
@@ -399,7 +411,7 @@ export default function DirectoryScreen({ embedded = false }: { embedded?: boole
                               <span className="rounded-full bg-[#00C4FF]/12 px-2.5 py-1 text-[11px] font-extrabold text-[#0092c4] ring-1 ring-[#00C4FF]/30">{KIND_LABELS[c.provKind]}</span>
                             )}
                             {c.categories.slice(0, c.provKind && c.provKind !== 'multi' ? 2 : 3).map((p) => (
-                              <span key={p} className="homy-glass-soft rounded-full px-2.5 py-1 text-[11px] font-bold text-[#1D63B8]">{cap(p)}</span>
+                              <span key={p} className="homy-glass-soft rounded-full px-2.5 py-1 text-[11px] font-bold text-[#1D63B8]">{categoryName(categories, p)}</span>
                             ))}
                           </>
                         )}

@@ -21,6 +21,9 @@ type Props = {
 
 export default function ReviewForm({ targetUserId, targetName, targetLabel = '', projectId, workId, purchaseId, onDone }: Props) {
   const [rating, setRating] = useState(5)
+  // estrella bajo el mouse: previsualiza el puntaje antes de elegirlo
+  const [hover, setHover] = useState<number | null>(null)
+  const shown = hover ?? rating
   const [comment, setComment] = useState('')
   const [photos, setPhotos] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
@@ -67,12 +70,18 @@ export default function ReviewForm({ targetUserId, targetName, targetLabel = '',
         Tu reseña ayuda a otros usuarios a decidir con confianza: calificá con estrellas, contá cómo fue la experiencia y sumá fotos — las reseñas con fotos son más fiables para la comunidad.
       </p>
 
-      <div className="relative mt-4 flex gap-1.5" role="radiogroup" aria-label="Puntaje de 1 a 5 estrellas">
+      {/* El relleno va en el <svg>: lucide pone fill="none" en el ícono y eso le gana al fill heredado del botón */}
+      <div className="relative mt-4 flex gap-1.5" role="radiogroup" aria-label="Puntaje de 1 a 5 estrellas"
+        onMouseLeave={() => setHover(null)}>
         {[1, 2, 3, 4, 5].map((n) => (
-          <button key={n} type="button" role="radio" aria-checked={n === rating} aria-label={`${n} estrellas`}
+          <button key={n} type="button" role="radio" aria-checked={n === rating} aria-label={`${n} estrella${n === 1 ? '' : 's'}`}
+            data-track="elegir estrellas de reseña"
             onClick={() => setRating(n)}
-            className={`transition-transform duration-200 hover:scale-110 ${n <= rating ? 'text-[#FFC700] fill-[#FFC700]' : 'text-white/25'}`}>
-            <Star className="size-7" />
+            onMouseEnter={() => setHover(n)}
+            onFocus={() => setHover(n)}
+            onBlur={() => setHover(null)}
+            className="homy-focus rounded-md transition-transform duration-200 hover:scale-110">
+            <Star className={`size-7 transition-colors ${n <= shown ? 'fill-[#FFC700] text-[#FFC700]' : 'fill-transparent text-white/25'}`} aria-hidden />
           </button>
         ))}
       </div>
@@ -105,7 +114,7 @@ export default function ReviewForm({ targetUserId, targetName, targetLabel = '',
       </div>
 
       <div className="relative mt-4 flex flex-wrap items-center gap-3">
-        <button type="button" onClick={submit} disabled={busy} className="homy-btn-primary px-6 py-3 text-sm sm:py-2.5">
+        <button type="button" onClick={submit} disabled={busy} data-track="publicar reseña" className="homy-btn-primary px-6 py-3 text-sm sm:py-2.5">
           Publicar reseña
         </button>
         <span className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">

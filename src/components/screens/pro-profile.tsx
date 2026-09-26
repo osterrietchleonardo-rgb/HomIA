@@ -10,6 +10,7 @@ import ReviewsShortcut, { formatRating } from '@/components/app/reviews-shortcut
 import HireWizard, { type HireTarget } from '@/components/app/hire-wizard'
 import AvailabilitySection from '@/components/app/availability-section'
 import { formatDate } from '@/lib/format'
+import { useRubroNombre } from '@/lib/categories'
 import { toast } from 'sonner'
 import { ChevronLeft, MapPin, HardHat, Briefcase, Star, ArrowUpRight, ImageOff, Search, Images, SendHorizonal, Heart, Share2, MessageCircleOff, Camera, X } from 'lucide-react'
 
@@ -32,6 +33,7 @@ export default function ProProfileScreen({ id }: { id: string }) {
   const [fav, setFav] = useState(false)
   const [zoom, setZoom] = useState<string | null>(null)
   const [hireOpen, setHireOpen] = useState(false)
+  const rubroNombre = useRubroNombre()
 
   useEffect(() => {
     (async () => {
@@ -145,7 +147,7 @@ export default function ProProfileScreen({ id }: { id: string }) {
                 <VerifyBadge status={p.verificationStatus} dark compact={false} />
                 {p.personType === 'empresa' && <span className="homy-pill text-[#0A2540]">Empresa</span>}
               </div>
-              <p className="text-[#66DFFF] capitalize text-sm font-semibold mt-1">{p.professions.join(' · ') || 'Profesional'}</p>
+              <p className="text-[#66DFFF] text-sm font-semibold mt-1">{p.professions.map(rubroNombre).join(', ') || 'Profesional'}</p>
               {/* atajo a las reseñas (scroll suave + foco en la sección) */}
               <div className="mt-2">
                 <ReviewsShortcut rating={p.rating} count={p.reviewsCount} targetId="resenas-profesional" dark className="-ml-1" />

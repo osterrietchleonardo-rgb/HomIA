@@ -17,6 +17,7 @@ import { Search, SearchX, MapPin as MapPinIcon, Compass, Sparkles, X, Lock, Home
 import { AccionesHomy, TarjetasHomy } from '@/components/homy/homy-tarjetas'
 import { rutaActual, useDuenioHomy, useHomy } from '@/components/homy/homy-store'
 import { trackBusqueda } from '@/lib/analytics/tracker'
+import { useRubroNombre } from '@/lib/categories'
 
 const MapView = dynamic(() => import('@/components/app/map-view'), { ssr: false, loading: () => <div className="h-[320px] sm:h-[420px] lg:h-[480px] rounded-2xl homy-skeleton" /> })
 
@@ -439,6 +440,7 @@ function Section({ title, count, icon, tone = 'homy-chip-blue', children }: { ti
 }
 
 function ProCard({ pro, logged }: { pro: ProResult; logged: boolean }) {
+  const rubroNombre = useRubroNombre()
   return (
     <button
       onClick={() => logged ? navigate(`/profesional/${pro.id}`) : gate()}
@@ -451,7 +453,7 @@ function ProCard({ pro, logged }: { pro: ProResult; logged: boolean }) {
             <p className="font-bold text-[#0A2540] truncate group-hover:text-[#1D63B8] transition-colors">{pro.companyName || pro.displayName}</p>
             {pro.verified && <BadgeCheck className="size-4 shrink-0 text-[#00A8E0]" aria-label="Verificado" />}
           </div>
-          <p className="text-xs text-slate-500 truncate capitalize mt-0.5">{pro.professions.join(' · ') || 'Profesional'}</p>
+          <p className="text-xs text-slate-500 truncate mt-0.5">{pro.professions.map(rubroNombre).join(', ') || 'Profesional'}</p>
           <div className="flex items-center gap-1.5 mt-1.5">
             <Star className="size-3.5 shrink-0 fill-[#FFC700] text-[#FFC700]" aria-hidden />
             {pro.rating > 0 ? (
@@ -560,6 +562,7 @@ function MaterialCard({ m, logged }: { m: MaterialResult; logged: boolean }) {
 }
 
 function JobCard({ job, logged }: { job: JobResult; logged: boolean }) {
+  const rubroNombre = useRubroNombre()
   return (
     <button
       onClick={() => logged ? navigate(`/trabajo/${job.id}`) : gate()}
@@ -571,7 +574,7 @@ function JobCard({ job, logged }: { job: JobResult; logged: boolean }) {
       </div>
       <p className="text-sm text-slate-500 mt-1.5 line-clamp-2 leading-relaxed">{job.description}</p>
       <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-        <span className="homy-pill capitalize">{job.categorySlug}</span>
+        <span className="homy-pill">{rubroNombre(job.categorySlug)}</span>
         {(job.city || job.distanceKm !== undefined) && (
           <span className="inline-flex items-center gap-1 text-xs text-slate-400 min-w-0">
             <MapPinIcon className="size-3.5 shrink-0" aria-hidden />

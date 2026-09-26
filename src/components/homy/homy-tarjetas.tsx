@@ -5,6 +5,7 @@
 import { ArrowRight, BadgeCheck, Briefcase, HardHat, MapPin, Package, ShieldAlert, ShoppingCart, Sparkles, Star, Store } from 'lucide-react'
 import { formatARS } from '@/lib/format'
 import { navigate } from '@/lib/router'
+import { useRubroNombre } from '@/lib/categories'
 import type { Accion, Tarjeta } from '@/lib/homy/tipos'
 
 const km = (d: number | null) => (d == null ? null : d < 1 ? `${Math.round(d * 1000)} m` : `${d.toFixed(1)} km`)
@@ -44,6 +45,7 @@ const boton =
 
 export function TarjetaHomy({ t, onNavegar }: { t: Tarjeta; onNavegar?: () => void }) {
   const ir = (href: string) => { onNavegar?.(); navigate(href) }
+  const rubroNombre = useRubroNombre()
 
   if (t.tipo === 'material') {
     return (
@@ -109,7 +111,7 @@ export function TarjetaHomy({ t, onNavegar }: { t: Tarjeta; onNavegar?: () => vo
               {t.obras > 0 && <span>{t.obras} obra{t.obras === 1 ? '' : 's'}</span>}
               {km(t.distanciaKm) && <span className="inline-flex items-center gap-0.5"><MapPin className="size-3" aria-hidden />{km(t.distanciaKm)}</span>}
             </span>
-            {t.rubros.length > 0 && <span className="mt-0.5 block truncate text-[11px] capitalize text-slate-500">{t.rubros.join(' · ')}</span>}
+            {t.rubros.length > 0 && <span className="mt-0.5 block truncate text-[11px] text-slate-500">{t.rubros.map(rubroNombre).join(', ')}</span>}
           </span>
           <ArrowRight className="mt-1 size-4 shrink-0 text-slate-300" aria-hidden />
         </span>
@@ -145,7 +147,7 @@ export function TarjetaHomy({ t, onNavegar }: { t: Tarjeta; onNavegar?: () => vo
         <span className="min-w-0 flex-1">
           <span className="block text-[13px] font-extrabold leading-snug text-[#0A2540]">{t.titulo}</span>
           <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] text-slate-500">
-            <span className="capitalize">{t.rubro}</span>
+            <span>{rubroNombre(t.rubro)}</span>
             <span className="capitalize">urgencia {t.urgencia}</span>
             {t.ciudad && <span>{t.ciudad}</span>}
             {km(t.distanciaKm) && <span className="inline-flex items-center gap-0.5"><MapPin className="size-3" aria-hidden />{km(t.distanciaKm)}</span>}

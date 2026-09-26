@@ -26,6 +26,14 @@
 
 ---
 
+## 2026-09-25 — XSS en el tooltip del mapa (hallazgo al revisar)
+
+`src/components/app/map-view.tsx` armaba el tooltip de cada pin con HTML interpolado (`<b>${pin.label}</b>`), y `label` puede ser el título de un trabajo que escribe un usuario: vía de XSS en `/buscar`. Ahora se arma con nodos y `textContent`. No quedan otros `bindTooltip`/`bindPopup`/`innerHTML` con datos de usuarios (el único `dangerouslySetInnerHTML` es el CSS estático de `ui/chart.tsx`).
+
+## 2026-09-25 — Cuatro detalles vistos al capturar los videos (Leonardo)
+
+(1) Un profesional en `/trabajo/<id>` veía "Perfil: Cliente": fuera de `/panel/<rol>` el panel caía en `roles[0]` (todo registro suma cliente) → `src/lib/panel-rol.ts` recuerda el último perfil usado (localStorage `homia_panel_rol`, validado contra los roles; tests en `__tests__/panel-rol.test.ts`), lo usan panel, "Volver al panel" de trabajo y notificaciones y "Mi panel" del header. (2) Rubros mostrados como slug ("Plomeria · Gasistas") → `useRubroNombre()` (`categories.ts`) / `nombreRubro()` (`categories-data.ts`) en perfil del profesional, asistente Contratar, directorio, buscar, detalle de trabajo, tarjetas de Homy, vinculaciones del proveedor, perfil del proveedor y pines del mapa; varios rubros se unen con ", ". (3) Estrellas de la reseña sin relleno: el `fill` iba en el botón y lucide pone `fill="none"` en el svg → relleno en el svg + vista previa al pasar el mouse (`review-form.tsx`). (4) Directorio del panel: un `sr-only` absoluto quedaba anclado a `.homy-screen`, fuera del overflow del app-shell, alargaba el documento (1052 px en 390×844) y en el celu la página entera scrolleaba con la topbar → `position: relative` en `.homy-app-shell/.homy-app-aside/.homy-app-main` (sirve para todas las pantallas) + cabecera anclada `.homy-page-head` en el directorio embebido; de paso, el botón Contratar de la tarjeta (`.homy-btn-primary` sin capa le ganaba a `absolute`) vuelve a su lugar. Sin cambios funcionales ni de base. Sin commit.
+
 ## 2026-09-25 — Videos v2: se publican 6 de 13; 7 esperan capturas nuevas (Leonardo)
 
 Leonardo mandó los 13 videos v2 (`Downloads/workspace-…tar`, `public/videos`, generador `scripts/gen-videos-v2.py` + `videos_data_v2.py`). La locución coincide palabra por palabra con los guiones del doc. Revisados cuadro por cuadro: **publicados** (maquetas iguales a la app de hoy) gen-sugerencias, cli-devoluciones, pro-calendario, pro-cobros, gen-finanzas, prv-plan; **retenidos** cli-bienvenida, cli-contratar, cli-carrito, gen-registro, pro-bienvenida, pro-presupuestos, prv-ventas porque sus capturas son de una versión vieja (home "Potenciado por agentes de IA… arman el presupuesto y cuidan tu pago", precios en US$ en el perfil del profesional, "Finalizar obra" del lado del profesional, registro de 3 pasos, "lo aceptás" en pedidos directos, pestaña "Mis compras"). `VideoItem.vertical` + reproductor 9:16 (`video-modal.tsx`); claves de la lista por rol+id.

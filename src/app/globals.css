@@ -814,7 +814,12 @@
         → .homy-app-body (fila, min-height:0)
            → .homy-app-aside (sidebar con scroll propio)
            → .homy-app-main (ÚNICO contenedor que scrollea, id=homy-app-main) */
+/* position: relative en el marco, la sidebar y el main: son el bloque contenedor de los
+   `absolute` de adentro (ej. el `sr-only` de un label). Sin eso quedaban anclados a .homy-screen,
+   fuera del overflow que los recorta, alargaban el documento y en el celu la página entera
+   scrolleaba y se llevaba la topbar (pasó en el Directorio del panel). */
 .homy-app-shell {
+  position: relative;
   height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -826,6 +831,7 @@
   min-height: 0; /* clave: habilita el scroll interno del main */
 }
 .homy-app-aside {
+  position: relative;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -833,6 +839,7 @@
   scrollbar-color: rgba(10, 37, 64, 0.22) transparent;
 }
 .homy-app-main {
+  position: relative;
   flex: 1;
   min-width: 0;
   overflow-y: auto;

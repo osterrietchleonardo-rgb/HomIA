@@ -27,3 +27,8 @@ export const CATEGORIES_FALLBACK: Category[] = [
   { slug: 'electrodomesticos', name: 'Electrodomésticos · Repuestos', icon: 'washing-machine' },
   { slug: 'plagas', name: 'Control de plagas', icon: 'bug' },
 ]
+
+/** Nombre del rubro para mostrar (servidor o cliente sin la lista de la base): nunca el slug, salvo uno desconocido. */
+export function nombreRubro(slug: string): string {
+  return CATEGORIES_FALLBACK.find((c) => c.slug === slug)?.name || slug
+}

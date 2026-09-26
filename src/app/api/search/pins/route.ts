@@ -5,6 +5,7 @@ import { parseJson } from '@/lib/api'
 import { withinRadius } from '@/lib/geo'
 import { puedeOperar, esProActivo } from '@/lib/plans'
 import { whereUsuarioPublico } from '@/lib/visibility'
+import { nombreRubro } from '@/lib/categories-data'
 
 // Pines para el mapa de búsqueda: profesionales, trabajos y materiales con coords reales
 export async function GET(req: NextRequest) {
@@ -113,7 +114,7 @@ export async function GET(req: NextRequest) {
 function professionsLabel(json: string): string {
   try {
     const arr = JSON.parse(json) as string[]
-    return arr.join(' · ')
+    return arr.map(nombreRubro).join(', ') || 'Profesional'
   } catch {
     return 'Profesional'
   }
