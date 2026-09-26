@@ -230,7 +230,7 @@ export default function HelpScreen({ embedded = false }: { embedded?: boolean })
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {videosForRole(tab).map((v) => (
-            <button key={v.id} onClick={() => openVideo(v)}
+            <button key={`${v.role}-${v.id}`} onClick={() => openVideo(v)}
               className="homy-focus group flex w-full items-center gap-3.5 rounded-2xl homy-glass-soft p-2.5 text-left transition hover:bg-white">
               <span className="relative block w-32 shrink-0 overflow-hidden rounded-xl sm:w-40" aria-hidden>
                 <img src={`/videos/${v.id}.jpg`} alt="" className="aspect-video w-full object-cover" loading="lazy" />

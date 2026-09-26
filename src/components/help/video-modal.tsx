@@ -58,7 +58,10 @@ export default function VideoModal() {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="homy-glass-strong w-full max-w-[880px] overflow-hidden rounded-3xl shadow-[0_40px_90px_-30px_rgba(10,37,64,0.8)]"
+        className={`homy-glass-strong w-full overflow-hidden rounded-3xl shadow-[0_40px_90px_-30px_rgba(10,37,64,0.8)] ${
+          // los videos verticales (9:16, grabados para el celular) no se achican dentro de un 16:9
+          video.vertical ? 'max-w-[min(440px,calc((100dvh-8rem)*9/16))]' : 'max-w-[880px]'
+        }`}
       >
         <div className="flex items-center gap-2.5 px-4 py-3">
           <span className="homy-icon-chip homy-chip-blue size-8 shrink-0 [&_svg]:size-4" aria-hidden><Clapperboard /></span>
@@ -82,7 +85,7 @@ export default function VideoModal() {
           playsInline
           preload="auto"
           poster={videoPoster(video.id)}
-          className="aspect-video w-full bg-[#071224]"
+          className={`${video.vertical ? 'aspect-[9/16]' : 'aspect-video'} w-full bg-[#071224]`}
         >
           <source src={videoSrc(video.id)} type="video/mp4" />
           Tu navegador no puede reproducir videos MP4.

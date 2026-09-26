@@ -26,6 +26,10 @@
 
 ---
 
+## 2026-09-25 — Videos v2: se publican 6 de 13; 7 esperan capturas nuevas (Leonardo)
+
+Leonardo mandó los 13 videos v2 (`Downloads/workspace-…tar`, `public/videos`, generador `scripts/gen-videos-v2.py` + `videos_data_v2.py`). La locución coincide palabra por palabra con los guiones del doc. Revisados cuadro por cuadro: **publicados** (maquetas iguales a la app de hoy) gen-sugerencias, cli-devoluciones, pro-calendario, pro-cobros, gen-finanzas, prv-plan; **retenidos** cli-bienvenida, cli-contratar, cli-carrito, gen-registro, pro-bienvenida, pro-presupuestos, prv-ventas porque sus capturas son de una versión vieja (home "Potenciado por agentes de IA… arman el presupuesto y cuidan tu pago", precios en US$ en el perfil del profesional, "Finalizar obra" del lado del profesional, registro de 3 pasos, "lo aceptás" en pedidos directos, pestaña "Mis compras"). `VideoItem.vertical` + reproductor 9:16 (`video-modal.tsx`); claves de la lista por rol+id.
+
 ## 2026-09-25 — Plan del proveedor: cancelar desde HomIA, acceso hasta el fin del período pago, prueba que no se pierde y plan vencido que deja cerrar lo que hay (D33) (Leonardo)
 
 **El pedido:** "no avisa la app que para cancelar tiene que hacerlo desde mercado pago suscripciones... cuando cancelo, no se le reintegra, y esta bien no? deberia avisar la app de homia, por mas que pague el plan dentro de los 14 dias de prueba"; después: qué pasa si el proveedor no paga tras la prueba.

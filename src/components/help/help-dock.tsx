@@ -271,7 +271,7 @@ export default function HelpDock() {
                       Videitos cortos con voz: cada sección y cada acción del rol, explicada para mirar donde estés.
                     </p>
                     {videosForRole(role as VideoRole).map((v) => (
-                      <button key={v.id} onClick={() => openVideo(v)}
+                      <button key={`${v.role}-${v.id}`} onClick={() => openVideo(v)}
                         className="homy-focus group flex w-full items-center gap-3 rounded-2xl homy-glass-soft p-2 text-left transition hover:bg-white">
                         <span className="relative block w-24 shrink-0 overflow-hidden rounded-xl" aria-hidden>
                           <img src={`/videos/${v.id}.jpg`} alt="" className="aspect-video w-full object-cover" loading="lazy" />
